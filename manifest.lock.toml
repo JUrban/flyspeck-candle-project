@@ -8,7 +8,7 @@ upstream_master = "5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d"
 upstream_pft = "51781e5ad891f5792bcf34ac1ea18c1ffd1b6425"
 development_branch = "codex/flyspeck-pft"
 rebased_head_at_bootstrap = "96d12a0752a8bdf00abb1d3cb0fe3d7363d1185a"
-development_head = "335f3d877b18975ea10854a65669b2c19dfb74bc"
+development_head = "056e34951fe9430e858e461229f4c14eca06020a"
 
 [repositories.cakeml]
 url = "https://github.com/CakeML/cakeml.git"
@@ -25,7 +25,7 @@ development_head = "6dc37788c18e3404294bf137067046bae5904ad0"
 url = "https://github.com/flyspeck/flyspeck.git"
 commit = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
 development_branch = "codex/candle-replay"
-development_head = "b47082d7b6079f00fe22308ffab225f3e0d2b285"
+development_head = "0e2f9e331b0eded8aca3dbacfe26df92fc84bcac"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
@@ -57,6 +57,17 @@ commands = 171560
 table_limits = [19125, 57241, 91135]
 targets = ["flyspeck$IMAGE_DELETE_INJ_COMPAT", "flyspeck$HAS_SIZE_2_EXISTS"]
 axioms = ["ETA_AX", "SELECT_AX", "INFINITY_AX"]
+
+[artifacts.flyspeck_refinement_leaves]
+path = "repos/candle/candle/pft/tests/fixtures/flyspeck-refinement-leaves.pft.bin"
+sha256 = "acc76842744d52667c42fd9831bb370e8a812f77668fa7a6ce5f2b6fbefef101"
+source_flyspeck = "0e2f9e331b0eded8aca3dbacfe26df92fc84bcac"
+producer_hol_light = "fa5e1542f32ebb9d5b20181f9529715c301792d0"
+commands = 547811
+table_limits = [44830, 143185, 288314]
+targets = ["flyspeck$Basics.LENGTH3", "flyspeck$Vukhacky_tactics.REDUCE_WITH_DIV_Euler_lemma"]
+axioms = ["ETA_AX", "SELECT_AX", "INFINITY_AX"]
+source_digests = ["leg/basics.hl:7d90051d1e2932d238cc8ed2f5548dd3", "general/vukhacky_tactics.hl:6b5b45ba6f26ed89e31f0c4e9456fb32"]
 
 [toolchain.hol4]
 polyml = "5.7.1"

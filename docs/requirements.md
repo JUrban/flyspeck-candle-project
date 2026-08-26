@@ -8,7 +8,7 @@ the evidence column names the release-level artifact that is required.
 | --- | --- | --- |
 | G1 Candle PFT consumer | in progress | Compiled checker; pinned schema/ruleset/policy; positive and per-command corruption tests; exact theorem/assumption result; soundness-export connection. |
 | G2 PFT scale | in progress | Streaming/segmented merge and replay; effective deletion/reuse; checkpoints; target reachability; measured full-trace resource envelope. |
-| G3 HOL Light/Flyspeck producer | in progress | Direct producer implemented; ordinary clean-manifest Flyspeck leaf replayed exactly; list/refinement and arithmetic/certificate representative leaves remain. |
+| G3 HOL Light/Flyspeck producer | proved | Direct producer; ordinary clean-manifest source leaf; digest-checked list/refinement and real-arithmetic/refinement leaves; all replayed exactly by compiled Candle. |
 | G4 Dopen | open (source track) | Current-master parser, inferencer/CV, soundness and completeness proof integration, layered corpus. |
 | G5 pointer equality | open (source/performance track) | End-to-end source/backend/runtime semantics and measured Candle/Flyspeck need. |
 | G6 custom FFI | open (source/tooling track) | Versioned ABI, bounds/error behavior, deterministic tests, and explicit untrusted-input policy. |
@@ -43,4 +43,8 @@ The first Gate 2 artifact is
 It reconstructs Flyspeck's `IMAGE_DELETE_INJ_COMPAT` and `HAS_SIZE_2_EXISTS`
 with exact empty assumptions and exact conclusions.  This satisfies the
 ordinary-leaf and clean-manifest parts of G3, but not the three-leaf route
-selection or full-build parts of Gates 2–4.
+selection or full-build parts of Gates 2–4.  The companion
+`flyspeck-refinement-leaves.pft.bin` now supplies the other two route-selection
+classes.  It closes G3, but it remains deliberately distinct from the
+compute-heavy, certificate-heavy, and full-build evidence required by G2, G9,
+and G11.

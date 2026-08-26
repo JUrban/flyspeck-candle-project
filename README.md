@@ -19,8 +19,10 @@ HOL Light producer can write primitive inferences online with bounded producer
 memory and can safely delete and reuse replay slots.  The tested-pin producer
 has now emitted two real theorems from Flyspeck's `general/hol-library.hl`, and
 the compiled endpoint replayed their exact statements under the locked axiom
-policy.  The remaining acceptance work includes two heavier representative
-leaf classes, a lower-memory or segmented foundation strategy, compute-context
+policy.  Pinned, digest-checked extractions of Flyspeck's original
+list/refinement and real-arithmetic/refinement proof blocks also replay exactly,
+completing the three-class producer route selection.  The remaining acceptance
+work includes a lower-memory or segmented foundation strategy, compute-context
 release/source alignment, and the nonlinear/LP evidence path.
 
 ## Layout

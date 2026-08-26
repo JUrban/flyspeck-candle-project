@@ -72,8 +72,9 @@ artifact's exact historical equation set and provenance.
 ## Acceptance impact
 
 The ordinary clean-manifest part of G3 and Gate 2 now has concrete evidence.
-G3 remains in progress because list/refinement and arithmetic or
-certificate-heavy leaves are still required.  G2 remains in progress because
+Later the same day, the digest-checked refinement harness added list and
+real-arithmetic leaves; see `2026-08-26-representative-leaves.md`.  G3 is now
+proved at the roadmap's route-selection scope.  G2 remains in progress because
 the monolithic foundation exceeded the conservative resource ceiling and no
 restartable segment format exists yet.  G9 and the full L2 conclusion remain
 open.
