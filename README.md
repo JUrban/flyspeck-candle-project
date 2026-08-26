@@ -24,9 +24,11 @@ list/refinement and real-arithmetic/refinement proof blocks also replay exactly,
 completing the three-class producer route selection.  Candle's compute source
 is now aligned with the verified kernel's pair-condition equation, and a
 source-derived 62-equation fixture positively exercises `COMPUTE_INIT` and
-`COMPUTE` through the compiled endpoint.  The remaining acceptance work
-includes a restartable lower-memory or segmented foundation strategy, a
-Flyspeck-specific compute-heavy leaf, and the nonlinear/LP evidence path.
+`COMPUTE` through the compiled endpoint.  The bounded producer now also has a
+proved DMTCP checkpoint/kill/restore boundary and a head-locked supervisor for
+the real Flyspeck `main` and `full` source sequences.  The remaining acceptance
+work includes measuring and completing that full run, a Flyspeck-specific
+compute-heavy leaf, and the nonlinear/LP evidence path.
 
 ## Layout
 
@@ -35,6 +37,9 @@ Flyspeck-specific compute-heavy leaf, and the nonlinear/LP evidence path.
   them.
 - `docs/progress/`: dated, evidence-backed interim reports.
 - `scripts/verify-lock.sh`: checks local source identities and roadmap hash.
+- `scripts/test-producer-resume.sh`: destructive-process restart smoke test.
+- `scripts/run-restartable-flyspeck-export.sh`: resumable real-build exporter
+  and compiled replay supervisor.
 
 Nothing in the producer, translator, merger, or orchestration repository is in
 the logical trust boundary.  Release traces are hostile input to the compiled

@@ -8,7 +8,7 @@ upstream_master = "5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d"
 upstream_pft = "51781e5ad891f5792bcf34ac1ea18c1ffd1b6425"
 development_branch = "codex/flyspeck-pft"
 rebased_head_at_bootstrap = "96d12a0752a8bdf00abb1d3cb0fe3d7363d1185a"
-development_head = "5f0ee02dfd86180bf8fb68be32492f67bffdeb6e"
+development_head = "177a9c1e759355a325842650d224b56a3d4437dd"
 
 [repositories.cakeml]
 url = "https://github.com/CakeML/cakeml.git"
@@ -25,16 +25,16 @@ development_head = "6dc37788c18e3404294bf137067046bae5904ad0"
 url = "https://github.com/flyspeck/flyspeck.git"
 commit = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
 development_branch = "codex/candle-replay"
-development_head = "0e2f9e331b0eded8aca3dbacfe26df92fc84bcac"
+development_head = "f884cba58cf962e7b67231c81290dcafd72d22b3"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
 observed_master = "433477862bb90b328a593e012e09390e99b2439b"
 development_branch = "codex/flyspeck-pft-producer"
-development_head = "8db51a0de545f9f9d069274700348c6ea7d37275"
+development_head = "d52a9a847c4dff2509231b3a05199de922547916"
 compatibility_base = "d8366986e22555c4e4c8ff49667d646d15c35f14"
 compatibility_branch = "codex/flyspeck-pft-compat"
-compatibility_head = "fa5e1542f32ebb9d5b20181f9529715c301792d0"
+compatibility_head = "ead33fbf82d7499919dead57b4ce8b2b06256f55"
 
 [toolchain.cakeml_binary]
 url = "https://cakeml.org/regression/artefacts/3286/cake-x64-64.tar.gz"
@@ -81,6 +81,15 @@ initialization_equations = 62
 target = "candle$COMPUTE_ZERO"
 axioms = ["ETA_AX", "SELECT_AX", "INFINITY_AX"]
 
+[artifacts.producer_resume]
+path = "repos/candle/candle/pft/tests/fixtures/producer-resume.pft.bin"
+sha256 = "7a3c7cefe5649bd70ddb8fa6a8c6c18443068c9e1e522385c9dce2d767aa0dc2"
+producer_hol_light = "ead33fbf82d7499919dead57b4ce8b2b06256f55"
+commands = 305
+table_limits = [63, 64, 99]
+targets = ["candle$RESUME_BEFORE", "candle$RESUME_AFTER"]
+axioms = []
+
 [toolchain.hol4]
 polyml = "5.7.1"
 jobs = 4
@@ -91,3 +100,8 @@ opam_switch = "local ocaml-system"
 opam_packages = ["zarith.1.14", "camlp-streams.5.0.1"]
 system_findlib_path = "/usr/lib/ocaml"
 jobs = 4
+
+[toolchain.restart]
+dmtcp = "4.1.0"
+boundary = "flushed PFT state plus source-file index"
+checkpoint_command = "dmtcp_command -kc"
