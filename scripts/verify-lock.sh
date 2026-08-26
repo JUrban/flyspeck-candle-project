@@ -91,6 +91,25 @@ resume_fixture_sha=$(sha256sum "$resume_fixture" | cut -d' ' -f1)
 [[ $(dmtcp_launch --version | sed -n '1s/.* //p') == 4.1.0 ]]
 printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
+certificate_inventory_sha=$(
+  cd "$repos_dir/flyspeck/formal_lp/glpk/binary"
+  find . -maxdepth 1 -type f \( -name 'easy*' -o -name 'hard*' \) -print0 |
+    sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1
+)
+[[ "$certificate_inventory_sha" == f42a7a2ddf81f2cf6e217e95c9b59df49dc834ab606684f54df0d68aba5071ca ]]
+archive_sha=$(sha256sum \
+  "$repos_dir/flyspeck/formal_graph/archive/archive_all.ml" | cut -d' ' -f1)
+[[ "$archive_sha" == 703ea865a124aa69f0ee12d94df7065bbbf5701a3085776e24632d14493474db ]]
+nonlinear_prep_sha=$(sha256sum \
+  "$repos_dir/flyspeck/text_formalization/nonlinear/prep.hl" | cut -d' ' -f1)
+[[ "$nonlinear_prep_sha" == 3ccef1bf65b13ca02e7ab1f409ebb49c979862ed5ea6ff1d57ed1e4e4761723d ]]
+nonlinear_log_sha=$(sha256sum \
+  "$repos_dir/flyspeck/text_formalization/nonlinear/break_case_log.hl" |
+  cut -d' ' -f1)
+[[ "$nonlinear_log_sha" == 2b3c74156a5ee9a6b3b5b6905ff28a7fb21e7c50052ad37887b90b9ed3d5e499 ]]
+printf 'ok: full LP/nonlinear inputs %s (archive %s)\n' \
+  "$certificate_inventory_sha" "$archive_sha"
+
 check_head cakeml dcc03f2866f05b1db18b9f45c731ce45c3a3133e
 check_development candle codex/flyspeck-pft \
   5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d \
@@ -100,7 +119,7 @@ check_development HOL codex/flyspeck-pft-producer \
   6dc37788c18e3404294bf137067046bae5904ad0
 check_development flyspeck codex/candle-replay \
   1ce0353008eba83d3c76ae9a25c3c242e4802d53 \
-  f884cba58cf962e7b67231c81290dcafd72d22b3
+  2ea440e9f7c55734d1e47738e44a6129ce0ecf5a
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   d52a9a847c4dff2509231b3a05199de922547916

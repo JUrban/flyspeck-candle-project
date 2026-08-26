@@ -26,9 +26,12 @@ is now aligned with the verified kernel's pair-condition equation, and a
 source-derived 62-equation fixture positively exercises `COMPUTE_INIT` and
 `COMPUTE` through the compiled endpoint.  The bounded producer now also has a
 proved DMTCP checkpoint/kill/restore boundary and a head-locked supervisor for
-the real Flyspeck `main` and `full` source sequences.  The remaining acceptance
-work includes measuring and completing that full run, a Flyspeck-specific
-compute-heavy leaf, and the nonlinear/LP evidence path.
+the real Flyspeck `main` and `full` source sequences.  The complete LP archive
+inventory is pinned, long LP/nonlinear phases have internal restart boundaries,
+and the full target now eliminates both HOL-side premises to leave only the
+Isabelle tame-classification premise.  The remaining acceptance work includes
+measuring, completing, and replaying that full run and a Flyspeck-specific
+compute-heavy leaf.
 
 ## Layout
 

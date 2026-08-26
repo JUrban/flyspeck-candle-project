@@ -14,7 +14,7 @@ the evidence column names the release-level artifact that is required.
 | G6 custom FFI | open (source/tooling track) | Versioned ABI, bounds/error behavior, deterministic tests, and explicit untrusted-input policy. |
 | G7 OCaml compatibility | open (source track) | Rebased fix-top100 changes and machine-readable whole-suite results. |
 | G8 loader/build | in progress | Pinned source order, deterministic paths, resume semantics, and explicit main/full driver are implemented; completed full-build evidence remains. |
-| G9 nonlinear/LP evidence | open | Pinned certificates/traces and Candle-checked theorem connections for the full path. |
+| G9 nonlinear/LP evidence | in progress | The complete certificate/archive inventory is pinned and the four-theorem L2 connection is implemented; completed compiled replay remains. |
 | G10 Isabelle tame graphs | not required for L2 | For L3 only: checked export/bridge or reproof with theorem correspondence. |
 | G11 end-to-end regression | open | 100 theorems, representative leaves, full L2 build, theorem/axiom/resource audit. |
 | G12 release manifest | in progress | Commits and hashes; policy; target fingerprint; expected assumptions; executable identity and resource record. |
@@ -60,3 +60,12 @@ and produce bytes identical to an uninterrupted run.  The real-build driver
 uses the same boundary for the checked-in `main` and `full` sequences.  This
 implements G2/G8 restart semantics but does not supply the full-trace resource
 measurement or final theorem replay needed to mark either row proved.
+
+The full-input audit decodes all 39 LP certificate shards and matches their
+19,715 unique graph identifiers bijectively with the 19,715-entry tame archive.
+The full target script saves the LP theorem, nonlinear theorem, prior
+conditional theorem, and a primitive-inference combination proving
+`import_tame_classification ==> the_kepler_conjecture`.  LP shards and groups
+of serialized nonlinear cases now expose restart boundaries.  These facts move
+G9 into progress, but no full-build claim is made until the resulting trace has
+completed and replayed in the compiled checker.

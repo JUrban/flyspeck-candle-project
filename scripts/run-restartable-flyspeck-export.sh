@@ -27,6 +27,7 @@ config_file="$state_dir/run.conf"
 checkpoint_dir="$state_dir/checkpoints"
 log_dir="$state_dir/logs"
 checkpoint_files_per_generation=${CANDLE_PFT_CHECKPOINT_FILES:-10}
+checkpoint_work_units_per_generation=${CANDLE_PFT_CHECKPOINT_WORK_UNITS:-25}
 max_generations=${CANDLE_PFT_MAX_GENERATIONS:-1000}
 active_port=
 
@@ -36,16 +37,34 @@ case "$output$state_dir" in
     exit 2;;
 esac
 [[ "$checkpoint_files_per_generation" =~ ^[1-9][0-9]*$ ]]
+[[ "$checkpoint_work_units_per_generation" =~ ^[1-9][0-9]*$ ]]
 [[ "$max_generations" =~ ^[1-9][0-9]*$ ]]
 
 for command in dmtcp_coordinator dmtcp_launch dmtcp_command dmtcp_restart \
-               truncate timeout python3 rg realpath git; do
+               truncate timeout python3 rg realpath git sha256sum xargs; do
   command -v "$command" >/dev/null
+done
+
+for repo in "$producer_dir" "$flyspeck_dir" "$candle_dir"; do
+  git -C "$repo" diff --quiet
+  git -C "$repo" diff --cached --quiet
 done
 
 producer_head=$(git -C "$producer_dir" rev-parse HEAD)
 flyspeck_head=$(git -C "$flyspeck_dir" rev-parse HEAD)
 candle_head=$(git -C "$candle_dir" rev-parse HEAD)
+certificate_inventory_sha=$(
+  cd "$flyspeck_dir/formal_lp/glpk/binary"
+  find . -maxdepth 1 -type f \( -name 'easy*' -o -name 'hard*' \) -print0 |
+    sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1
+)
+archive_sha=$(sha256sum \
+  "$flyspeck_dir/formal_graph/archive/archive_all.ml" | cut -d' ' -f1)
+nonlinear_prep_sha=$(sha256sum \
+  "$flyspeck_dir/text_formalization/nonlinear/prep.hl" | cut -d' ' -f1)
+nonlinear_log_sha=$(sha256sum \
+  "$flyspeck_dir/text_formalization/nonlinear/break_case_log.hl" |
+  cut -d' ' -f1)
 
 read_config_value() {
   local key=$1
@@ -59,13 +78,19 @@ if [[ ! -e "$state_dir" ]]; then
   }
   mkdir -p "$checkpoint_dir" "$log_dir" "$(dirname -- "$output")"
   {
-    printf 'schema=1\n'
+    printf 'schema=2\n'
     printf 'sequence=%s\n' "$sequence"
     printf 'output=%s\n' "$output"
     printf 'producer_head=%s\n' "$producer_head"
     printf 'flyspeck_head=%s\n' "$flyspeck_head"
     printf 'candle_head=%s\n' "$candle_head"
     printf 'checkpoint_files=%s\n' "$checkpoint_files_per_generation"
+    printf 'checkpoint_work_units=%s\n' \
+      "$checkpoint_work_units_per_generation"
+    printf 'certificate_inventory_sha256=%s\n' "$certificate_inventory_sha"
+    printf 'archive_sha256=%s\n' "$archive_sha"
+    printf 'nonlinear_prep_sha256=%s\n' "$nonlinear_prep_sha"
+    printf 'nonlinear_log_sha256=%s\n' "$nonlinear_log_sha"
   } >"$config_file"
   fresh_run=1
 else
@@ -73,7 +98,7 @@ else
     printf 'invalid state directory: %s\n' "$state_dir" >&2
     exit 2
   }
-  [[ $(read_config_value schema) == 1 ]]
+  [[ $(read_config_value schema) == 2 ]]
   [[ $(read_config_value sequence) == "$sequence" ]]
   [[ $(read_config_value output) == "$output" ]]
   [[ $(read_config_value producer_head) == "$producer_head" ]]
@@ -81,6 +106,13 @@ else
   [[ $(read_config_value candle_head) == "$candle_head" ]]
   [[ $(read_config_value checkpoint_files) == \
      "$checkpoint_files_per_generation" ]]
+  [[ $(read_config_value checkpoint_work_units) == \
+     "$checkpoint_work_units_per_generation" ]]
+  [[ $(read_config_value certificate_inventory_sha256) == \
+     "$certificate_inventory_sha" ]]
+  [[ $(read_config_value archive_sha256) == "$archive_sha" ]]
+  [[ $(read_config_value nonlinear_prep_sha256) == "$nonlinear_prep_sha" ]]
+  [[ $(read_config_value nonlinear_log_sha256) == "$nonlinear_log_sha" ]]
   fresh_run=0
   printf 'WARNING: restoring only locally created, trusted DMTCP images.\n' >&2
 fi
@@ -103,6 +135,7 @@ common_environment=(
   "CANDLE_FLYSPECK_SEQUENCE=$sequence"
   "CANDLE_PFT_PROCESS_CHECKPOINTS=1"
   "CANDLE_PFT_CHECKPOINT_FILES=$checkpoint_files_per_generation"
+  "CANDLE_PFT_CHECKPOINT_WORK_UNITS=$checkpoint_work_units_per_generation"
   "CANDLE_PFT_RESUME_SCRIPT=$export_script"
 )
 
@@ -182,15 +215,15 @@ printf '%s  %s\n' "$output_sha" "$(basename -- "$output")" \
   >"$state_dir/SHA256SUMS"
 
 if [[ ${CANDLE_REPLAY_AFTER_EXPORT:-1} == 1 ]]; then
-  expected_target=flyspeck\$The_main_statement.kepler_conjecture_with_assumptions
+  expected_targets='["flyspeck$The_main_statement.kepler_conjecture_with_assumptions"]'
   if [[ "$sequence" == full ]]; then
-    expected_target=flyspeck\$The_kepler_conjecture.tame_nonlinear_imp_kepler_conjecture
+    expected_targets='["flyspeck$Linear_programming_results.linear_programming_results_th"; "flyspeck$Mk_all_ineq.the_nonlinear_inequalities"; "flyspeck$The_kepler_conjecture.tame_nonlinear_imp_kepler_conjecture"; "flyspeck$Candle_flyspeck_l2.tame_imp_kepler_conjecture"]'
   fi
   timeout 86400 "$candle_dir/candle.sh" >"$state_dir/replay.log" 2>&1 <<EOF
 #use "candle/pft/replay.ml";;
 allow_standard_pft_axioms ();;
 let evidence = replay "$output";;
-if map fst (pft_result_saved_theorems evidence) = ["$expected_target"] &&
+if map fst (pft_result_saved_theorems evidence) = $expected_targets &&
    length (pft_result_axioms evidence) = 3
 then print_endline "CANDLE_FULL_REPLAY_OK"
 else failwith "unexpected restartable Flyspeck replay evidence";;

@@ -25,7 +25,7 @@ development_head = "6dc37788c18e3404294bf137067046bae5904ad0"
 url = "https://github.com/flyspeck/flyspeck.git"
 commit = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
 development_branch = "codex/candle-replay"
-development_head = "f884cba58cf962e7b67231c81290dcafd72d22b3"
+development_head = "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
@@ -103,5 +103,15 @@ jobs = 4
 
 [toolchain.restart]
 dmtcp = "4.1.0"
-boundary = "flushed PFT state plus source-file index"
+boundary = "flushed PFT state plus source-file or LP/nonlinear work-unit index"
 checkpoint_command = "dmtcp_command -kc"
+
+[evidence_inputs.full_flyspeck]
+certificate_files = 39
+certificate_ids = 19715
+archive_ids = 19715
+certificate_inventory_sha256 = "f42a7a2ddf81f2cf6e217e95c9b59df49dc834ab606684f54df0d68aba5071ca"
+archive_sha256 = "703ea865a124aa69f0ee12d94df7065bbbf5701a3085776e24632d14493474db"
+nonlinear_prep_sha256 = "3ccef1bf65b13ca02e7ab1f409ebb49c979862ed5ea6ff1d57ed1e4e4761723d"
+nonlinear_log_sha256 = "2b3c74156a5ee9a6b3b5b6905ff28a7fb21e7c50052ad37887b90b9ed3d5e499"
+certificate_archive_match = "zero duplicates, omissions, or extras"
