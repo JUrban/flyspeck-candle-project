@@ -8,7 +8,7 @@ upstream_master = "5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d"
 upstream_pft = "51781e5ad891f5792bcf34ac1ea18c1ffd1b6425"
 development_branch = "codex/flyspeck-pft"
 rebased_head_at_bootstrap = "96d12a0752a8bdf00abb1d3cb0fe3d7363d1185a"
-development_head = "754f727a307e9e6cdd0155ce67b9561103c3f8b4"
+development_head = "5d0c854c63874731707f52e1b88820493581e254"
 
 [repositories.cakeml]
 url = "https://github.com/CakeML/cakeml.git"
@@ -19,19 +19,22 @@ observed_master = "dcc03f2866f05b1db18b9f45c731ce45c3a3133e"
 url = "https://github.com/HOL-Theorem-Prover/HOL.git"
 upstream_replay = "427496c4b6d9796b0d02167715ac7412f5f83a44"
 development_branch = "codex/flyspeck-pft-producer"
-development_head = "162ebb3ba685add636f5241acf53ddc7136857ab"
+development_head = "6dc37788c18e3404294bf137067046bae5904ad0"
 
 [repositories.flyspeck]
 url = "https://github.com/flyspeck/flyspeck.git"
 commit = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
 development_branch = "codex/candle-replay"
-development_head = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
+development_head = "b47082d7b6079f00fe22308ffab225f3e0d2b285"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
 observed_master = "433477862bb90b328a593e012e09390e99b2439b"
 development_branch = "codex/flyspeck-pft-producer"
-development_head = "433477862bb90b328a593e012e09390e99b2439b"
+development_head = "8db51a0de545f9f9d069274700348c6ea7d37275"
+compatibility_base = "d8366986e22555c4e4c8ff49667d646d15c35f14"
+compatibility_branch = "codex/flyspeck-pft-compat"
+compatibility_head = "fa5e1542f32ebb9d5b20181f9529715c301792d0"
 
 [toolchain.cakeml_binary]
 url = "https://cakeml.org/regression/artefacts/3286/cake-x64-64.tar.gz"

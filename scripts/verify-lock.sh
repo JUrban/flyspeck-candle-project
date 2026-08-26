@@ -49,13 +49,16 @@ printf 'ok: roadmap %s\n' "$roadmap_actual"
 check_head cakeml dcc03f2866f05b1db18b9f45c731ce45c3a3133e
 check_development candle codex/flyspeck-pft \
   5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d \
-  754f727a307e9e6cdd0155ce67b9561103c3f8b4
+  5d0c854c63874731707f52e1b88820493581e254
 check_development HOL codex/flyspeck-pft-producer \
   427496c4b6d9796b0d02167715ac7412f5f83a44 \
-  162ebb3ba685add636f5241acf53ddc7136857ab
+  6dc37788c18e3404294bf137067046bae5904ad0
 check_development flyspeck codex/candle-replay \
   1ce0353008eba83d3c76ae9a25c3c242e4802d53 \
-  1ce0353008eba83d3c76ae9a25c3c242e4802d53
+  b47082d7b6079f00fe22308ffab225f3e0d2b285
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
-  433477862bb90b328a593e012e09390e99b2439b
+  8db51a0de545f9f9d069274700348c6ea7d37275
+check_development hol-light-flyspeck codex/flyspeck-pft-compat \
+  d8366986e22555c4e4c8ff49667d646d15c35f14 \
+  fa5e1542f32ebb9d5b20181f9529715c301792d0
