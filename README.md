@@ -16,10 +16,12 @@ consumes both official HOL4-writer traces and a direct HOL Light bootstrap
 trace, rejects the committed malformed/unauthorized suite, enforces exact
 standard-axiom identities, and returns deterministic replay evidence.  The
 HOL Light producer can write primitive inferences online with bounded producer
-memory and can safely delete and reuse replay slots.  The next acceptance step
-is a bounded rerun at the Flyspeck-tested HOL Light pin followed by exact replay
-of representative Flyspeck targets; Gate 1 still needs its final explicit
-compiled-soundness audit.
+memory and can safely delete and reuse replay slots.  The tested-pin producer
+has now emitted two real theorems from Flyspeck's `general/hol-library.hl`, and
+the compiled endpoint replayed their exact statements under the locked axiom
+policy.  The remaining acceptance work includes two heavier representative
+leaf classes, a lower-memory or segmented foundation strategy, compute-context
+release/source alignment, and the nonlinear/LP evidence path.
 
 ## Layout
 

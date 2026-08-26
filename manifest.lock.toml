@@ -8,7 +8,7 @@ upstream_master = "5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d"
 upstream_pft = "51781e5ad891f5792bcf34ac1ea18c1ffd1b6425"
 development_branch = "codex/flyspeck-pft"
 rebased_head_at_bootstrap = "96d12a0752a8bdf00abb1d3cb0fe3d7363d1185a"
-development_head = "5d0c854c63874731707f52e1b88820493581e254"
+development_head = "335f3d877b18975ea10854a65669b2c19dfb74bc"
 
 [repositories.cakeml]
 url = "https://github.com/CakeML/cakeml.git"
@@ -46,6 +46,17 @@ patched_assembly_sha256 = "b55547fb4a7e4586a5503b7e7c2cb65fd850a82fe7ca2504d30fb
 patched_basis_ffi_sha256 = "fcf6d21c3dededac23ea3f905c45223265ed75c33001fda42a5d6b361dbe8bab"
 candle_boot_sha256 = "6a4cf654617d5709ab1e0c50beccb395c17b7ffb18d13a00e40d54ceb4acc144"
 config_sha256 = "162ea59dac4c00177530ecbdb7a5ad72a03460825c5160a8c596dd4f53a5f3cb"
+
+[artifacts.flyspeck_hol_library]
+path = "repos/candle/candle/pft/tests/fixtures/flyspeck-hol-library.pft.bin"
+sha256 = "c64751d819bffa16d4e7abe7c31bb1836ba3958dd60c5bfbe545495f99dec025"
+source_file = "text_formalization/general/hol-library.hl"
+source_flyspeck = "b47082d7b6079f00fe22308ffab225f3e0d2b285"
+producer_hol_light = "fa5e1542f32ebb9d5b20181f9529715c301792d0"
+commands = 171560
+table_limits = [19125, 57241, 91135]
+targets = ["flyspeck$IMAGE_DELETE_INJ_COMPAT", "flyspeck$HAS_SIZE_2_EXISTS"]
+axioms = ["ETA_AX", "SELECT_AX", "INFINITY_AX"]
 
 [toolchain.hol4]
 polyml = "5.7.1"

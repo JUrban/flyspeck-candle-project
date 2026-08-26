@@ -8,7 +8,7 @@ the evidence column names the release-level artifact that is required.
 | --- | --- | --- |
 | G1 Candle PFT consumer | in progress | Compiled checker; pinned schema/ruleset/policy; positive and per-command corruption tests; exact theorem/assumption result; soundness-export connection. |
 | G2 PFT scale | in progress | Streaming/segmented merge and replay; effective deletion/reuse; checkpoints; target reachability; measured full-trace resource envelope. |
-| G3 HOL Light/Flyspeck producer | in progress | Direct HOL Light instrumentation or semantics-preserving bridge; three representative leaves; one clean-manifest Flyspeck leaf replayed exactly in Candle. |
+| G3 HOL Light/Flyspeck producer | in progress | Direct producer implemented; ordinary clean-manifest Flyspeck leaf replayed exactly; list/refinement and arithmetic/certificate representative leaves remain. |
 | G4 Dopen | open (source track) | Current-master parser, inferencer/CV, soundness and completeness proof integration, layered corpus. |
 | G5 pointer equality | open (source/performance track) | End-to-end source/backend/runtime semantics and measured Candle/Flyspeck need. |
 | G6 custom FFI | open (source/tooling track) | Versioned ABI, bounds/error behavior, deterministic tests, and explicit untrusted-input policy. |
@@ -35,3 +35,12 @@ the evidence column names the release-level artifact that is required.
 The full objective is complete only when every L2-required row and Gate 1–4 is
 proved by current artifacts.  Source-as-is compatibility and optional L3 remain
 separately labelled and cannot be used to overstate the L2 result.
+
+## Current gate evidence
+
+The first Gate 2 artifact is
+`candle/pft/tests/fixtures/flyspeck-hol-library.pft.bin`, locked in the manifest.
+It reconstructs Flyspeck's `IMAGE_DELETE_INJ_COMPAT` and `HAS_SIZE_2_EXISTS`
+with exact empty assumptions and exact conclusions.  This satisfies the
+ordinary-leaf and clean-manifest parts of G3, but not the three-leaf route
+selection or full-build parts of Gates 2–4.

@@ -67,10 +67,15 @@ do
   printf 'ok: %s %s\n' "$path" "$actual"
 done
 
+flyspeck_leaf="$repos_dir/candle/candle/pft/tests/fixtures/flyspeck-hol-library.pft.bin"
+flyspeck_leaf_sha=$(sha256sum "$flyspeck_leaf" | cut -d' ' -f1)
+[[ "$flyspeck_leaf_sha" == c64751d819bffa16d4e7abe7c31bb1836ba3958dd60c5bfbe545495f99dec025 ]]
+printf 'ok: Flyspeck ordinary leaf %s\n' "$flyspeck_leaf_sha"
+
 check_head cakeml dcc03f2866f05b1db18b9f45c731ce45c3a3133e
 check_development candle codex/flyspeck-pft \
   5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d \
-  5d0c854c63874731707f52e1b88820493581e254
+  335f3d877b18975ea10854a65669b2c19dfb74bc
 check_development HOL codex/flyspeck-pft-producer \
   427496c4b6d9796b0d02167715ac7412f5f83a44 \
   6dc37788c18e3404294bf137067046bae5904ad0
