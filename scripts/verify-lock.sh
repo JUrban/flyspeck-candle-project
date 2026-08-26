@@ -46,6 +46,27 @@ roadmap_expected=713b97d2d8b873504ea428d014a142acb066ff5d27263dd5be6a9c0135444e3
 [[ "$roadmap_actual" == "$roadmap_expected" ]]
 printf 'ok: roadmap %s\n' "$roadmap_actual"
 
+cake_binary="$repos_dir/candle/candle/build/cake"
+cake_binary_sha=$(sha256sum "$cake_binary" | cut -d' ' -f1)
+[[ "$cake_binary_sha" == d361be3839f31811328d5a0da1ecea15a8a73f369c77e34a288355f16bb930d3 ]]
+cake_source=$($cake_binary --version 2>&1 | sed -n 's/^CakeML: //p')
+[[ "$cake_source" == 4e312c0f7e18b9c5789c8ac4e0af257bff895cf5 ]]
+printf 'ok: compiled CakeML/Candle %s (source %s)\n' \
+  "$cake_binary_sha" "$cake_source"
+
+for locked_file in \
+  'candle/build/cake.S:b55547fb4a7e4586a5503b7e7c2cb65fd850a82fe7ca2504d30fb31f7d350327' \
+  'candle/build/basis_ffi.c:fcf6d21c3dededac23ea3f905c45223265ed75c33001fda42a5d6b361dbe8bab' \
+  'candle/build/candle_boot.ml:6a4cf654617d5709ab1e0c50beccb395c17b7ffb18d13a00e40d54ceb4acc144' \
+  'candle/build/config_enc_str.txt:162ea59dac4c00177530ecbdb7a5ad72a03460825c5160a8c596dd4f53a5f3cb'
+do
+  path=${locked_file%%:*}
+  expected=${locked_file#*:}
+  actual=$(sha256sum "$repos_dir/candle/$path" | cut -d' ' -f1)
+  [[ "$actual" == "$expected" ]]
+  printf 'ok: %s %s\n' "$path" "$actual"
+done
+
 check_head cakeml dcc03f2866f05b1db18b9f45c731ce45c3a3133e
 check_development candle codex/flyspeck-pft \
   5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d \

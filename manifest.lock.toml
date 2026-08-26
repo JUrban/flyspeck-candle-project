@@ -39,6 +39,13 @@ compatibility_head = "fa5e1542f32ebb9d5b20181f9529715c301792d0"
 [toolchain.cakeml_binary]
 url = "https://cakeml.org/regression/artefacts/3286/cake-x64-64.tar.gz"
 sha256 = "4e074090eb04d8fdfb62536457adb31c98e1b17f6cd66c9483806601251053b7"
+compiler_source = "4e312c0f7e18b9c5789c8ac4e0af257bff895cf5"
+compiler_reported_hol4 = "63f2eb9c146352dfd0bab8c5604a096d1e554d03"
+compiled_binary_sha256 = "d361be3839f31811328d5a0da1ecea15a8a73f369c77e34a288355f16bb930d3"
+patched_assembly_sha256 = "b55547fb4a7e4586a5503b7e7c2cb65fd850a82fe7ca2504d30fb31f7d350327"
+patched_basis_ffi_sha256 = "fcf6d21c3dededac23ea3f905c45223265ed75c33001fda42a5d6b361dbe8bab"
+candle_boot_sha256 = "6a4cf654617d5709ab1e0c50beccb395c17b7ffb18d13a00e40d54ceb4acc144"
+config_sha256 = "162ea59dac4c00177530ecbdb7a5ad72a03460825c5160a8c596dd4f53a5f3cb"
 
 [toolchain.hol4]
 polyml = "5.7.1"
