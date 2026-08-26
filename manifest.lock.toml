@@ -1,0 +1,36 @@
+schema = 1
+claim_level = "L2"
+roadmap_sha256 = "713b97d2d8b873504ea428d014a142acb066ff5d27263dd5be6a9c0135444e3b"
+
+[repositories.candle]
+url = "https://github.com/CakeML/candle.git"
+upstream_master = "5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d"
+upstream_pft = "51781e5ad891f5792bcf34ac1ea18c1ffd1b6425"
+development_branch = "codex/flyspeck-pft"
+rebased_head_at_bootstrap = "96d12a0752a8bdf00abb1d3cb0fe3d7363d1185a"
+
+[repositories.cakeml]
+url = "https://github.com/CakeML/cakeml.git"
+roadmap_audited = "14856fcfddeb3fdafdf8a1080e567a55d3102698"
+observed_master = "dcc03f2866f05b1db18b9f45c731ce45c3a3133e"
+
+[repositories.hol4]
+url = "https://github.com/HOL-Theorem-Prover/HOL.git"
+upstream_replay = "427496c4b6d9796b0d02167715ac7412f5f83a44"
+development_branch = "codex/flyspeck-pft-producer"
+
+[repositories.flyspeck]
+url = "https://github.com/flyspeck/flyspeck.git"
+commit = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
+
+[repositories.hol_light]
+url = "https://github.com/jrh13/hol-light.git"
+observed_master = "433477862bb90b328a593e012e09390e99b2439b"
+
+[toolchain.cakeml_binary]
+url = "https://cakeml.org/regression/artefacts/3286/cake-x64-64.tar.gz"
+sha256 = "4e074090eb04d8fdfb62536457adb31c98e1b17f6cd66c9483806601251053b7"
+
+[toolchain.hol4]
+polyml = "5.7.1"
+jobs = 4
