@@ -77,10 +77,18 @@ refinement_leaf_sha=$(sha256sum "$refinement_leaf" | cut -d' ' -f1)
 [[ "$refinement_leaf_sha" == acc76842744d52667c42fd9831bb370e8a812f77668fa7a6ce5f2b6fbefef101 ]]
 printf 'ok: Flyspeck refinement leaves %s\n' "$refinement_leaf_sha"
 
+compute_fixture="$repos_dir/candle/candle/pft/tests/fixtures/compute-zero.pft.bin"
+compute_fixture_sha=$(sha256sum "$compute_fixture" | cut -d' ' -f1)
+[[ "$compute_fixture_sha" == 5f63f5ca8e280bf83e1c9838884130199891569b48912a85b2042a791e0b46cc ]]
+compute_source_sha=$(sha256sum "$repos_dir/candle/candle/compute.ml" | cut -d' ' -f1)
+[[ "$compute_source_sha" == be24fa596eb4a53986bad69c4540e845279c01d3257d487c40dc76ec5e68468c ]]
+printf 'ok: source-aligned compute %s (source %s)\n' \
+  "$compute_fixture_sha" "$compute_source_sha"
+
 check_head cakeml dcc03f2866f05b1db18b9f45c731ce45c3a3133e
 check_development candle codex/flyspeck-pft \
   5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d \
-  056e34951fe9430e858e461229f4c14eca06020a
+  5f0ee02dfd86180bf8fb68be32492f67bffdeb6e
 check_development HOL codex/flyspeck-pft-producer \
   427496c4b6d9796b0d02167715ac7412f5f83a44 \
   6dc37788c18e3404294bf137067046bae5904ad0

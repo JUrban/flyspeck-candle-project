@@ -8,7 +8,7 @@ upstream_master = "5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d"
 upstream_pft = "51781e5ad891f5792bcf34ac1ea18c1ffd1b6425"
 development_branch = "codex/flyspeck-pft"
 rebased_head_at_bootstrap = "96d12a0752a8bdf00abb1d3cb0fe3d7363d1185a"
-development_head = "056e34951fe9430e858e461229f4c14eca06020a"
+development_head = "5f0ee02dfd86180bf8fb68be32492f67bffdeb6e"
 
 [repositories.cakeml]
 url = "https://github.com/CakeML/cakeml.git"
@@ -68,6 +68,18 @@ table_limits = [44830, 143185, 288314]
 targets = ["flyspeck$Basics.LENGTH3", "flyspeck$Vukhacky_tactics.REDUCE_WITH_DIV_Euler_lemma"]
 axioms = ["ETA_AX", "SELECT_AX", "INFINITY_AX"]
 source_digests = ["leg/basics.hl:7d90051d1e2932d238cc8ed2f5548dd3", "general/vukhacky_tactics.hl:6b5b45ba6f26ed89e31f0c4e9456fb32"]
+
+[artifacts.compute_zero]
+path = "repos/candle/candle/pft/tests/fixtures/compute-zero.pft.bin"
+sha256 = "5f63f5ca8e280bf83e1c9838884130199891569b48912a85b2042a791e0b46cc"
+source_candle = "b55243eb7776d37957d64b5a99365cd1dd4bd600"
+source_compute_sha256 = "be24fa596eb4a53986bad69c4540e845279c01d3257d487c40dc76ec5e68468c"
+producer_hol_light = "fa5e1542f32ebb9d5b20181f9529715c301792d0"
+commands = 1311902
+table_limits = [200544, 585972, 525260]
+initialization_equations = 62
+target = "candle$COMPUTE_ZERO"
+axioms = ["ETA_AX", "SELECT_AX", "INFINITY_AX"]
 
 [toolchain.hol4]
 polyml = "5.7.1"

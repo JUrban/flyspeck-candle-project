@@ -21,9 +21,12 @@ has now emitted two real theorems from Flyspeck's `general/hol-library.hl`, and
 the compiled endpoint replayed their exact statements under the locked axiom
 policy.  Pinned, digest-checked extractions of Flyspeck's original
 list/refinement and real-arithmetic/refinement proof blocks also replay exactly,
-completing the three-class producer route selection.  The remaining acceptance
-work includes a lower-memory or segmented foundation strategy, compute-context
-release/source alignment, and the nonlinear/LP evidence path.
+completing the three-class producer route selection.  Candle's compute source
+is now aligned with the verified kernel's pair-condition equation, and a
+source-derived 62-equation fixture positively exercises `COMPUTE_INIT` and
+`COMPUTE` through the compiled endpoint.  The remaining acceptance work
+includes a restartable lower-memory or segmented foundation strategy, a
+Flyspeck-specific compute-heavy leaf, and the nonlinear/LP evidence path.
 
 ## Layout
 

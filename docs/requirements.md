@@ -47,4 +47,8 @@ selection or full-build parts of Gates 2–4.  The companion
 `flyspeck-refinement-leaves.pft.bin` now supplies the other two route-selection
 classes.  It closes G3, but it remains deliberately distinct from the
 compute-heavy, certificate-heavy, and full-build evidence required by G2, G9,
-and G11.
+and G11.  `compute-zero.pft.bin` separately proves that the 62 equations from
+the corrected Candle source initialize the verified compute context and that a
+positive `COMPUTE` result passes exact `EXPECT` checking.  This closes the
+source/release equation mismatch but is intentionally not counted as a
+Flyspeck-specific compute-heavy Gate 2 leaf.
