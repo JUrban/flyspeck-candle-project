@@ -11,9 +11,11 @@ The upstream repositories are checked out as sibling directories under
 this repository holds the locked manifest, cross-repository tooling, acceptance
 criteria, and progress reports.
 
-Current work is Phase 1 / Gate 1: align and harden the existing Candle PFT
-consumer against the current HOL4 PFT writer, build both sides, and establish a
-positive/negative trace suite.
+Current work is Phase 1 / Gate 1.  The source-level Candle endpoint now consumes
+an official HOL4-writer trace and rejects the committed malformed/unauthorized
+suite.  The remaining Gate 1 work is to cover the full command surface, make
+the axiom policy release-grade, expose deterministic replay evidence, and tie
+the endpoint to a compiled Candle/CakeML soundness statement.
 
 ## Layout
 
