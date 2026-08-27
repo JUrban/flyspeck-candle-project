@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == c474c86b10158b4237d0f08e460d47d9de08d4483644ffb4f1f397442b5c091b ]]
+[[ "$direct_manifest_sha" == a26f155bc8f34fae1f29906de7cbd4f1e53e2cd0ff96e01bbb0810d484bc67d1 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -143,11 +143,15 @@ jq -e '
   (.source_nodes | has("flyspeck:load_flyspeck.ml") | not) and
   .source_digest_contract.activation_status ==
     "preflight-before-strictbuild" and
-  .source_digest_contract.entry_count == 399 and
+  .source_digest_contract.entry_count == 398 and
+  .source_digest_contract.bootstrap_exclusions ==
+    ["candle:candle/flyspeck_loader.ml"] and
   .source_digest_contract.generated_source ==
     "candle:candle/flyspeck_source_digests.ml" and
+  .source_digest_contract.generated_source_md5 ==
+    "552a21f448e866a7f8fcd49ce8908c2f" and
   .source_digest_contract.generated_source_sha256 ==
-    "c3cd0090c7084889de8005afeadfc17d5e7074b251c728e5d00bb79218b84e8a" and
+    "0af74c3dab90d8c37234a07b55c632257dcced97fa7fca924fa5fb8f6bc362ab" and
   .source_digest_contract.gate ==
     "candle:candle/test_flyspeck_source_digests.sh" and
   (.generated_dependency_contracts | length) == 3 and
@@ -188,7 +192,7 @@ jq -e '
     "partial-source-bindings" and
   .ocaml_compatibility_contract.selected_members.Digest ==
     ["file", "string", "t", "to_hex"] and
-  (.ocaml_compatibility_contract.qualified_uses | length) == 15 and
+  (.ocaml_compatibility_contract.qualified_uses | length) == 17 and
   .ocaml_compatibility_contract.module_opens == [] and
   .ocaml_compatibility_contract.opened_module_uses == [] and
   .ocaml_compatibility_contract.binding_evidence.Digest.status ==
@@ -213,7 +217,7 @@ jq -e '
 ' "$direct_manifest" >/dev/null
 direct_digest_program="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_source_digests.ml"
 direct_digest_program_sha=$(sha256sum "$direct_digest_program" | cut -d' ' -f1)
-[[ "$direct_digest_program_sha" == c3cd0090c7084889de8005afeadfc17d5e7074b251c728e5d00bb79218b84e8a ]]
+[[ "$direct_digest_program_sha" == 0af74c3dab90d8c37234a07b55c632257dcced97fa7fca924fa5fb8f6bc362ab ]]
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
 certificate_inventory_sha=$(
@@ -254,7 +258,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  9a161801b00908d4468af0d78fe92e73cde2ee02
+  76331264d60e0769fceaa1c22454e96414d9d28c
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
