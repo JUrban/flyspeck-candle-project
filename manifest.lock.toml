@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "c3003dc2ec5aa33af10dbfc00b696d9ab017ec4b"
+development_head = "980f96a007c22efe0dcb76988137c2755ab57ce9"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -134,7 +134,7 @@ axioms = []
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 sha256 = "68befe85d08a470f1aa84796704f864103490773c60eb5ff7e2d63b6df418c46"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "c3003dc2ec5aa33af10dbfc00b696d9ab017ec4b"
+generator_candle = "980f96a007c22efe0dcb76988137c2755ab57ce9"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 399

@@ -163,7 +163,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  c3003dc2ec5aa33af10dbfc00b696d9ab017ec4b
+  980f96a007c22efe0dcb76988137c2755ab57ce9
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
