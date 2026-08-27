@@ -82,6 +82,8 @@ execution.
   syntax inventory deterministically.
 - `scripts/check-compatibility-ledger.sh`: validates schemas, lifecycle rules,
   generated evidence, and authoritative component imports.
+- `scripts/check-direct-dopen-corpus.py`: independently reproduces the direct
+  declaration-open counts and site digest from the compatibility inventory.
 - `scripts/test-producer-resume.sh`: destructive-process restart smoke test.
 - `scripts/run-restartable-flyspeck-export.sh`: resumable real-build exporter
   and compiled replay supervisor.

@@ -123,6 +123,10 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
 [[ "$direct_manifest_sha" == 6ef2189d4d7caf5f45d283a55f86c106242e5f6d4864325532402ed8336a2b80 ]]
+python3 "$project_dir/scripts/check-direct-dopen-corpus.py" \
+  --manifest "$direct_manifest" \
+  --findings "$project_dir/compatibility/generated/inventory-findings.jsonl" \
+  >/dev/null
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
