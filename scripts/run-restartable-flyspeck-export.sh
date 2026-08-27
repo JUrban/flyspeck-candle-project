@@ -175,6 +175,7 @@ run_restart_generation() {
   local checkpoint=$2
   local port_file="$state_dir/restart-$(printf '%04d' "$generation").port"
   local restart_pid
+  local restart_status=0
   local wait_index
   find "$port_file" -maxdepth 0 -type f -delete 2>/dev/null || true
   (
@@ -198,8 +199,9 @@ run_restart_generation() {
   active_port=$(tr -d '[:space:]' <"$port_file")
   [[ "$active_port" =~ ^[0-9]+$ ]]
   printf '%s\n' "$active_port" >"$active_port_file"
-  wait "$restart_pid"
+  wait "$restart_pid" || restart_status=$?
   cleanup_coordinator
+  return "$restart_status"
 }
 
 if [[ $fresh_run == 1 ]]; then
@@ -237,7 +239,24 @@ for ((generation = first_generation;
     exit 1
   }
   printf 'restart %d from %s\n' "$generation" "$(basename -- "$checkpoint")"
-  run_restart_generation "$generation" "$checkpoint"
+  if ! run_restart_generation "$generation" "$checkpoint"; then
+    recovery_phase=$(cut -f1 "$status_file" 2>/dev/null || true)
+    recovery_offset=$(cut -f4 "$status_file" 2>/dev/null || true)
+    [[ "$recovery_phase" == checkpoint || "$recovery_phase" == resumed ]]
+    [[ "$recovery_offset" =~ ^[0-9]+$ ]]
+    output_size=$(stat -c '%s' "$output")
+    if ((output_size < recovery_offset)); then
+      printf 'failed generation %d left output shorter than boundary\n' \
+        "$generation" >&2
+      exit 1
+    fi
+    truncate -s "$recovery_offset" "$output"
+    find "$checkpoint_dir" -maxdepth 1 -type f \
+      -name 'ckpt_*.dmtcp.temp' -delete
+    printf 'generation %d failed; restored output boundary %s for retry\n' \
+      "$generation" "$recovery_offset" >&2
+    continue
+  fi
   next_phase=$(cut -f1 "$status_file" 2>/dev/null || true)
   next_checkpoint=$(latest_checkpoint)
   if [[ "$next_phase" == complete ||
