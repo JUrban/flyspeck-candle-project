@@ -157,26 +157,26 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == dd4707140892dd531b55b3d5ae5e05a13bdbcd474aba060c37502ede58497db8 ]]
+[[ "$direct_manifest_sha" == dbc6da53c60981660ca80763057a359e0f21c8404c89adf052974dd5a64f37ad ]]
 python3 "$project_dir/scripts/check-direct-dopen-corpus.py" \
   --manifest "$direct_manifest" \
   --findings "$project_dir/compatibility/generated/inventory-findings.jsonl" \
   >/dev/null
 direct_closure="$project_dir/compatibility/generated/direct-closure-summary.json"
 [[ $(sha256sum "$direct_closure" | cut -d' ' -f1) == \
-  fb5704da090d3fc62b91411618a0f60ba4109785b2ec75d9b0be45f88e4327a2 ]]
+  cd5744e91977b60f91a7c6b8807df25d9c618c8a4b6b564db7db8f9ed36844dc ]]
 jq -e '
   .manifest.sha256 ==
-    "dd4707140892dd531b55b3d5ae5e05a13bdbcd474aba060c37502ede58497db8" and
+    "dbc6da53c60981660ca80763057a359e0f21c8404c89adf052974dd5a64f37ad" and
   .manifest.source_node_count == 400 and
   .manifest.normalization_source_count == 10 and
   .inventory.sha256 ==
-    "e713ab19cfd207a8cd4db191436df467db763ba73f2799a288f6a50fa4c71b02" and
+    "4521df8a230be72fbd5c52db1f5e7d4747cfa37c1b497945f8e3269715f404b6" and
   .selected.finding_count == 3689 and
   .selected.source_files_with_findings == 329 and
   .selected.non_dopen_review_occurrences == 509 and
   .selected.site_sha256 ==
-    "28a1cc07d6c9e34f8fc979f75a1421c7101ecf1c585c271a22faf57c1360e372" and
+    "f355b17244d953f1c290def6142b47efc7306dfcf3bd25d5988c03fa6b6b9ce3" and
   .selected.by_category["open.declaration"] == 3180 and
   .selected.by_category["open.local_let"] == 0 and
   .selected.by_category["open.local_parenthesized"] == 79 and
@@ -334,9 +334,9 @@ jq -e '
   .source_digest_contract.generated_source ==
     "candle:candle/flyspeck_source_digests.ml" and
   .source_digest_contract.generated_source_md5 ==
-    "bbf86c97f90944a70f0d0347e9dac05b" and
+    "949f016c2779c3534abad78ee4d829b8" and
   .source_digest_contract.generated_source_sha256 ==
-    "4ee2ad10e2f7f8ae81f971d350bd32c99697afb499ba1d60a93781f4f6ca4630" and
+    "bc3c5624e21fc7041d74d0f03cd5307421113a4260cb2f57812a5b256e91245a" and
   .source_digest_contract.gate ==
     "candle:candle/test_flyspeck_source_digests.sh" and
   (.generated_dependency_contracts | length) == 3 and
@@ -377,6 +377,16 @@ jq -e '
         "source": "candle:candle/flyspeck_metadata/user.txt"
       }
     ] and
+  .static_library_contract.binding_evidence["unix.cma"]
+    .process_filesystem_route.glpk_generator_chain.reviewed_occurrence_count == 32 and
+  .static_library_contract.binding_evidence["unix.cma"]
+    .process_filesystem_route.glpk_generator_chain.external_qualified_uses == [] and
+  .static_library_contract.binding_evidence["unix.cma"]
+    .process_filesystem_route.glpk_generator_chain.route_root ==
+    "Lpproc.execute" and
+  .static_library_contract.binding_evidence["unix.cma"]
+    .process_filesystem_route.lp_mkdir_disposition.normalization ==
+    "PROJECT-FFI-S3-LP-SHELL-ELIMINATION-001" and
   (.static_library_contract.binding_evidence["unix.cma"].telemetry_policy |
     contains("gettimeofday returns deterministic Float.zero")) and
   .static_library_contract.binding_evidence["unix.cma"].telemetry_uses ==
@@ -438,7 +448,7 @@ jq -e '
 ' "$direct_manifest" >/dev/null
 direct_digest_program="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_source_digests.ml"
 direct_digest_program_sha=$(sha256sum "$direct_digest_program" | cut -d' ' -f1)
-[[ "$direct_digest_program_sha" == 4ee2ad10e2f7f8ae81f971d350bd32c99697afb499ba1d60a93781f4f6ca4630 ]]
+[[ "$direct_digest_program_sha" == bc3c5624e21fc7041d74d0f03cd5307421113a4260cb2f57812a5b256e91245a ]]
 direct_full_build="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_full_build.ml"
 direct_full_build_sha=$(sha256sum "$direct_full_build" | cut -d' ' -f1)
 [[ "$direct_full_build_sha" == a9851f086240d49e0449aab4d5bb3e5ad16fa46a405e430d9729764312477826 ]]
@@ -591,12 +601,12 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  7db8e182d8cd9a92eef386365584009d63f5959b
+  87f1fd965313c090fd4d87bcfcc493a3ad7bc79f
 check_worktree candle-clean-build \
   "$workspace_dir/worktrees/candle-clean-build-v13" \
   codex/flyspeck-v13-clean-build \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  7db8e182d8cd9a92eef386365584009d63f5959b
+  87f1fd965313c090fd4d87bcfcc493a3ad7bc79f
 check_worktree cakeml-flyspeck-actions \
   "$workspace_dir/worktrees/cakeml-flyspeck-actions-v13" \
   codex/flyspeck-v13-actions \

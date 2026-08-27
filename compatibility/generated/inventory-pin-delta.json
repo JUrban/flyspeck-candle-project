@@ -126,8 +126,8 @@
       },
       "source_bytes_scanned": {
         "comparison": 100751549,
-        "selected": 100858516,
-        "selected_minus_comparison": 106967
+        "selected": 100859118,
+        "selected_minus_comparison": 107569
       },
       "source_files_scanned": {
         "comparison": 1347,
@@ -191,13 +191,13 @@
   "schema_version": 1,
   "selected_lane": {
     "flyspeck_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
-    "inventory_findings_sha256": "e713ab19cfd207a8cd4db191436df467db763ba73f2799a288f6a50fa4c71b02",
+    "inventory_findings_sha256": "4521df8a230be72fbd5c52db1f5e7d4747cfa37c1b497945f8e3269715f404b6",
     "inventory_path_key": "../worktrees/flyspeck-v13-source",
     "role": "direct_s3_clean_upstream",
     "totals": {
       "findings": 6074,
       "lexical_notes": 1,
-      "source_bytes_scanned": 100858516,
+      "source_bytes_scanned": 100859118,
       "source_files_scanned": 1364
     }
   },
@@ -2795,8 +2795,8 @@
         "location": {
           "column": 1,
           "end_column": 21,
-          "end_line": 743,
-          "line": 743
+          "end_line": 751,
+          "line": 751
         },
         "repository": "candle",
         "source_path": "candle/ocaml.ml"
@@ -2807,8 +2807,8 @@
         "location": {
           "column": 1,
           "end_column": 25,
-          "end_line": 775,
-          "line": 775
+          "end_line": 783,
+          "line": 783
         },
         "repository": "candle",
         "source_path": "candle/ocaml.ml"
@@ -3252,7 +3252,7 @@
       "comparison_artifact_sha256": "dff487602275e016894cc673b6c82f1f52354a4b5fce3317bb49e51684af1f09",
       "comparison_only_records": 2,
       "comparison_records": 2,
-      "selected_artifact_sha256": "d09f72615680d9056401ae28a2138cb2246ac785578b099762aa4652dc8fa9a2",
+      "selected_artifact_sha256": "e137bbbb677e98e1c05ddf26c7d3d57dd8feb8155513feb1533d1bbe0025cdf2",
       "selected_counts": {
         "by_s3_dependency_status": {},
         "total": 0
@@ -3266,7 +3266,7 @@
       "comparison_artifact_sha256": "d61ce28f408be6037482cb6749bbf279c6c7bed0929ecc4984d661f340eb7499",
       "comparison_only_records": 0,
       "comparison_records": 217,
-      "selected_artifact_sha256": "4684bdec157955a84328eaa04000fcc6ef48406f4248eb707d91e6014826447d",
+      "selected_artifact_sha256": "59db1838c3993447c1be120271e2a3ed94ffdbbc2b75810e9446f24e9acf70c2",
       "selected_counts": {
         "by_ledger_disposition": {
           "excluded_from_pointer_identity_after_name_resolution": 2,

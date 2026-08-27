@@ -24,7 +24,7 @@ ordering, JSON encoding, finding IDs, and summaries are deterministic.  The
 checked-in result is tied to:
 
 - selected direct-source Candle branch
-  `7db8e182d8cd9a92eef386365584009d63f5959b`, read from
+  `87f1fd965313c090fd4d87bcfcc493a3ad7bc79f`, read from
   `worktrees/candle-loader-v13`;
 - clean direct-S3 Flyspeck
   `1ce0353008eba83d3c76ae9a25c3c242e4802d53`, read from the dedicated
@@ -58,7 +58,7 @@ The complete machine-readable coordinates are in
 
 ## Snapshot result
 
-The scan covers 1,364 tracked OCaml-family files (100,857,485 source bytes): 704
+The scan covers 1,364 tracked OCaml-family files (100,859,118 source bytes): 704
 in Candle and 660 in Flyspeck.  It records 6,074 findings.
 
 | Syntax family | Count | Source-level classification |
@@ -90,7 +90,7 @@ The prior checked-in inventory combined Candle `177a9c1e...` with PFT
 development Flyspeck `2ea440e9...`.  The machine-readable comparison pins that
 evidence at project commit `5d620bcdd3412f3e4a9ed3d9dcb3ed9ae71c22ff` and
 compares stable occurrences without confusing commit-derived IDs with source
-changes.  The new selected snapshot has 17 more files, 105,936 more bytes, and
+changes.  The new selected snapshot has 17 more files, 107,569 more bytes, and
 25 more findings in total: Candle contributes 30 net findings while the clean
 direct Flyspeck pin removes five PFT-only findings.  There are 114 old-only and
 139 new-only stable occurrences.  The apparent stable-occurrence churn includes
@@ -100,7 +100,7 @@ source delta remain separately visible.  The 23 new pointer records are host reg
 oracles and are explicitly outside the generated direct boot; all 217 earlier
 pointer reviews still match.  Both historical FFI records disappear from the
 selected source, leaving zero selected FFI calls.  The current findings digest
-is `e713ab19cfd207a8cd4db191436df467db763ba73f2799a288f6a50fa4c71b02`.
+is `4521df8a230be72fbd5c52db1f5e7d4747cfa37c1b497945f8e3269715f404b6`.
 
 The removed calls were the former startup `chdir` bridge and the former
 `Sys.command` `system` bridge.  Their ledger entries remain as deferred
@@ -113,7 +113,7 @@ member, and reaches the authenticated direct frontier without the old patch.
 `compatibility/generated/direct-closure-summary.json` projects this broad
 snapshot onto the 400-node direct manifest by exact repository path and source
 SHA-256.  It selects 3,689 findings in 329 files with site digest
-`28a1cc07d6c9e34f8fc979f75a1421c7101ecf1c585c271a22faf57c1360e372`.
+`f355b17244d953f1c290def6142b47efc7306dfcf3bd25d5988c03fa6b6b9ce3`.
 Of those, 3,180 are the separately governed Dopen corpus and 509 are other
 compatibility-sensitive occurrences.
 

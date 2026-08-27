@@ -14,7 +14,7 @@
   },
   "inventory": {
     "finding_count": 6074,
-    "sha256": "e713ab19cfd207a8cd4db191436df467db763ba73f2799a288f6a50fa4c71b02"
+    "sha256": "4521df8a230be72fbd5c52db1f5e7d4747cfa37c1b497945f8e3269715f404b6"
   },
   "manifest": {
     "normalization_source_count": 10,
@@ -30,7 +30,7 @@
       "flyspeck:text_formalization/general/serialization.hl",
       "flyspeck:text_formalization/jordan/tactics_jordan.hl"
     ],
-    "sha256": "dd4707140892dd531b55b3d5ae5e05a13bdbcd474aba060c37502ede58497db8",
+    "sha256": "dbc6da53c60981660ca80763057a359e0f21c8404c89adf052974dd5a64f37ad",
     "source_node_count": 400
   },
   "reproduce": "scripts/direct-compatibility-closure.py --manifest ../worktrees/candle-loader-v13/candle/flyspeck_manifest.json --findings compatibility/generated/inventory-findings.jsonl --output compatibility/generated/direct-closure-summary.json",
@@ -268,7 +268,7 @@
       ">=/": 1
     },
     "non_dopen_review_occurrences": 509,
-    "site_sha256": "28a1cc07d6c9e34f8fc979f75a1421c7101ecf1c585c271a22faf57c1360e372",
+    "site_sha256": "f355b17244d953f1c290def6142b47efc7306dfcf3bd25d5988c03fa6b6b9ce3",
     "source_files_by_category": {
       "ffi.custom_call": 0,
       "ffi.ocaml_external_declaration": 0,

@@ -77,7 +77,7 @@ purpose = "pinned reference semantics and differential oracle source for the dir
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "7db8e182d8cd9a92eef386365584009d63f5959b"
+development_head = "87f1fd965313c090fd4d87bcfcc493a3ad7bc79f"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -103,7 +103,7 @@ config_sha256 = "162ea59dac4c00177530ecbdb7a5ad72a03460825c5160a8c596dd4f53a5f3c
 [toolchain.direct_frontier_binary]
 path = "worktrees/candle-clean-build-v13/candle/build/cake"
 build_branch = "codex/flyspeck-v13-clean-build"
-build_source = "7db8e182d8cd9a92eef386365584009d63f5959b"
+build_source = "87f1fd965313c090fd4d87bcfcc493a3ad7bc79f"
 compiler_source = "4e312c0f7e18b9c5789c8ac4e0af257bff895cf5"
 compiler_archive_sha256 = "4e074090eb04d8fdfb62536457adb31c98e1b17f6cd66c9483806601251053b7"
 compiled_binary_sha256 = "c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f"
@@ -167,9 +167,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "dd4707140892dd531b55b3d5ae5e05a13bdbcd474aba060c37502ede58497db8"
+sha256 = "dbc6da53c60981660ca80763057a359e0f21c8404c89adf052974dd5a64f37ad"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "7db8e182d8cd9a92eef386365584009d63f5959b"
+generator_candle = "87f1fd965313c090fd4d87bcfcc493a3ad7bc79f"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 400
@@ -188,11 +188,11 @@ dopen_corpus_site_sha256 = "bce30814051df12ea23c14f2918a55e6b839b72760fd58b8996e
 dopen_corpus_earliest_stratum_occurrences = [29, 22, 13, 35, 841, 177, 2048, 15]
 dopen_corpus_independent_gate = "flyspeck-candle-project/scripts/check-direct-dopen-corpus.py"
 compatibility_closure_summary = "flyspeck-candle-project/compatibility/generated/direct-closure-summary.json"
-compatibility_closure_sha256 = "fb5704da090d3fc62b91411618a0f60ba4109785b2ec75d9b0be45f88e4327a2"
+compatibility_closure_sha256 = "cd5744e91977b60f91a7c6b8807df25d9c618c8a4b6b564db7db8f9ed36844dc"
 compatibility_closure_findings = 3689
 compatibility_closure_source_files = 329
 compatibility_closure_non_dopen_occurrences = 509
-compatibility_closure_site_sha256 = "28a1cc07d6c9e34f8fc979f75a1421c7101ecf1c585c271a22faf57c1360e372"
+compatibility_closure_site_sha256 = "f355b17244d953f1c290def6142b47efc7306dfcf3bd25d5988c03fa6b6b9ce3"
 compatibility_closure_local_let_open = 0
 compatibility_closure_parenthesized_local_open = 79
 compatibility_closure_parenthesized_operator_reference = 79

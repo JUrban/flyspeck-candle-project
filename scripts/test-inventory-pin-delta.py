@@ -50,31 +50,31 @@ class InventoryPinDeltaTests(unittest.TestCase):
         self.assertEqual(
             self.document["delta"]["totals"],
             {
-                "findings": {"comparison": 6049, "selected": 6044, "selected_minus_comparison": -5},
+                "findings": {"comparison": 6049, "selected": 6074, "selected_minus_comparison": 25},
                 "lexical_notes": {"comparison": 1, "selected": 1, "selected_minus_comparison": 0},
                 "source_bytes_scanned": {
                     "comparison": 100751549,
-                    "selected": 100736789,
-                    "selected_minus_comparison": -14760,
+                    "selected": 100859118,
+                    "selected_minus_comparison": 107569,
                 },
                 "source_files_scanned": {
                     "comparison": 1347,
-                    "selected": 1339,
-                    "selected_minus_comparison": -8,
+                    "selected": 1364,
+                    "selected_minus_comparison": 17,
                 },
             },
         )
 
-    def test_g3_g4_records_are_semantically_unchanged(self):
+    def test_exact_g3_g4_record_delta(self):
         pointer = self.document["triage"]["pointer"]
         ffi = self.document["triage"]["ffi"]
         self.assertEqual(
             (pointer["stable_records_matched"], pointer["comparison_only_records"], pointer["selected_only_records"]),
-            (217, 0, 0),
+            (217, 0, 23),
         )
         self.assertEqual(
             (ffi["stable_records_matched"], ffi["comparison_only_records"], ffi["selected_only_records"]),
-            (2, 0, 0),
+            (0, 2, 0),
         )
 
 
