@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 15085c56faf676071e25d90ef7200e027c5edaaa40eaa5ab28cf23c2b07346b0 ]]
+[[ "$direct_manifest_sha" == b3038b3e65febbdadec38fe0a38a5994c05c2bb6c15042adf1f3c656c9a0da42 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -130,6 +130,16 @@ jq -e '
   .source_edge_count == 417 and
   .bootstrap_roots ==
     ["candle:hol.ml", "flyspeck:text_formalization/build/strictbuild.hl"] and
+  [.build_strata[].name] ==
+    ["base", "arithmetic", "nonlinear_support", "analysis", "geometry",
+     "lp_support", "text_formalization", "final_assembly"] and
+  [.build_strata[].entry_count] == [30, 8, 12, 11, 91, 33, 106, 6] and
+  [.build_strata[].start_index] == [0, 30, 38, 50, 61, 152, 185, 291] and
+  [.build_strata[].end_index] == [29, 37, 49, 60, 151, 184, 290, 296] and
+  (.source_node_strata | length) == 398 and
+  ([.source_node_strata[] | select(length == 0)] | length) == 0 and
+  (.source_node_strata["candle:candle/flyspeck_l2_target.ml"] |
+    contains(["final_assembly"])) and
   (.source_nodes | has("flyspeck:load_flyspeck.ml") | not) and
   .diagnostics.unsupported_runtime_libraries == [] and
   .diagnostics.unsupported_runtime_members == [] and
@@ -231,7 +241,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  b41ae5c44e93353925b4644619e41237ac72ade8
+  e93028464a89591b15bd2913f686f5c9b7ab8600
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa

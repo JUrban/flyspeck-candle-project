@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "b41ae5c44e93353925b4644619e41237ac72ade8"
+development_head = "e93028464a89591b15bd2913f686f5c9b7ab8600"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -132,14 +132,17 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "15085c56faf676071e25d90ef7200e027c5edaaa40eaa5ab28cf23c2b07346b0"
+sha256 = "b3038b3e65febbdadec38fe0a38a5994c05c2bb6c15042adf1f3c656c9a0da42"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "b41ae5c44e93353925b4644619e41237ac72ade8"
+generator_candle = "e93028464a89591b15bd2913f686f5c9b7ab8600"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 398
 dependency_edges = 417
 generated_inputs = 42
+build_strata = 8
+build_strata_order = ["base", "arithmetic", "nonlinear_support", "analysis", "geometry", "lp_support", "text_formalization", "final_assembly"]
+build_strata_entry_counts = [30, 8, 12, 11, 91, 33, 106, 6]
 runtime_library_directives = 5
 runtime_qualified_uses = 39
 runtime_open_attributed_uses = 3
