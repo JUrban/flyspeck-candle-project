@@ -46,7 +46,7 @@
     "counts": {
       "type": "object",
       "required": [
-        "by_category", "by_repository", "by_category_and_repository",
+        "by_category", "by_repository", "by_source_dialect", "by_category_and_repository",
         "files_with_findings_by_category", "by_module_path_form",
         "pointer_by_token", "pointer_by_syntactic_role",
         "pointer_by_static_operand_category", "custom_ffi_by_command_form",
@@ -74,4 +74,3 @@
     }
   }
 }
-

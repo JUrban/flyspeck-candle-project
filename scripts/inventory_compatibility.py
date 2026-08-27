@@ -70,7 +70,12 @@ def _blank(chars: list[str], start: int, end: int) -> None:
             chars[index] = " "
 
 
-def mask_noncode(text: str, *, mask_hol_quotations: bool = True) -> tuple[str, list[LexicalNote]]:
+def mask_noncode(
+    text: str,
+    *,
+    mask_hol_quotations: bool = True,
+    mask_double_dash_comments: bool = False,
+) -> tuple[str, list[LexicalNote]]:
     """Mask comments/literals/quotations while preserving offsets/newlines."""
 
     chars = list(text)
@@ -78,6 +83,13 @@ def mask_noncode(text: str, *, mask_hol_quotations: bool = True) -> tuple[str, l
     length = len(text)
     index = 0
     while index < length:
+        if mask_double_dash_comments and text.startswith("--", index):
+            start = index
+            end = text.find("\n", index + 2)
+            index = length if end == -1 else end
+            _blank(chars, start, index)
+            continue
+
         if text.startswith("(*", index):
             start = index
             depth = 1
@@ -248,10 +260,19 @@ def pointer_review_hints(excerpt: str) -> list[str]:
 
 
 class FindingBuilder:
-    def __init__(self, repository: str, commit: str, source_path: str, text: str, source_sha256: str):
+    def __init__(
+        self,
+        repository: str,
+        commit: str,
+        source_path: str,
+        source_dialect: str,
+        text: str,
+        source_sha256: str,
+    ):
         self.repository = repository
         self.commit = commit
         self.source_path = source_path
+        self.source_dialect = source_dialect
         self.text = text
         self.source_sha256 = source_sha256
         self.findings: list[dict[str, Any]] = []
@@ -290,6 +311,7 @@ class FindingBuilder:
             "repository": self.repository,
             "repository_commit": self.commit,
             "source_path": self.source_path,
+            "source_dialect": self.source_dialect,
             "source_sha256": self.source_sha256,
             "location": {
                 "line": line,
@@ -313,11 +335,16 @@ def scan_text(
 ) -> tuple[list[dict[str, Any]], list[LexicalNote]]:
     if source_sha256 is None:
         source_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    source_dialect = classify_source_dialect(source_path)
     # pa_j contains legacy/revised Camlp lexer source where backticks are lexer
     # tokens, not HOL quotations.  Treating arbitrary pairs as HOL terms would
     # desynchronize the masker and hide executed source.
-    masked, notes = mask_noncode(text, mask_hol_quotations=not source_path.startswith("pa_j/"))
-    builder = FindingBuilder(repository, commit, source_path, text, source_sha256)
+    masked, notes = mask_noncode(
+        text,
+        mask_hol_quotations=source_dialect != "camlp_legacy_generated_ml",
+        mask_double_dash_comments=source_dialect == "verification_source_vhl",
+    )
+    builder = FindingBuilder(repository, commit, source_path, source_dialect, text, source_sha256)
 
     # Local let-open must be identified before the general open matcher.
     local_open_spans: list[tuple[int, int]] = []
@@ -447,7 +474,7 @@ def scan_text(
 
     # Physical equality.  Semantic intent is deliberately unresolved.  Only
     # operator and operand-shape facts visible in the source are classified.
-    for match in re.finditer(r"(?<![=])(?P<op>==|!=)(?!=)", masked):
+    for match in re.finditer(r"(?<![=])(?P<op>==|!=)(?![=>])", masked):
         line_start = masked.rfind("\n", 0, match.start()) + 1
         line_end = masked.find("\n", match.end())
         if line_end == -1:
@@ -521,6 +548,21 @@ def scan_text(
     return builder.findings, notes
 
 
+def classify_source_dialect(source_path: str) -> str:
+    if source_path.startswith("pa_j/") and source_path.endswith(".ml"):
+        return "camlp_legacy_generated_ml"
+    suffix = Path(source_path).suffix
+    return {
+        ".ml": "ocaml_implementation",
+        ".mli": "ocaml_interface",
+        ".hl": "hol_light_script",
+        ".vhl": "verification_source_vhl",
+        ".cml": "cakeml_source",
+        ".mll": "ocamllex_source",
+        ".mly": "ocamlyacc_source",
+    }.get(suffix, "unknown_ocaml_family")
+
+
 def run_git(repo: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -571,6 +613,7 @@ def build_summary(
     raw_by_category = Counter(item["category"] for item in findings)
     by_category = {category: raw_by_category[category] for category in FINDING_CATEGORIES}
     by_repository = Counter(item["repository"] for item in findings)
+    by_source_dialect = Counter(item["source_dialect"] for item in findings)
     raw_path_forms = Counter(
         item["details"].get("module_path_form")
         for item in findings
@@ -619,6 +662,7 @@ def build_summary(
         "counts": {
             "by_category": by_category,
             "by_repository": dict(sorted(by_repository.items())),
+            "by_source_dialect": dict(sorted(by_source_dialect.items())),
             "by_category_and_repository": {
                 category: {
                     repository: sum(

@@ -29,6 +29,13 @@ fixture theorem counts and parser-only successes do not promote a gate.  A
 manifest-rooted direct Flyspeck loader and broad source patching follow the S1
 compatibility closure rather than standing in for it.
 
+The v1.3 source-substitution work now also has a conservative compatibility
+inventory and aggregate ledger foundation.  See
+`docs/compatibility-inventory.md`.  It inventories tracked Candle/Flyspeck
+OCaml-family syntax without treating repository presence as production load
+closure, and imports the authoritative Candle-native compatibility ledger by
+immutable git coordinates instead of copying component entries.
+
 The PFT validation stream is substantially further along.  Its compiled Candle
 endpoint consumes both official HOL4-writer traces and direct HOL Light
 bootstrap traces, rejects malformed and unauthorized input, enforces exact
@@ -52,6 +59,10 @@ execution.
   filename is not a v1.3 S2/S3 claim.
 - `docs/progress/`: dated, evidence-backed interim reports.
 - `scripts/verify-lock.sh`: checks local source identities and roadmap hash.
+- `scripts/update-compatibility-inventory.sh`: regenerates the pinned v1.3
+  syntax inventory deterministically.
+- `scripts/check-compatibility-ledger.sh`: validates schemas, lifecycle rules,
+  generated evidence, and authoritative component imports.
 - `scripts/test-producer-resume.sh`: destructive-process restart smoke test.
 - `scripts/run-restartable-flyspeck-export.sh`: resumable real-build exporter
   and compiled replay supervisor.

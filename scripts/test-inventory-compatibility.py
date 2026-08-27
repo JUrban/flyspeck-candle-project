@@ -91,6 +91,14 @@ let actual = left != right;;
         findings, notes = self.scan(text, "pa_j/generated.ml")
         self.assertEqual(notes, [])
         self.assertEqual([item["category"] for item in findings], ["open.declaration"])
+        self.assertEqual(findings[0]["source_dialect"], "camlp_legacy_generated_ml")
+
+    def test_vhl_double_dash_comment_is_not_pointer_syntax(self):
+        text = "-- theorem p ==> q and (x == y).\nmodule Visible.\n"
+        findings, notes = self.scan(text, "theory/example.vhl")
+        self.assertEqual(notes, [])
+        self.assertEqual([item["category"] for item in findings], ["module.declaration_other"])
+        self.assertEqual(findings[0]["source_dialect"], "verification_source_vhl")
 
     def test_unclosed_construct_is_reported(self):
         _, notes = self.scan("open A;;\n(* truncated")

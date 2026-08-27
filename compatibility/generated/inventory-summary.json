@@ -1,7 +1,7 @@
 {
   "artifacts": {
     "findings_jsonl": "inventory-findings.jsonl",
-    "findings_sha256": "3974900809439c172e9ede3f75410c4ee300409ff04359d0f59f1173ceb87d03",
+    "findings_sha256": "29bf0bf9bb9c23b0ba4e77b271e1fc82282023c16e703dcd0cb5ac027a5e75e7",
     "lexical_notes_json": "inventory-lexical-notes.json"
   },
   "counts": {
@@ -20,7 +20,7 @@
       "open.declaration": 4926,
       "open.local_let": 3,
       "open.local_parenthesized": 91,
-      "pointer_equality.infix_use": 224,
+      "pointer_equality.infix_use": 210,
       "pointer_equality.operator_binding": 4,
       "pointer_equality.operator_reference": 3
     },
@@ -83,7 +83,7 @@
       },
       "pointer_equality.infix_use": {
         "candle": 157,
-        "flyspeck": 67
+        "flyspeck": 53
       },
       "pointer_equality.operator_binding": {
         "candle": 1,
@@ -103,7 +103,15 @@
     },
     "by_repository": {
       "candle": 954,
-      "flyspeck": 5109
+      "flyspeck": 5095
+    },
+    "by_source_dialect": {
+      "camlp_legacy_generated_ml": 171,
+      "hol_light_script": 4877,
+      "ocaml_implementation": 964,
+      "ocaml_interface": 32,
+      "ocamllex_source": 1,
+      "verification_source_vhl": 4
     },
     "custom_ffi_by_command_form": {
       "literal": 2
@@ -123,7 +131,7 @@
       "open.declaration": 577,
       "open.local_let": 3,
       "open.local_parenthesized": 28,
-      "pointer_equality.infix_use": 40,
+      "pointer_equality.infix_use": 38,
       "pointer_equality.operator_binding": 4,
       "pointer_equality.operator_reference": 3
     },
@@ -131,19 +139,18 @@
       "unterminated_string": 1
     },
     "pointer_by_static_operand_category": {
-      "expression_operand_present": 54,
-      "identifier_and_immediate_syntax": 41,
-      "identifier_operands": 128,
-      "syntactic_self_comparison": 1
+      "expression_operand_present": 52,
+      "identifier_and_immediate_syntax": 39,
+      "identifier_operands": 119
     },
     "pointer_by_syntactic_role": {
-      "infix_use": 224,
+      "infix_use": 210,
       "operator_binding": 4,
       "operator_reference": 3
     },
     "pointer_by_token": {
       "bang_equal": 11,
-      "double_equal": 220
+      "double_equal": 206
     }
   },
   "evidence_boundary": {
@@ -191,7 +198,7 @@
         "latin-1": 1,
         "utf-8": 667
       },
-      "findings": 5109,
+      "findings": 5095,
       "path_key": "flyspeck",
       "source_bytes_scanned": 52188896,
       "source_files_scanned": 668
@@ -206,7 +213,7 @@
   "scope_kind": "tracked_ocaml_family_repository_snapshot",
   "scope_sha256": "56febe7fb0ebae82531cc1b6060e2831b37ef9ddbe9eeebd4b7e6d760ff92921",
   "totals": {
-    "findings": 6063,
+    "findings": 6049,
     "lexical_notes": 1,
     "source_bytes_scanned": 100751549,
     "source_files_scanned": 1347

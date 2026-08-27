@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "finding_id", "category", "repository",
-    "repository_commit", "source_path", "source_sha256", "location",
+    "repository_commit", "source_path", "source_dialect", "source_sha256", "location",
     "lexeme", "excerpt", "details"
   ],
   "properties": {
@@ -27,6 +27,13 @@
     "repository": {"type": "string", "minLength": 1},
     "repository_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "source_path": {"type": "string", "minLength": 1},
+    "source_dialect": {
+      "enum": [
+        "ocaml_implementation", "ocaml_interface", "hol_light_script",
+        "verification_source_vhl", "cakeml_source", "ocamllex_source",
+        "ocamlyacc_source", "camlp_legacy_generated_ml", "unknown_ocaml_family"
+      ]
+    },
     "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "location": {
       "type": "object",
