@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "76331264d60e0769fceaa1c22454e96414d9d28c"
+development_head = "a3195068e6062d8e9abd4ddbee3d7d8dd271dd89"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -132,9 +132,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "a26f155bc8f34fae1f29906de7cbd4f1e53e2cd0ff96e01bbb0810d484bc67d1"
+sha256 = "c21996e0b8597cc5713bcd8be7d4697bd582e70f7f0fb0a088727648964ed954"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "76331264d60e0769fceaa1c22454e96414d9d28c"
+generator_candle = "a3195068e6062d8e9abd4ddbee3d7d8dd271dd89"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 399
@@ -165,6 +165,13 @@ source_digest_program = "worktrees/candle-loader-v13/candle/flyspeck_source_dige
 source_digest_program_sha256 = "0af74c3dab90d8c37234a07b55c632257dcced97fa7fca924fa5fb8f6bc362ab"
 source_digest_program_md5 = "552a21f448e866a7f8fcd49ce8908c2f"
 source_digest_gate = "worktrees/candle-loader-v13/candle/test_flyspeck_source_digests.sh"
+static_full_build_activation = "generated-fail-closed-pending-loader-action"
+static_full_build_directive = "#flyspeck_needs"
+static_full_build_entries = 297
+static_full_build_unique_targets = 287
+static_full_build_program = "worktrees/candle-loader-v13/candle/flyspeck_full_build.ml"
+static_full_build_program_sha256 = "1bb71f85fd66c23d974599ded954344fd54f8b6904ebb4e51c4325d9ca0e8947"
+static_full_build_program_md5 = "5853a6e82e9303ba52ad874c98282842"
 toplevel_interface_activation = "blocked-no-dummy-or-no-op"
 format_qualified_uses = 106
 toploop_qualified_uses = 19
