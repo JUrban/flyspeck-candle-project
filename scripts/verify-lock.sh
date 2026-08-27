@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 17d1620e62df0dc6fca1e7e126fef4a35aacf51b4f10e33fc0940c081676c610 ]]
+[[ "$direct_manifest_sha" == 68befe85d08a470f1aa84796704f864103490773c60eb5ff7e2d63b6df418c46 ]]
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
 certificate_inventory_sha=$(
@@ -163,7 +163,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  f33a4e8c6e0de8ae7fcb8969e267db40eff65ab0
+  c3003dc2ec5aa33af10dbfc00b696d9ab017ec4b
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
