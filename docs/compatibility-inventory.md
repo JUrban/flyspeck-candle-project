@@ -15,6 +15,7 @@ scripts/update-compatibility-inventory.sh /project/repos
 scripts/check-compatibility-ledger.sh /project/repos
 python3 scripts/test-inventory-compatibility.py
 python3 scripts/test-compatibility-ledger.py
+python3 scripts/test-compatibility-triage.py
 ```
 
 The generator refuses a different repository HEAD or tracked dirty state.  It
@@ -36,6 +37,11 @@ The complete machine-readable coordinates are in
   digest, and the evidence boundary;
 - `compatibility/generated/inventory-lexical-notes.json`: inputs that the
   conservative masker could not close;
+- `compatibility/generated/pointer-triage.json`: one reviewed G3 record for
+  every pointer-token finding, with name resolution, intent, selected-route
+  status, evidence, and ledger disposition;
+- `compatibility/generated/ffi-triage.json`: both G4 calls with selected-route
+  call chains, current ABI observations, security posture, and proof duties;
 - `compatibility/schema/*.schema.json`: JSON Schema for findings, summary, and
   project ledger entries/imports.
 
@@ -75,6 +81,45 @@ The two custom FFI calls are:
 They are call-site evidence only.  The inventory does not claim that their C
 implementation has a versioned ABI, total validation, sandboxing, or a sound
 trust policy; those remain B3 ledger work.
+
+## G3/G4 source-backed triage
+
+The reviewed overlay covers all 217 pointer-token findings exactly once.  On
+the explicitly selected S3 source route, it finds 15 tokens:
+
+- 12 built-in physical-identity uses: ten structural-sharing controls in
+  `text_formalization/general/lib.hl`, plus two identity-filter predicates in
+  `general/print_types.hl` and `jordan/tactics_jordan.hl` whose higher-level
+  intent remains deliberately medium-confidence.  Direct oracles confirm a
+  Candle incompatibility: non-reference `==` is rejected because Candle types
+  it as reference-only, while non-reference `!=` reaches the unsupported
+  `nRelOp` parser path;
+- one built-in immediate-int comparison, `n == 1`, in the selected LP
+  certificate verifier.  OCaml accepts the minimized form; Candle rejects the
+  int operand because its `==` expects references;
+- a local operator binding and its use in
+  `list_hypermap_computations.hl`; source context proves that `(==)` is the
+  theorem-producing function `eq_eq`, so these two tokens are not pointer
+  identity after name resolution.
+
+The remaining 202 tokens are classified and excluded from this selected route:
+alternative Azure, Proofrecording, and kernel trees; host-side `pa_j` build
+inputs; and optional, test, or informal sources.  The exclusion means only
+"not selected by the pinned S3 route".  It is not a global dead-code claim.
+Every record retains its source coordinate, evidence, confidence, and reviewed
+rule ID.  The generator rejects gaps, overlaps, unused rules, or moved FFI
+sites.
+
+Both custom FFI calls are required at runtime.  `chdir` is appended to the
+Candle boot image and invoked immediately to enter the repository root.
+`system` is reached on the full route: LP verification consumes the tracked
+`formal_lp/glpk/binary/hard_7.tar.gz`, whose certificate reader invokes
+`Sys.command` for `tar` and `rm`.  A minimized success-path smoke returns child
+status 7 as expected.  The current C patch documents a byte-array
+convention but uses assertions, implicit C strings, and an unrestricted host
+shell.  Thus G4 remains open.  The generated review lists the exact ABI,
+validation, deterministic-error, command-policy, sandbox, and platform-trust
+obligations without treating source review as a refinement proof.
 
 There is one lexical note.  Flyspeck
 `jHOLLight/Tests/test-compiled.hl:1` starts an unterminated string (`needs
@@ -130,8 +175,9 @@ It also rechecks inventory repository HEAD/dirty state, tracked file and byte
 counts, every referenced source digest, every aggregate category/path/operator
 count, the JSONL digest, and all ledger selectors against the current artifacts.
 
-The five local entries are inventory-review queues for declaration open, local
-open, module constructs, pointer equality, and custom FFI.  Each contains all
+The eight local entries comprise three remaining syntax-review queues, three
+concrete selected-route pointer/name-resolution obligations, and separate
+`chdir`/`system` platform-contract obligations.  Each contains all
 v1.3 lifecycle fields: minimal reproducer, OCaml outcome, Candle outcome,
 semantic category, remedy, proof obligation, regression IDs, affected files,
 and status.  Empty/pending values are honest because an inventory hit is not a
@@ -146,9 +192,10 @@ obligation, stable regression IDs, and evidence.
    repository-snapshot inventory.
 2. Turn each actual failure into a minimized OCaml/Candle oracle before marking
    it a confirmed divergence.
-3. Resolve `==`/`!=` bindings and review every reachable infix use for the B2
-   intent classes; do not infer purpose from names alone.
-4. Reconcile `chdir` and `system` with the B3 ABI, error, determinism, sandbox,
-   and trust requirements.
+3. Choose and implement remedies for the two confirmed pointer incompatibility
+   entries, then prove or differentially validate all 13 selected built-in
+   uses; retain medium-confidence filter intent as an explicit review item.
+4. Implement and test total, versioned `chdir` and constrained/sandboxed
+   `system` contracts, then discharge the platform-refinement trust statement.
 5. Move stable regression IDs and lifecycle fields into the authoritative
    Candle-native ledger, then advance the immutable import coordinate.
