@@ -117,6 +117,34 @@ def selector_matches(
     return False
 
 
+def source_contract_selector(selector: dict[str, Any]) -> set[tuple[str, str]] | None:
+    if "source_contract_files" not in selector:
+        return None
+    raw_files = selector["source_contract_files"]
+    require(
+        isinstance(raw_files, list) and bool(raw_files),
+        "source-contract selector needs a nonempty source_contract_files list",
+    )
+    selected: set[tuple[str, str]] = set()
+    for item in raw_files:
+        require(
+            isinstance(item, dict) and set(item) == {"repository", "path"}
+            and isinstance(item["repository"], str) and bool(item["repository"])
+            and isinstance(item["path"], str) and bool(item["path"]),
+            "malformed source-contract selector file",
+        )
+        selected.add((item["repository"], item["path"]))
+    require(
+        len(selected) == len(raw_files),
+        "duplicate source-contract selector file",
+    )
+    require(
+        isinstance(selector.get("reason"), str) and bool(selector["reason"]),
+        "source-contract selector needs a reason",
+    )
+    return selected
+
+
 def git_text(repo: Path, *args: str) -> str:
     result = subprocess.run(
         ["git", "-C", str(repo), *args],
@@ -515,6 +543,23 @@ def main(argv: list[str] | None = None) -> int:
             findings,
         )
         for entry in ledger["entries"]:
+            source_contract_files = source_contract_selector(
+                entry["inventory_selector"]
+            )
+            if source_contract_files is not None:
+                require(
+                    entry["affected_files_status"] == "enumerated",
+                    f"{entry['id']}: source-contract selector needs enumerated files",
+                )
+                declared_files = {
+                    (item["repository"], item["path"])
+                    for item in entry["affected_corpus_files"]
+                }
+                require(
+                    declared_files == source_contract_files,
+                    f"{entry['id']}: enumerated affected files differ from source contract",
+                )
+                continue
             matched = [
                 finding for finding in findings
                 if selector_matches(finding, entry["inventory_selector"], pointer_by_id, ffi_by_id)

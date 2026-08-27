@@ -53,6 +53,25 @@ class LedgerLifecycleTests(unittest.TestCase):
         entry["regression_ids"] = ["REG-001"]
         validator.validate_local_entry(entry)
 
+    def test_source_contract_selector_is_exact(self):
+        selector = {
+            "source_contract_files": [
+                {"repository": "flyspeck", "path": "build/strictbuild.hl"}
+            ],
+            "reason": "runtime contract outside the lexical inventory",
+        }
+        self.assertEqual(
+            validator.source_contract_selector(selector),
+            {("flyspeck", "build/strictbuild.hl")},
+        )
+        with self.assertRaisesRegex(
+            validator.ValidationError, "duplicate source-contract"
+        ):
+            validator.source_contract_selector({
+                "source_contract_files": selector["source_contract_files"] * 2,
+                "reason": selector["reason"],
+            })
+
 
 if __name__ == "__main__":
     unittest.main()
