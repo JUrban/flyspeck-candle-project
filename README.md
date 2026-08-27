@@ -6,6 +6,15 @@ kernel replay plus HOL-side nonlinear/LP evidence closure, while retaining the
 Isabelle tame-graph classification as an explicit premise.  L1 is the first
 integration milestone and L3 is tracked separately.
 
+The selected L2 architecture is specifically
+`Flyspeck source -> HOL Light producer -> hostile PFT -> compiled Candle`.
+It proves that Candle can reconstruct the complete HOL-side proof and evidence;
+it does **not** claim that Candle directly executes the Flyspeck source without
+HOL Light.  Direct source execution is the separately labelled G4--G7
+compatibility track.  If a later roadmap makes source substitution the release
+criterion, this PFT result remains an independent validation lane rather than
+that substitution milestone.
+
 The upstream repositories are checked out as sibling directories under
 `../repos/`.  Development happens on `codex/*` branches in those repositories;
 this repository holds the locked manifest, cross-repository tooling, acceptance

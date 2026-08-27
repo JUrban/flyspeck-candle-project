@@ -36,6 +36,13 @@ The full objective is complete only when every L2-required row and Gate 1–4 is
 proved by current artifacts.  Source-as-is compatibility and optional L3 remain
 separately labelled and cannot be used to overstate the L2 result.
 
+For claim discipline, the resulting release is called a full
+`HOL Light -> PFT -> Candle` L2 replay.  It must not be called direct Flyspeck
+source execution or HOL Light replacement.  The supplied roadmap is version
+1.2; a source-substitution criterion from another roadmap would change which
+rows are on the critical path and requires that roadmap to be separately
+adopted and pinned.
+
 ## Current gate evidence
 
 The first Gate 2 artifact is
