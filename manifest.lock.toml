@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "996de1744623f63de07707cad27d65c753621ed9"
+development_head = "feb20bbf8361172d5bab5c1717ed1cd3da5d0174"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -132,9 +132,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "8b4cc533ca91f3ed4024dea8519954d04d8fc555bcab218794d197b87f68436a"
+sha256 = "824910cc2dee7453074e6d5bbb3236dbd59277e9ff7f79b588e4f2dde0991d58"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "996de1744623f63de07707cad27d65c753621ed9"
+generator_candle = "feb20bbf8361172d5bab5c1717ed1cd3da5d0174"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 398
@@ -150,6 +150,11 @@ runtime_library_activation = "blocked-pending-static-binding-evidence"
 str_binding = "partial-pure-source-differential-gate"
 unix_binding = "startup-metadata-only-explicit-fail-otherwise"
 deterministic_process_inputs = 2
+ocaml_compatibility_activation = "partial-source-bindings"
+digest_binding = "pure-source-differential-gate"
+digest_qualified_uses = 13
+digest_module_opens = 0
+digest_selected_members = ["file", "string", "t", "to_hex"]
 entry_route = ["candle:hol.ml", "flyspeck:text_formalization/build/strictbuild.hl"]
 claim = "G6 inventory only; not loader execution evidence"
 

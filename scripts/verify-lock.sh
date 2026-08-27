@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 8b4cc533ca91f3ed4024dea8519954d04d8fc555bcab218794d197b87f68436a ]]
+[[ "$direct_manifest_sha" == 824910cc2dee7453074e6d5bbb3236dbd59277e9ff7f79b588e4f2dde0991d58 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -133,6 +133,7 @@ jq -e '
   (.source_nodes | has("flyspeck:load_flyspeck.ml") | not) and
   .diagnostics.unsupported_runtime_libraries == [] and
   .diagnostics.unsupported_runtime_members == [] and
+  .diagnostics.unsupported_compatibility_members == [] and
   .static_library_contract.activation_status ==
     "blocked-pending-static-binding-evidence" and
   (.static_library_contract.directives | length) == 5 and
@@ -162,7 +163,20 @@ jq -e '
         "sha256": "ad29b534dd27882add87d6996aa4ccf39bf1e5b15ccfd08804636905e8b8d864",
         "source": "candle:candle/flyspeck_metadata/user.txt"
       }
-    ]
+    ] and
+  .ocaml_compatibility_contract.activation_status ==
+    "partial-source-bindings" and
+  .ocaml_compatibility_contract.selected_members.Digest ==
+    ["file", "string", "t", "to_hex"] and
+  (.ocaml_compatibility_contract.qualified_uses | length) == 13 and
+  .ocaml_compatibility_contract.module_opens == [] and
+  .ocaml_compatibility_contract.opened_module_uses == [] and
+  .ocaml_compatibility_contract.binding_evidence.Digest.status ==
+    "pure-source-differential-gate" and
+  .ocaml_compatibility_contract.binding_evidence.Digest.gate ==
+    "candle:candle/test_digest_compat.sh" and
+  (.ocaml_compatibility_contract.binding_evidence.Digest.assurance_limit |
+    contains("not yet formally linked"))
 ' "$direct_manifest" >/dev/null
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
@@ -204,7 +218,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  996de1744623f63de07707cad27d65c753621ed9
+  feb20bbf8361172d5bab5c1717ed1cd3da5d0174
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
