@@ -1,5 +1,8 @@
 # Response to `audit1.md` — 2026-08-27
 
+Reviewed input SHA-256:
+`03be4c7935505eb480201775872be8dd0d87b1b38b31c03e9c6f4da182df5acf`.
+
 ## Verdict
 
 The audit's central criticism is accepted.  A complete
