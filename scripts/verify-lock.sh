@@ -648,7 +648,7 @@ check_worktree cakeml-flyspeck-integration \
   "$workspace_dir/worktrees/cakeml-flyspeck-v13-integration" \
   codex/flyspeck-v13-integration \
   dcc03f2866f05b1db18b9f45c731ce45c3a3133e \
-  c006dc4998c354f820d652ce619c0714918a5ed4
+  a336d8493b1ffc81b3a93348c4326d6200cf2d78
 check_worktree HOL-cakeml-dopen \
   "$workspace_dir/worktrees/HOL-cakeml-dopen-v13" \
   master \
