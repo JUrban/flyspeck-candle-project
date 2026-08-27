@@ -1,5 +1,5 @@
 {
   "schema_version": 1,
-  "evidence_boundary": "The selected direct-source Candle branch contains no Runtime.customFFI call. Historical chdir/system observations remain in the project ledger; the source-elimination result still requires a clean binary rebuild before G4 can become not required.",
+  "evidence_boundary": "The selected direct-source Candle branch and generated boot contain no Runtime.customFFI call. The clean executable c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f uses the pristine archive basis_ffi.c and reaches the authenticated Dopen frontier; historical chdir/system observations remain as outside-closure ledger history.",
   "calls": []
 }

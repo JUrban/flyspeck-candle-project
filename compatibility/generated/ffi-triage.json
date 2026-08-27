@@ -3,11 +3,11 @@
     "by_s3_dependency_status": {},
     "total": 0
   },
-  "evidence_boundary": "The selected direct-source Candle branch contains no Runtime.customFFI call. Historical chdir/system observations remain in the project ledger; the source-elimination result still requires a clean binary rebuild before G4 can become not required.",
+  "evidence_boundary": "The selected direct-source Candle branch and generated boot contain no Runtime.customFFI call. The clean executable c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f uses the pristine archive basis_ffi.c and reaches the authenticated Dopen frontier; historical chdir/system observations remain as outside-closure ledger history.",
   "inventory_findings_sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a",
   "records": [],
   "reproduce": "scripts/update-compatibility-inventory.sh /project/repos",
-  "review_source_sha256": "0d43f7d1e9231d8a65ee154326d3d86686c47bee0dd981d0b95b210c22678d3c",
+  "review_source_sha256": "8e5eff6e3c80faae65894d48beaab83f4147663c23ab8e0bd9dafb827a85654e",
   "schema_version": 1,
   "triage_kind": "custom_ffi_source_review"
 }

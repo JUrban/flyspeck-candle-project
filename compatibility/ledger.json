@@ -18,9 +18,9 @@
     "inventory_artifacts": {
       "findings_sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a",
       "pointer_triage_sha256": "8a95b6b7676fa7497692c6b90c531e26117a2c9a470cd522d2cc517290bfe5af",
-      "ffi_triage_sha256": "6efdddbdc4fe6ccd83162943fd1cc6726be33cdf3428d61398a65a5348036855",
+      "ffi_triage_sha256": "b47c747e00cc28f862e9dcff29e97424551add41a58385128320854a71622eff",
       "pin_contract_sha256": "7a5dec1222048bbce2dcfc2a190fd5d0f4945e9c3a8dd4339eb0eb4b6002423f",
-      "pin_delta_sha256": "91a2b49060f8849d52aa7365950e70b2ae95aa6acdb15eec47a81244cdc58660"
+      "pin_delta_sha256": "0baa534cc64f1a07e5dc82792e76b079dd80e6edcd1abc82c8509ac96f3f1cb4"
     }
   },
   "import_contract": {
@@ -254,38 +254,38 @@
       "entry_kind": "inventory_review",
       "divergence_state": "outside_dependency_closure",
       "priority": "P0",
-      "status": "proof_pending",
+      "status": "deferred",
       "summary": "Remove startup chdir customFFI from the selected direct-source build",
       "semantic_category": "runtime.custom_ffi.chdir",
       "minimal_reproducer": {"status": "ready", "path": "compatibility/oracles/custom_ffi_chdir.ml"},
       "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
-      "candle_outcome": {"status": "observed", "outcome": "The selected source and build recipe contain no chdir customFFI: the repository-root launcher uses relative generated boot/config links. The currently reused compiled binary still contains the historical patched FFI and is not G4-clean.", "evidence": ["Candle a08e551a4398907776112eb72db1573f65cf2012 deletes candle/chdir_to_root.ml and candle/basis_ffi.c.patch", "Candle a08e551a4398907776112eb72db1573f65cf2012 build-instructions.sh installs repository-root relative links", "current frontier executable SHA-256 d361be3839f31811328d5a0da1ecea15a8a73f369c77e34a288355f16bb930d3 retains the legacy FFI patch"]},
+      "candle_outcome": {"status": "observed", "outcome": "The selected source, generated boot, build recipe, pristine basis_ffi.c, and clean executable contain no chdir customFFI; the repository-root launcher uses relative generated boot/config links and reaches the authenticated Dopen frontier.", "evidence": ["Candle a08e551a4398907776112eb72db1573f65cf2012 deletes candle/chdir_to_root.ml and candle/basis_ffi.c.patch", "clean executable SHA-256 c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f", "basis_ffi.c SHA-256 04da4d58c97ad7ea649bf94c9d6f1af8313913078330442a901b501d5289c735 equals the compiler-archive member", "clean frontier log SHA-256 ffa64df26d4fbf015d67dc189fb8b8f509686c364a26d5c9b6e0cf8bb0eb8d3b"]},
       "chosen_remedy": {"status": "implemented", "kind": "repository_root_launch_without_runtime_chdir", "description": "Start the generated CakeML program from the Candle repository root and install relative boot/config links there; delete the custom ML call site and C patch from the selected build recipe."},
-      "proof_obligation": {"status": "open", "description": "Rebuild the selected CakeML/Candle executable from the authenticated source and recipe, prove its source and linked image contain no legacy custom FFI patch, and rerun the selected direct frontier/full regression with exact fingerprints.", "evidence": ["Candle d9f1c616c6e8c5369c544dfd15947f179a20c14c source/build elimination commit", "manifest.lock.toml [toolchain.direct_frontier_binary] records clean_rebuild_required_for_g4_elimination=true"]},
+      "proof_obligation": {"status": "not_applicable_documented", "description": "No chdir ABI refinement is required for the selected route because the exact source, generated boot, build recipe, pristine C basis, and clean executable eliminate the call and handler. Any future reintroduction must create a new versioned G4 contract.", "evidence": ["Candle d9f1c616c6e8c5369c544dfd15947f179a20c14c source/build elimination commit", "manifest.lock.toml [toolchain.direct_frontier_binary]", "clean compiled compatibility suite and Dopen-frontier regression pass"]},
       "regression_ids": ["CANDLE-FLYSPECK-ROOT-LAUNCH-001", "CANDLE-FLYSPECK-CLEAN-BINARY-FFI-001"],
       "affected_corpus_files": [{"repository": "candle", "path": "build-instructions.sh"}, {"repository": "candle", "path": "candle.sh"}],
       "affected_files_status": "enumerated",
       "inventory_selector": {"source_contract_files": [{"repository": "candle", "path": "build-instructions.sh"}, {"repository": "candle", "path": "candle.sh"}], "reason": "The remedy removes the historical call site from the selected source inventory; these tracked launch/build files are the authenticated non-FFI replacement contract."},
-      "notes": "Outside the selected source dependency closure, but not yet promoted: the preserved direct-frontier executable predates this remedy and still contains the legacy patch. G4 stays open until the clean rebuild and regression pass."
+      "notes": "Outside the selected dependency closure and deferred as historical evidence. G4 is not required for this exact route; a source, boot, recipe, archive-member, binary, or manifest change reopens the classification."
     },
     {
       "id": "PROJECT-FFI-SYSTEM-001",
       "entry_kind": "inventory_review",
       "divergence_state": "outside_dependency_closure",
       "priority": "P0",
-      "status": "proof_pending",
+      "status": "deferred",
       "summary": "Remove Sys.command customFFI and runtime shell extraction from selected LP certificate loading",
       "semantic_category": "runtime.custom_ffi.system",
       "minimal_reproducer": {"status": "ready", "path": "compatibility/oracles/custom_ffi_system.ml"},
       "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
-      "candle_outcome": {"status": "observed", "outcome": "Sys.command now fails closed and the selected LP loader accepts only a separately prepared, hash-bound hard_7.dat plus an exact static 39-certificate inventory; no selected source calls Runtime.customFFI.", "evidence": ["Candle d9f1c616c6e8c5369c544dfd15947f179a20c14c removes the customFFI bridge", "Candle a08e551a4398907776112eb72db1573f65cf2012 authenticates the offline archive contract and static runtime inventory", "shell-free frontier log SHA-256 69fd5740657dcd06f0639a93f4f5802848a0ab4432e1e320a15c1d8d7414dc03 reaches the unchanged Dopen frontier"]},
+      "candle_outcome": {"status": "observed", "outcome": "Sys.command fails closed and the selected LP loader accepts only a separately prepared, hash-bound hard_7.dat plus an exact static 39-certificate inventory. Selected source/boot contain no Runtime.customFFI and the clean executable uses the pristine compiler-archive C basis.", "evidence": ["Candle d9f1c616c6e8c5369c544dfd15947f179a20c14c removes the customFFI bridge", "Candle a08e551a4398907776112eb72db1573f65cf2012 authenticates the offline archive contract and static runtime inventory", "clean executable SHA-256 c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f", "clean frontier log SHA-256 ffa64df26d4fbf015d67dc189fb8b8f509686c364a26d5c9b6e0cf8bb0eb8d3b reaches the unchanged Dopen frontier"]},
       "chosen_remedy": {"status": "implemented", "kind": "offline_exact_archive_preparation_and_static_inventory", "description": "Validate and extract exactly hard_7.dat outside the proof runtime under pinned size/hash/member constraints, authenticate it in the loader, replace the selected shell branch and directory scan by exact hash-bound source normalizations, and make Sys.command fail closed."},
-      "proof_obligation": {"status": "open", "description": "Rebuild a clean executable without the legacy C patch, run every LP certificate through the exact static inventory, match reference certificate and final theorem/assumption fingerprints, and reject archive, prepared-input, inventory, or normalized-source drift.", "evidence": ["candle/flyspeck_lp_archive_contract.json", "candle/test_flyspeck_prepare_inputs.py", "candle/test_flyspeck_loader_frontier.sh", "manifest.lock.toml LP archive/prepared/inventory hashes"]},
+      "proof_obligation": {"status": "not_applicable_documented", "description": "No system custom-FFI ABI refinement is required for the selected route because the call and handler are eliminated from exact source, boot, recipe, pristine C basis, and clean executable. Complete 39-certificate execution and semantic fingerprints remain G7/G9 obligations, not G4 ABI work.", "evidence": ["candle/flyspeck_lp_archive_contract.json", "candle/test_flyspeck_prepare_inputs.py", "clean compiled compatibility suite and Dopen-frontier regression pass", "manifest.lock.toml LP and direct_frontier_binary contracts"]},
       "regression_ids": ["CANDLE-FLYSPECK-LP-ARCHIVE-CONTRACT-001", "CANDLE-FLYSPECK-LP-STATIC-INVENTORY-001", "CANDLE-FLYSPECK-SYS-COMMAND-FAIL-CLOSED-001", "CANDLE-FLYSPECK-CLEAN-BINARY-FFI-001"],
       "affected_corpus_files": [{"repository": "candle", "path": "candle/ocaml.ml"}, {"repository": "candle", "path": "candle/flyspeck_loader.ml"}, {"repository": "candle", "path": "candle/flyspeck_lp_archive_contract.json"}, {"repository": "candle", "path": "candle/flyspeck_prepare_inputs.py"}],
       "affected_files_status": "enumerated",
       "inventory_selector": {"source_contract_files": [{"repository": "candle", "path": "candle/ocaml.ml"}, {"repository": "candle", "path": "candle/flyspeck_loader.ml"}, {"repository": "candle", "path": "candle/flyspeck_lp_archive_contract.json"}, {"repository": "candle", "path": "candle/flyspeck_prepare_inputs.py"}], "reason": "The remedy removes the historical call from the selected inventory; these tracked files specify the fail-closed runtime and exact offline-preparation boundary."},
-      "notes": "Outside the selected source dependency closure after exact normalization. This is not yet a G4 or S3 closure claim: the old binary still embeds the historical patch and the complete 39-certificate/full-Flyspeck regression remains outstanding."
+      "notes": "Outside the selected dependency closure and deferred as historical evidence. G4 is not required for this exact route. The complete 39-certificate/full-Flyspeck run remains mandatory under G7/G9 and no S2/S3 milestone is claimed."
     }
   ]
 }

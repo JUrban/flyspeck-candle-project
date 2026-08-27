@@ -1212,7 +1212,7 @@
       "comparison_artifact_sha256": "dff487602275e016894cc673b6c82f1f52354a4b5fce3317bb49e51684af1f09",
       "comparison_only_records": 2,
       "comparison_records": 2,
-      "selected_artifact_sha256": "6efdddbdc4fe6ccd83162943fd1cc6726be33cdf3428d61398a65a5348036855",
+      "selected_artifact_sha256": "b47c747e00cc28f862e9dcff29e97424551add41a58385128320854a71622eff",
       "selected_counts": {
         "by_s3_dependency_status": {},
         "total": 0

@@ -101,12 +101,26 @@ candle_boot_sha256 = "6a4cf654617d5709ab1e0c50beccb395c17b7ffb18d13a00e40d54ceb4
 config_sha256 = "162ea59dac4c00177530ecbdb7a5ad72a03460825c5160a8c596dd4f53a5f3cb"
 
 [toolchain.direct_frontier_binary]
-compiled_binary_sha256 = "d361be3839f31811328d5a0da1ecea15a8a73f369c77e34a288355f16bb930d3"
+path = "worktrees/candle-clean-build-v13/candle/build/cake"
+build_branch = "codex/flyspeck-v13-clean-build"
+build_source = "a08e551a4398907776112eb72db1573f65cf2012"
+compiler_source = "4e312c0f7e18b9c5789c8ac4e0af257bff895cf5"
+compiler_archive_sha256 = "4e074090eb04d8fdfb62536457adb31c98e1b17f6cd66c9483806601251053b7"
+compiled_binary_sha256 = "c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f"
+patched_assembly_sha256 = "b55547fb4a7e4586a5503b7e7c2cb65fd850a82fe7ca2504d30fb31f7d350327"
+basis_ffi_sha256 = "04da4d58c97ad7ea649bf94c9d6f1af8313913078330442a901b501d5289c735"
+basis_ffi_matches_archive_member = true
+candle_boot_sha256 = "55a0e08b515a06e9b047ccedb62eb98eb4808f3b45e9c4b11e13eac7f7abba94"
+config_sha256 = "162ea59dac4c00177530ecbdb7a5ad72a03460825c5160a8c596dd4f53a5f3cb"
 source_custom_ffi_calls = 0
+boot_custom_ffi_calls = 0
 build_recipe_custom_ffi_patch = false
-binary_still_contains_legacy_ffi_patch = true
-clean_rebuild_required_for_g4_elimination = true
+binary_still_contains_legacy_ffi_patch = false
+clean_rebuild_required_for_g4_elimination = false
+g4_disposition = "not-required-selected-route-custom-ffi-eliminated"
 startup = "repository-root launch through relative generated boot/config links"
+frontier_log = "flyspeck-candle-runs/v13-direct-clean-noffi-frontier.log"
+frontier_log_sha256 = "ffa64df26d4fbf015d67dc189fb8b8f509686c364a26d5c9b6e0cf8bb0eb8d3b"
 
 [artifacts.flyspeck_hol_library]
 path = "repos/candle/candle/pft/tests/fixtures/flyspeck-hol-library.pft.bin"
@@ -231,8 +245,8 @@ source_normalization_ids = ["PROJECT-POINTER-S3-IMMEDIATE-001", "PROJECT-POINTER
 source_normalization_original_sha256 = ["8ed592aa6515b9fe76cef8f101c98953bfe53b21d0cf023ccb45aaa62f97cc3f", "a429247955e1e095e5663813e9609c43697d83d80f357c7855af3b76a3145865", "193abcdff7657f421398203c67e67d32ce5204ce4ba5a04adad53f37fd161ae6", "3af61cf6961097eae9b67f3f3aaeef8fbd8c9a2ec2dfef1e95594561bac58ebe", "c5238451804b274b8feab8ce9a60eb481a13e1015c3a3d9ad2037beba5e42c6a", "c999e6428ff402a781db826ca3b4c3e4b7ad400c9f549b6e964b4798e4981ba5", "b19e1e179b0863e551671688d76c24b13498965b460c0f514b9065a1bb8a8483", "256ad729d3e4138da4ee911d03d98ce04fac42f2df360252bf6a9c6badd52709", "c81f340edda820f06c3f2db753e192fdd6288abb7b3c410c1c4a97299e76df95"]
 source_normalization_output_sha256 = ["243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4", "d1ae25218cce2f2f510966d574d48d283c04748a1b6c8d8dfc0c2ca52438a60f", "cb6ab239f202554f204188a3feac089cd2cc69645088e0d95659aeabb304b6de", "e34517f72ed00eeb30275f1dca01210604665a43d96aa1d759c9f6890f0312e5", "e8678c01ebb0ddcd647b0155f05caee931be482161f1d34319c1c6cb3fdf74c3", "1af4e5bc6e7fc7a95c3ae9d12a6a721e17575451573d595f015c1c6a2ef461d1", "a456dba39b239cfbe135ec10c9acfebcade7857fbfc36e1d52487f7856cfa187", "79ef91c2192a39566ffc9dc2b5064b6f5c04defb5db9074447f1043495b2122c", "f64bf35f3d1cfff43ab8117ee632e625b219390e416d31a463ad7d2fea2e55d0"]
 parser_normalization_gate = "worktrees/candle-loader-v13/candle/test_flyspeck_parser_orpattern_normalization.sh"
-direct_frontier_log = "flyspeck-candle-runs/v13-direct-overlay-frontier-shell-free.log"
-direct_frontier_log_sha256 = "69fd5740657dcd06f0639a93f4f5802848a0ab4432e1e320a15c1d8d7414dc03"
+direct_frontier_log = "flyspeck-candle-runs/v13-direct-clean-noffi-frontier.log"
+direct_frontier_log_sha256 = "ffa64df26d4fbf015d67dc189fb8b8f509686c364a26d5c9b6e0cf8bb0eb8d3b"
 source_normalization_non_use_ids = ["qmap", "unsuppress", "use_file_b"]
 source_normalization_reference_ocaml = "4.14.1@99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93"
 toplevel_interface_activation = "blocked-no-dummy-or-no-op"
@@ -243,7 +257,7 @@ obj_qualified_uses = 3
 toplevel_dynamic_source_payloads = 4
 toplevel_selected_update_database = "flyspeck:text_formalization/general/update_database_400.ml"
 entry_route = ["candle:hol.ml", "flyspeck:text_formalization/build/strictbuild.hl"]
-claim = "authenticated exact source actions, nine-output overlay, shell-free LP input boundary, and static 39-certificate inventory active; current direct execution stops at debug open Parser_verbose pending verified Dopen integration; preserved executable still contains the historical FFI patch and this is not S1/S2/S3 evidence"
+claim = "authenticated exact source actions, nine-output overlay, shell-free LP input boundary, static 39-certificate inventory, and clean no-custom-FFI executable active; G4 is not required for this selected route; current direct execution stops at debug open Parser_verbose pending verified Dopen integration and is not S1/S2/S3 evidence"
 
 [toolchain.hol4]
 polyml = "5.7.1"

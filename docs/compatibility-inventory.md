@@ -50,7 +50,7 @@ The complete machine-readable coordinates are in
   every pointer-token finding, with name resolution, intent, selected-route
   status, evidence, and ledger disposition;
 - `compatibility/generated/ffi-triage.json`: the selected-source custom-FFI
-  result (currently zero calls) and its explicit clean-binary evidence boundary;
+  result (zero calls) and its explicit clean-binary elimination boundary;
 - `compatibility/generated/inventory-pin-delta.json`: reproducible, stable-
   occurrence comparison with the earlier PFT-head inventory;
 - `compatibility/schema/*.schema.json`: JSON Schema for findings, summary, and
@@ -100,10 +100,10 @@ selected source, leaving zero selected FFI calls.  The current findings digest
 is `a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a`.
 
 The removed calls were the former startup `chdir` bridge and the former
-`Sys.command` `system` bridge.  Their ledger entries remain open as historical
-platform-boundary obligations until a clean executable is rebuilt.  Source
-elimination alone cannot establish that the preserved frontier binary lacks
-the old C patch.
+`Sys.command` `system` bridge.  Their ledger entries remain as deferred
+outside-closure history.  The clean executable `c20b3ec...` uses
+`basis_ffi.c` SHA-256 `04da4d58...`, byte-identical to the compiler archive
+member, and reaches the authenticated direct frontier without the old patch.
 
 ## G3/G4 source-backed triage
 
@@ -139,11 +139,13 @@ uses a repository-root launcher with relative boot/config links.  `Sys.command`
 fails closed; the one tracked compressed LP certificate is prepared outside
 the proof runtime under an exact archive/member/hash contract, and the selected
 runtime receives a fixed sorted inventory of 39 authenticated `.dat` paths.
-The compiled shell-free frontier reaches the unchanged Dopen failure after
-loading that inventory.  G4 nevertheless remains in progress: the preserved
-frontier executable predates the remedy and still embeds the historical C
-patch.  A clean rebuild, binary inspection, and complete direct regression are
-promotion requirements.
+The clean compiled frontier reaches the unchanged Dopen failure after loading
+that inventory.  Its executable SHA-256 is `c20b3ec...`; its generated boot
+also contains zero custom-FFI calls, and its C basis is byte-identical to the
+pinned compiler archive member.  G4 is therefore not required for this exact
+selected route.  The historical entries are fail-closed guards: any source,
+boot, recipe, C-basis, or manifest change that reintroduces a call or handler
+reopens G4.
 
 There is one lexical note.  Flyspeck
 `jHOLLight/Tests/test-compiled.hl:1` starts an unterminated string (`needs
@@ -221,8 +223,7 @@ obligation, stable regression IDs, and evidence.
 3. Close the full-run fingerprint and scale gates for the implemented exact
    pointer normalizations; retain medium-confidence filter intent as an
    explicit review item.
-4. Rebuild Candle from the selected no-custom-FFI source/build recipe, inspect
-   the executable for the legacy patch, and run the 39-certificate/full-source
-   regression before promoting G4.
+4. Keep the zero-custom-FFI source/boot/build/binary checks in the release lock;
+   execute the 39-certificate/full-source regression as G7/G9 evidence.
 5. Move stable regression IDs and lifecycle fields into the authoritative
    Candle-native ledger, then advance the immutable import coordinate.

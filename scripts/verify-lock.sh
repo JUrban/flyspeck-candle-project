@@ -99,6 +99,38 @@ do
   printf 'ok: %s %s\n' "$path" "$actual"
 done
 
+direct_clean_root="$workspace_dir/worktrees/candle-clean-build-v13"
+direct_clean_binary="$direct_clean_root/candle/build/cake"
+direct_clean_binary_sha=$(sha256sum "$direct_clean_binary" | cut -d' ' -f1)
+[[ "$direct_clean_binary_sha" == \
+  c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f ]]
+[[ $("$direct_clean_binary" --version 2>&1 | sed -n 's/^CakeML: //p') == \
+  4e312c0f7e18b9c5789c8ac4e0af257bff895cf5 ]]
+for locked_file in \
+  'candle/build/cake.S:b55547fb4a7e4586a5503b7e7c2cb65fd850a82fe7ca2504d30fb31f7d350327' \
+  'candle/build/basis_ffi.c:04da4d58c97ad7ea649bf94c9d6f1af8313913078330442a901b501d5289c735' \
+  'candle/build/candle_boot.ml:55a0e08b515a06e9b047ccedb62eb98eb4808f3b45e9c4b11e13eac7f7abba94' \
+  'candle/build/config_enc_str.txt:162ea59dac4c00177530ecbdb7a5ad72a03460825c5160a8c596dd4f53a5f3cb' \
+  'candle/build/cake-x64-64.tar.gz:4e074090eb04d8fdfb62536457adb31c98e1b17f6cd66c9483806601251053b7'
+do
+  path=${locked_file%%:*}
+  expected=${locked_file#*:}
+  actual=$(sha256sum "$direct_clean_root/$path" | cut -d' ' -f1)
+  [[ "$actual" == "$expected" ]]
+done
+archive_basis_sha=$(
+  tar -xOf "$direct_clean_root/candle/build/cake-x64-64.tar.gz" \
+    cake-x64-64/basis_ffi.c | sha256sum | cut -d' ' -f1
+)
+[[ "$archive_basis_sha" == \
+  04da4d58c97ad7ea649bf94c9d6f1af8313913078330442a901b501d5289c735 ]]
+! rg -q 'chdir|system\(|customFFI' \
+  "$direct_clean_root/candle/build/basis_ffi.c"
+! nm -D "$direct_clean_binary" 2>/dev/null | \
+  rg -q ' (chdir|system)(@|$)'
+printf 'ok: clean no-custom-FFI direct binary %s (pristine basis %s)\n' \
+  "$direct_clean_binary_sha" "$archive_basis_sha"
+
 flyspeck_leaf="$repos_dir/candle/candle/pft/tests/fixtures/flyspeck-hol-library.pft.bin"
 flyspeck_leaf_sha=$(sha256sum "$flyspeck_leaf" | cut -d' ' -f1)
 [[ "$flyspeck_leaf_sha" == c64751d819bffa16d4e7abe7c31bb1836ba3958dd60c5bfbe545495f99dec025 ]]
@@ -425,16 +457,20 @@ cmp \
   candle/build/config_enc_str.txt ]]
 ! rg -q '(^|[^A-Za-z0-9_.])(Cake\.)?Runtime\.customFFI' \
   "$workspace_dir/worktrees/candle-loader-v13" -g '*.ml' -g '*.hl'
+! rg -q '(^|[^A-Za-z0-9_.])(Cake\.)?Runtime\.customFFI' \
+  "$workspace_dir/worktrees/cakeml-flyspeck-actions-v13/candle/prover/candle_boot.ml" \
+  "$direct_clean_root/candle/build/candle_boot.ml"
 ! rg -q 'basis_ffi\.c\.patch|chdir_to_root\.ml' \
   "$workspace_dir/worktrees/candle-loader-v13/build-instructions.sh"
-"$direct_candle/test_static_load_directive.sh" \
-  "$workspace_dir/worktrees/candle-loader-v13/candle.sh" >/dev/null
-CANDLE_BINARY="$workspace_dir/worktrees/candle-loader-v13/candle.sh" \
+direct_clean_candle="$direct_clean_root/candle.sh"
+"$direct_candle/test_static_load_directive.sh" "$direct_clean_candle" >/dev/null
+CANDLE_BINARY="$direct_clean_candle" \
   "$direct_candle/test_flyspeck_needs_directive.sh" >/dev/null
-CANDLE_BINARY="$workspace_dir/worktrees/candle-loader-v13/candle.sh" \
+CANDLE_BINARY="$direct_clean_candle" \
   "$direct_candle/test_filename_compat.sh" >/dev/null
 "$direct_candle/test_flyspeck_parser_orpattern_normalization.sh" \
-  "$workspace_dir/worktrees/candle-loader-v13/candle.sh" >/dev/null
+  "$direct_clean_candle" >/dev/null
+"$direct_candle/test_unix_metadata.sh" "$direct_clean_candle" >/dev/null
 # The older seven-overlay frontier log remains immutable historical evidence.
 direct_frontier_log="$workspace_dir/flyspeck-candle-runs/v13-direct-overlay-frontier-dopen-2.log"
 [[ $(sha256sum "$direct_frontier_log" | cut -d' ' -f1) == \
@@ -450,6 +486,17 @@ rg -Fq 'open-declarations are not supported (yet)' "$shell_free_frontier_log"
 rg -Fq 'Parsing failed at line 16' "$shell_free_frontier_log"
 ! rg -q 'CANDLE_FLYSPECK_DIRECT_FULL_OK|Flyspeck source action complete: general/debug.hl' \
   "$shell_free_frontier_log"
+clean_noffi_frontier_log="$workspace_dir/flyspeck-candle-runs/v13-direct-clean-noffi-frontier.log"
+[[ $(sha256sum "$clean_noffi_frontier_log" | cut -d' ' -f1) == \
+  ffa64df26d4fbf015d67dc189fb8b8f509686c364a26d5c9b6e0cf8bb0eb8d3b ]]
+rg -Fq 'val candle_flyspeck_lp_certificate_files = [' \
+  "$clean_noffi_frontier_log"
+rg -Fq -- '- Flyspeck source action complete: general/parser_verbose.hl' \
+  "$clean_noffi_frontier_log"
+rg -Fq 'open-declarations are not supported (yet)' "$clean_noffi_frontier_log"
+rg -Fq 'Parsing failed at line 16' "$clean_noffi_frontier_log"
+! rg -q 'CANDLE_FLYSPECK_DIRECT_FULL_OK|Flyspeck source action complete: general/debug.hl' \
+  "$clean_noffi_frontier_log"
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
 certificate_inventory_sha=$(
@@ -490,6 +537,11 @@ check_worktree flyspeck-direct \
 check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
+  bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
+  a08e551a4398907776112eb72db1573f65cf2012
+check_worktree candle-clean-build \
+  "$workspace_dir/worktrees/candle-clean-build-v13" \
+  codex/flyspeck-v13-clean-build \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
   a08e551a4398907776112eb72db1573f65cf2012
 check_worktree cakeml-flyspeck-actions \

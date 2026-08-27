@@ -47,9 +47,10 @@ and earliest-stratum counts prevent a synthetic-only Dopen result from closing
 G2.  The selected source and build recipe now contain no custom FFI: startup
 uses repository-root relative boot/config links, `Sys.command` fails closed,
 and LP verification receives a separately prepared hash-bound `hard_7.dat`
-through a fixed 39-certificate inventory.  The clean-binary rebuild is still a
-release gate because the preserved frontier executable embeds the historical
-FFI patch.
+through a fixed 39-certificate inventory.  A clean rebuild with the pristine
+compiler-archive C basis passes the compiled compatibility suite and the same
+authenticated Dopen frontier, so G4 is not required for this pinned route.
+Any source, boot, recipe, C-basis, or manifest reintroduction reopens it.
 The first baseline is deliberately
 allowed to expose and retain compatibility failures; fixture theorem counts,
 parser-only successes, and broad source patching do not promote a gate.
