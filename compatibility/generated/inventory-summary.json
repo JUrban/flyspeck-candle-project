@@ -1,7 +1,7 @@
 {
   "artifacts": {
     "findings_jsonl": "inventory-findings.jsonl",
-    "findings_sha256": "29bf0bf9bb9c23b0ba4e77b271e1fc82282023c16e703dcd0cb5ac027a5e75e7",
+    "findings_sha256": "bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c",
     "lexical_notes_json": "inventory-lexical-notes.json"
   },
   "counts": {
@@ -12,12 +12,12 @@
       "module.declaration_first_class_unpack": 0,
       "module.declaration_functor": 1,
       "module.declaration_other": 39,
-      "module.declaration_structure": 605,
+      "module.declaration_structure": 601,
       "module.first_class_pack": 0,
       "module.first_class_unpack": 0,
       "module.include": 95,
       "module.type_declaration": 65,
-      "open.declaration": 4926,
+      "open.declaration": 4925,
       "open.local_let": 3,
       "open.local_parenthesized": 91,
       "pointer_equality.infix_use": 210,
@@ -51,7 +51,7 @@
       },
       "module.declaration_structure": {
         "candle": 201,
-        "flyspeck": 404
+        "flyspeck": 400
       },
       "module.first_class_pack": {
         "candle": 0,
@@ -71,7 +71,7 @@
       },
       "open.declaration": {
         "candle": 423,
-        "flyspeck": 4503
+        "flyspeck": 4502
       },
       "open.local_let": {
         "candle": 3,
@@ -98,16 +98,16 @@
       "anonymous_structure": 0,
       "dotted": 31,
       "functor_application": 7,
-      "simple": 5082,
+      "simple": 5081,
       "unparsed_expression": 39
     },
     "by_repository": {
       "candle": 954,
-      "flyspeck": 5095
+      "flyspeck": 5090
     },
     "by_source_dialect": {
       "camlp_legacy_generated_ml": 171,
-      "hol_light_script": 4877,
+      "hol_light_script": 4872,
       "ocaml_implementation": 964,
       "ocaml_interface": 32,
       "ocamllex_source": 1,
@@ -123,12 +123,12 @@
       "module.declaration_first_class_unpack": 0,
       "module.declaration_functor": 1,
       "module.declaration_other": 19,
-      "module.declaration_structure": 490,
+      "module.declaration_structure": 487,
       "module.first_class_pack": 0,
       "module.first_class_unpack": 0,
       "module.include": 84,
       "module.type_declaration": 65,
-      "open.declaration": 577,
+      "open.declaration": 576,
       "open.local_let": 3,
       "open.local_parenthesized": 28,
       "pointer_equality.infix_use": 38,
@@ -192,16 +192,16 @@
       "source_files_scanned": 679
     },
     "flyspeck": {
-      "commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "dirty": false,
       "encodings": {
         "latin-1": 1,
-        "utf-8": 667
+        "utf-8": 659
       },
-      "findings": 5095,
-      "path_key": "flyspeck",
-      "source_bytes_scanned": 52188896,
-      "source_files_scanned": 668
+      "findings": 5090,
+      "path_key": "../worktrees/flyspeck-v13-source",
+      "source_bytes_scanned": 52174136,
+      "source_files_scanned": 660
     }
   },
   "reproducible_command": "scripts/update-compatibility-inventory.sh /project/repos",
@@ -211,11 +211,11 @@
   },
   "schema_version": 1,
   "scope_kind": "tracked_ocaml_family_repository_snapshot",
-  "scope_sha256": "82f3b9ac100240c21b924854a4000241faede3aaf66ca3648d0c7e79b8e70b8a",
+  "scope_sha256": "daf73881a64b98fb63354460bc0d824cf24780e16fd1a474354bdd3d83f9a02c",
   "totals": {
-    "findings": 6049,
+    "findings": 6044,
     "lexical_notes": 1,
-    "source_bytes_scanned": 100751549,
-    "source_files_scanned": 1347
+    "source_bytes_scanned": 100736789,
+    "source_files_scanned": 1339
   }
 }

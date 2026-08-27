@@ -6,7 +6,7 @@
     "total": 2
   },
   "evidence_boundary": "This is a source-backed call-chain and current-C-glue review, not a verified refinement result. Runtime ABI, total validation, deterministic failure behavior, sandbox policy, and the platform trust argument remain proof obligations.",
-  "inventory_findings_sha256": "29bf0bf9bb9c23b0ba4e77b271e1fc82282023c16e703dcd0cb5ac027a5e75e7",
+  "inventory_findings_sha256": "bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c",
   "records": [
     {
       "command": "chdir",

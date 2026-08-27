@@ -65,7 +65,7 @@
     "total": 217
   },
   "evidence_boundary": "Manual source review classifies the role of each pinned token and membership in the explicitly selected S3 source route. A required source dependency is not proof that the expression is dynamically evaluated. A not-selected record is an exclusion from this route, not a claim that the file is dead in every HOL Light workflow.",
-  "inventory_findings_sha256": "29bf0bf9bb9c23b0ba4e77b271e1fc82282023c16e703dcd0cb5ac027a5e75e7",
+  "inventory_findings_sha256": "bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c",
   "records": [
     {
       "category": "pointer_equality.operator_binding",
@@ -4651,7 +4651,7 @@
     },
     {
       "category": "pointer_equality.operator_binding",
-      "finding_id": "CF-ffadeb3081ce3447dd75",
+      "finding_id": "CF-6ed0e8789d40a08c7305",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 7,
@@ -4662,7 +4662,7 @@
       "operator": "==",
       "operator_resolution": "local_custom_operator_definition",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-BIGINT-BINDING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4680,7 +4680,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-efbb8cae3b79f761bc77",
+      "finding_id": "CF-a4febe968c0ed6f39bf2",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 28,
@@ -4691,7 +4691,7 @@
       "operator": "==",
       "operator_resolution": "locally_rebound_custom_value_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-BIGINT-USE",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4709,7 +4709,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-95f85594d5c59db41125",
+      "finding_id": "CF-51f2594b5adfcd856a24",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 26,
@@ -4720,7 +4720,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4738,7 +4738,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f47544718e6a6dc74bf0",
+      "finding_id": "CF-da0790295044d50927b4",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 36,
@@ -4749,7 +4749,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4767,7 +4767,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7a85d6178c6de780c334",
+      "finding_id": "CF-2b198b21c242255d098d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 14,
@@ -4778,7 +4778,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4796,7 +4796,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f68cf2c0019a7983fd67",
+      "finding_id": "CF-3c504a6a79ce0e42bd9c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 12,
@@ -4807,7 +4807,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-CALCNUM-SHORTCUT",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4825,7 +4825,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7ef20f15c57cfefb654f",
+      "finding_id": "CF-35f88a141436224b1054",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 20,
@@ -4836,7 +4836,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4854,7 +4854,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-03e2c159c7153edc37cb",
+      "finding_id": "CF-0d48a972f8a603192ae1",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 28,
@@ -4865,7 +4865,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4883,7 +4883,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3866500a36b3f378f780",
+      "finding_id": "CF-3150786fddf6788605a6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 38,
@@ -4894,7 +4894,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4912,7 +4912,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-dbc32a7dcb2c0a442592",
+      "finding_id": "CF-27ef5cc5a144ceeae07e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 27,
@@ -4923,7 +4923,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4941,7 +4941,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9b6c8b1e43b8984517cd",
+      "finding_id": "CF-8818a7c1d03d056f9d24",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 41,
@@ -4952,7 +4952,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4970,7 +4970,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-aaa1ab477b6513c8b460",
+      "finding_id": "CF-c3024ebc6d41a038fe4f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 31,
@@ -4981,7 +4981,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -4999,7 +4999,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-fe0c3cc9798be0c065ae",
+      "finding_id": "CF-861f4ba149fa73b34b8a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 30,
@@ -5010,7 +5010,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5028,7 +5028,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ce707b5775f2d84eb048",
+      "finding_id": "CF-d3405052e344f3234542",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 40,
@@ -5039,7 +5039,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5057,7 +5057,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-501502d0684452195704",
+      "finding_id": "CF-09f25a9ebbb7d5277937",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 34,
@@ -5068,7 +5068,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5086,7 +5086,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-75f9ccc332fb6d734124",
+      "finding_id": "CF-e8740a3655521aac32fe",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -5097,7 +5097,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5115,7 +5115,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-84897ac6c1386658f378",
+      "finding_id": "CF-f9af3282632dcc0f2d73",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 12,
@@ -5126,7 +5126,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-ORDER-SHORTCUT",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5144,7 +5144,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8353c73213b8952ed9c3",
+      "finding_id": "CF-08a6cba0d14a16903986",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -5155,7 +5155,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5173,7 +5173,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-72bc835fc3b8a7eb085c",
+      "finding_id": "CF-55c04bcc7bc7843ad77f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 21,
@@ -5184,7 +5184,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5202,7 +5202,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5b6cc31deb7992defb64",
+      "finding_id": "CF-e25097c3acca56c91320",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 31,
@@ -5213,7 +5213,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5231,7 +5231,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ccdff22dc8a4c8273d79",
+      "finding_id": "CF-f5cce0f4f29c77982f8c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 27,
@@ -5242,7 +5242,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-GROBNER-IDENTITY-KEY",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5260,7 +5260,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a1d9f8d51ff19c226dfb",
+      "finding_id": "CF-1032e8bec975a8b4db34",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 31,
@@ -5271,7 +5271,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5289,7 +5289,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-0e577f6affda169a5625",
+      "finding_id": "CF-7b4455f2908005581ee7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 34,
@@ -5300,7 +5300,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5318,7 +5318,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3c09e965aa8f562ce723",
+      "finding_id": "CF-ea515261ffd39ffa19cb",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -5329,7 +5329,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5347,7 +5347,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-426054fafd55861c6203",
+      "finding_id": "CF-9f83863e2daad63fd6b7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 28,
@@ -5358,7 +5358,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5376,7 +5376,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d71696e017bc5e7236cc",
+      "finding_id": "CF-d7879ba21aea890fbde3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5387,7 +5387,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5405,7 +5405,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2ece6d05f2cd01804f3c",
+      "finding_id": "CF-21d6073a529a364d0e03",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 30,
@@ -5416,7 +5416,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5434,7 +5434,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-22fe07d277ff60611ec0",
+      "finding_id": "CF-024b7d94980130753bd1",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 17,
@@ -5445,7 +5445,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5463,7 +5463,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-69d4c6f96bc32ab9de57",
+      "finding_id": "CF-b25bf611c9a96c42dad1",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 17,
@@ -5474,7 +5474,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5492,7 +5492,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ee6e771504ec94f6edf3",
+      "finding_id": "CF-7666a70e39053e5c547a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5503,7 +5503,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5521,7 +5521,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6afcc82269af9713006b",
+      "finding_id": "CF-63979bc2da06cfe53d0d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5532,7 +5532,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5550,7 +5550,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-bfbda92c3080e89ea222",
+      "finding_id": "CF-8312e7a2c3bbcbf3d87d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 12,
@@ -5561,7 +5561,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-MESON-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5579,7 +5579,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3a5305fc92a8a06da9e9",
+      "finding_id": "CF-a662d7859917c13d437f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 20,
@@ -5590,7 +5590,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-MESON-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5608,7 +5608,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-0bfb3fcf35f19b2bd88a",
+      "finding_id": "CF-2cd51edf64d2ad6703d5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 14,
@@ -5619,7 +5619,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-MESON-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5637,7 +5637,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c24a64f131da2d367b92",
+      "finding_id": "CF-b42f323480cd98c3070d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 20,
@@ -5648,7 +5648,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-MESON-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5666,7 +5666,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9b96a7615fb1cc62bb22",
+      "finding_id": "CF-4dde17fdd2c40a8dba1f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 14,
@@ -5677,7 +5677,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-MESON-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5695,7 +5695,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e81769b7c9e0856bc69b",
+      "finding_id": "CF-7210546460b62b33f0e7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 9,
@@ -5706,7 +5706,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-MESON-SHORTCUT",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5724,7 +5724,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-df8340eab20627ca8307",
+      "finding_id": "CF-9fa5913147d6a20d4e2c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 36,
@@ -5735,7 +5735,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-MESON-SHARING",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5753,7 +5753,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cd7fde2d21ab1ea04f7b",
+      "finding_id": "CF-07de3fff3aa3d602681b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5764,7 +5764,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-AZURE-PAJ-IMMEDIATE",
       "s3_dependency": {
         "basis": "alternative_azure_tree",
@@ -5782,7 +5782,7 @@
     },
     {
       "category": "pointer_equality.operator_binding",
-      "finding_id": "CF-51623bb19b7cc62ad61c",
+      "finding_id": "CF-c1ed4b09533a9ca2085e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 7,
@@ -5793,7 +5793,7 @@
       "operator": "==",
       "operator_resolution": "local_custom_operator_definition",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-FORMAL-INFORMAL-BIGINT-BINDING",
       "s3_dependency": {
         "basis": "informal_source_outside_explicit_full_sequence",
@@ -5811,7 +5811,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cdbf7901cab0e37be4f7",
+      "finding_id": "CF-6385a40da07b8d7f9135",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 28,
@@ -5822,7 +5822,7 @@
       "operator": "==",
       "operator_resolution": "locally_rebound_custom_value_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-FORMAL-INFORMAL-BIGINT-USE",
       "s3_dependency": {
         "basis": "informal_source_outside_explicit_full_sequence",
@@ -5840,7 +5840,7 @@
     },
     {
       "category": "pointer_equality.operator_binding",
-      "finding_id": "CF-74062331ccd8ed46b253",
+      "finding_id": "CF-4c5a23a4a7b3131df705",
       "ledger_disposition": "excluded_from_pointer_identity_after_name_resolution",
       "location": {
         "column": 29,
@@ -5851,7 +5851,7 @@
       "operator": "==",
       "operator_resolution": "local_custom_operator_definition",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-LP-CUSTOM-BINDING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -5869,7 +5869,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ec0ae663a275b4acff91",
+      "finding_id": "CF-8b984bbb4dc1304c4c57",
       "ledger_disposition": "excluded_from_pointer_identity_after_name_resolution",
       "location": {
         "column": 44,
@@ -5880,7 +5880,7 @@
       "operator": "==",
       "operator_resolution": "locally_rebound_custom_value_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-LP-CUSTOM-USE",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -5898,7 +5898,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e56fb30af46291400fba",
+      "finding_id": "CF-e0a0512c6dc85455576d",
       "ledger_disposition": "open_immediate_representation_contract",
       "location": {
         "column": 10,
@@ -5909,7 +5909,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-LP-PROVE-INT",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -5927,7 +5927,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f39f8dcd185a40f26f1f",
+      "finding_id": "CF-e2d0f34c0686a170d6e8",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -5938,7 +5938,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-LP-TEST-INT",
       "s3_dependency": {
         "basis": "test_source_outside_explicit_full_sequence",
@@ -5956,7 +5956,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-23da9da983f59a94b624",
+      "finding_id": "CF-179703b8a84f0d69691a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -5967,7 +5967,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-LP-TEST-INT",
       "s3_dependency": {
         "basis": "test_source_outside_explicit_full_sequence",
@@ -5985,7 +5985,7 @@
     },
     {
       "category": "pointer_equality.operator_reference",
-      "finding_id": "CF-ba3ec71868fed8d798ec",
+      "finding_id": "CF-40ebb8bb5e5658caf249",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 50,
@@ -5996,7 +5996,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-INFORMAL-PRINT-IDENTITY-FILTER",
       "s3_dependency": {
         "basis": "informal_tooling_tree",
@@ -6014,7 +6014,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2d896f255f6509de3001",
+      "finding_id": "CF-d78804b89cf793555b1e",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 31,
@@ -6025,7 +6025,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6043,7 +6043,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7aab25e2962591058071",
+      "finding_id": "CF-8f013557bd5b244b7b7c",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 34,
@@ -6054,7 +6054,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6072,7 +6072,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-fc3c061d19cf703e6cab",
+      "finding_id": "CF-debb0e39e0c933519c3d",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 25,
@@ -6083,7 +6083,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6101,7 +6101,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7f17a4366fb9435bd69f",
+      "finding_id": "CF-89dfbc677a3c20fe3438",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 28,
@@ -6112,7 +6112,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6130,7 +6130,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7c8dd2f6e416103a2f61",
+      "finding_id": "CF-42aca2b91c687d35c12e",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 19,
@@ -6141,7 +6141,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6159,7 +6159,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-44a034b7eaa45c20ddf2",
+      "finding_id": "CF-59e8488ab224c8589919",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 30,
@@ -6170,7 +6170,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6188,7 +6188,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-68da895df69067a2e8ca",
+      "finding_id": "CF-c6e9b788ee3b29546853",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 17,
@@ -6199,7 +6199,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6217,7 +6217,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-60862e62ef253734cc11",
+      "finding_id": "CF-be5e2ca76934883f0291",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 17,
@@ -6228,7 +6228,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6246,7 +6246,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-065ad47aea2c94db9547",
+      "finding_id": "CF-d4b8b92e317b3364ef57",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 19,
@@ -6257,7 +6257,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6275,7 +6275,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b252ed67747c60401dce",
+      "finding_id": "CF-4809aa78a45489c69ddd",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 19,
@@ -6286,7 +6286,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
       "s3_dependency": {
         "basis": "explicit_full_sequence",
@@ -6304,7 +6304,7 @@
     },
     {
       "category": "pointer_equality.operator_reference",
-      "finding_id": "CF-c59c879e8975d1626817",
+      "finding_id": "CF-8ee4d59849d8b4db4109",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 50,
@@ -6315,7 +6315,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-GENERAL-PRINT-IDENTITY-FILTER",
       "s3_dependency": {
         "basis": "strict_loader_and_explicit_full_sequence",
@@ -6333,7 +6333,7 @@
     },
     {
       "category": "pointer_equality.operator_reference",
-      "finding_id": "CF-e068635a445ee15e0979",
+      "finding_id": "CF-0f9aaa2001287a9cf515",
       "ledger_disposition": "open_identity_contract",
       "location": {
         "column": 31,
@@ -6344,7 +6344,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "flyspeck",
-      "repository_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "repository_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
       "review_rule_id": "PTR-FLYSPECK-JORDAN-IDENTITY-FILTER",
       "s3_dependency": {
         "basis": "explicit_full_sequence",

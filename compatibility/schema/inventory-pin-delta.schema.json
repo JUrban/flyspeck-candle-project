@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flyspeck-candle.invalid/schema/inventory-pin-delta-v1.json",
+  "title": "Direct S3 compatibility inventory pin correction",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "comparison_kind", "contract_sha256",
+    "reproducible_command", "comparison_lane", "selected_lane", "delta",
+    "stable_occurrences", "triage",
+    "eligible_source_path_delta_comparison_to_selected", "evidence_boundary"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "comparison_kind": {"const": "direct_s3_pin_correction_from_pft_development_evidence"},
+    "contract_sha256": {"$ref": "#/$defs/sha256"},
+    "reproducible_command": {"type": "string", "minLength": 1},
+    "comparison_lane": {"$ref": "#/$defs/lane"},
+    "selected_lane": {"$ref": "#/$defs/selectedLane"},
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["totals", "by_category", "by_repository"],
+      "properties": {
+        "totals": {"$ref": "#/$defs/deltaMap"},
+        "by_category": {"$ref": "#/$defs/deltaMap"},
+        "by_repository": {"$ref": "#/$defs/deltaMap"}
+      }
+    },
+    "stable_occurrences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method", "matched", "comparison_only", "selected_only",
+        "comparison_only_records", "selected_only_records"
+      ],
+      "properties": {
+        "method": {"type": "string", "minLength": 1},
+        "matched": {"type": "integer", "minimum": 0},
+        "comparison_only": {"type": "integer", "minimum": 0},
+        "selected_only": {"type": "integer", "minimum": 0},
+        "comparison_only_records": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+        "selected_only_records": {"type": "array", "items": {"$ref": "#/$defs/finding"}}
+      }
+    },
+    "triage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pointer", "ffi"],
+      "properties": {
+        "pointer": {"$ref": "#/$defs/triage"},
+        "ffi": {"$ref": "#/$defs/triage"}
+      }
+    },
+    "eligible_source_path_delta_comparison_to_selected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "path"],
+        "properties": {
+          "status": {"type": "string", "pattern": "^[A-Z][0-9]*$"},
+          "path": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "evidence_boundary": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "totals": {
+      "type": "object",
+      "required": ["findings", "lexical_notes", "source_bytes_scanned", "source_files_scanned"],
+      "properties": {
+        "findings": {"type": "integer", "minimum": 0},
+        "lexical_notes": {"type": "integer", "minimum": 0},
+        "source_bytes_scanned": {"type": "integer", "minimum": 0},
+        "source_files_scanned": {"type": "integer", "minimum": 0}
+      }
+    },
+    "lane": {
+      "type": "object",
+      "required": ["role", "flyspeck_commit", "inventory_findings_sha256", "totals"],
+      "properties": {
+        "role": {"type": "string", "minLength": 1},
+        "project_git_commit": {"$ref": "#/$defs/gitCommit"},
+        "flyspeck_commit": {"$ref": "#/$defs/gitCommit"},
+        "inventory_findings_sha256": {"$ref": "#/$defs/sha256"},
+        "totals": {"$ref": "#/$defs/totals"}
+      }
+    },
+    "selectedLane": {
+      "allOf": [
+        {"$ref": "#/$defs/lane"},
+        {
+          "type": "object",
+          "required": ["inventory_path_key"],
+          "properties": {"inventory_path_key": {"type": "string", "minLength": 1}}
+        }
+      ]
+    },
+    "deltaValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparison", "selected", "selected_minus_comparison"],
+      "properties": {
+        "comparison": {"type": "integer", "minimum": 0},
+        "selected": {"type": "integer", "minimum": 0},
+        "selected_minus_comparison": {"type": "integer"}
+      }
+    },
+    "deltaMap": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/deltaValue"}
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "source_path", "location", "category", "lexeme"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "source_path": {"type": "string", "minLength": 1},
+        "location": {"type": "object"},
+        "category": {"type": "string", "minLength": 1},
+        "lexeme": {"type": "string", "minLength": 1}
+      }
+    },
+    "triage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "comparison_artifact_sha256", "selected_artifact_sha256",
+        "comparison_records", "selected_records", "selected_minus_comparison",
+        "stable_records_matched", "comparison_only_records",
+        "selected_only_records", "selected_counts"
+      ],
+      "properties": {
+        "comparison_artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "selected_artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "comparison_records": {"type": "integer", "minimum": 0},
+        "selected_records": {"type": "integer", "minimum": 0},
+        "selected_minus_comparison": {"type": "integer"},
+        "stable_records_matched": {"type": "integer", "minimum": 0},
+        "comparison_only_records": {"type": "integer", "minimum": 0},
+        "selected_only_records": {"type": "integer", "minimum": 0},
+        "selected_counts": {"type": "object"}
+      }
+    }
+  }
+}
