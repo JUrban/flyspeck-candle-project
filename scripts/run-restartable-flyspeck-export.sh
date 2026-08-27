@@ -29,6 +29,7 @@ log_dir="$state_dir/logs"
 active_port_file="$state_dir/coordinator.port"
 checkpoint_files_per_generation=${CANDLE_PFT_CHECKPOINT_FILES:-10}
 checkpoint_work_units_per_generation=${CANDLE_PFT_CHECKPOINT_WORK_UNITS:-25}
+checkpoint_gzip=${CANDLE_PFT_DMTCP_GZIP:-0}
 max_generations=${CANDLE_PFT_MAX_GENERATIONS:-1000}
 active_port=
 
@@ -39,6 +40,7 @@ case "$output$state_dir" in
 esac
 [[ "$checkpoint_files_per_generation" =~ ^[1-9][0-9]*$ ]]
 [[ "$checkpoint_work_units_per_generation" =~ ^[1-9][0-9]*$ ]]
+[[ "$checkpoint_gzip" =~ ^[01]$ ]]
 [[ "$max_generations" =~ ^[1-9][0-9]*$ ]]
 
 for command in dmtcp_coordinator dmtcp_launch dmtcp_command dmtcp_restart \
@@ -88,6 +90,7 @@ if [[ ! -e "$state_dir" ]]; then
     printf 'checkpoint_files=%s\n' "$checkpoint_files_per_generation"
     printf 'checkpoint_work_units=%s\n' \
       "$checkpoint_work_units_per_generation"
+    printf 'checkpoint_gzip=%s\n' "$checkpoint_gzip"
     printf 'certificate_inventory_sha256=%s\n' "$certificate_inventory_sha"
     printf 'archive_sha256=%s\n' "$archive_sha"
     printf 'nonlinear_prep_sha256=%s\n' "$nonlinear_prep_sha"
@@ -109,6 +112,11 @@ else
      "$checkpoint_files_per_generation" ]]
   [[ $(read_config_value checkpoint_work_units) == \
      "$checkpoint_work_units_per_generation" ]]
+  configured_checkpoint_gzip=$(read_config_value checkpoint_gzip)
+  if [[ -z "$configured_checkpoint_gzip" ]]; then
+    configured_checkpoint_gzip=1
+  fi
+  [[ "$configured_checkpoint_gzip" == "$checkpoint_gzip" ]]
   [[ $(read_config_value certificate_inventory_sha256) == \
      "$certificate_inventory_sha" ]]
   [[ $(read_config_value archive_sha256) == "$archive_sha" ]]
@@ -128,6 +136,7 @@ trap cleanup_coordinator EXIT
 
 common_environment=(
   "PATH=$project_dir/scripts/bin:$PATH"
+  "DMTCP_GZIP=$checkpoint_gzip"
   "OCAMLPATH=$ocaml_switch/lib"
   "CAML_LD_LIBRARY_PATH=$ocaml_switch/lib/stublibs:/usr/lib/ocaml/stublibs"
   "HOLLIGHT_DIR=$producer_dir"
@@ -180,9 +189,10 @@ run_restart_generation() {
   find "$port_file" -maxdepth 0 -type f -delete 2>/dev/null || true
   (
     cd "$checkpoint_dir"
-    timeout 86400 dmtcp_restart --new-coordinator --coord-port 0 \
-      --port-file "$port_file" --ckptdir "$checkpoint_dir" "$checkpoint" \
-      >"$log_dir/generation-$(printf '%04d' "$generation").log" 2>&1
+    env DMTCP_GZIP="$checkpoint_gzip" \
+      timeout 86400 dmtcp_restart --new-coordinator --coord-port 0 \
+        --port-file "$port_file" --ckptdir "$checkpoint_dir" "$checkpoint" \
+        >"$log_dir/generation-$(printf '%04d' "$generation").log" 2>&1
   ) &
   restart_pid=$!
   for ((wait_index = 0; wait_index < 100; wait_index++)); do
