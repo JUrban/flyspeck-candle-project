@@ -24,7 +24,7 @@ ordering, JSON encoding, finding IDs, and summaries are deterministic.  The
 checked-in result is tied to:
 
 - selected direct-source Candle branch
-  `f4c95109430266c3a734e4836263e9efe4659d9c`, read from
+  `7db8e182d8cd9a92eef386365584009d63f5959b`, read from
   `worktrees/candle-loader-v13`;
 - clean direct-S3 Flyspeck
   `1ce0353008eba83d3c76ae9a25c3c242e4802d53`, read from the dedicated
@@ -100,7 +100,7 @@ source delta remain separately visible.  The 23 new pointer records are host reg
 oracles and are explicitly outside the generated direct boot; all 217 earlier
 pointer reviews still match.  Both historical FFI records disappear from the
 selected source, leaving zero selected FFI calls.  The current findings digest
-is `e2af1fad83d1b0e3ba6e4bb7033470f770e0874371e8de5ef3e242ba120f1bdb`.
+is `e713ab19cfd207a8cd4db191436df467db763ba73f2799a288f6a50fa4c71b02`.
 
 The removed calls were the former startup `chdir` bridge and the former
 `Sys.command` `system` bridge.  Their ledger entries remain as deferred
@@ -113,7 +113,7 @@ member, and reaches the authenticated direct frontier without the old patch.
 `compatibility/generated/direct-closure-summary.json` projects this broad
 snapshot onto the 400-node direct manifest by exact repository path and source
 SHA-256.  It selects 3,689 findings in 329 files with site digest
-`3e9ba03631ab57e9fc0df6524630fe112222eb0f75e7a2df72b2b987e189a78f`.
+`28a1cc07d6c9e34f8fc979f75a1421c7101ecf1c585c271a22faf57c1360e372`.
 Of those, 3,180 are the separately governed Dopen corpus and 509 are other
 compatibility-sensitive occurrences.
 
@@ -237,7 +237,7 @@ artifact digests.  It rechecks inventory repository HEAD/dirty state, tracked fi
 counts, every referenced source digest, every aggregate category/path/operator
 count, the JSONL digest, and all ledger selectors against the current artifacts.
 
-The twelve local entries comprise the remaining syntax-review queues, concrete
+The thirteen local entries comprise the remaining syntax-review queues, concrete
 selected-route pointer/name-resolution and exact-normalization obligations,
 and the retained historical `chdir`/`system` elimination obligations.  Each
 contains all

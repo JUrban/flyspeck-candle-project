@@ -77,7 +77,7 @@ purpose = "pinned reference semantics and differential oracle source for the dir
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "f4c95109430266c3a734e4836263e9efe4659d9c"
+development_head = "7db8e182d8cd9a92eef386365584009d63f5959b"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -103,7 +103,7 @@ config_sha256 = "162ea59dac4c00177530ecbdb7a5ad72a03460825c5160a8c596dd4f53a5f3c
 [toolchain.direct_frontier_binary]
 path = "worktrees/candle-clean-build-v13/candle/build/cake"
 build_branch = "codex/flyspeck-v13-clean-build"
-build_source = "f4c95109430266c3a734e4836263e9efe4659d9c"
+build_source = "7db8e182d8cd9a92eef386365584009d63f5959b"
 compiler_source = "4e312c0f7e18b9c5789c8ac4e0af257bff895cf5"
 compiler_archive_sha256 = "4e074090eb04d8fdfb62536457adb31c98e1b17f6cd66c9483806601251053b7"
 compiled_binary_sha256 = "c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f"
@@ -119,8 +119,8 @@ binary_still_contains_legacy_ffi_patch = false
 clean_rebuild_required_for_g4_elimination = false
 g4_disposition = "not-required-selected-route-custom-ffi-eliminated"
 startup = "repository-root launch through relative generated boot/config links"
-frontier_log = "flyspeck-candle-runs/v13-direct-clean-noffi-frontier-set-make.log"
-frontier_log_sha256 = "04d875c82cfa943701be5e78d22bc78853d47fb3d314fe9f3de7abd0e4cf3dbb"
+frontier_log = "flyspeck-candle-runs/v13-direct-clean-noffi-frontier-telemetry.log"
+frontier_log_sha256 = "ddd78faff4adb56cece0c3bb76e0048dba287a26ad9192a42af3a442bc3668c0"
 
 [artifacts.flyspeck_hol_library]
 path = "repos/candle/candle/pft/tests/fixtures/flyspeck-hol-library.pft.bin"
@@ -167,9 +167,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "e3c4a6a8bc393435c33dbcaf16b1638c06a88796e3f4d62455169bd52d27685a"
+sha256 = "dd4707140892dd531b55b3d5ae5e05a13bdbcd474aba060c37502ede58497db8"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "f4c95109430266c3a734e4836263e9efe4659d9c"
+generator_candle = "7db8e182d8cd9a92eef386365584009d63f5959b"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 400
@@ -188,11 +188,11 @@ dopen_corpus_site_sha256 = "bce30814051df12ea23c14f2918a55e6b839b72760fd58b8996e
 dopen_corpus_earliest_stratum_occurrences = [29, 22, 13, 35, 841, 177, 2048, 15]
 dopen_corpus_independent_gate = "flyspeck-candle-project/scripts/check-direct-dopen-corpus.py"
 compatibility_closure_summary = "flyspeck-candle-project/compatibility/generated/direct-closure-summary.json"
-compatibility_closure_sha256 = "4c256fac8c953288e35a31773d50b12a7c3d918a072237743fff58b1a352e6eb"
+compatibility_closure_sha256 = "fb5704da090d3fc62b91411618a0f60ba4109785b2ec75d9b0be45f88e4327a2"
 compatibility_closure_findings = 3689
 compatibility_closure_source_files = 329
 compatibility_closure_non_dopen_occurrences = 509
-compatibility_closure_site_sha256 = "3e9ba03631ab57e9fc0df6524630fe112222eb0f75e7a2df72b2b987e189a78f"
+compatibility_closure_site_sha256 = "28a1cc07d6c9e34f8fc979f75a1421c7101ecf1c585c271a22faf57c1360e372"
 compatibility_closure_local_let_open = 0
 compatibility_closure_parenthesized_local_open = 79
 compatibility_closure_parenthesized_operator_reference = 79
@@ -215,7 +215,9 @@ source_action_cakeml_commit = "1b17732f902fde2efd985905d277a972da73ae0f"
 source_action_cakeml_source_sha256 = "55a0e08b515a06e9b047ccedb62eb98eb4808f3b45e9c4b11e13eac7f7abba94"
 source_action_boot_bytes = 38504
 str_binding = "partial-pure-source-differential-gate"
-unix_binding = "startup-metadata-only-explicit-fail-otherwise"
+unix_binding = "startup-metadata-and-zero-telemetry-explicit-fail-otherwise"
+unix_gettimeofday_selected_uses = 4
+unix_gettimeofday_policy = "deterministic Float.zero; external runner owns wall/RSS telemetry"
 deterministic_process_inputs = 2
 ocaml_compatibility_activation = "partial-source-bindings"
 digest_binding = "pure-source-differential-gate"
@@ -237,8 +239,8 @@ source_digest_activation = "preflight-before-strictbuild"
 source_digest_entries = 399
 source_digest_bootstrap_exclusions = ["candle:candle/flyspeck_loader.ml"]
 source_digest_program = "worktrees/candle-loader-v13/candle/flyspeck_source_digests.ml"
-source_digest_program_sha256 = "300f6a4fd580418721d151d6d5c594fbce765d9cbbf97f2610346028164edc98"
-source_digest_program_md5 = "23ca318c41145e16325670672537b658"
+source_digest_program_sha256 = "4ee2ad10e2f7f8ae81f971d350bd32c99697afb499ba1d60a93781f4f6ca4630"
+source_digest_program_md5 = "bbf86c97f90944a70f0d0347e9dac05b"
 source_digest_gate = "worktrees/candle-loader-v13/candle/test_flyspeck_source_digests.sh"
 static_full_build_activation = "exact-action-and-overlay-active-pending-full-run"
 static_full_build_directive = "#flyspeck_needs"
@@ -258,8 +260,8 @@ source_normalization_original_sha256 = ["8ed592aa6515b9fe76cef8f101c98953bfe53b2
 source_normalization_output_sha256 = ["243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4", "d1ae25218cce2f2f510966d574d48d283c04748a1b6c8d8dfc0c2ca52438a60f", "cb6ab239f202554f204188a3feac089cd2cc69645088e0d95659aeabb304b6de", "e34517f72ed00eeb30275f1dca01210604665a43d96aa1d759c9f6890f0312e5", "062139c28e400951aaab8436298fecdcdb1c5a76b19ec3e19fa65f6fce3915ea", "e8678c01ebb0ddcd647b0155f05caee931be482161f1d34319c1c6cb3fdf74c3", "1af4e5bc6e7fc7a95c3ae9d12a6a721e17575451573d595f015c1c6a2ef461d1", "a456dba39b239cfbe135ec10c9acfebcade7857fbfc36e1d52487f7856cfa187", "79ef91c2192a39566ffc9dc2b5064b6f5c04defb5db9074447f1043495b2122c", "f64bf35f3d1cfff43ab8117ee632e625b219390e416d31a463ad7d2fea2e55d0"]
 parser_normalization_gate = "worktrees/candle-loader-v13/candle/test_flyspeck_parser_orpattern_normalization.sh"
 module_set_make_gate = "worktrees/candle-loader-v13/candle/test_flyspeck_set_make_normalization.sh"
-direct_frontier_log = "flyspeck-candle-runs/v13-direct-clean-noffi-frontier-set-make.log"
-direct_frontier_log_sha256 = "04d875c82cfa943701be5e78d22bc78853d47fb3d314fe9f3de7abd0e4cf3dbb"
+direct_frontier_log = "flyspeck-candle-runs/v13-direct-clean-noffi-frontier-telemetry.log"
+direct_frontier_log_sha256 = "ddd78faff4adb56cece0c3bb76e0048dba287a26ad9192a42af3a442bc3668c0"
 source_normalization_non_use_ids = ["qmap", "unsuppress", "use_file_b"]
 source_normalization_reference_ocaml = "4.14.1@99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93"
 toplevel_interface_activation = "blocked-no-dummy-or-no-op"
@@ -270,7 +272,7 @@ obj_qualified_uses = 3
 toplevel_dynamic_source_payloads = 4
 toplevel_selected_update_database = "flyspeck:text_formalization/general/update_database_400.ml"
 entry_route = ["candle:hol.ml", "flyspeck:text_formalization/build/strictbuild.hl"]
-claim = "authenticated exact source actions, ten-output overlay including the selected Set.Make replacement, shell-free LP input boundary, static 39-certificate inventory, and clean no-custom-FFI executable active; G4 is not required for this selected route; current direct execution stops at debug open Parser_verbose pending verified Dopen integration and is not S1/S2/S3 evidence"
+claim = "authenticated exact source actions, ten-output overlay including the selected Set.Make replacement, deterministic zero telemetry with external wall/RSS measurement, shell-free LP input boundary, static 39-certificate inventory, and clean no-custom-FFI executable active; G4 is not required for this selected route; current direct execution stops at debug open Parser_verbose pending verified Dopen integration and is not S1/S2/S3 evidence"
 
 [toolchain.hol4]
 polyml = "5.7.1"

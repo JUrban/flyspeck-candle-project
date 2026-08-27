@@ -157,26 +157,26 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == e3c4a6a8bc393435c33dbcaf16b1638c06a88796e3f4d62455169bd52d27685a ]]
+[[ "$direct_manifest_sha" == dd4707140892dd531b55b3d5ae5e05a13bdbcd474aba060c37502ede58497db8 ]]
 python3 "$project_dir/scripts/check-direct-dopen-corpus.py" \
   --manifest "$direct_manifest" \
   --findings "$project_dir/compatibility/generated/inventory-findings.jsonl" \
   >/dev/null
 direct_closure="$project_dir/compatibility/generated/direct-closure-summary.json"
 [[ $(sha256sum "$direct_closure" | cut -d' ' -f1) == \
-  4c256fac8c953288e35a31773d50b12a7c3d918a072237743fff58b1a352e6eb ]]
+  fb5704da090d3fc62b91411618a0f60ba4109785b2ec75d9b0be45f88e4327a2 ]]
 jq -e '
   .manifest.sha256 ==
-    "e3c4a6a8bc393435c33dbcaf16b1638c06a88796e3f4d62455169bd52d27685a" and
+    "dd4707140892dd531b55b3d5ae5e05a13bdbcd474aba060c37502ede58497db8" and
   .manifest.source_node_count == 400 and
   .manifest.normalization_source_count == 10 and
   .inventory.sha256 ==
-    "e2af1fad83d1b0e3ba6e4bb7033470f770e0874371e8de5ef3e242ba120f1bdb" and
+    "e713ab19cfd207a8cd4db191436df467db763ba73f2799a288f6a50fa4c71b02" and
   .selected.finding_count == 3689 and
   .selected.source_files_with_findings == 329 and
   .selected.non_dopen_review_occurrences == 509 and
   .selected.site_sha256 ==
-    "3e9ba03631ab57e9fc0df6524630fe112222eb0f75e7a2df72b2b987e189a78f" and
+    "28a1cc07d6c9e34f8fc979f75a1421c7101ecf1c585c271a22faf57c1360e372" and
   .selected.by_category["open.declaration"] == 3180 and
   .selected.by_category["open.local_let"] == 0 and
   .selected.by_category["open.local_parenthesized"] == 79 and
@@ -334,9 +334,9 @@ jq -e '
   .source_digest_contract.generated_source ==
     "candle:candle/flyspeck_source_digests.ml" and
   .source_digest_contract.generated_source_md5 ==
-    "23ca318c41145e16325670672537b658" and
+    "bbf86c97f90944a70f0d0347e9dac05b" and
   .source_digest_contract.generated_source_sha256 ==
-    "300f6a4fd580418721d151d6d5c594fbce765d9cbbf97f2610346028164edc98" and
+    "4ee2ad10e2f7f8ae81f971d350bd32c99697afb499ba1d60a93781f4f6ca4630" and
   .source_digest_contract.gate ==
     "candle:candle/test_flyspeck_source_digests.sh" and
   (.generated_dependency_contracts | length) == 3 and
@@ -357,7 +357,7 @@ jq -e '
   .static_library_contract.binding_evidence["str.cma"].status ==
     "partial-pure-source-differential-gate" and
   .static_library_contract.binding_evidence["unix.cma"].status ==
-    "startup-metadata-only-explicit-fail-otherwise" and
+    "startup-metadata-and-zero-telemetry-explicit-fail-otherwise" and
   .static_library_contract.binding_evidence["unix.cma"].source ==
     "candle:candle/ocaml.ml" and
   .static_library_contract.binding_evidence["unix.cma"].gate ==
@@ -376,6 +376,19 @@ jq -e '
         "sha256": "ad29b534dd27882add87d6996aa4ccf39bf1e5b15ccfd08804636905e8b8d864",
         "source": "candle:candle/flyspeck_metadata/user.txt"
       }
+    ] and
+  (.static_library_contract.binding_evidence["unix.cma"].telemetry_policy |
+    contains("gettimeofday returns deterministic Float.zero")) and
+  .static_library_contract.binding_evidence["unix.cma"].telemetry_uses ==
+    [
+      {"library":"unix.cma","line":43,"member":"gettimeofday","module":"Unix",
+       "source":"flyspeck:formal_ineqs/misc/misc_functions.hl"},
+      {"library":"unix.cma","line":48,"member":"gettimeofday","module":"Unix",
+       "source":"flyspeck:formal_ineqs/misc/misc_functions.hl"},
+      {"library":"unix.cma","line":65,"member":"gettimeofday","module":"Unix",
+       "source":"flyspeck:formal_lp/hypermap/verify_all.hl"},
+      {"library":"unix.cma","line":67,"member":"gettimeofday","module":"Unix",
+       "source":"flyspeck:formal_lp/hypermap/verify_all.hl"}
     ] and
   .ocaml_compatibility_contract.activation_status ==
     "partial-source-bindings" and
@@ -425,7 +438,7 @@ jq -e '
 ' "$direct_manifest" >/dev/null
 direct_digest_program="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_source_digests.ml"
 direct_digest_program_sha=$(sha256sum "$direct_digest_program" | cut -d' ' -f1)
-[[ "$direct_digest_program_sha" == 300f6a4fd580418721d151d6d5c594fbce765d9cbbf97f2610346028164edc98 ]]
+[[ "$direct_digest_program_sha" == 4ee2ad10e2f7f8ae81f971d350bd32c99697afb499ba1d60a93781f4f6ca4630 ]]
 direct_full_build="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_full_build.ml"
 direct_full_build_sha=$(sha256sum "$direct_full_build" | cut -d' ' -f1)
 [[ "$direct_full_build_sha" == a9851f086240d49e0449aab4d5bb3e5ad16fa46a405e430d9729764312477826 ]]
@@ -505,6 +518,8 @@ FLYSPECK_ROOT="$workspace_dir/worktrees/flyspeck-v13-source" \
   CANDLE_BINARY="$direct_clean_candle" \
   "$direct_candle/test_flyspeck_set_make_normalization.sh" >/dev/null
 "$direct_candle/test_unix_metadata.sh" "$direct_clean_candle" >/dev/null
+"$project_dir/scripts/test-unix-telemetry-compatibility.sh" \
+  "$direct_clean_candle" >/dev/null
 "$project_dir/scripts/test-local-open-compatibility.sh" \
   "$direct_clean_candle" >/dev/null
 "$project_dir/scripts/test-module-compatibility.sh" \
@@ -524,9 +539,9 @@ rg -Fq 'open-declarations are not supported (yet)' "$shell_free_frontier_log"
 rg -Fq 'Parsing failed at line 16' "$shell_free_frontier_log"
 ! rg -q 'CANDLE_FLYSPECK_DIRECT_FULL_OK|Flyspeck source action complete: general/debug.hl' \
   "$shell_free_frontier_log"
-clean_noffi_frontier_log="$workspace_dir/flyspeck-candle-runs/v13-direct-clean-noffi-frontier-set-make.log"
+clean_noffi_frontier_log="$workspace_dir/flyspeck-candle-runs/v13-direct-clean-noffi-frontier-telemetry.log"
 [[ $(sha256sum "$clean_noffi_frontier_log" | cut -d' ' -f1) == \
-  04d875c82cfa943701be5e78d22bc78853d47fb3d314fe9f3de7abd0e4cf3dbb ]]
+  ddd78faff4adb56cece0c3bb76e0048dba287a26ad9192a42af3a442bc3668c0 ]]
 rg -Fq 'val candle_flyspeck_lp_certificate_files = [' \
   "$clean_noffi_frontier_log"
 rg -Fq -- '- Flyspeck source action complete: general/parser_verbose.hl' \
@@ -576,12 +591,12 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  f4c95109430266c3a734e4836263e9efe4659d9c
+  7db8e182d8cd9a92eef386365584009d63f5959b
 check_worktree candle-clean-build \
   "$workspace_dir/worktrees/candle-clean-build-v13" \
   codex/flyspeck-v13-clean-build \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  f4c95109430266c3a734e4836263e9efe4659d9c
+  7db8e182d8cd9a92eef386365584009d63f5959b
 check_worktree cakeml-flyspeck-actions \
   "$workspace_dir/worktrees/cakeml-flyspeck-actions-v13" \
   codex/flyspeck-v13-actions \
