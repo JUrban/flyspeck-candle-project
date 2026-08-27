@@ -325,6 +325,9 @@ EOF
   fi
 fi
 
+"$project_dir/scripts/summarize-flyspeck-run.sh" "$state_dir" \
+  >"$state_dir/resource-summary.txt"
+
 if [[ ${CANDLE_KEEP_FINAL_CHECKPOINT:-0} != 1 ]]; then
   find "$checkpoint_dir" -maxdepth 1 -type f -name 'ckpt_*.dmtcp' -delete
   printf 'removed completed producer checkpoint images\n'

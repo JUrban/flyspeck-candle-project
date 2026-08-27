@@ -38,6 +38,8 @@ On successful export the supervisor writes:
 - `SHA256SUMS`, pinning the final PFT bytes;
 - `resources.tsv`, periodic producer/restore RSS, CPU, trace-size, and
   checkpoint-size samples;
+- `resource-summary.txt`, the corresponding peak values, sample span, final
+  status, trace size, and trace SHA-256;
 - `logs/generation-NNNN.log`, preserving every producer attempt; and
 - `replay.log`, which must contain both `Success!` and
   `CANDLE_FULL_REPLAY_OK` and no `EXCEPTION:` line.
