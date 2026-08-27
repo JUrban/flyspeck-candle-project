@@ -60,7 +60,10 @@ inventory and aggregate ledger foundation.  See
 `docs/compatibility-inventory.md`.  It inventories tracked Candle/Flyspeck
 OCaml-family syntax without treating repository presence as production load
 closure, and imports the authoritative Candle-native compatibility ledger by
-immutable git coordinates instead of copying component entries.
+immutable git coordinates instead of copying component entries.  A separate
+exact path-and-source-hash projection now reduces that snapshot to 3,689
+findings in 329 files on the 400-node direct manifest, with explicit per-
+category and earliest-stratum counts.
 
 The PFT validation stream is substantially further along.  Its compiled Candle
 endpoint consumes both official HOL4-writer traces and direct HOL Light

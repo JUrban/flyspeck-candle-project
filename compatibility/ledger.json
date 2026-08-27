@@ -19,6 +19,7 @@
       "findings_sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a",
       "pointer_triage_sha256": "8a95b6b7676fa7497692c6b90c531e26117a2c9a470cd522d2cc517290bfe5af",
       "ffi_triage_sha256": "b47c747e00cc28f862e9dcff29e97424551add41a58385128320854a71622eff",
+      "direct_closure_sha256": "96bfe4bf6f0e64ff7cde7f00eaa29de89f62ff48c9aec9d638f7ce45f677519f",
       "pin_contract_sha256": "7a5dec1222048bbce2dcfc2a190fd5d0f4945e9c3a8dd4339eb0eb4b6002423f",
       "pin_delta_sha256": "0baa534cc64f1a07e5dc82792e76b079dd80e6edcd1abc82c8509ac96f3f1cb4"
     }
@@ -84,22 +85,22 @@
       "semantic_category": "syntax.name_resolution.open.declaration",
       "minimal_reproducer": {"status": "ready", "path": "compatibility/oracles/open_declaration.ml"},
       "ocaml_reference": {"status": "observed", "outcome": "OCaml 4.14.1 opens the module and resolves the subsequent unqualified value to 7", "evidence": ["ocaml -noinit -noprompt compatibility/oracles/open_declaration.ml => OPEN_DECLARATION_ORACLE_OK"]},
-      "candle_outcome": {"status": "observed", "outcome": "The current compiled Candle frontend rejects the declaration before evaluating the unqualified value; the clean direct Flyspeck route reaches the same error at debug.hl:16", "evidence": ["compiled Candle d361be3839f31811328d5a0da1ecea15a8a73f369c77e34a288355f16bb930d3 => open-declarations are not supported (yet)", "direct frontier log SHA-256 cc75153644c72a85bd0ee6acb88e66288e903f08a5aa3cd28f462d29d4b3b5c7"]},
+      "candle_outcome": {"status": "observed", "outcome": "The clean compiled Candle frontend rejects the declaration before evaluating the unqualified value; the direct Flyspeck route reaches the same error at debug.hl:16", "evidence": ["clean compiled Candle c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f => open-declarations are not supported (yet)", "clean direct frontier log SHA-256 ffa64df26d4fbf015d67dc189fb8b8f509686c364a26d5c9b6e0cf8bb0eb8d3b"]},
       "chosen_remedy": {"status": "chosen", "kind": "verified_dopen_frontend_inference_semantics_and_backend_integration", "description": "Integrate declaration-open as Dopen through parsing, inference, soundness/completeness, CV, semantics, backend, bootstrap, and a compiled corpus-derived gate; do not qualify thousands of Flyspeck names by source rewrite."},
       "proof_obligation": {"status": "open", "description": "Build the verified inference stack and compiler, pass the minimal OCaml differential, and match OCaml/HOL Light fingerprints on a real open-dependent slice derived from the exact 3,180-site direct corpus. Synthetic parser success alone does not discharge G2.", "evidence": ["Candle 921e7f2 dopen_corpus_contract: 3,180 opens, 234 files, 193 module paths, site SHA-256 bce30814051df12ea23c14f2918a55e6b839b72760fd58b8996e32f1c05bf282", "docs/requirements-v1.3.md: G2 Dopen"]},
       "regression_ids": ["CAKEML-DOPEN-MINIMAL-001", "CANDLE-FLYSPECK-DOPEN-CORPUS-001"],
       "affected_corpus_files": [],
       "affected_files_status": "inventory_query",
       "inventory_selector": {"categories": ["open.declaration"]},
-      "notes": "The aggregate inventory covers tracked syntax beyond the direct load closure, so this entry remains a review_candidate with inventory_query affected files. The generated direct manifest independently freezes the exact S3 subset and its site digest."
+      "notes": "The exact direct projection selects 3,180 declarations in 234 files from the broad inventory and matches the separate manifest Dopen site digest. This remains a review_candidate until verified integration and semantic regressions pass."
     },
     {
       "id": "PROJECT-LOCAL-OPEN-REVIEW-001",
       "entry_kind": "inventory_review",
       "divergence_state": "review_candidate",
       "priority": "P0",
-      "status": "inventory_pending",
-      "summary": "Decide support or normalization policy for let-open and parenthesized local-open syntax",
+      "status": "reproducer_pending",
+      "summary": "Validate the 79 selected parenthesized local opens; exact direct closure contains no let-open syntax",
       "semantic_category": "syntax.name_resolution.open.local",
       "minimal_reproducer": {"status": "not_created", "path": null},
       "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
@@ -110,15 +111,15 @@
       "affected_corpus_files": [],
       "affected_files_status": "inventory_query",
       "inventory_selector": {"categories": ["open.local_let", "open.local_parenthesized"]},
-      "notes": "Repository-snapshot presence does not prove production dependency-closure membership."
+      "notes": "Exact manifest projection finds zero selected let-open occurrences and 79 parenthesized local opens in 23 files: 78 in the base stratum and one in LP support. The clean frontier traverses the base stratum, but a minimized OCaml/Candle semantic oracle and the LP occurrence remain open."
     },
     {
       "id": "PROJECT-MODULE-CONSTRUCT-REVIEW-001",
       "entry_kind": "inventory_review",
       "divergence_state": "review_candidate",
       "priority": "P0",
-      "status": "inventory_pending",
-      "summary": "Classify required include, alias, functor, module-type, and first-class-module behavior",
+      "status": "reproducer_pending",
+      "summary": "Classify the exact selected module constructs and their OCaml/Candle behavior",
       "semantic_category": "syntax.modules",
       "minimal_reproducer": {"status": "not_created", "path": null},
       "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
@@ -129,7 +130,7 @@
       "affected_corpus_files": [],
       "affected_files_status": "inventory_query",
       "inventory_selector": {"category_prefixes": ["module."]},
-      "notes": "Syntactic forms are machine-classified; module semantics and actual load reachability remain unclassified."
+      "notes": "Exact manifest projection selects 389 structures, one alias, 15 other declarations, one include, nine module-type declarations, and no functor or first-class-module syntax. Occurrence membership/strata are closed; semantic sub-classification and minimized oracles remain open."
     },
     {
       "id": "PROJECT-POINTER-S3-IDENTITY-001",

@@ -105,6 +105,32 @@ outside-closure history.  The clean executable `c20b3ec...` uses
 `basis_ffi.c` SHA-256 `04da4d58...`, byte-identical to the compiler archive
 member, and reaches the authenticated direct frontier without the old patch.
 
+### Exact direct-manifest projection
+
+`compatibility/generated/direct-closure-summary.json` projects this broad
+snapshot onto the 400-node direct manifest by exact repository path and source
+SHA-256.  It selects 3,689 findings in 329 files with site digest
+`58dd3df95e81cfc9f41a198879a3b8623ac9097b6f9719a2f3fee04be95c4003`.
+Of those, 3,180 are the separately governed Dopen corpus and 509 are other
+compatibility-sensitive occurrences.
+
+The projection turns several broad queues into exact facts:
+
+- selected `let open ... in`: zero;
+- selected parenthesized local opens: 79 in 23 files (78 in the base stratum,
+  one in LP support);
+- selected pointer tokens: 15 (12 infix uses, one binding, and two
+  operator-as-value references), matching the separately reviewed G3 set;
+- selected custom-FFI calls and external declarations: zero;
+- selected module syntax: 389 structures, one alias, 15 other declarations,
+  one include, and nine module-type declarations.
+
+The artifact also records every source path by category and occurrence counts
+by earliest build stratum.  This is exact source-membership evidence, not a
+claim that an occurrence executes or that its semantics already match OCaml.
+The generator rejects a selected source hash mismatch, and the release lock
+recomputes the artifact byte-for-byte.
+
 ## G3/G4 source-backed triage
 
 The reviewed overlay covers all 240 pointer-token findings exactly once.  On
@@ -177,9 +203,10 @@ Likewise, repository-snapshot presence is not dependency-closure membership.
 The scope includes tracked `.ml`, `.mli`, `.hl`, `.vhl`, `.cml`, `.mll`, and
 `.mly` files, including historical/generated tools.  It excludes Isabelle
 uppercase `.ML` sources, C/runtime implementations, Java, data, and certificate
-formats.  The deterministic S2/S3 loader manifest must later annotate findings
-with exact production-closure membership and strata before P0 compatibility can
-be declared closed.
+formats.  The repository snapshot alone cannot establish production-closure
+membership.  The direct-closure artifact now supplies exact node/hash and
+stratum annotations; the warning remains applicable to the broader snapshot
+itself.
 
 ## Ledger ownership and import contract
 
@@ -198,14 +225,15 @@ local ledgers, and records three current source-schema gaps: stable regression
 IDs, separate remedy/proof lifecycle status, and repository-qualified affected
 locations.  Those gaps are explicit follow-up work, not synthesized fields.
 It also rejects any ledger/inventory drift between the clean direct source pin,
-the separately named PFT development pin, and all five generated/configuration
+the separately named PFT development pin, and all six generated/configuration
 artifact digests.  It rechecks inventory repository HEAD/dirty state, tracked file and byte
 counts, every referenced source digest, every aggregate category/path/operator
 count, the JSONL digest, and all ledger selectors against the current artifacts.
 
 The eleven local entries comprise the remaining syntax-review queues, concrete
 selected-route pointer/name-resolution and exact-normalization obligations,
-and the retained historical `chdir`/`system` elimination obligations.  Each contains all
+and the retained historical `chdir`/`system` elimination obligations.  Each
+contains all
 v1.3 lifecycle fields: minimal reproducer, OCaml outcome, Candle outcome,
 semantic category, remedy, proof obligation, regression IDs, affected files,
 and status.  Empty/pending values are honest because an inventory hit is not a
@@ -216,8 +244,9 @@ obligation, stable regression IDs, and evidence.
 
 ## Next ledger work
 
-1. Overlay the exact source load DAG/strata and Great 100 target closure on this
-   repository-snapshot inventory.
+1. Semantically group the 509 exact selected non-Dopen occurrences, prioritizing
+   the one LP local-open and the selected module forms not traversed by the
+   current clean frontier.
 2. Turn each actual failure into a minimized OCaml/Candle oracle before marking
    it a confirmed divergence.
 3. Close the full-run fingerprint and scale gates for the implemented exact

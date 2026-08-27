@@ -332,6 +332,7 @@ def validate_source_provenance(
         "findings_sha256": "inventory-findings.jsonl",
         "pointer_triage_sha256": "pointer-triage.json",
         "ffi_triage_sha256": "ffi-triage.json",
+        "direct_closure_sha256": "direct-closure-summary.json",
         "pin_delta_sha256": "inventory-pin-delta.json",
     }
     for field, filename in filenames.items():
