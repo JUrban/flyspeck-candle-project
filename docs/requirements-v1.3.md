@@ -15,7 +15,7 @@ test or implementation commit.
 | --- | --- | --- |
 | G1 OCaml-compatible open | in progress | OCaml oracle pack; current AST semantics/parser/elaboration; `infer_open` and `infer_d`; state/stamp invariants; CV correctness; soundness, canonicalization, completeness; compiled open-heavy Candle slice. |
 | G2 language/runtime compatibility | in progress | Closed compatibility ledger for required numeric, float, bytes/string, comparison, exception, mutation, module, parser-state, and I/O behavior; differential and negative tests. |
-| G3 pointer identity | in progress | Corpus call-site classification and either verified end-to-end identity/GC semantics or justified transformations with representative performance evidence. |
+| G3 pointer identity | in progress (immediate-int remedy/proof complete; compiled integration and 12 allocated-identity sites open) | Corpus call-site classification and either verified end-to-end identity/GC semantics or justified transformations with representative performance evidence. |
 | G4 custom FFI contract | open | Versioned ABI, total validation, deterministic errors, sandbox/path/environment policy, pure CakeML/C golden tests, fuzzing, and explicit trust assumptions. |
 | G5 Candle regression baseline | in progress | All 65 Great-100 load entries covering the pinned 100 theorems from clean state; exact theorem/definition/assumption fingerprints; no skips/new axioms; two semantic matches; timing/RSS bundle. |
 | G6 loader/build system | open | Manifest-rooted dependency DAG and generated inputs; build-mode guard; structured strata; relocation; versioned atomic checkpoints; clean, resume, corruption, and reorder tests. |

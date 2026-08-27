@@ -20,14 +20,16 @@ The upstream repositories are checked out as sibling directories under
 this repository holds the locked manifest, cross-repository tooling, acceptance
 criteria, and progress reports.
 
-The direct S3 stream is in Phase 0.  Current critical-path work audits and
-rebuilds verified Dopen on current CakeML, derives a machine-readable OCaml
-compatibility ledger from the pinned corpus, and executes the actual 65-load
-Great 100 source inventory from clean compiled-Candle states.  The first
-baseline is deliberately allowed to expose and retain compatibility failures;
-fixture theorem counts and parser-only successes do not promote a gate.  A
-manifest-rooted direct Flyspeck loader and broad source patching follow the S1
-compatibility closure rather than standing in for it.
+The direct S3 stream is active in parallel across the verified Dopen rebuild,
+the actual 65-load Great 100 source inventory, and the manifest-rooted full
+Flyspeck loader.  The current direct manifest freezes 297 build entries, 399
+source nodes, exact loader actions, generated-input hashes, and eight build
+strata.  Compatibility work is call-site-specific and fail-closed: for
+example, the selected LP verifier's one immediate-int `==` has an exact
+hash-bound, semantics-proved normalization, while the twelve allocated-value
+identity sites remain open and untouched.  The first baseline is deliberately
+allowed to expose and retain compatibility failures; fixture theorem counts,
+parser-only successes, and broad source patching do not promote a gate.
 
 The v1.3 source-substitution work now also has a conservative compatibility
 inventory and aggregate ledger foundation.  See
