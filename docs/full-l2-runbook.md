@@ -36,8 +36,9 @@ On successful export the supervisor writes:
 - `status.tsv`, ending in `complete` with the final byte and table counters;
 - `opcodes.json`, a structural command inventory;
 - `SHA256SUMS`, pinning the final PFT bytes;
-- `resources.tsv`, periodic producer/restore RSS, CPU, trace-size, and
-  checkpoint-size samples;
+- `resources.tsv`, periodic peak-process RSS and CPU samples across the full
+  supervisor process tree (producer, restarts, structural inspection, and
+  compiled replay), plus trace and checkpoint sizes;
 - `resource-summary.txt`, the corresponding peak values, sample span, final
   status, trace size, and trace SHA-256;
 - `logs/generation-NNNN.log`, preserving every producer attempt; and

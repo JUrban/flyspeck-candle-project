@@ -13,8 +13,12 @@ supervisor_pid=$3
 status_file="$state_dir/status.tsv"
 sample_file="$state_dir/resources.tsv"
 checkpoint_dir="$state_dir/checkpoints"
+sample_interval=${CANDLE_RESOURCE_SAMPLE_INTERVAL:-10}
+sample_once=${CANDLE_RESOURCE_SAMPLE_ONCE:-0}
 
 [[ "$supervisor_pid" =~ ^[1-9][0-9]*$ ]]
+[[ "$sample_interval" =~ ^[1-9][0-9]*$ ]]
+[[ "$sample_once" =~ ^[01]$ ]]
 [[ -d "$state_dir" && -d "$checkpoint_dir" ]]
 
 if [[ ! -e "$sample_file" ]]; then
@@ -30,17 +34,35 @@ while kill -0 "$supervisor_pid" 2>/dev/null; do
     IFS=$'\t' read -r phase index _ <"$status_file"
   fi
   process_sample=$(
-    ps -eo pid=,rss=,%cpu=,etimes=,stat=,args= |
-      awk '
-        /ocamlrun .*ocaml-hol|\[DMTCP:ocaml-hol\]|\[mtcp_restart\]/ {
-          if ($2 > maximum) {
-            maximum = $2;
-            pid = $1;
-            cpu = $3;
-            elapsed = $4
-          }
+    ps -eo pid=,ppid=,rss=,%cpu=,etimes= |
+      awk -v root="$supervisor_pid" '
+        {
+          row_pid[NR] = $1;
+          row_parent[NR] = $2;
+          row_rss[NR] = $3;
+          row_cpu[NR] = $4;
+          row_elapsed[NR] = $5
         }
         END {
+          in_tree[root] = 1;
+          changed = 1;
+          while (changed) {
+            changed = 0;
+            for (i = 1; i <= NR; i++) {
+              if (in_tree[row_parent[i]] && !in_tree[row_pid[i]]) {
+                in_tree[row_pid[i]] = 1;
+                changed = 1
+              }
+            }
+          }
+          for (i = 1; i <= NR; i++) {
+            if (in_tree[row_pid[i]] && row_rss[i] > maximum) {
+              maximum = row_rss[i];
+              pid = row_pid[i];
+              cpu = row_cpu[i];
+              elapsed = row_elapsed[i]
+            }
+          }
           if (maximum == "") print "0 0 0.0 0";
           else print pid, maximum, cpu, elapsed
         }'
@@ -59,5 +81,6 @@ while kill -0 "$supervisor_pid" 2>/dev/null; do
     "$utc" "$phase" "$index" "$process_pid" "$rss_kib" \
     "$cpu_percent" "$process_elapsed" "$trace_bytes" \
     "$checkpoint_bytes" >>"$sample_file"
-  sleep 10
+  [[ "$sample_once" == 1 ]] && break
+  sleep "$sample_interval"
 done

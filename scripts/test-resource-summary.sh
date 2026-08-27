@@ -24,7 +24,7 @@ summary=$(
 )
 rg -q '^sample_span_seconds=10$' <<<"$summary"
 rg -q '^samples=2$' <<<"$summary"
-rg -q '^peak_producer_rss_kib=20$' <<<"$summary"
+rg -q '^peak_run_process_rss_kib=20$' <<<"$summary"
 rg -q '^peak_process_cpu_percent=99.0$' <<<"$summary"
 rg -q '^peak_trace_bytes=5$' <<<"$summary"
 rg -q '^peak_checkpoint_bytes=30$' <<<"$summary"
