@@ -122,16 +122,24 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 978781b088fccbec62210ace5b559d09cde5596e9f70e5ceb8264c8f69c1c811 ]]
+[[ "$direct_manifest_sha" == dffb3bed57b5904ce6da68545a0daae75b82a8a723de0025a27d662d49b13f1d ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
   .source_node_count == 399 and
   .diagnostics.unsupported_runtime_libraries == [] and
+  .diagnostics.unsupported_runtime_members == [] and
   .static_library_contract.activation_status ==
     "blocked-pending-static-binding-evidence" and
   (.static_library_contract.directives | length) == 6 and
-  (.static_library_contract.qualified_uses | length) == 41
+  (.static_library_contract.qualified_uses | length) == 41 and
+  (.static_library_contract.opened_module_uses | length) == 3 and
+  (.static_library_contract.capability_uses | length) == 44 and
+  (.static_library_contract.module_opens | length) == 2 and
+  .static_library_contract.binding_evidence["str.cma"].status ==
+    "partial-pure-source-differential-gate" and
+  .static_library_contract.binding_evidence["unix.cma"].status ==
+    "unimplemented"
 ' "$direct_manifest" >/dev/null
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
@@ -173,7 +181,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  58c32cbf24b5a0bfc06fdff1e8b8e7e18949faab
+  eed3d0952a01f17d792c57d31f298310edf3e885
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
