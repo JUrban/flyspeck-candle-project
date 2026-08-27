@@ -9,6 +9,7 @@ import json
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -102,10 +103,132 @@ def selector_matches(finding: dict[str, Any], selector: dict[str, Any]) -> bool:
     return finding["category"] in categories or any(finding["category"].startswith(prefix) for prefix in prefixes)
 
 
+def git_text(repo: Path, *args: str) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    return result.stdout
+
+
+def validate_inventory_sources_and_counts(
+    summary: dict[str, Any],
+    findings: list[dict[str, Any]],
+    lexical_notes: list[dict[str, Any]],
+    repos_root: Path,
+) -> None:
+    extensions = set(summary["extensions"])
+    source_cache: dict[tuple[str, str], str] = {}
+    for repository, metadata in summary["repositories"].items():
+        repo = repos_root / metadata["path_key"]
+        require(repo.exists(), f"inventory repository missing: {repo}")
+        head = git_text(repo, "rev-parse", "HEAD").strip()
+        require(head == metadata["commit"], f"{repository}: inventory HEAD mismatch")
+        dirty = bool(git_text(repo, "status", "--porcelain", "--untracked-files=no"))
+        require(dirty == metadata["dirty"], f"{repository}: inventory dirty-state mismatch")
+        raw_paths = subprocess.run(
+            ["git", "-C", str(repo), "ls-files", "-z"],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).stdout
+        paths = sorted(
+            path.decode("utf-8", "surrogateescape")
+            for path in raw_paths.split(b"\0")
+            if path and Path(path.decode("utf-8", "surrogateescape")).suffix in extensions
+        )
+        require(len(paths) == metadata["source_files_scanned"], f"{repository}: scanned file count mismatch")
+        require(
+            sum((repo / path).stat().st_size for path in paths) == metadata["source_bytes_scanned"],
+            f"{repository}: scanned byte count mismatch",
+        )
+
+    for finding in findings:
+        repository = finding["repository"]
+        require(repository in summary["repositories"], f"unknown finding repository: {repository}")
+        metadata = summary["repositories"][repository]
+        require(finding["repository_commit"] == metadata["commit"], f"{finding['finding_id']}: commit mismatch")
+        key = (repository, finding["source_path"])
+        if key not in source_cache:
+            path = repos_root / metadata["path_key"] / finding["source_path"]
+            require(path.is_file(), f"{finding['finding_id']}: source file missing: {path}")
+            source_cache[key] = sha256(path.read_bytes())
+        require(source_cache[key] == finding["source_sha256"], f"{finding['finding_id']}: source digest mismatch")
+
+    expected_categories = summary["counts"]["by_category"]
+    actual_categories = Counter(finding["category"] for finding in findings)
+    require(
+        expected_categories == {category: actual_categories[category] for category in expected_categories},
+        "inventory category counts do not match findings",
+    )
+    actual_repositories = Counter(finding["repository"] for finding in findings)
+    require(summary["counts"]["by_repository"] == dict(sorted(actual_repositories.items())), "repository finding counts mismatch")
+    actual_dialects = Counter(finding["source_dialect"] for finding in findings)
+    require(summary["counts"]["by_source_dialect"] == dict(sorted(actual_dialects.items())), "source-dialect counts mismatch")
+
+    for category, repository_counts in summary["counts"]["by_category_and_repository"].items():
+        actual = {
+            repository: sum(
+                finding["category"] == category and finding["repository"] == repository
+                for finding in findings
+            )
+            for repository in repository_counts
+        }
+        require(repository_counts == actual, f"{category}: per-repository counts mismatch")
+        files = len({
+            (finding["repository"], finding["source_path"])
+            for finding in findings if finding["category"] == category
+        })
+        require(summary["counts"]["files_with_findings_by_category"][category] == files, f"{category}: file count mismatch")
+
+    actual_path_forms = Counter(
+        finding["details"].get("module_path_form")
+        for finding in findings
+        if finding["details"].get("module_path_form") is not None
+    )
+    require(
+        summary["counts"]["by_module_path_form"]
+        == {form: actual_path_forms[form] for form in summary["counts"]["by_module_path_form"]},
+        "module-path form counts mismatch",
+    )
+    pointer_findings = [finding for finding in findings if finding["category"].startswith("pointer_equality.")]
+    require(
+        summary["counts"]["pointer_by_token"]
+        == dict(sorted(Counter(finding["details"]["token_category"] for finding in pointer_findings).items())),
+        "pointer token counts mismatch",
+    )
+    require(
+        summary["counts"]["pointer_by_syntactic_role"]
+        == dict(sorted(Counter(finding["details"]["syntactic_role"] for finding in pointer_findings).items())),
+        "pointer role counts mismatch",
+    )
+    infix_findings = [finding for finding in pointer_findings if finding["category"] == "pointer_equality.infix_use"]
+    require(
+        summary["counts"]["pointer_by_static_operand_category"]
+        == dict(sorted(Counter(finding["details"]["static_operand_category"] for finding in infix_findings).items())),
+        "pointer operand counts mismatch",
+    )
+    ffi_findings = [finding for finding in findings if finding["category"] == "ffi.custom_call"]
+    require(
+        summary["counts"]["custom_ffi_by_command_form"]
+        == dict(sorted(Counter(finding["details"]["command_form"] for finding in ffi_findings).items())),
+        "custom FFI command-form counts mismatch",
+    )
+    require(
+        summary["counts"]["lexical_notes_by_kind"]
+        == dict(sorted(Counter(note["kind"] for note in lexical_notes).items())),
+        "lexical-note counts mismatch",
+    )
+
+
 def load_and_validate_inventory(
     inventory_dir: Path,
     finding_schema: Path,
     summary_schema: Path,
+    repos_root: Path,
 ) -> list[dict[str, Any]]:
     summary_path = inventory_dir / "inventory-summary.json"
     findings_path = inventory_dir / "inventory-findings.jsonl"
@@ -130,6 +253,11 @@ def load_and_validate_inventory(
         ids.add(finding["finding_id"])
         findings.append(finding)
     require(len(findings) == summary["totals"]["findings"], "inventory finding count does not match summary")
+    lexical_notes_path = inventory_dir / summary["artifacts"]["lexical_notes_json"]
+    require(lexical_notes_path.is_file(), f"missing lexical notes: {lexical_notes_path}")
+    lexical_notes = json.loads(lexical_notes_path.read_text(encoding="utf-8"))
+    require(len(lexical_notes) == summary["totals"]["lexical_notes"], "lexical-note count does not match summary")
+    validate_inventory_sources_and_counts(summary, findings, lexical_notes, repos_root)
     return findings
 
 
@@ -192,7 +320,12 @@ def main(argv: list[str] | None = None) -> int:
         imported_ids = validate_imports(ledger, args.repos_root)
         require(local_ids.isdisjoint(imported_ids), "local entry duplicates authoritative imported entry")
         validate_related_artifacts(ledger, args.repos_root)
-        findings = load_and_validate_inventory(args.inventory_dir, args.finding_schema, args.summary_schema)
+        findings = load_and_validate_inventory(
+            args.inventory_dir,
+            args.finding_schema,
+            args.summary_schema,
+            args.repos_root,
+        )
         for entry in ledger["entries"]:
             if entry["affected_files_status"] == "inventory_query":
                 count = sum(selector_matches(finding, entry["inventory_selector"]) for finding in findings)
@@ -201,7 +334,7 @@ def main(argv: list[str] | None = None) -> int:
             f"ledger ok: {len(local_ids)} project review entries, "
             f"{len(imported_ids)} authoritative imported entry, {len(findings)} inventory findings"
         )
-    except (OSError, KeyError, TypeError, ValueError, ValidationError) as error:
+    except (OSError, KeyError, TypeError, ValueError, subprocess.SubprocessError, ValidationError) as error:
         print(f"ledger validation failed: {error}", file=sys.stderr)
         return 1
     return 0

@@ -57,8 +57,9 @@ byte-for-byte identical.  The final artifact hashes are:
   `26f4216bbebb10f1836d05f7fb9205da486b9909a988a474922de791434e4eec`.
 
 The validator checks JSON Schema when `jsonschema` is available, always checks
-lifecycle invariants, verifies generated JSONL count/digest, and reads imported
-ledger/Great 100 artifacts directly from their pinned git commit.  Unit tests
+lifecycle invariants, verifies generated JSONL count/digest, rederives all
+aggregate counts and source digests from the pinned clean repositories, and
+reads imported ledger/Great 100 artifacts directly from their pinned git commit.  Unit tests
 cover masking, nested comments, both local-open forms, module forms, custom FFI,
 pointer classification, deterministic output, ignored untracked files, and
 ledger promotion requirements.

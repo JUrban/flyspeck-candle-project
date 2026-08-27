@@ -126,6 +126,9 @@ their hashes and declared counts/IDs, rejects duplicate IDs across imported and
 local ledgers, and records three current source-schema gaps: stable regression
 IDs, separate remedy/proof lifecycle status, and repository-qualified affected
 locations.  Those gaps are explicit follow-up work, not synthesized fields.
+It also rechecks inventory repository HEAD/dirty state, tracked file and byte
+counts, every referenced source digest, every aggregate category/path/operator
+count, the JSONL digest, and all ledger selectors against the current artifacts.
 
 The five local entries are inventory-review queues for declaration open, local
 open, module constructs, pointer equality, and custom FFI.  Each contains all
