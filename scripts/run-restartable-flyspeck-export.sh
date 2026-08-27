@@ -33,6 +33,7 @@ checkpoint_gzip=${CANDLE_PFT_DMTCP_GZIP:-0}
 checkpoint_gzip_explicit=${CANDLE_PFT_DMTCP_GZIP+x}
 max_generations=${CANDLE_PFT_MAX_GENERATIONS:-1000}
 active_port=
+resource_sampler_pid=
 
 case "$output$state_dir" in
   *$'\n'*|*$'\t'*|*'"'*|*'\\'*)
@@ -136,7 +137,16 @@ cleanup_coordinator() {
     active_port=
   fi
 }
-trap cleanup_coordinator EXIT
+
+cleanup_run() {
+  cleanup_coordinator
+  if [[ -n "$resource_sampler_pid" ]]; then
+    kill "$resource_sampler_pid" 2>/dev/null || true
+    wait "$resource_sampler_pid" 2>/dev/null || true
+    resource_sampler_pid=
+  fi
+}
+trap cleanup_run EXIT
 
 common_environment=(
   "PATH=$project_dir/scripts/bin:$PATH"
@@ -153,6 +163,11 @@ common_environment=(
   "CANDLE_PFT_CHECKPOINT_WORK_UNITS=$checkpoint_work_units_per_generation"
   "CANDLE_PFT_RESUME_SCRIPT=$export_script"
 )
+
+"$project_dir/scripts/sample-flyspeck-run.sh" \
+  "$state_dir" "$output" "$$" >"$log_dir/resource-sampler.log" 2>&1 &
+resource_sampler_pid=$!
+printf '%s\n' "$resource_sampler_pid" >"$state_dir/resource-sampler.pid"
 
 run_initial_generation() {
   local port_file="$state_dir/initial.port"
