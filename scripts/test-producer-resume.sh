@@ -19,14 +19,24 @@ done
 resume_tmp=$(mktemp -d /tmp/candle-pft-resume.XXXXXX)
 resume_port=
 cleanup() {
+  local status=$?
   if [[ -n "$resume_port" ]]; then
     DMTCP_COORD_PORT="$resume_port" dmtcp_command -q >/dev/null 2>&1 || true
   fi
-  if [[ ${PFT_RESUME_KEEP_TMP:-0} == 1 ]]; then
+  if [[ $status -ne 0 ]]; then
+    printf 'resume test failed; diagnostic log tails follow\n' >&2
+    for log in "$resume_tmp"/*.log; do
+      [[ -f "$log" ]] || continue
+      printf '%s\n' "--- $log" >&2
+      tail -n 80 "$log" >&2
+    done
+  fi
+  if [[ ${PFT_RESUME_KEEP_TMP:-0} == 1 || $status -ne 0 ]]; then
     printf 'kept resume test files: %s\n' "$resume_tmp"
   else
     rm -rf -- "$resume_tmp"
   fi
+  return "$status"
 }
 trap cleanup EXIT
 
