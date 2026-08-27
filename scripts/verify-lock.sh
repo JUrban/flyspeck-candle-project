@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == ff7c6d79eb751566ddd55c60892fee2087a04bf32b61c659baa0d104de1c155c ]]
+[[ "$direct_manifest_sha" == 8b4cc533ca91f3ed4024dea8519954d04d8fc555bcab218794d197b87f68436a ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -143,7 +143,26 @@ jq -e '
   .static_library_contract.binding_evidence["str.cma"].status ==
     "partial-pure-source-differential-gate" and
   .static_library_contract.binding_evidence["unix.cma"].status ==
-    "unimplemented"
+    "startup-metadata-only-explicit-fail-otherwise" and
+  .static_library_contract.binding_evidence["unix.cma"].source ==
+    "candle:candle/ocaml.ml" and
+  .static_library_contract.binding_evidence["unix.cma"].gate ==
+    "candle:candle/test_unix_metadata.sh" and
+  .static_library_contract.binding_evidence["unix.cma"].deterministic_process_inputs ==
+    [
+      {
+        "bytes": 21,
+        "command": "date",
+        "sha256": "8f2148c336b70d69d770cd80e0f3decc5a1c9716fac2fc7961f7a5b2d57701e8",
+        "source": "candle:candle/flyspeck_metadata/date.txt"
+      },
+      {
+        "bytes": 16,
+        "command": "whoami",
+        "sha256": "ad29b534dd27882add87d6996aa4ccf39bf1e5b15ccfd08804636905e8b8d864",
+        "source": "candle:candle/flyspeck_metadata/user.txt"
+      }
+    ]
 ' "$direct_manifest" >/dev/null
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
@@ -185,7 +204,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  21e93dad706842a2c5143e1bd811fc9b1fb4181d
+  996de1744623f63de07707cad27d65c753621ed9
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
