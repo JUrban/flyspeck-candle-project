@@ -13,11 +13,11 @@
     "source_membership": "exact manifest node and SHA-256 match"
   },
   "inventory": {
-    "finding_count": 6070,
-    "sha256": "4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159"
+    "finding_count": 6074,
+    "sha256": "e2af1fad83d1b0e3ba6e4bb7033470f770e0874371e8de5ef3e242ba120f1bdb"
   },
   "manifest": {
-    "normalization_source_count": 9,
+    "normalization_source_count": 10,
     "normalization_sources": [
       "flyspeck:formal_lp/hypermap/main/lp_certificate.hl",
       "flyspeck:formal_lp/hypermap/main/prove_flyspeck_lp.hl",
@@ -27,9 +27,10 @@
       "flyspeck:text_formalization/general/lib.hl",
       "flyspeck:text_formalization/general/parser_verbose.hl",
       "flyspeck:text_formalization/general/print_types.hl",
+      "flyspeck:text_formalization/general/serialization.hl",
       "flyspeck:text_formalization/jordan/tactics_jordan.hl"
     ],
-    "sha256": "220bd2c6ecbb4ae85a4af552ee8ccd58d4917d29c1f82b7e9491428bcc6832fc",
+    "sha256": "e3c4a6a8bc393435c33dbcaf16b1638c06a88796e3f4d62455169bd52d27685a",
     "source_node_count": 400
   },
   "reproduce": "scripts/direct-compatibility-closure.py --manifest ../worktrees/candle-loader-v13/candle/flyspeck_manifest.json --findings compatibility/generated/inventory-findings.jsonl --output compatibility/generated/direct-closure-summary.json",
@@ -267,7 +268,7 @@
       ">=/": 1
     },
     "non_dopen_review_occurrences": 509,
-    "site_sha256": "ca232c3110c20a4dda2a34c366526e66a6984b687e59547ca03ea39c22b10f42",
+    "site_sha256": "3e9ba03631ab57e9fc0df6524630fe112222eb0f75e7a2df72b2b987e189a78f",
     "source_files_by_category": {
       "ffi.custom_call": 0,
       "ffi.ocaml_external_declaration": 0,

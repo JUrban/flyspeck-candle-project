@@ -11,7 +11,7 @@ extensions = [".ml", ".mli", ".hl", ".vhl", ".cml", ".mll", ".mly"]
 
 [repositories.candle]
 path = "../worktrees/candle-loader-v13"
-pinned_commit = "a08e551a4398907776112eb72db1573f65cf2012"
+pinned_commit = "f4c95109430266c3a734e4836263e9efe4659d9c"
 
 [repositories.flyspeck]
 # Direct S3 compatibility evidence must come from the clean upstream worktree.

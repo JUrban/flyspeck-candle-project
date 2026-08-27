@@ -69,11 +69,11 @@
     "total": 240
   },
   "evidence_boundary": "Manual source review classifies the role of each pinned token and membership in the explicitly selected S3 source route. A required source dependency is not proof that the expression is dynamically evaluated. A not-selected record is an exclusion from this route, not a claim that the file is dead in every HOL Light workflow.",
-  "inventory_findings_sha256": "4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159",
+  "inventory_findings_sha256": "e2af1fad83d1b0e3ba6e4bb7033470f770e0874371e8de5ef3e242ba120f1bdb",
   "records": [
     {
       "category": "pointer_equality.operator_binding",
-      "finding_id": "CF-525538bd2da74d581759",
+      "finding_id": "CF-bf0da41a49b671fd4f99",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 7,
@@ -84,7 +84,7 @@
       "operator": "==",
       "operator_resolution": "local_custom_operator_definition",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-INFORMAL-BIGINT-BINDING",
       "s3_dependency": {
         "basis": "outside_explicit_full_sequence",
@@ -102,7 +102,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2141bc97ed4275543bfc",
+      "finding_id": "CF-991e42e539ff2ace179a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 28,
@@ -113,7 +113,7 @@
       "operator": "==",
       "operator_resolution": "locally_rebound_custom_value_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-INFORMAL-BIGINT-USE",
       "s3_dependency": {
         "basis": "outside_explicit_full_sequence",
@@ -131,7 +131,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3932d773767ac6bb4c64",
+      "finding_id": "CF-08f73321f005f423bd6a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 31,
@@ -142,7 +142,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -160,7 +160,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-377e62717f2b099c3b37",
+      "finding_id": "CF-41540d6ad1fc2f0f2e0c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 42,
@@ -171,7 +171,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -189,7 +189,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-56d89dcd1ac24208e5b3",
+      "finding_id": "CF-29ffcacab12854949a6e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -200,7 +200,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -218,7 +218,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c60ad64b5cacdc71847b",
+      "finding_id": "CF-80602ed61fa8ba452b54",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -229,7 +229,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -247,7 +247,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5cbee6e17b8f7cd666be",
+      "finding_id": "CF-6020acb22794081b869c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -258,7 +258,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-NTRIE-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -276,7 +276,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-55dd656f999626ccbdc5",
+      "finding_id": "CF-39646c6df560ffef58ef",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -287,7 +287,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-NTRIE-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -305,7 +305,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3bb654bf400a67b858ba",
+      "finding_id": "CF-29ec14d53beddc4e6e19",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 29,
@@ -316,7 +316,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-NTRIE-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -334,7 +334,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c35576d48823c05e5053",
+      "finding_id": "CF-c843ea472c876fda404f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 26,
@@ -345,7 +345,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -363,7 +363,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e71a34e63cf4abb3a1f4",
+      "finding_id": "CF-981694dc3a43891d14da",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 37,
@@ -374,7 +374,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -392,7 +392,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8064fa791054dde15f15",
+      "finding_id": "CF-6b04c7f93f39659dbe36",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 14,
@@ -403,7 +403,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -421,7 +421,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f33c40cbe81ae682d462",
+      "finding_id": "CF-6c6662b3a764a257303b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -432,7 +432,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-INT-ID",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -450,7 +450,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-da3f6dc5b2745fb29bab",
+      "finding_id": "CF-825d963e9e74fa04d365",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 12,
@@ -461,7 +461,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-THM-ORDER-SHORTCUT",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -479,7 +479,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4aa50e1d68c2a9a17866",
+      "finding_id": "CF-1d83db440fb814be4f2a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -490,7 +490,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-THM-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -508,7 +508,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-10ca300da4127228bb6f",
+      "finding_id": "CF-5d231a0049fe1321c40c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 21,
@@ -519,7 +519,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-THM-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -537,7 +537,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6359e5666034bc484d39",
+      "finding_id": "CF-8d38dad6b7577134fbd5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 32,
@@ -548,7 +548,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-THM-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -566,7 +566,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1d34ce96c7a2bfde6a79",
+      "finding_id": "CF-b94e6dbfeba57f4f9513",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 111,
@@ -577,7 +577,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-QBF-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_extension_outside_selected_roots",
@@ -595,7 +595,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1a0b5081b21bf814a4a5",
+      "finding_id": "CF-188de69bf36fb313ea5b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 50,
@@ -606,7 +606,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-QBF-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_extension_outside_selected_roots",
@@ -624,7 +624,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3b6e3c254013d9da4142",
+      "finding_id": "CF-5be357dcd8a6874ee001",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 11,
@@ -635,7 +635,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-TACTICTRACE-IMMEDIATE",
       "s3_dependency": {
         "basis": "development_tool_outside_selected_roots",
@@ -653,7 +653,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-bace00b0c52db9faaf53",
+      "finding_id": "CF-f1352769ca6f4a209aa6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 31,
@@ -664,7 +664,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -682,7 +682,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-23215e6e74ad7b8c262e",
+      "finding_id": "CF-1060724a560af759c314",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 33,
@@ -693,7 +693,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -711,7 +711,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2bac16b775db305b9f25",
+      "finding_id": "CF-416c90d78ada567a4eb2",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -722,7 +722,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -740,7 +740,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c56eba51563fd322b06d",
+      "finding_id": "CF-a84d9b809356def0ee18",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 29,
@@ -751,7 +751,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -769,7 +769,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d3da1682d843cce50c3c",
+      "finding_id": "CF-668e98e9171fe2c3c327",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -780,7 +780,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -798,7 +798,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-733e0cee7b5d9b6c7a91",
+      "finding_id": "CF-2b068cb6be074a50dc4e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 30,
@@ -809,7 +809,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -827,7 +827,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-bd4c92146f3a3d1675ce",
+      "finding_id": "CF-362eb84ab6d425b069bb",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -838,7 +838,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -856,7 +856,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-14612d8d8d012cc6ee85",
+      "finding_id": "CF-6723f498ea127d8e020c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 17,
@@ -867,7 +867,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -885,7 +885,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4c20a34918cd2a1c81ca",
+      "finding_id": "CF-5f4202790fd859be54e8",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -896,7 +896,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -914,7 +914,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b4dd8b4ea6c4db4d8d00",
+      "finding_id": "CF-677d3c866d3b3fd326e9",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -925,7 +925,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -943,7 +943,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e1b52b06637d5cc6029a",
+      "finding_id": "CF-90015539e25b997137a1",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 83,
@@ -954,7 +954,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -972,7 +972,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-23ed04538f51ac3dd305",
+      "finding_id": "CF-e78121be204f31711a23",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 87,
@@ -983,7 +983,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1001,7 +1001,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c8854f8415c228cd1848",
+      "finding_id": "CF-8036c171e06bf93f129d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 50,
@@ -1012,7 +1012,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1030,7 +1030,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f0cf81f04a9025cfcd2b",
+      "finding_id": "CF-7e53859b35f2b64ac25c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 52,
@@ -1041,7 +1041,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1059,7 +1059,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-21f888480fde432dcc5a",
+      "finding_id": "CF-f6dc02d19bf5d9f4de39",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 49,
@@ -1070,7 +1070,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1088,7 +1088,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ad850237e5da5352ab69",
+      "finding_id": "CF-ba839e43a866c8474c89",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 51,
@@ -1099,7 +1099,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1117,7 +1117,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-37049cb517001b2acdc9",
+      "finding_id": "CF-43c58844278ce8628611",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 65,
@@ -1128,7 +1128,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1146,7 +1146,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6008df8bebee7de40b4a",
+      "finding_id": "CF-c8bf2c6276b8813528b9",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 69,
@@ -1157,7 +1157,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1175,7 +1175,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-706467a58a5814d21022",
+      "finding_id": "CF-4a3062a7fe5e0c3487d1",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 51,
@@ -1186,7 +1186,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1204,7 +1204,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f71cff5014d9ba6d9d2a",
+      "finding_id": "CF-4ede18d34f44c222ed8c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 61,
@@ -1215,7 +1215,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1233,7 +1233,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b91b7ce4c9996f9b8b72",
+      "finding_id": "CF-5bf64ae04b9e300232d0",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 65,
@@ -1244,7 +1244,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1262,7 +1262,7 @@
     },
     {
       "category": "pointer_equality.operator_reference",
-      "finding_id": "CF-022cf89ae7d629671626",
+      "finding_id": "CF-e267c18bc86026e7e3ad",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 41,
@@ -1273,7 +1273,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1291,7 +1291,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a73cf55b4c050014596d",
+      "finding_id": "CF-d8424f601d508061585a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 30,
@@ -1302,7 +1302,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FLYSPECK-IMMEDIATE-ORACLE",
       "s3_dependency": {
         "basis": "host_regression_oracle_outside_generated_boot",
@@ -1320,7 +1320,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f21600ddb61d2454b249",
+      "finding_id": "CF-bc14f9e629faaec1b7ba",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 20,
@@ -1331,7 +1331,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1349,7 +1349,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d4b2991c96561aac8325",
+      "finding_id": "CF-936bf411a546c4b8cf64",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 28,
@@ -1360,7 +1360,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1378,7 +1378,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a04fe7fabaf8add33a64",
+      "finding_id": "CF-6ba785b2d3cb55418fbd",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 39,
@@ -1389,7 +1389,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1407,7 +1407,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1ccb20991ee60a6d880e",
+      "finding_id": "CF-63935badca08a6765732",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 27,
@@ -1418,7 +1418,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1436,7 +1436,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-54edbf941693d1df79fc",
+      "finding_id": "CF-5ecd4f1ff59f65f0b773",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 41,
@@ -1447,7 +1447,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1465,7 +1465,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cd89d43fffafaf9d6231",
+      "finding_id": "CF-77ea4073ae857e38ff47",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 31,
@@ -1476,7 +1476,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1494,7 +1494,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b433c5e162fbf6a29a00",
+      "finding_id": "CF-9c40b16cdd7c7e1ded1e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 30,
@@ -1505,7 +1505,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1523,7 +1523,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a842a1c8bf002278c4af",
+      "finding_id": "CF-2480fd145ddf692e684f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 41,
@@ -1534,7 +1534,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1552,7 +1552,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6e8dd314696e33dd807e",
+      "finding_id": "CF-5564cef8195f86487131",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 34,
@@ -1563,7 +1563,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1581,7 +1581,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a5ba7ea6c3ebe5202690",
+      "finding_id": "CF-bf23c1d0c8ec3bd4cfe3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -1592,7 +1592,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1610,7 +1610,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-75e0f1a53de1aa28af99",
+      "finding_id": "CF-93facf7eb7330e18a759",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 12,
@@ -1621,7 +1621,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-ORDER-SHORTCUT",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1639,7 +1639,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d05f285884c33eb2e5df",
+      "finding_id": "CF-efd7c6a7e10240d3c812",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -1650,7 +1650,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1668,7 +1668,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f27b8094bd43eba0a1a2",
+      "finding_id": "CF-746fdb2108d7b4a42cbe",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 21,
@@ -1679,7 +1679,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1697,7 +1697,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3275373ebdedc0650147",
+      "finding_id": "CF-4074586caebbda0e2e67",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 32,
@@ -1708,7 +1708,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1726,7 +1726,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-aa4b850840abca8849f9",
+      "finding_id": "CF-77152f207ecea536e723",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1737,7 +1737,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1755,7 +1755,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f08a486f59159eb3ba0d",
+      "finding_id": "CF-c3bb5977d1310c39f869",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1766,7 +1766,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1784,7 +1784,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-68caf6af7c98540c7a6e",
+      "finding_id": "CF-b59167c9a6967cba4f94",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1795,7 +1795,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1813,7 +1813,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2262305d7bce06ed8700",
+      "finding_id": "CF-d0f79bb3b235dc569dc7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -1824,7 +1824,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1842,7 +1842,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-15df6df0f2f7cf015f9b",
+      "finding_id": "CF-622571c0c95ae01ffeed",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -1853,7 +1853,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1871,7 +1871,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-bd613866f3f4557aeaa7",
+      "finding_id": "CF-3dc9a4f988eb34f03d74",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1882,7 +1882,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1900,7 +1900,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-adfdf5493d7fd80b1455",
+      "finding_id": "CF-ca3f3ea558e86bc37027",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1911,7 +1911,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1929,7 +1929,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5e0ab777bedca1ba4faa",
+      "finding_id": "CF-69f107994333855fc402",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -1940,7 +1940,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1958,7 +1958,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9339e4244daba0e88d4a",
+      "finding_id": "CF-75d5b9b3fa0195c78e54",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -1969,7 +1969,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1987,7 +1987,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e97c43617d50ad0ad0fb",
+      "finding_id": "CF-bfd645207dbeba1991c0",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1998,7 +1998,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2016,7 +2016,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a47e91c3efb5850ed96e",
+      "finding_id": "CF-e95c055965cf9ab9580d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2027,7 +2027,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2045,7 +2045,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-30035606c10b20ec9012",
+      "finding_id": "CF-4008bc1cdc19d610a0b8",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2056,7 +2056,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2074,7 +2074,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4a23e14e5fd1b0e4e7cf",
+      "finding_id": "CF-00c9ea063a4ba49c3f8a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2085,7 +2085,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2103,7 +2103,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-288feb4f212a47ff55f9",
+      "finding_id": "CF-00f874e651f35364671b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -2114,7 +2114,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2132,7 +2132,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-bf38db5d5a7cd4a7db01",
+      "finding_id": "CF-5ed49b3066bd81f9e3d6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -2143,7 +2143,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2161,7 +2161,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5fe743c997ebc1e39a53",
+      "finding_id": "CF-a970161a32aedba9ebe6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2172,7 +2172,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2190,7 +2190,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d69c3e974f588a426bf7",
+      "finding_id": "CF-d64a311c1b0b87a84885",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2201,7 +2201,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2219,7 +2219,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6f20b7d3fda7a98af89a",
+      "finding_id": "CF-4adcf6de65be42901037",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -2230,7 +2230,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2248,7 +2248,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-88696386bc3e537bb2f5",
+      "finding_id": "CF-7b5bd459b4d484d454d8",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -2259,7 +2259,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2277,7 +2277,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e482ae3e9439043cff24",
+      "finding_id": "CF-2f66f703b4c0b4314a67",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2288,7 +2288,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2306,7 +2306,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ee3f9286880674755e25",
+      "finding_id": "CF-45e52730118cad1bd615",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2317,7 +2317,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2335,7 +2335,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-05272c1f7d4146a460c6",
+      "finding_id": "CF-dc69705712ee74310449",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2346,7 +2346,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2364,7 +2364,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6da5e0daf4ef51705ab6",
+      "finding_id": "CF-251e0575585b8811cc5d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2375,7 +2375,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2393,7 +2393,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-32be3e2a095821a65bfb",
+      "finding_id": "CF-40b6fb0235889a8378f7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -2404,7 +2404,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2422,7 +2422,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-dfed29ea7f3ea4adb083",
+      "finding_id": "CF-e87317e9cf4dcda4bb53",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -2433,7 +2433,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2451,7 +2451,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a1e1b929cd8ae32fe6c5",
+      "finding_id": "CF-3ffbbaafb0c14a4e968b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2462,7 +2462,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2480,7 +2480,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c0b9a2c7ea26e2b474b0",
+      "finding_id": "CF-0954e511dcc95c0cd32e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2491,7 +2491,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2509,7 +2509,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-89b0502c2e627d44694b",
+      "finding_id": "CF-d2e35143bab87d386ff7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -2520,7 +2520,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2538,7 +2538,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2b1e2c954b63e1676f26",
+      "finding_id": "CF-309c091d922168f8a942",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -2549,7 +2549,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2567,7 +2567,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-0e57c01e657e03020498",
+      "finding_id": "CF-0472cd6ff9caec6595a9",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2578,7 +2578,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2596,7 +2596,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cc90f1f150cd37350a6d",
+      "finding_id": "CF-c523c2c5b12d00a5e167",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2607,7 +2607,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2625,7 +2625,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-209f227d4a50d7a50450",
+      "finding_id": "CF-a3933150a572a72274c6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2636,7 +2636,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2654,7 +2654,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3a3f7239bd04103c601b",
+      "finding_id": "CF-aef857399ef556750c3a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -2665,7 +2665,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2683,7 +2683,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d5317d683d4737579a4c",
+      "finding_id": "CF-f768f7cb8376342f2c0b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -2694,7 +2694,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2712,7 +2712,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e1c69604b6da50c0e0f5",
+      "finding_id": "CF-86d958afed38981f1db1",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2723,7 +2723,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2741,7 +2741,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2d98705b6c012a1fd040",
+      "finding_id": "CF-80547b7ce832d637ab5f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2752,7 +2752,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2770,7 +2770,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d2be63b8a360f7244fe6",
+      "finding_id": "CF-90e830faca5a9f19ea80",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -2781,7 +2781,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2799,7 +2799,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5cbb7488c73306c32206",
+      "finding_id": "CF-8fb84245fc49575dfef9",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -2810,7 +2810,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2828,7 +2828,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8f5b8d922a839ce240b5",
+      "finding_id": "CF-039d727fae467d129d00",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2839,7 +2839,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2857,7 +2857,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d9aafa5a9bc56d6fb8f9",
+      "finding_id": "CF-9a70f1e46fb7f8c9e0ba",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2868,7 +2868,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2886,7 +2886,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6366c3bf64266f062538",
+      "finding_id": "CF-18b124a421df67c66674",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2897,7 +2897,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2915,7 +2915,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ad5e5099de4a1fd536e5",
+      "finding_id": "CF-1ebf3031bf058d166bc5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -2926,7 +2926,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2944,7 +2944,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-31ae912f559eceb0eca5",
+      "finding_id": "CF-cedbb9900ca95f662a07",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -2955,7 +2955,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2973,7 +2973,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-17c88a1c4b7201ea5c30",
+      "finding_id": "CF-06acb6db07d8123603f4",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2984,7 +2984,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3002,7 +3002,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ee743eb00e4a4b91c8e3",
+      "finding_id": "CF-f0740d24f3eb624b2b96",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3013,7 +3013,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3031,7 +3031,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f18feeb428011df34e8a",
+      "finding_id": "CF-d2c2a60c84c27a9a5d07",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -3042,7 +3042,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3060,7 +3060,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ceb4fba0eca92ada172c",
+      "finding_id": "CF-166c7685add8a20e98e3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -3071,7 +3071,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3089,7 +3089,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3eed2b2e2bc93a99b55e",
+      "finding_id": "CF-acd06ff2af0b39e2056b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3100,7 +3100,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3118,7 +3118,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8cbb22dc2c331887e35a",
+      "finding_id": "CF-1ce96765ca064ae619db",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3129,7 +3129,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3147,7 +3147,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-82b593ee4471e6cf3788",
+      "finding_id": "CF-30407a1a8d9169602c2d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3158,7 +3158,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3176,7 +3176,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f46af6a5450fde57e8b4",
+      "finding_id": "CF-1966a6319a552f5fbf70",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3187,7 +3187,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3205,7 +3205,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b8fce6f21fb60949a8fc",
+      "finding_id": "CF-e393aa754ecd6b618f3a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -3216,7 +3216,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3234,7 +3234,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-361d88e1b88192c2059d",
+      "finding_id": "CF-8a4a58fec198d183902c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3245,7 +3245,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3263,7 +3263,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-38fa77d36eee38870825",
+      "finding_id": "CF-8eb1f5a08f2af4d32b15",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3274,7 +3274,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3292,7 +3292,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-567d48070e35f0d1974a",
+      "finding_id": "CF-3e1b40f40575f87385b6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -3303,7 +3303,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3321,7 +3321,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e4b8669637e4c8134558",
+      "finding_id": "CF-0cea950cf0571c7f4a29",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -3332,7 +3332,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3350,7 +3350,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8ff9299af7968ec42627",
+      "finding_id": "CF-5338cd61153a245bca79",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3361,7 +3361,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3379,7 +3379,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1481cd4d29e85f70739d",
+      "finding_id": "CF-f7e67c5a94080432ddb7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3390,7 +3390,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3408,7 +3408,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1d88ce3d007ac246f8ad",
+      "finding_id": "CF-2dc51f915404bfb9bda8",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3419,7 +3419,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3437,7 +3437,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f5623fe711faa6880513",
+      "finding_id": "CF-afd61bc22a20d648c89d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3448,7 +3448,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3466,7 +3466,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-553dbc0f020696329968",
+      "finding_id": "CF-70befb5c4c18c02c9b94",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -3477,7 +3477,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3495,7 +3495,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-26ba964d0f4f81386243",
+      "finding_id": "CF-b22b65935b89b562d418",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3506,7 +3506,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3524,7 +3524,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-fd7e864a8d47155317fb",
+      "finding_id": "CF-fdac55938df820a3db10",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3535,7 +3535,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3553,7 +3553,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e48789f0117699eed45d",
+      "finding_id": "CF-7d387c3bb53bdd06e6df",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -3564,7 +3564,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3582,7 +3582,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-bef8cb0ecc204ab127d8",
+      "finding_id": "CF-679db51107c9888c90ab",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -3593,7 +3593,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3611,7 +3611,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-eff6d20a4651ee5e8f6c",
+      "finding_id": "CF-30505892aaf28990482c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3622,7 +3622,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3640,7 +3640,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c004717b77eb97d2d609",
+      "finding_id": "CF-069e13ff74ea7fdafda7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3651,7 +3651,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3669,7 +3669,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-81b4ce708f902bec9f73",
+      "finding_id": "CF-72ae251d43a0bbae7ebe",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3680,7 +3680,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3698,7 +3698,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b663470596dc74a1b615",
+      "finding_id": "CF-05be2aa737de3004d82e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3709,7 +3709,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3727,7 +3727,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f9e304745b42cd2312c3",
+      "finding_id": "CF-87eb82ac55ca95c69194",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -3738,7 +3738,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3756,7 +3756,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-14540a28cb1389da7a30",
+      "finding_id": "CF-b75c103a2cb6eae4e12f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3767,7 +3767,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3785,7 +3785,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-078b9420fbd3139d49f0",
+      "finding_id": "CF-3545cb48b1573dcc40c7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3796,7 +3796,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3814,7 +3814,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-35610d04de5380bce1ce",
+      "finding_id": "CF-5d1fdf445881589623a2",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -3825,7 +3825,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3843,7 +3843,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cb35bf1bf4062b6905d4",
+      "finding_id": "CF-077b8690db057e88c943",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -3854,7 +3854,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3872,7 +3872,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1aa551ea2121a67b220c",
+      "finding_id": "CF-ff0610bbd18aa95a8e96",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3883,7 +3883,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3901,7 +3901,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3258780f682778ab6112",
+      "finding_id": "CF-c3e96c1667907da89e39",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3912,7 +3912,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3930,7 +3930,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3dc5d738476bdcb319a2",
+      "finding_id": "CF-f0f751a9c7a3004b64c4",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3941,7 +3941,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3959,7 +3959,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1e78e0b4aface9f8b6a8",
+      "finding_id": "CF-4b95f0efb9c581a79c90",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3970,7 +3970,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3988,7 +3988,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-771d164a530bf6d9bf3c",
+      "finding_id": "CF-5a426bfbf7513cb457a7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -3999,7 +3999,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4017,7 +4017,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-35058df2836328c116e4",
+      "finding_id": "CF-3daaf488db96ab34a2b7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4028,7 +4028,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4046,7 +4046,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d204ed1559a2c8b9503e",
+      "finding_id": "CF-e0641b0d71bed437057e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4057,7 +4057,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4075,7 +4075,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cc076af13a7ec99d6423",
+      "finding_id": "CF-b13c8367e8323c1c5864",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -4086,7 +4086,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4104,7 +4104,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ab3d8150b0b623c93dc1",
+      "finding_id": "CF-36dc8ee0795f48b68545",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -4115,7 +4115,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4133,7 +4133,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f110ccba17f9b3f6c7dd",
+      "finding_id": "CF-8f60e47fa68d60886fd1",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4144,7 +4144,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4162,7 +4162,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-da563a7bf2a7f2f2aac5",
+      "finding_id": "CF-750bf57b57e52682e5fc",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4173,7 +4173,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4191,7 +4191,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-47139745950a61f367fc",
+      "finding_id": "CF-b5d39fb817da9f87bd4d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4202,7 +4202,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4220,7 +4220,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c7b49a3ef94cb169731d",
+      "finding_id": "CF-ee467bb1cca9f2233a7f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -4231,7 +4231,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4249,7 +4249,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ddfcdbf1f693e1ce6d82",
+      "finding_id": "CF-f2041aaa325da451ea6c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -4260,7 +4260,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4278,7 +4278,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-008bcf230c0d1f97d987",
+      "finding_id": "CF-dd862396fce31d59fd5c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4289,7 +4289,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4307,7 +4307,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-41e6f3cce30f22a7a9bc",
+      "finding_id": "CF-a6b1bd0e33ebf0307991",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4318,7 +4318,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4336,7 +4336,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-dce17c1609b514606eed",
+      "finding_id": "CF-9861892655eff1cddb3d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -4347,7 +4347,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4365,7 +4365,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-217cb68ee08c89fafe1a",
+      "finding_id": "CF-3fbcdf5613a9a5a6ee82",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -4376,7 +4376,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4394,7 +4394,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d21ba2235028100bb963",
+      "finding_id": "CF-3646fe5a96a7ed6d2bbf",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4405,7 +4405,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4423,7 +4423,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-027383c047705a918378",
+      "finding_id": "CF-04a6c35fd80dd060fda6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4434,7 +4434,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4452,7 +4452,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7f478843c89c52252524",
+      "finding_id": "CF-6b66daed7d87031a2fa2",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4463,7 +4463,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4481,7 +4481,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cf1275d88be1a9f45c4b",
+      "finding_id": "CF-7a1313688a52daf0230e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -4492,7 +4492,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4510,7 +4510,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-88b75d990b7816d4ff0d",
+      "finding_id": "CF-4fa6945ce15ac8453c15",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -4521,7 +4521,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4539,7 +4539,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2fc49c45c80c200b6f6f",
+      "finding_id": "CF-03e5228c28bb4f234bca",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4550,7 +4550,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4568,7 +4568,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-77ff0c9ccf3d52741cbb",
+      "finding_id": "CF-57f4ff705f0095c15271",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4579,7 +4579,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4597,7 +4597,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-fc6773ce9e328ba91a8c",
+      "finding_id": "CF-e5a7d89293594684f383",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4608,7 +4608,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4626,7 +4626,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-75f557110ee51c02f45c",
+      "finding_id": "CF-6f601030e1fbdeba189c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4637,7 +4637,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4655,7 +4655,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-280a553970116aec104d",
+      "finding_id": "CF-3ab438fb288e3d058381",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -4666,7 +4666,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4684,7 +4684,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-89b81e199c5503f6b7ab",
+      "finding_id": "CF-9d7724eb9321b7f7f9c5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -4695,7 +4695,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4713,7 +4713,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1b8203b664fc2931c6ed",
+      "finding_id": "CF-a26988191b9212226306",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4724,7 +4724,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4742,7 +4742,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1948fc8ef76f1e61a867",
+      "finding_id": "CF-9a5e4f3fd015c7b21ec3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4753,7 +4753,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4771,7 +4771,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1648ffbbf357f6961c2f",
+      "finding_id": "CF-31b30a8680c2f95160ea",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4782,7 +4782,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4800,7 +4800,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-97c297dc7deb6ec82a00",
+      "finding_id": "CF-c2c181ab8df9577278c3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4811,7 +4811,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4829,7 +4829,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5ee550fa709659ded6ae",
+      "finding_id": "CF-651a92c0fd3fb2e170ff",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -4840,7 +4840,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4858,7 +4858,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-271b01ba8a47d39c0cbc",
+      "finding_id": "CF-a3d4b588edb22de6f4a6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -4869,7 +4869,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4887,7 +4887,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-0c17b5e4e67e43883a28",
+      "finding_id": "CF-214afb4f834b92141aca",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4898,7 +4898,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4916,7 +4916,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e32810c94732cd008659",
+      "finding_id": "CF-ec9c9d7de52132e88a9b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4927,7 +4927,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4945,7 +4945,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d8acfd8c4fe008c78f9f",
+      "finding_id": "CF-8ab3c2892093f9876013",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4956,7 +4956,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4974,7 +4974,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-72dcc595b1983546fe30",
+      "finding_id": "CF-0032d3ac74d810223445",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4985,7 +4985,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5003,7 +5003,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-578352d863dc9c8bd37d",
+      "finding_id": "CF-081582482f1289dadb6c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -5014,7 +5014,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5032,7 +5032,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-128a1d6dee4c49e934bd",
+      "finding_id": "CF-d4fc30f0393dc62923a9",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -5043,7 +5043,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5061,7 +5061,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-08e0f2733f455b722021",
+      "finding_id": "CF-6294f3a1b78a204d82db",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5072,7 +5072,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5090,7 +5090,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-972368da4ea9b38c75c0",
+      "finding_id": "CF-a05b28712af01015c66d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5101,7 +5101,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5119,7 +5119,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d043878d6c734eeff386",
+      "finding_id": "CF-eb0416de1e48f8db08d3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5130,7 +5130,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5148,7 +5148,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-285cceee8deca73b233d",
+      "finding_id": "CF-6d504170f6f89537e2de",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -5159,7 +5159,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5177,7 +5177,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6e13e78757fb56d40ccb",
+      "finding_id": "CF-5c0e22bab14001bc3617",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -5188,7 +5188,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5206,7 +5206,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4d468b7ff94db17231d2",
+      "finding_id": "CF-51481d91b19ca337e707",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -5217,7 +5217,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5235,7 +5235,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a3dacb6bb5982ebfb542",
+      "finding_id": "CF-f44545ebbc4dcf429fcd",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5246,7 +5246,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5264,7 +5264,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7d3ca33aebb87a84e6df",
+      "finding_id": "CF-161a17aa441818cb09fa",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5275,7 +5275,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -5293,7 +5293,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e584ee6a0f4ff0f04a8d",
+      "finding_id": "CF-173c399faa01a66c2237",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -5304,7 +5304,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "repository_commit": "f4c95109430266c3a734e4836263e9efe4659d9c",
       "review_rule_id": "PTR-CANDLE-THECOPS-ROLLBACK-SENTINEL",
       "s3_dependency": {
         "basis": "disabled_optional_extension",

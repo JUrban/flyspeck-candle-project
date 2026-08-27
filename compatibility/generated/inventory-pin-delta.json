@@ -27,8 +27,8 @@
       },
       "module.declaration_alias": {
         "comparison": 5,
-        "selected": 5,
-        "selected_minus_comparison": 0
+        "selected": 6,
+        "selected_minus_comparison": 1
       },
       "module.declaration_first_class_unpack": {
         "comparison": 0,
@@ -47,8 +47,8 @@
       },
       "module.declaration_structure": {
         "comparison": 605,
-        "selected": 608,
-        "selected_minus_comparison": 3
+        "selected": 611,
+        "selected_minus_comparison": 6
       },
       "module.first_class_pack": {
         "comparison": 0,
@@ -104,8 +104,8 @@
     "by_repository": {
       "candle": {
         "comparison": 954,
-        "selected": 980,
-        "selected_minus_comparison": 26
+        "selected": 984,
+        "selected_minus_comparison": 30
       },
       "flyspeck": {
         "comparison": 5095,
@@ -116,8 +116,8 @@
     "totals": {
       "findings": {
         "comparison": 6049,
-        "selected": 6070,
-        "selected_minus_comparison": 21
+        "selected": 6074,
+        "selected_minus_comparison": 25
       },
       "lexical_notes": {
         "comparison": 1,
@@ -126,13 +126,13 @@
       },
       "source_bytes_scanned": {
         "comparison": 100751549,
-        "selected": 100855095,
-        "selected_minus_comparison": 103546
+        "selected": 100857485,
+        "selected_minus_comparison": 105936
       },
       "source_files_scanned": {
         "comparison": 1347,
-        "selected": 1362,
-        "selected_minus_comparison": 15
+        "selected": 1364,
+        "selected_minus_comparison": 17
       }
     }
   },
@@ -191,14 +191,14 @@
   "schema_version": 1,
   "selected_lane": {
     "flyspeck_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
-    "inventory_findings_sha256": "4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159",
+    "inventory_findings_sha256": "e2af1fad83d1b0e3ba6e4bb7033470f770e0874371e8de5ef3e242ba120f1bdb",
     "inventory_path_key": "../worktrees/flyspeck-v13-source",
     "role": "direct_s3_clean_upstream",
     "totals": {
-      "findings": 6070,
+      "findings": 6074,
       "lexical_notes": 1,
-      "source_bytes_scanned": 100855095,
-      "source_files_scanned": 1362
+      "source_bytes_scanned": 100857485,
+      "source_files_scanned": 1364
     }
   },
   "stable_occurrences": {
@@ -1575,7 +1575,7 @@
     ],
     "matched": 5935,
     "method": "All finding fields except finding_id, repository_commit, and source_sha256; this distinguishes content/coordinate changes from commit-derived identifier churn.",
-    "selected_only": 135,
+    "selected_only": 139,
     "selected_only_records": [
       {
         "category": "open.local_parenthesized",
@@ -2140,6 +2140,54 @@
         },
         "repository": "candle",
         "source_path": "candle/flyspeck_l2_target.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Flyspeck_set_make_replacement = struct",
+        "location": {
+          "column": 1,
+          "end_column": 46,
+          "end_line": 1,
+          "line": 1
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_set_make_normalized_oracle.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Flyspeck_set_make_order = struct",
+        "location": {
+          "column": 1,
+          "end_column": 40,
+          "end_line": 1,
+          "line": 1
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_set_make_ocaml_oracle.ml"
+      },
+      {
+        "category": "module.declaration_alias",
+        "lexeme": "module Flyspeck_set_make_reference = Set.Make(Flyspeck_set_make_order)",
+        "location": {
+          "column": 1,
+          "end_column": 71,
+          "end_line": 6,
+          "line": 6
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_set_make_ocaml_oracle.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Flyspeck_set_make_replacement = struct",
+        "location": {
+          "column": 1,
+          "end_column": 46,
+          "end_line": 8,
+          "line": 8
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_set_make_ocaml_oracle.ml"
       },
       {
         "category": "open.local_parenthesized",
@@ -3204,7 +3252,7 @@
       "comparison_artifact_sha256": "dff487602275e016894cc673b6c82f1f52354a4b5fce3317bb49e51684af1f09",
       "comparison_only_records": 2,
       "comparison_records": 2,
-      "selected_artifact_sha256": "d99f83c712f6e8f688bc25d6c30d252dab526ad60fc56e982647a2e526815841",
+      "selected_artifact_sha256": "9d3df0a9a45c93d09ffc95f0a9dd753ef068bf16c7d2c9e82bdef4281f3e3ce4",
       "selected_counts": {
         "by_s3_dependency_status": {},
         "total": 0
@@ -3218,7 +3266,7 @@
       "comparison_artifact_sha256": "d61ce28f408be6037482cb6749bbf279c6c7bed0929ecc4984d661f340eb7499",
       "comparison_only_records": 0,
       "comparison_records": 217,
-      "selected_artifact_sha256": "a2b4a2937c54a87cb0d4c73e643207d604de57141f2f9e10c1da6e546046252c",
+      "selected_artifact_sha256": "f1f6d6d16ffdc346d500b558e01db7b1aa86057034966d3e73c8d82dab2a3f73",
       "selected_counts": {
         "by_ledger_disposition": {
           "excluded_from_pointer_identity_after_name_resolution": 2,

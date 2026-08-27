@@ -24,7 +24,7 @@ ordering, JSON encoding, finding IDs, and summaries are deterministic.  The
 checked-in result is tied to:
 
 - selected direct-source Candle branch
-  `a08e551a4398907776112eb72db1573f65cf2012`, read from
+  `f4c95109430266c3a734e4836263e9efe4659d9c`, read from
   `worktrees/candle-loader-v13`;
 - clean direct-S3 Flyspeck
   `1ce0353008eba83d3c76ae9a25c3c242e4802d53`, read from the dedicated
@@ -58,16 +58,16 @@ The complete machine-readable coordinates are in
 
 ## Snapshot result
 
-The scan covers 1,362 tracked OCaml-family files (100,855,095 source bytes): 702
-in Candle and 660 in Flyspeck.  It records 6,070 findings.
+The scan covers 1,364 tracked OCaml-family files (100,857,485 source bytes): 704
+in Candle and 660 in Flyspeck.  It records 6,074 findings.
 
 | Syntax family | Count | Source-level classification |
 |---|---:|---|
 | Declaration `open` | 4,925 | path form plus `open!` flag |
 | `let open ... in` | 3 | local let-open |
 | `M.(...)` | 89 | 82 operator references; seven general expressions |
-| Module structures | 608 | `module M ... = struct` |
-| Module aliases | 5 | simple, dotted, or functor-application right side |
+| Module structures | 611 | `module M ... = struct` |
+| Module aliases | 6 | simple, dotted, or functor-application right side |
 | Module functor declarations | 1 | parameter/functor syntax |
 | Other module declarations | 39 | deliberately left unparsed for AST review |
 | `include` | 95 | path form |
@@ -79,7 +79,7 @@ in Candle and 660 in Flyspeck.  It records 6,070 findings.
 | `customFFI` calls | 0 | lexical absence in the selected source snapshot |
 | OCaml `external` declarations | 0 | lexical absence after quotation masking |
 
-The module-path inventory contains 5,081 simple, 29 dotted, seven
+The module-path inventory contains 5,081 simple, 29 dotted, eight
 functor-application, zero anonymous-structure, and 39 unparsed-expression
 forms.  Counts include explicit zeros so absence is distinguishable from an
 unimplemented classifier.
@@ -90,17 +90,17 @@ The prior checked-in inventory combined Candle `177a9c1e...` with PFT
 development Flyspeck `2ea440e9...`.  The machine-readable comparison pins that
 evidence at project commit `5d620bcdd3412f3e4a9ed3d9dcb3ed9ae71c22ff` and
 compares stable occurrences without confusing commit-derived IDs with source
-changes.  The new selected snapshot has 15 more files, 103,546 more bytes, and
-21 more findings in total: Candle contributes 26 net findings while the clean
+changes.  The new selected snapshot has 17 more files, 105,936 more bytes, and
+25 more findings in total: Candle contributes 30 net findings while the clean
 direct Flyspeck pin removes five PFT-only findings.  There are 114 old-only and
-135 new-only stable occurrences.  The apparent stable-occurrence churn includes
+139 new-only stable occurrences.  The apparent stable-occurrence churn includes
 all 91 historical and 89 current `M.(...)` records because generator v2 adds
 the body-shape classification; category-coordinate identity and the aggregate
 source delta remain separately visible.  The 23 new pointer records are host regression
 oracles and are explicitly outside the generated direct boot; all 217 earlier
 pointer reviews still match.  Both historical FFI records disappear from the
 selected source, leaving zero selected FFI calls.  The current findings digest
-is `4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159`.
+is `e2af1fad83d1b0e3ba6e4bb7033470f770e0874371e8de5ef3e242ba120f1bdb`.
 
 The removed calls were the former startup `chdir` bridge and the former
 `Sys.command` `system` bridge.  Their ledger entries remain as deferred
@@ -113,7 +113,7 @@ member, and reaches the authenticated direct frontier without the old patch.
 `compatibility/generated/direct-closure-summary.json` projects this broad
 snapshot onto the 400-node direct manifest by exact repository path and source
 SHA-256.  It selects 3,689 findings in 329 files with site digest
-`ca232c3110c20a4dda2a34c366526e66a6984b687e59547ca03ea39c22b10f42`.
+`3e9ba03631ab57e9fc0df6524630fe112222eb0f75e7a2df72b2b987e189a78f`.
 Of those, 3,180 are the separately governed Dopen corpus and 509 are other
 compatibility-sensitive occurrences.
 
@@ -126,8 +126,11 @@ The projection turns several broad queues into exact facts:
 - selected pointer tokens: 15 (12 infix uses, one binding, and two
   operator-as-value references), matching the separately reviewed G3 set;
 - selected custom-FFI calls and external declarations: zero;
-- selected module syntax: 389 structures, one alias, 15 other declarations,
-  one include, and nine module-type declarations.
+- selected module syntax: 389 structures, one alias, 15 scanner-other
+  declarations, one include, and nine module-type declarations.  All 15
+  scanner-other sites are multiline ordinary or signature-constrained
+  structures.  The alias is the sole selected functor application,
+  `Set.Make(String_compare)`, and is handled by an exact source contract.
 
 The artifact also records every source path by category and occurrence counts
 by earliest build stratum.  This is exact source-membership evidence, not a
@@ -234,7 +237,7 @@ artifact digests.  It rechecks inventory repository HEAD/dirty state, tracked fi
 counts, every referenced source digest, every aggregate category/path/operator
 count, the JSONL digest, and all ledger selectors against the current artifacts.
 
-The eleven local entries comprise the remaining syntax-review queues, concrete
+The twelve local entries comprise the remaining syntax-review queues, concrete
 selected-route pointer/name-resolution and exact-normalization obligations,
 and the retained historical `chdir`/`system` elimination obligations.  Each
 contains all
@@ -248,9 +251,10 @@ obligation, stable regression IDs, and evidence.
 
 ## Next ledger work
 
-1. Semantically group the 509 exact selected non-Dopen occurrences, prioritizing
-   the one LP local-open and the selected module forms not traversed by the
-   current clean frontier.
+1. Semantically group the remaining exact selected non-Dopen occurrences,
+   prioritizing runtime members and parser-state behavior not traversed by the
+   current clean frontier; the selected local-open and module subsets are now
+   closed by differential gates and one exact `Set.Make` normalization.
 2. Turn each actual failure into a minimized OCaml/Candle oracle before marking
    it a confirmed divergence.
 3. Close the full-run fingerprint and scale gates for the implemented exact
