@@ -7,13 +7,14 @@
     "notes": [
       "A selected occurrence is a review obligation, not proof that the expression executes.",
       "Dopen has a separate exact 3,180-site semantic/proof contract.",
-      "Repository findings outside the 400-node manifest do not enter this artifact."
+      "Repository findings outside the 400-node manifest do not enter this artifact.",
+      "Parenthesized local-open body forms are lexical shapes, not a general parser or semantics proof."
     ],
     "source_membership": "exact manifest node and SHA-256 match"
   },
   "inventory": {
     "finding_count": 6070,
-    "sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a"
+    "sha256": "4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159"
   },
   "manifest": {
     "normalization_source_count": 9,
@@ -240,8 +241,33 @@
       "flyspeck": 3507
     },
     "finding_count": 3689,
+    "local_parenthesized_body_forms": {
+      "operator_reference": 79
+    },
+    "local_parenthesized_operators": {
+      "*": 3,
+      "**/": 1,
+      "*/": 1,
+      "+": 4,
+      "+/": 1,
+      "-": 3,
+      "--": 1,
+      "-/": 1,
+      "/": 5,
+      "//": 1,
+      "<": 38,
+      "</": 1,
+      "<<": 1,
+      "<=": 8,
+      "<=/": 1,
+      "<>/": 1,
+      "=/": 1,
+      ">": 5,
+      ">/": 1,
+      ">=/": 1
+    },
     "non_dopen_review_occurrences": 509,
-    "site_sha256": "58dd3df95e81cfc9f41a198879a3b8623ac9097b6f9719a2f3fee04be95c4003",
+    "site_sha256": "ca232c3110c20a4dda2a34c366526e66a6984b687e59547ca03ea39c22b10f42",
     "source_files_by_category": {
       "ffi.custom_call": 0,
       "ffi.ocaml_external_declaration": 0,

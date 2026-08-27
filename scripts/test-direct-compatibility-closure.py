@@ -49,6 +49,13 @@ class DirectCompatibilityClosureTests(unittest.TestCase):
                 "location": {"line": 2, "column": 3, "end_line": 2, "end_column": 5},
             },
             {
+                "category": "open.local_parenthesized", "repository": "candle",
+                "source_path": "a.ml", "source_sha256": "a" * 64,
+                "finding_id": "CF-" + "4" * 20, "lexeme": "A.(",
+                "location": {"line": 3, "column": 3, "end_line": 3, "end_column": 6},
+                "details": {"body_form": "operator_reference", "operator": "++"},
+            },
+            {
                 "category": "ffi.custom_call", "repository": "candle",
                 "source_path": "outside.ml", "source_sha256": "c" * 64,
                 "finding_id": "CF-" + "3" * 20, "lexeme": "customFFI",
@@ -63,16 +70,28 @@ class DirectCompatibilityClosureTests(unittest.TestCase):
 
     def test_exact_projection_and_explicit_zeroes(self):
         document = closure.project(*self.fixture())
-        self.assertEqual(document["selected"]["finding_count"], 2)
+        self.assertEqual(document["selected"]["finding_count"], 3)
         self.assertEqual(document["selected"]["source_files_with_findings"], 2)
-        self.assertEqual(document["selected"]["non_dopen_review_occurrences"], 1)
+        self.assertEqual(document["selected"]["non_dopen_review_occurrences"], 2)
         self.assertEqual(document["selected"]["by_category"]["ffi.custom_call"], 0)
         self.assertEqual(document["selected"]["by_earliest_stratum"], {
-            "base": 1, "final": 1,
+            "base": 2, "final": 1,
         })
         self.assertEqual(document["manifest"]["normalization_sources"], [
             "flyspeck:b.hl"
         ])
+        self.assertEqual(document["selected"]["local_parenthesized_body_forms"], {
+            "operator_reference": 1,
+        })
+        self.assertEqual(document["selected"]["local_parenthesized_operators"], {
+            "++": 1,
+        })
+
+    def test_unclassified_selected_local_open_is_rejected(self):
+        manifest_raw, manifest, findings_raw, findings = self.fixture()
+        findings[2]["details"] = {}
+        with self.assertRaisesRegex(ValueError, "lacks body classification"):
+            closure.project(manifest_raw, manifest, findings_raw, findings)
 
     def test_stale_selected_source_is_rejected(self):
         manifest_raw, manifest, findings_raw, findings = self.fixture()

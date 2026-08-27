@@ -164,22 +164,24 @@ python3 "$project_dir/scripts/check-direct-dopen-corpus.py" \
   >/dev/null
 direct_closure="$project_dir/compatibility/generated/direct-closure-summary.json"
 [[ $(sha256sum "$direct_closure" | cut -d' ' -f1) == \
-  96bfe4bf6f0e64ff7cde7f00eaa29de89f62ff48c9aec9d638f7ce45f677519f ]]
+  84a8c61c639a061f17ba73c519d20e7da91fe394dc335297fd1eaad25ae3ecfc ]]
 jq -e '
   .manifest.sha256 ==
     "220bd2c6ecbb4ae85a4af552ee8ccd58d4917d29c1f82b7e9491428bcc6832fc" and
   .manifest.source_node_count == 400 and
   .manifest.normalization_source_count == 9 and
   .inventory.sha256 ==
-    "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a" and
+    "4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159" and
   .selected.finding_count == 3689 and
   .selected.source_files_with_findings == 329 and
   .selected.non_dopen_review_occurrences == 509 and
   .selected.site_sha256 ==
-    "58dd3df95e81cfc9f41a198879a3b8623ac9097b6f9719a2f3fee04be95c4003" and
+    "ca232c3110c20a4dda2a34c366526e66a6984b687e59547ca03ea39c22b10f42" and
   .selected.by_category["open.declaration"] == 3180 and
   .selected.by_category["open.local_let"] == 0 and
   .selected.by_category["open.local_parenthesized"] == 79 and
+  .selected.local_parenthesized_body_forms == {"operator_reference": 79} and
+  (.selected.local_parenthesized_operators | values | add) == 79 and
   .selected.by_category["pointer_equality.infix_use"] == 12 and
   .selected.by_category["pointer_equality.operator_binding"] == 1 and
   .selected.by_category["pointer_equality.operator_reference"] == 2 and
@@ -494,6 +496,8 @@ CANDLE_BINARY="$direct_clean_candle" \
 "$direct_candle/test_flyspeck_parser_orpattern_normalization.sh" \
   "$direct_clean_candle" >/dev/null
 "$direct_candle/test_unix_metadata.sh" "$direct_clean_candle" >/dev/null
+"$project_dir/scripts/test-local-open-compatibility.sh" \
+  "$direct_clean_candle" >/dev/null
 # The older seven-overlay frontier log remains immutable historical evidence.
 direct_frontier_log="$workspace_dir/flyspeck-candle-runs/v13-direct-overlay-frontier-dopen-2.log"
 [[ $(sha256sum "$direct_frontier_log" | cut -d' ' -f1) == \

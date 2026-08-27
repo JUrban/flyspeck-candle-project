@@ -25,7 +25,7 @@ from typing import Any, Iterable
 
 
 GENERATOR_NAME = "inventory_compatibility.py"
-GENERATOR_VERSION = 1
+GENERATOR_VERSION = 2
 UPPER = r"[A-Z][A-Za-z0-9_']*"
 LOWER = r"[a-z_][A-Za-z0-9_']*"
 SIMPLE_PATH = rf"{UPPER}(?:\s*\.\s*{UPPER})*"
@@ -55,6 +55,9 @@ FINDING_CATEGORIES = [
     "ffi.ocaml_external_declaration",
 ]
 MODULE_PATH_FORMS = ["simple", "dotted", "functor_application", "anonymous_structure", "unparsed_expression"]
+PARENTHESIZED_OPERATOR_REFERENCE = re.compile(
+    r"\s*(?P<operator>[!$%&*+\-./:<=>?@^|~#]+)\s*\)"
+)
 
 
 @dataclass(frozen=True)
@@ -220,6 +223,18 @@ def module_path_form(path: str | None) -> str | None:
     return "unparsed_expression"
 
 
+def parenthesized_open_body_details(masked: str, body_start: int) -> dict[str, str]:
+    """Classify the exact OCaml body shape after the opening ``M.(``."""
+
+    operator = PARENTHESIZED_OPERATOR_REFERENCE.match(masked, body_start)
+    if operator is not None:
+        return {
+            "body_form": "operator_reference",
+            "operator": operator.group("operator"),
+        }
+    return {"body_form": "general_expression"}
+
+
 def pointer_operand_shape(masked_line: str, operator_start: int, operator_end: int) -> tuple[str, str, str]:
     left_text = masked_line[:operator_start].rstrip()
     right_text = masked_line[operator_end:].lstrip()
@@ -366,6 +381,7 @@ def scan_text(
     # OCaml's M.(expr) local-open shorthand.
     for match in re.finditer(rf"(?<![A-Za-z0-9_'])\b(?P<path>{SIMPLE_PATH})\s*\.\s*\(", masked):
         path = match.group("path")
+        body_details = parenthesized_open_body_details(masked, match.end())
         builder.add(
             "open.local_parenthesized",
             match.start(),
@@ -373,6 +389,7 @@ def scan_text(
             details={
                 "module_path": normalize_path(path),
                 "module_path_form": module_path_form(path),
+                **body_details,
                 "semantic_status": "syntax_only",
             },
         )

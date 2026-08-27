@@ -65,7 +65,7 @@ in Candle and 660 in Flyspeck.  It records 6,070 findings.
 |---|---:|---|
 | Declaration `open` | 4,925 | path form plus `open!` flag |
 | `let open ... in` | 3 | local let-open |
-| `M.(...)` | 89 | parenthesized local-open syntax |
+| `M.(...)` | 89 | 82 operator references; seven general expressions |
 | Module structures | 608 | `module M ... = struct` |
 | Module aliases | 5 | simple, dotted, or functor-application right side |
 | Module functor declarations | 1 | parameter/functor syntax |
@@ -92,12 +92,15 @@ evidence at project commit `5d620bcdd3412f3e4a9ed3d9dcb3ed9ae71c22ff` and
 compares stable occurrences without confusing commit-derived IDs with source
 changes.  The new selected snapshot has 15 more files, 103,546 more bytes, and
 21 more findings in total: Candle contributes 26 net findings while the clean
-direct Flyspeck pin removes five PFT-only findings.  There are 31 old-only and
-52 new-only stable occurrences.  The 23 new pointer records are host regression
+direct Flyspeck pin removes five PFT-only findings.  There are 114 old-only and
+135 new-only stable occurrences.  The apparent stable-occurrence churn includes
+all 91 historical and 89 current `M.(...)` records because generator v2 adds
+the body-shape classification; category-coordinate identity and the aggregate
+source delta remain separately visible.  The 23 new pointer records are host regression
 oracles and are explicitly outside the generated direct boot; all 217 earlier
 pointer reviews still match.  Both historical FFI records disappear from the
 selected source, leaving zero selected FFI calls.  The current findings digest
-is `a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a`.
+is `4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159`.
 
 The removed calls were the former startup `chdir` bridge and the former
 `Sys.command` `system` bridge.  Their ledger entries remain as deferred
@@ -110,15 +113,16 @@ member, and reaches the authenticated direct frontier without the old patch.
 `compatibility/generated/direct-closure-summary.json` projects this broad
 snapshot onto the 400-node direct manifest by exact repository path and source
 SHA-256.  It selects 3,689 findings in 329 files with site digest
-`58dd3df95e81cfc9f41a198879a3b8623ac9097b6f9719a2f3fee04be95c4003`.
+`ca232c3110c20a4dda2a34c366526e66a6984b687e59547ca03ea39c22b10f42`.
 Of those, 3,180 are the separately governed Dopen corpus and 509 are other
 compatibility-sensitive occurrences.
 
 The projection turns several broad queues into exact facts:
 
 - selected `let open ... in`: zero;
-- selected parenthesized local opens: 79 in 23 files (78 in the base stratum,
-  one in LP support);
+- selected parenthesized local opens: 79 operator references in 23 files (78
+  in the base stratum, one in LP support), with zero selected general-expression
+  bodies;
 - selected pointer tokens: 15 (12 infix uses, one binding, and two
   operator-as-value references), matching the separately reviewed G3 set;
 - selected custom-FFI calls and external declarations: zero;

@@ -70,7 +70,7 @@ def project(
         if not owned_strata:
             raise ValueError(f"selected source has no stratum: {source}")
         earliest = min(owned_strata, key=stratum_index.__getitem__)
-        records.append({
+        record = {
             "category": finding["category"],
             "column": finding["location"]["column"],
             "earliest_stratum": earliest,
@@ -80,7 +80,24 @@ def project(
             "lexeme": finding["lexeme"],
             "line": finding["location"]["line"],
             "source": source,
-        })
+        }
+        if finding["category"] == "open.local_parenthesized":
+            body_form = finding.get("details", {}).get("body_form")
+            if body_form not in ("operator_reference", "general_expression"):
+                raise ValueError(
+                    f"selected parenthesized local open lacks body classification: "
+                    f'{finding["finding_id"]}'
+                )
+            record["body_form"] = body_form
+            if body_form == "operator_reference":
+                operator = finding["details"].get("operator")
+                if not operator:
+                    raise ValueError(
+                        f"selected operator local open lacks operator: "
+                        f'{finding["finding_id"]}'
+                    )
+                record["operator"] = operator
+        records.append(record)
 
     if stale:
         raise ValueError("stale selected inventory sources: " + ", ".join(sorted(stale)))
@@ -97,6 +114,18 @@ def project(
     for item in records:
         by_category_and_stratum[item["category"]][item["earliest_stratum"]] += 1
         paths_by_category[item["category"]].add(item["source"])
+
+    selected_local_opens = [
+        item for item in records
+        if item["category"] == "open.local_parenthesized"
+    ]
+    local_open_body_forms = Counter(
+        item["body_form"] for item in selected_local_opens
+    )
+    local_open_operators = Counter(
+        item["operator"] for item in selected_local_opens
+        if item["body_form"] == "operator_reference"
+    )
 
     normalized_sources = sorted(
         source for source, node in nodes.items()
@@ -134,6 +163,12 @@ def project(
             "source_paths_by_category": {
                 category: sorted(paths_by_category[category]) for category in CATEGORIES
             },
+            "local_parenthesized_body_forms": dict(
+                sorted(local_open_body_forms.items())
+            ),
+            "local_parenthesized_operators": dict(
+                sorted(local_open_operators.items())
+            ),
             "by_repository": dict(sorted(by_repository.items())),
             "by_earliest_stratum": {name: by_stratum[name] for name in strata},
             "by_category_and_earliest_stratum": {
@@ -152,6 +187,7 @@ def project(
                 "A selected occurrence is a review obligation, not proof that the expression executes.",
                 "Dopen has a separate exact 3,180-site semantic/proof contract.",
                 "Repository findings outside the 400-node manifest do not enter this artifact.",
+                "Parenthesized local-open body forms are lexical shapes, not a general parser or semantics proof.",
             ],
         },
         "reproduce": (

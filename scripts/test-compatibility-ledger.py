@@ -57,6 +57,16 @@ class LedgerLifecycleTests(unittest.TestCase):
         entry["regression_ids"] = ["REG-001"]
         validator.validate_local_entry(entry)
 
+    def test_observed_equivalent_subset_can_be_resolved(self):
+        entry = copy.deepcopy(next(
+            item for item in self.ledger["entries"]
+            if item["id"] == "PROJECT-LOCAL-OPEN-REVIEW-001"
+        ))
+        validator.validate_local_entry(entry)
+        entry["ocaml_reference"]["status"] = "not_run"
+        with self.assertRaisesRegex(validator.ValidationError, "needs OCaml outcome"):
+            validator.validate_local_entry(entry)
+
     def test_source_contract_selector_is_exact(self):
         selector = {
             "source_contract_files": [

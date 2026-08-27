@@ -89,7 +89,15 @@ def validate_local_entry(entry: dict[str, Any]) -> None:
         require(bool(entry["affected_corpus_files"]), f"{entry_id}: confirmed divergence needs affected files")
 
     if entry["status"] == "resolved":
-        require(confirmed, f"{entry_id}: only a confirmed divergence can be resolved")
+        require(
+            entry["divergence_state"] in {
+                "confirmed_divergence", "equivalent_behavior",
+            },
+            f"{entry_id}: only observed divergence/equivalence can be resolved",
+        )
+        require(entry["minimal_reproducer"]["status"] == "ready", f"{entry_id}: resolved entry needs reproducer")
+        require(entry["ocaml_reference"]["status"] == "observed", f"{entry_id}: resolved entry needs OCaml outcome")
+        require(entry["candle_outcome"]["status"] == "observed", f"{entry_id}: resolved entry needs Candle outcome")
         require(entry["chosen_remedy"]["status"] == "implemented", f"{entry_id}: resolved entry needs implemented remedy")
         require(entry["proof_obligation"]["status"] in {"discharged", "not_applicable_documented"}, f"{entry_id}: unresolved proof obligation")
         require(bool(entry["regression_ids"]), f"{entry_id}: resolved entry needs stable regression IDs")

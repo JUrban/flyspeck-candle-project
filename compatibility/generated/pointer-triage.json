@@ -69,7 +69,7 @@
     "total": 240
   },
   "evidence_boundary": "Manual source review classifies the role of each pinned token and membership in the explicitly selected S3 source route. A required source dependency is not proof that the expression is dynamically evaluated. A not-selected record is an exclusion from this route, not a claim that the file is dead in every HOL Light workflow.",
-  "inventory_findings_sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a",
+  "inventory_findings_sha256": "4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159",
   "records": [
     {
       "category": "pointer_equality.operator_binding",

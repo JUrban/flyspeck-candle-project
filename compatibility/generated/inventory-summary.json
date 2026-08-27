@@ -1,7 +1,7 @@
 {
   "artifacts": {
     "findings_jsonl": "inventory-findings.jsonl",
-    "findings_sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a",
+    "findings_sha256": "4dc7dc7789334e066d12a53565c96b53ee905bc9f6868555b6c22e413aca9159",
     "lexical_notes_json": "inventory-lexical-notes.json"
   },
   "counts": {
@@ -174,7 +174,7 @@
   ],
   "generator": {
     "name": "inventory_compatibility.py",
-    "version": 1
+    "version": 2
   },
   "inventory_id": "candle-flyspeck-ocaml-syntax-v1",
   "repositories": {

@@ -37,6 +37,7 @@ class InventorySyntaxTests(unittest.TestCase):
 open A.B;;
 let x = let open C in y
 let z = D.(x)
+let op = D.E.( ++ )
 let q = `x == y`;;
 let p = a == b;;
 let _ = Cake.Runtime.customFFI "system" bytes;;
@@ -54,6 +55,7 @@ include I.J;;
                 "open.declaration",
                 "open.local_let",
                 "open.local_parenthesized",
+                "open.local_parenthesized",
                 "pointer_equality.infix_use",
                 "ffi.custom_call",
                 "module.declaration_alias",
@@ -67,6 +69,15 @@ include I.J;;
         self.assertEqual(pointer["details"]["static_operand_category"], "identifier_operands")
         ffi = next(item for item in findings if item["category"] == "ffi.custom_call")
         self.assertEqual(ffi["details"]["command_literal_raw"], "system")
+        local_opens = [
+            item for item in findings
+            if item["category"] == "open.local_parenthesized"
+        ]
+        self.assertEqual(
+            [item["details"]["body_form"] for item in local_opens],
+            ["general_expression", "operator_reference"],
+        )
+        self.assertEqual(local_opens[1]["details"]["operator"], "++")
 
     def test_masks_literals_comments_and_hol_terms(self):
         text = """\
