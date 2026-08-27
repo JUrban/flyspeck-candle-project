@@ -41,6 +41,24 @@ check_development() {
     "$repo" "$actual_branch" "$actual_head" "$base"
 }
 
+check_worktree() {
+  local label=$1
+  local path=$2
+  local branch=$3
+  local base=$4
+  local expected=$5
+  local actual_branch
+  local actual_head
+  actual_branch=$(git -C "$path" branch --show-current)
+  actual_head=$(git -C "$path" rev-parse HEAD)
+  [[ "$actual_branch" == "$branch" ]]
+  [[ "$actual_head" == "$expected" ]]
+  git -C "$path" merge-base --is-ancestor "$base" HEAD
+  [[ -z $(git -C "$path" status --porcelain) ]]
+  printf 'ok: %s %s at %s (base %s, clean)\n' \
+    "$label" "$actual_branch" "$actual_head" "$base"
+}
+
 roadmap_v12_actual=$(
   sha256sum "$workspace_dir/Flyspeck_in_Candle_Gap_Analysis.docx" |
     cut -d' ' -f1
@@ -102,6 +120,11 @@ resume_fixture_sha=$(sha256sum "$resume_fixture" | cut -d' ' -f1)
 [[ $(dmtcp_launch --version | sed -n '1s/.* //p') == 4.1.0 ]]
 printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
+direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
+direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
+[[ "$direct_manifest_sha" == 17d1620e62df0dc6fca1e7e126fef4a35aacf51b4f10e33fc0940c081676c610 ]]
+printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
+
 certificate_inventory_sha=$(
   cd "$repos_dir/flyspeck/formal_lp/glpk/binary"
   find . -maxdepth 1 -type f \( -name 'easy*' -o -name 'hard*' \) -print0 |
@@ -131,6 +154,16 @@ check_development HOL codex/flyspeck-pft-producer \
 check_development flyspeck codex/candle-replay \
   1ce0353008eba83d3c76ae9a25c3c242e4802d53 \
   2ea440e9f7c55734d1e47738e44a6129ce0ecf5a
+check_worktree flyspeck-direct \
+  "$workspace_dir/worktrees/flyspeck-v13-source" \
+  codex/flyspeck-v13-source \
+  1ce0353008eba83d3c76ae9a25c3c242e4802d53 \
+  1ce0353008eba83d3c76ae9a25c3c242e4802d53
+check_worktree candle-loader \
+  "$workspace_dir/worktrees/candle-loader-v13" \
+  codex/flyspeck-v13-loader \
+  bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
+  f33a4e8c6e0de8ae7fcb8969e267db40eff65ab0
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa

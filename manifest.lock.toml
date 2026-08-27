@@ -54,6 +54,19 @@ commit = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
 development_branch = "codex/candle-replay"
 development_head = "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a"
 
+[repositories.flyspeck_direct]
+url = "https://github.com/flyspeck/flyspeck.git"
+development_branch = "codex/flyspeck-v13-source"
+development_head = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
+purpose = "governing S3 direct-source snapshot; excludes PFT development changes"
+
+[repositories.candle_loader]
+url = "https://github.com/CakeML/candle.git"
+base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
+development_branch = "codex/flyspeck-v13-loader"
+development_head = "f33a4e8c6e0de8ae7fcb8969e267db40eff65ab0"
+purpose = "v1.3 direct-source manifest, loader, and target"
+
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
 observed_master = "433477862bb90b328a593e012e09390e99b2439b"
@@ -116,6 +129,18 @@ commands = 305
 table_limits = [63, 64, 99]
 targets = ["candle$RESUME_BEFORE", "candle$RESUME_AFTER"]
 axioms = []
+
+[artifacts.direct_source_manifest]
+path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
+sha256 = "17d1620e62df0dc6fca1e7e126fef4a35aacf51b4f10e33fc0940c081676c610"
+source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
+generator_candle = "f33a4e8c6e0de8ae7fcb8969e267db40eff65ab0"
+build_entries = 297
+unique_build_entries = 287
+source_nodes = 398
+dependency_edges = 417
+generated_inputs = 42
+claim = "G6 inventory only; not loader execution evidence"
 
 [toolchain.hol4]
 polyml = "5.7.1"
