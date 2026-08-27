@@ -68,3 +68,20 @@ equivalence evidence is successful compiled replay under the same axiom
 policy plus canonical fingerprints of every saved theorem, hypotheses, and
 assumptions.  The direct S3 production path remains independent of both PFT
 runs.
+
+## Second live restart
+
+The repaired run subsequently checkpointed again and generation 2 restored
+that image.  The exact resumed status was:
+
+```text
+resumed  10  leg/AFF_SGN_TAC.hl  8640234160  976213989  103364  243740  30911288
+```
+
+The replacement uncompressed checkpoint is 22,073,835,520 bytes.  Generation
+1 ended with `Computation was checkpointed and killed.`, and generation 2 is
+actively producing proof output beyond the 8,640,234,160-byte boundary.  This
+is a second successful full-scale restore and confirms that the direct
+`Unix.ftruncate` repair is active beyond the initial source-0 smoke.  It is
+still live PFT validation evidence only: completion, compiled replay, saved
+theorem fingerprints, and the direct S3 run all remain open.
