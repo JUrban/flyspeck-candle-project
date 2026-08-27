@@ -41,10 +41,21 @@ check_development() {
     "$repo" "$actual_branch" "$actual_head" "$base"
 }
 
-roadmap_actual=$(sha256sum "$workspace_dir/Flyspeck_in_Candle_Gap_Analysis.docx" | cut -d' ' -f1)
-roadmap_expected=713b97d2d8b873504ea428d014a142acb066ff5d27263dd5be6a9c0135444e3b
-[[ "$roadmap_actual" == "$roadmap_expected" ]]
-printf 'ok: roadmap %s\n' "$roadmap_actual"
+roadmap_v12_actual=$(
+  sha256sum "$workspace_dir/Flyspeck_in_Candle_Gap_Analysis.docx" |
+    cut -d' ' -f1
+)
+roadmap_v12_expected=713b97d2d8b873504ea428d014a142acb066ff5d27263dd5be6a9c0135444e3b
+[[ "$roadmap_v12_actual" == "$roadmap_v12_expected" ]]
+printf 'ok: superseded roadmap v1.2 %s\n' "$roadmap_v12_actual"
+
+roadmap_v13_actual=$(
+  sha256sum "$workspace_dir/Flyspeck_in_Candle_Gap_Analysis_v1.3.docx" |
+    cut -d' ' -f1
+)
+roadmap_v13_expected=13fc3a6209787e9fa9c1879cb482fef6837252ec96b3ae506d312646c898863f
+[[ "$roadmap_v13_actual" == "$roadmap_v13_expected" ]]
+printf 'ok: governing roadmap v1.3 %s\n' "$roadmap_v13_actual"
 
 cake_binary="$repos_dir/candle/candle/build/cake"
 cake_binary_sha=$(sha256sum "$cake_binary" | cut -d' ' -f1)

@@ -1,4 +1,8 @@
-# Roadmap acceptance ledger
+# Superseded v1.2 PFT-validation acceptance ledger
+
+This ledger remains authoritative only for the independent PFT validation
+lane.  The governing release target and source-substitution gates are in
+`requirements-v1.3.md`; satisfying every row below does not satisfy S2 or S3.
 
 Status values are `open`, `in progress`, `proved`, or `not required` for the
 selected claim.  A green unit test is not enough to mark a broad item proved;

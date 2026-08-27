@@ -1,19 +1,19 @@
 # Flyspeck in Candle
 
-This repository coordinates the implementation needed to check the HOL Light
-side of Flyspeck with Candle.  The default release target is roadmap level L2:
-kernel replay plus HOL-side nonlinear/LP evidence closure, while retaining the
-Isabelle tame-graph classification as an explicit premise.  L1 is the first
-integration milestone and L3 is tracked separately.
+This repository coordinates the implementation needed for Candle/CakeML to
+execute the pinned Flyspeck/HOL Light source workload.  The governing v1.3
+release target is S3: direct source execution plus HOL-side nonlinear/LP
+evidence closure, with no HOL Light runtime in the production path and with the
+Isabelle tame-graph classification retained as an explicit premise.  S2 is the
+decisive source-substitution milestone and S4 is tracked separately.
 
-The selected L2 architecture is specifically
+The parallel PFT validation architecture is specifically
 `Flyspeck source -> HOL Light producer -> hostile PFT -> compiled Candle`.
-It proves that Candle can reconstruct the complete HOL-side proof and evidence;
-it does **not** claim that Candle directly executes the Flyspeck source without
-HOL Light.  Direct source execution is the separately labelled G4--G7
-compatibility track.  If a later roadmap makes source substitution the release
-criterion, this PFT result remains an independent validation lane rather than
-that substitution milestone.
+It can prove that Candle reconstructs the complete HOL-side proof and evidence,
+but it does **not** satisfy S2 or S3.  It is retained as an independent checker,
+differential oracle, and distribution artifact while verified Dopen, OCaml
+compatibility, the direct loader, and source-driven evidence closure form the
+primary critical path.
 
 The upstream repositories are checked out as sibling directories under
 `../repos/`.  Development happens on `codex/*` branches in those repositories;
@@ -45,8 +45,9 @@ compute-heavy leaf.
 ## Layout
 
 - `manifest.lock.toml`: immutable source and toolchain identities.
-- `docs/requirements.md`: roadmap-derived gates and evidence required to close
-  them.
+- `docs/requirements-v1.3.md`: governing source-substitution gates and evidence.
+- `docs/requirements.md`: superseded v1.2 PFT-validation ledger retained for
+  the independent replay lane.
 - `docs/full-l2-runbook.md`: fresh/resume operation, evidence outputs, and the
   DMTCP trust boundary for the full L2 run.
 - `docs/progress/`: dated, evidence-backed interim reports.
