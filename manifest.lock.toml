@@ -6,6 +6,29 @@ superseded_roadmap_version = "1.2"
 superseded_roadmap_sha256 = "713b97d2d8b873504ea428d014a142acb066ff5d27263dd5be6a9c0135444e3b"
 pft_validation_claim = "L2"
 
+[claim.s3]
+production_path = "pinned Flyspeck source -> Candle OCaml frontend -> verified CakeML -> Candle kernel -> compiled CakeML executable"
+forbidden_release_dependencies = ["HOL Light runtime", "PFT producer", "unchecked theorem import"]
+target_name = "Candle_flyspeck_l2.tame_imp_kepler_conjecture"
+target_statement = "import_tame_classification ==> the_kepler_conjecture"
+required_evidence = ["complete nonlinear inequalities", "complete formal LP"]
+allowed_axioms = ["ETA_AX", "SELECT_AX", "INFINITY_AX"]
+imported_premises = ["import_tame_classification"]
+isabelle_closure = "separate S4 milestone"
+
+[claim.pft_validation]
+production_path = "pinned Flyspeck source -> HOL Light producer -> hostile PFT -> compiled Candle"
+target_name = "Candle_flyspeck_l2.tame_imp_kepler_conjecture"
+target_statement = "import_tame_classification ==> the_kepler_conjecture"
+satisfies_source_execution = false
+
+[resource_policy]
+interactive_cpu_limit = 10
+interactive_ram_gib_range = [60, 80]
+developer_profile = "4 vCPU, 8 GiB RAM, 30 GiB free disk"
+small_ci_profile = "8 vCPU, 16 GiB RAM, 100 GiB SSD"
+scale_profile = "32+ vCPU, 64-128 GiB RAM, fast SSD"
+
 [repositories.candle]
 url = "https://github.com/CakeML/candle.git"
 upstream_master = "5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d"
