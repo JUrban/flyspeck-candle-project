@@ -26,6 +26,7 @@ status_file="$state_dir/status.tsv"
 config_file="$state_dir/run.conf"
 checkpoint_dir="$state_dir/checkpoints"
 log_dir="$state_dir/logs"
+active_port_file="$state_dir/coordinator.port"
 checkpoint_files_per_generation=${CANDLE_PFT_CHECKPOINT_FILES:-10}
 checkpoint_work_units_per_generation=${CANDLE_PFT_CHECKPOINT_WORK_UNITS:-25}
 max_generations=${CANDLE_PFT_MAX_GENERATIONS:-1000}
@@ -126,6 +127,7 @@ cleanup_coordinator() {
 trap cleanup_coordinator EXIT
 
 common_environment=(
+  "PATH=$project_dir/scripts/bin:$PATH"
   "OCAMLPATH=$ocaml_switch/lib"
   "CAML_LD_LIBRARY_PATH=$ocaml_switch/lib/stublibs:/usr/lib/ocaml/stublibs"
   "HOLLIGHT_DIR=$producer_dir"
@@ -141,6 +143,7 @@ common_environment=(
 
 run_initial_generation() {
   local port_file="$state_dir/initial.port"
+  find "$port_file" -maxdepth 0 -type f -delete 2>/dev/null || true
   dmtcp_coordinator --daemon --coord-port 0 --port-file "$port_file" \
     --ckptdir "$checkpoint_dir" \
     --coord-logfile "$log_dir/coordinator-initial.log" >/dev/null
@@ -150,6 +153,7 @@ run_initial_generation() {
   done
   active_port=$(tr -d '[:space:]' <"$port_file")
   [[ "$active_port" =~ ^[0-9]+$ ]]
+  printf '%s\n' "$active_port" >"$active_port_file"
   (
     cd "$producer_dir"
     env "${common_environment[@]}" DMTCP_COORD_PORT="$active_port" \
@@ -169,9 +173,30 @@ latest_checkpoint() {
 run_restart_generation() {
   local generation=$1
   local checkpoint=$2
+  local port_file="$state_dir/restart-$(printf '%04d' "$generation").port"
+  local restart_pid
+  local wait_index
+  find "$port_file" -maxdepth 0 -type f -delete 2>/dev/null || true
   timeout 86400 dmtcp_restart --new-coordinator --coord-port 0 \
-    --ckptdir "$checkpoint_dir" "$checkpoint" \
-    >"$log_dir/generation-$(printf '%04d' "$generation").log" 2>&1
+    --port-file "$port_file" --ckptdir "$checkpoint_dir" "$checkpoint" \
+    >"$log_dir/generation-$(printf '%04d' "$generation").log" 2>&1 &
+  restart_pid=$!
+  for ((wait_index = 0; wait_index < 100; wait_index++)); do
+    [[ -s "$port_file" ]] && break
+    kill -0 "$restart_pid" 2>/dev/null || break
+    sleep 0.1
+  done
+  if [[ ! -s "$port_file" ]]; then
+    wait "$restart_pid" || true
+    printf 'restart %d did not publish a coordinator port\n' \
+      "$generation" >&2
+    return 1
+  fi
+  active_port=$(tr -d '[:space:]' <"$port_file")
+  [[ "$active_port" =~ ^[0-9]+$ ]]
+  printf '%s\n' "$active_port" >"$active_port_file"
+  wait "$restart_pid"
+  cleanup_coordinator
 }
 
 if [[ $fresh_run == 1 ]]; then

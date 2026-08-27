@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+real_command=${CANDLE_DMTCP_REAL_COMMAND:-/usr/local/bin/dmtcp_command}
+use_recorded_port=0
+for argument in "$@"; do
+  if [[ "$argument" == -kc || "$argument" == --kcheckpoint ]]; then
+    use_recorded_port=1
+  fi
+done
+
+if [[ $use_recorded_port == 1 &&
+      -n ${CANDLE_PFT_CHECKPOINT_STATUS:-} ]]; then
+  state_dir=$(dirname -- "$CANDLE_PFT_CHECKPOINT_STATUS")
+  port_file="$state_dir/coordinator.port"
+  if [[ -s "$port_file" ]]; then
+    port=$(tr -d '[:space:]' <"$port_file")
+    if [[ "$port" =~ ^[0-9]+$ ]]; then
+      exec "$real_command" --coord-port "$port" "$@"
+    fi
+  fi
+fi
+
+exec "$real_command" "$@"
