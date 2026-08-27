@@ -31,13 +31,16 @@ hash-bound, semantics-proved normalization.  The twelve allocated-value
 identity sites now have a separate exact, site-specific source remedy with
 local differential, callback/exception-order, sharing, and zero-residual-
 operator tests.  The compiled loader now authenticates and selects those four
-outputs plus a strictbuild normalization, but the remedy remains
+outputs plus strictbuild and two parser-path normalizations, for seven exact
+authenticated outputs in total, but the remedy remains
 `regression_pending` until a full selected run closes its non-use and
 fingerprint gates and Flyspeck-scale performance is accepted.  Exact static
 `#load`, `#flyspeck_needs`, and always-evaluate `#flyspeck_loadt` actions are
-active and fail-closed.  Phrase-start recognition and loaded-file EOF are now
-covered by compiled regressions; the next clean direct frontier is the local
-let-binding or-pattern in `general/parser_verbose.hl`.
+active and fail-closed.  Phrase-start recognition, module-item separators, and
+loaded-file EOF are covered by compiled regressions.  The clean direct loader
+now completes normalized `general/parser_verbose.hl` and stops at the exact
+`open Parser_verbose` declaration in `general/debug.hl`, pending integration of
+the verified Dopen work.
 The first baseline is deliberately
 allowed to expose and retain compatibility failures; fixture theorem counts,
 parser-only successes, and broad source patching do not promote a gate.
