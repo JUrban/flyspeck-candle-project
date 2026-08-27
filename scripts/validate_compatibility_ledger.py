@@ -243,7 +243,7 @@ def load_and_validate_inventory(
     finding_schema: Path,
     summary_schema: Path,
     repos_root: Path,
-) -> list[dict[str, Any]]:
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     summary_path = inventory_dir / "inventory-summary.json"
     findings_path = inventory_dir / "inventory-findings.jsonl"
     require(summary_path.is_file(), f"missing inventory summary: {summary_path}")
@@ -272,7 +272,80 @@ def load_and_validate_inventory(
     lexical_notes = json.loads(lexical_notes_path.read_text(encoding="utf-8"))
     require(len(lexical_notes) == summary["totals"]["lexical_notes"], "lexical-note count does not match summary")
     validate_inventory_sources_and_counts(summary, findings, lexical_notes, repos_root)
-    return findings
+    return summary, findings
+
+
+def validate_source_provenance(
+    ledger: dict[str, Any],
+    summary: dict[str, Any],
+    inventory_dir: Path,
+    contract_path: Path,
+    pin_delta_schema: Path,
+) -> None:
+    provenance = ledger["source_provenance"]
+    selected = provenance["selected_direct_source"]
+    development = provenance["separate_development_source"]
+    artifacts = provenance["inventory_artifacts"]
+    repository = selected["repository"]
+    metadata = summary["repositories"][repository]
+    require(selected["git_commit"] == metadata["commit"], "ledger selected source commit differs from inventory")
+    require(selected["path_key"] == metadata["path_key"], "ledger selected source path differs from inventory")
+    require(not development["included_in_selected_inventory"], "PFT development source entered selected inventory")
+    require(development["git_commit"] != selected["git_commit"], "selected and PFT development pins are not separated")
+
+    contract_raw = contract_path.read_bytes()
+    contract = json.loads(contract_raw)
+    require(artifacts["pin_contract_sha256"] == sha256(contract_raw), "pin contract digest mismatch")
+    require(contract["selected_lane"]["git_commit"] == selected["git_commit"], "pin contract selected commit mismatch")
+    require(contract["selected_lane"]["path_key"] == selected["path_key"], "pin contract selected path mismatch")
+    require(contract["comparison_lane"]["git_commit"] == development["git_commit"], "pin contract PFT commit mismatch")
+
+    filenames = {
+        "findings_sha256": "inventory-findings.jsonl",
+        "pointer_triage_sha256": "pointer-triage.json",
+        "ffi_triage_sha256": "ffi-triage.json",
+        "pin_delta_sha256": "inventory-pin-delta.json",
+    }
+    for field, filename in filenames.items():
+        require(
+            artifacts[field] == sha256((inventory_dir / filename).read_bytes()),
+            f"ledger provenance digest mismatch for {filename}",
+        )
+
+    delta = json.loads((inventory_dir / "inventory-pin-delta.json").read_text(encoding="utf-8"))
+    validate_with_json_schema(delta, pin_delta_schema)
+    require(delta["contract_sha256"] == artifacts["pin_contract_sha256"], "pin delta contract digest mismatch")
+    require(delta["selected_lane"]["flyspeck_commit"] == selected["git_commit"], "pin delta selected commit mismatch")
+    require(delta["selected_lane"]["inventory_path_key"] == selected["path_key"], "pin delta selected path mismatch")
+    require(
+        delta["selected_lane"]["inventory_findings_sha256"] == summary["artifacts"]["findings_sha256"],
+        "pin delta selected findings digest mismatch",
+    )
+    require(delta["selected_lane"]["totals"] == summary["totals"], "pin delta selected totals mismatch")
+    require(delta["comparison_lane"]["flyspeck_commit"] == development["git_commit"], "pin delta PFT commit mismatch")
+
+    occurrences = delta["stable_occurrences"]
+    require(
+        occurrences["matched"] + occurrences["comparison_only"]
+        == delta["comparison_lane"]["totals"]["findings"],
+        "pin delta comparison stable-occurrence arithmetic mismatch",
+    )
+    require(
+        occurrences["matched"] + occurrences["selected_only"]
+        == delta["selected_lane"]["totals"]["findings"],
+        "pin delta selected stable-occurrence arithmetic mismatch",
+    )
+    require(
+        occurrences["comparison_only"] == len(occurrences["comparison_only_records"])
+        and occurrences["selected_only"] == len(occurrences["selected_only_records"]),
+        "pin delta stable-occurrence record counts mismatch",
+    )
+    for section in delta["delta"].values():
+        for name, counts in section.items():
+            require(
+                counts["selected"] - counts["comparison"] == counts["selected_minus_comparison"],
+                f"pin delta arithmetic mismatch for {name}",
+            )
 
 
 def canonical_bytes(document: Any) -> bytes:
@@ -402,6 +475,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--ffi-triage-schema", type=Path, required=True)
     parser.add_argument("--pointer-rules", type=Path, required=True)
     parser.add_argument("--ffi-review", type=Path, required=True)
+    parser.add_argument("--pin-contract", type=Path, required=True)
+    parser.add_argument("--pin-delta-schema", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -418,11 +493,18 @@ def main(argv: list[str] | None = None) -> int:
         imported_ids = validate_imports(ledger, args.repos_root)
         require(local_ids.isdisjoint(imported_ids), "local entry duplicates authoritative imported entry")
         validate_related_artifacts(ledger, args.repos_root)
-        findings = load_and_validate_inventory(
+        summary, findings = load_and_validate_inventory(
             args.inventory_dir,
             args.finding_schema,
             args.summary_schema,
             args.repos_root,
+        )
+        validate_source_provenance(
+            ledger,
+            summary,
+            args.inventory_dir,
+            args.pin_contract,
+            args.pin_delta_schema,
         )
         pointer_by_id, ffi_by_id = load_and_validate_triage(
             args.inventory_dir,

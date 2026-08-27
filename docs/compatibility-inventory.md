@@ -24,9 +24,16 @@ ordering, JSON encoding, finding IDs, and summaries are deterministic.  The
 checked-in result is tied to:
 
 - Candle `177a9c1e759355a325842650d224b56a3d4437dd`;
-- Flyspeck `2ea440e9f7c55734d1e47738e44a6129ce0ecf5a`;
+- clean direct-S3 Flyspeck
+  `1ce0353008eba83d3c76ae9a25c3c242e4802d53`, read from the dedicated
+  `worktrees/flyspeck-v13-source` worktree;
 - roadmap v1.3 SHA-256
   `13fc3a6209787e9fa9c1879cb482fef6837252ec96b3ae506d312646c898863f`.
+
+The PFT development head
+`2ea440e9f7c55734d1e47738e44a6129ce0ecf5a` is deliberately excluded from
+the direct inventory.  `compatibility/inventory-pin-contract.json` and the
+ledger provenance keep the two roles separate.
 
 The complete machine-readable coordinates are in
 `compatibility/inventory-scope.toml`.  The result artifacts are:
@@ -42,20 +49,22 @@ The complete machine-readable coordinates are in
   status, evidence, and ledger disposition;
 - `compatibility/generated/ffi-triage.json`: both G4 calls with selected-route
   call chains, current ABI observations, security posture, and proof duties;
+- `compatibility/generated/inventory-pin-delta.json`: reproducible, stable-
+  occurrence comparison with the earlier PFT-head inventory;
 - `compatibility/schema/*.schema.json`: JSON Schema for findings, summary, and
   project ledger entries/imports.
 
 ## Snapshot result
 
-The scan covers 1,347 tracked OCaml-family files (100,751,549 source bytes): 679
-in Candle and 668 in Flyspeck.  It records 6,049 findings.
+The scan covers 1,339 tracked OCaml-family files (100,736,789 source bytes): 679
+in Candle and 660 in Flyspeck.  It records 6,044 findings.
 
 | Syntax family | Count | Source-level classification |
 |---|---:|---|
-| Declaration `open` | 4,926 | path form plus `open!` flag |
+| Declaration `open` | 4,925 | path form plus `open!` flag |
 | `let open ... in` | 3 | local let-open |
 | `M.(...)` | 91 | parenthesized local-open syntax |
-| Module structures | 605 | `module M ... = struct` |
+| Module structures | 601 | `module M ... = struct` |
 | Module aliases | 5 | simple, dotted, or functor-application right side |
 | Module functor declarations | 1 | parameter/functor syntax |
 | Other module declarations | 39 | deliberately left unparsed for AST review |
@@ -68,10 +77,25 @@ in Candle and 668 in Flyspeck.  It records 6,049 findings.
 | `customFFI` calls | 2 | both have literal command names |
 | OCaml `external` declarations | 0 | lexical absence after quotation masking |
 
-The module-path inventory contains 5,082 simple, 31 dotted, seven
+The module-path inventory contains 5,081 simple, 31 dotted, seven
 functor-application, zero anonymous-structure, and 39 unparsed-expression
 forms.  Counts include explicit zeros so absence is distinguishable from an
 unimplemented classifier.
+
+### Direct-pin correction from the PFT evidence
+
+The prior checked-in inventory used PFT development head `2ea440e9...`.  The
+machine-readable comparison pins that evidence at project commit
+`5d620bcdd3412f3e4a9ed3d9dcb3ed9ae71c22ff` and compares it with the direct
+source result without treating commit-derived finding-ID changes as source
+changes.  Direct minus PFT is eight files, 14,760 bytes, and five findings
+smaller.  The five PFT-only occurrences are four module structures and one
+declaration `open` in PFT-added `text_formalization/candle` sources.  There are
+no direct-only findings.  All 217 pointer-review records and both FFI-review
+records match by stable reviewed content, so the G3/G4 classifications and
+selected-route counts do not change.  The findings digest changed from
+`29bf0bf9...` to
+`bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c`.
 
 The two custom FFI calls are:
 
@@ -171,7 +195,9 @@ their hashes and declared counts/IDs, rejects duplicate IDs across imported and
 local ledgers, and records three current source-schema gaps: stable regression
 IDs, separate remedy/proof lifecycle status, and repository-qualified affected
 locations.  Those gaps are explicit follow-up work, not synthesized fields.
-It also rechecks inventory repository HEAD/dirty state, tracked file and byte
+It also rejects any ledger/inventory drift between the clean direct source pin,
+the separately named PFT development pin, and all five generated/configuration
+artifact digests.  It rechecks inventory repository HEAD/dirty state, tracked file and byte
 counts, every referenced source digest, every aggregate category/path/operator
 count, the JSONL digest, and all ledger selectors against the current artifacts.
 

@@ -8,10 +8,15 @@ and component-ledger import contract.  This closes the inventory plumbing task;
 it does not close any P0 semantic compatibility class or prove S1/S2 source
 reachability.
 
-The current corpus result is 1,347 files, 100,751,549 bytes, and 6,049 findings:
-5,020 open forms, 810 module constructs, 217 `==`/`!=` tokens classified by
+The corrected direct-S3 corpus result is 1,339 files, 100,736,789 bytes, and
+6,044 findings: 5,019 open forms, 806 module constructs, 217 `==`/`!=` tokens classified by
 syntactic role, and two literal-command custom FFI calls.  One pre-existing
 truncated jHOLLight test file is retained as an explicit lexical note.
+
+This result comes from the dedicated clean worktree at upstream Flyspeck
+`1ce0353008eba83d3c76ae9a25c3c242e4802d53`.  The original result in this
+report used PFT development head `2ea440e9...`; it is now retained only as an
+immutable comparison, not selected-route evidence.
 
 ## Design decisions and re-evaluation
 
@@ -45,16 +50,26 @@ python3 scripts/test-inventory-compatibility.py
 python3 scripts/test-compatibility-ledger.py
 ```
 
-Two measured full regenerations used one CPU, completed in 77.23 and 78.76
-seconds, and peaked at 123,900 KiB RSS.  Their three output files were
-byte-for-byte identical.  The final artifact hashes are:
+The original two measured PFT-head regenerations used one CPU, completed in
+77.23 and 78.76 seconds, and peaked at 123,900 KiB RSS.  The corrected direct
+run also uses one CPU and is reproducible through the same command.  Current
+artifact hashes are:
 
 - findings JSONL:
-  `29bf0bf9bb9c23b0ba4e77b271e1fc82282023c16e703dcd0cb5ac027a5e75e7`;
+  `bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c`;
 - lexical notes:
-  `5dbf6debb9b58c8e83c38d085444f1f3f9591a4e098436e32ab8610332b1546e`;
+  `6ef2f63144e7f3c7a2ed240b968228466f71b0210b7e369ae4c5d76465e2c7f3`;
 - summary:
-  `bbcd41eef9ce6be52bdbb4208e630146edde1edb93339ac99f53c11c438108b4`.
+  `ec490b8c40cfe2351c6dce3af49b9da70403df82537f7ead836b473e268927b5`;
+- pin-delta report:
+  `b930b78521dd4f47347e9471e268298cea2e61fbc65080212ec91904881944d9`.
+
+The exact direct-minus-PFT delta is eight files, 14,760 bytes, and five
+findings: four module structures and one declaration `open`, all from PFT-added
+`text_formalization/candle` files.  Stable comparison matches all 6,044 direct
+findings and finds no direct-only occurrence.  All 217 pointer and two FFI
+triage records match after excluding only pin-derived identifiers and commit
+coordinates.
 
 The validator checks JSON Schema when `jsonschema` is available, always checks
 lifecycle invariants, verifies generated JSONL count/digest, rederives all
