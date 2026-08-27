@@ -30,6 +30,7 @@ active_port_file="$state_dir/coordinator.port"
 checkpoint_files_per_generation=${CANDLE_PFT_CHECKPOINT_FILES:-10}
 checkpoint_work_units_per_generation=${CANDLE_PFT_CHECKPOINT_WORK_UNITS:-25}
 checkpoint_gzip=${CANDLE_PFT_DMTCP_GZIP:-0}
+checkpoint_gzip_explicit=${CANDLE_PFT_DMTCP_GZIP+x}
 max_generations=${CANDLE_PFT_MAX_GENERATIONS:-1000}
 active_port=
 
@@ -115,6 +116,9 @@ else
   configured_checkpoint_gzip=$(read_config_value checkpoint_gzip)
   if [[ -z "$configured_checkpoint_gzip" ]]; then
     configured_checkpoint_gzip=1
+  fi
+  if [[ -z "$checkpoint_gzip_explicit" ]]; then
+    checkpoint_gzip=$configured_checkpoint_gzip
   fi
   [[ "$configured_checkpoint_gzip" == "$checkpoint_gzip" ]]
   [[ $(read_config_value certificate_inventory_sha256) == \

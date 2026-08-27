@@ -48,7 +48,9 @@ New supervised runs default to uncompressed DMTCP images because the producer
 retains only its latest image and the installed DMTCP documents substantially
 lower checkpoint latency in this mode.  Set `CANDLE_PFT_DMTCP_GZIP=1` to opt
 into compression.  The setting is locked in the run state; state directories
-created before this option was added retain their historical gzip mode.
+created before this option was added retain their historical gzip mode, which
+the supervisor adopts automatically on resume unless an explicit conflicting
+override is supplied.
 
 Nothing in the producer, translator, merger, or orchestration repository is in
 the logical trust boundary.  Release traces are hostile input to the compiled
