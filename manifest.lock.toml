@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "e93028464a89591b15bd2913f686f5c9b7ab8600"
+development_head = "9a161801b00908d4468af0d78fe92e73cde2ee02"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -132,13 +132,13 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "b3038b3e65febbdadec38fe0a38a5994c05c2bb6c15042adf1f3c656c9a0da42"
+sha256 = "c474c86b10158b4237d0f08e460d47d9de08d4483644ffb4f1f397442b5c091b"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "e93028464a89591b15bd2913f686f5c9b7ab8600"
+generator_candle = "9a161801b00908d4468af0d78fe92e73cde2ee02"
 build_entries = 297
 unique_build_entries = 287
-source_nodes = 398
-dependency_edges = 417
+source_nodes = 399
+dependency_edges = 418
 generated_inputs = 42
 build_strata = 8
 build_strata_order = ["base", "arithmetic", "nonlinear_support", "analysis", "geometry", "lp_support", "text_formalization", "final_assembly"]
@@ -155,9 +155,14 @@ unix_binding = "startup-metadata-only-explicit-fail-otherwise"
 deterministic_process_inputs = 2
 ocaml_compatibility_activation = "partial-source-bindings"
 digest_binding = "pure-source-differential-gate"
-digest_qualified_uses = 13
+digest_qualified_uses = 15
 digest_module_opens = 0
 digest_selected_members = ["file", "string", "t", "to_hex"]
+source_digest_activation = "preflight-before-strictbuild"
+source_digest_entries = 399
+source_digest_program = "worktrees/candle-loader-v13/candle/flyspeck_source_digests.ml"
+source_digest_program_sha256 = "c3cd0090c7084889de8005afeadfc17d5e7074b251c728e5d00bb79218b84e8a"
+source_digest_gate = "worktrees/candle-loader-v13/candle/test_flyspeck_source_digests.sh"
 toplevel_interface_activation = "blocked-no-dummy-or-no-op"
 format_qualified_uses = 106
 toploop_qualified_uses = 19
