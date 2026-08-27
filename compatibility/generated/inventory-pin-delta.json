@@ -126,8 +126,8 @@
       },
       "source_bytes_scanned": {
         "comparison": 100751549,
-        "selected": 100859118,
-        "selected_minus_comparison": 107569
+        "selected": 100859921,
+        "selected_minus_comparison": 108372
       },
       "source_files_scanned": {
         "comparison": 1347,
@@ -191,13 +191,13 @@
   "schema_version": 1,
   "selected_lane": {
     "flyspeck_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
-    "inventory_findings_sha256": "4521df8a230be72fbd5c52db1f5e7d4747cfa37c1b497945f8e3269715f404b6",
+    "inventory_findings_sha256": "6e45a3471500f9bd0de3dcca59f19fc844e0e2eaa18e42551ca6722479e264e0",
     "inventory_path_key": "../worktrees/flyspeck-v13-source",
     "role": "direct_s3_clean_upstream",
     "totals": {
       "findings": 6074,
       "lexical_notes": 1,
-      "source_bytes_scanned": 100859118,
+      "source_bytes_scanned": 100859921,
       "source_files_scanned": 1364
     }
   },
@@ -3252,7 +3252,7 @@
       "comparison_artifact_sha256": "dff487602275e016894cc673b6c82f1f52354a4b5fce3317bb49e51684af1f09",
       "comparison_only_records": 2,
       "comparison_records": 2,
-      "selected_artifact_sha256": "e137bbbb677e98e1c05ddf26c7d3d57dd8feb8155513feb1533d1bbe0025cdf2",
+      "selected_artifact_sha256": "d7a3bcb27dcceceb2cfbd6722d8d6b3c8f5fc23aa800d8e7ed1466af088f8c5f",
       "selected_counts": {
         "by_s3_dependency_status": {},
         "total": 0
@@ -3266,7 +3266,7 @@
       "comparison_artifact_sha256": "d61ce28f408be6037482cb6749bbf279c6c7bed0929ecc4984d661f340eb7499",
       "comparison_only_records": 0,
       "comparison_records": 217,
-      "selected_artifact_sha256": "59db1838c3993447c1be120271e2a3ed94ffdbbc2b75810e9446f24e9acf70c2",
+      "selected_artifact_sha256": "6a66cd4a5fa9225eb792b19f2207c708a9a370601005fbe7d7f9356be485ca78",
       "selected_counts": {
         "by_ledger_disposition": {
           "excluded_from_pointer_identity_after_name_resolution": 2,

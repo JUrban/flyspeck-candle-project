@@ -54,8 +54,8 @@ class InventoryPinDeltaTests(unittest.TestCase):
                 "lexical_notes": {"comparison": 1, "selected": 1, "selected_minus_comparison": 0},
                 "source_bytes_scanned": {
                     "comparison": 100751549,
-                    "selected": 100859118,
-                    "selected_minus_comparison": 107569,
+                    "selected": 100859921,
+                    "selected_minus_comparison": 108372,
                 },
                 "source_files_scanned": {
                     "comparison": 1347,

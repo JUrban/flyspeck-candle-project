@@ -1,7 +1,7 @@
 {
   "artifacts": {
     "findings_jsonl": "inventory-findings.jsonl",
-    "findings_sha256": "4521df8a230be72fbd5c52db1f5e7d4747cfa37c1b497945f8e3269715f404b6",
+    "findings_sha256": "6e45a3471500f9bd0de3dcca59f19fc844e0e2eaa18e42551ca6722479e264e0",
     "lexical_notes_json": "inventory-lexical-notes.json"
   },
   "counts": {
@@ -179,7 +179,7 @@
   "inventory_id": "candle-flyspeck-ocaml-syntax-v1",
   "repositories": {
     "candle": {
-      "commit": "87f1fd965313c090fd4d87bcfcc493a3ad7bc79f",
+      "commit": "8d80834b263c22e4f19fe208491be4250959aa19",
       "dirty": false,
       "encodings": {
         "latin-1": 2,
@@ -187,7 +187,7 @@
       },
       "findings": 984,
       "path_key": "../worktrees/candle-loader-v13",
-      "source_bytes_scanned": 48684982,
+      "source_bytes_scanned": 48685785,
       "source_files_scanned": 704
     },
     "flyspeck": {
@@ -210,11 +210,11 @@
   },
   "schema_version": 1,
   "scope_kind": "tracked_ocaml_family_repository_snapshot",
-  "scope_sha256": "6c3b72ccf209ce77b4b3b53c909c23590eba8b780ea30677d1cf28f0a2a1980b",
+  "scope_sha256": "7aa456fc23c430d5d6bf327a134b53da03c4e2e27193f650890a5bbe359a6383",
   "totals": {
     "findings": 6074,
     "lexical_notes": 1,
-    "source_bytes_scanned": 100859118,
+    "source_bytes_scanned": 100859921,
     "source_files_scanned": 1364
   }
 }

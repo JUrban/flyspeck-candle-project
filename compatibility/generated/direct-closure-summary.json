@@ -14,23 +14,26 @@
   },
   "inventory": {
     "finding_count": 6074,
-    "sha256": "4521df8a230be72fbd5c52db1f5e7d4747cfa37c1b497945f8e3269715f404b6"
+    "sha256": "6e45a3471500f9bd0de3dcca59f19fc844e0e2eaa18e42551ca6722479e264e0"
   },
   "manifest": {
-    "normalization_source_count": 10,
+    "normalization_source_count": 13,
     "normalization_sources": [
       "flyspeck:formal_lp/hypermap/main/lp_certificate.hl",
       "flyspeck:formal_lp/hypermap/main/prove_flyspeck_lp.hl",
       "flyspeck:formal_lp/hypermap/verify_all.hl",
+      "flyspeck:jHOLLight/caml/ssreflect.hl",
       "flyspeck:text_formalization/build/strictbuild.hl",
       "flyspeck:text_formalization/general/debug.hl",
+      "flyspeck:text_formalization/general/flyspeck_eval_4.14.hl",
       "flyspeck:text_formalization/general/lib.hl",
       "flyspeck:text_formalization/general/parser_verbose.hl",
       "flyspeck:text_formalization/general/print_types.hl",
       "flyspeck:text_formalization/general/serialization.hl",
+      "flyspeck:text_formalization/general/update_database_400.ml",
       "flyspeck:text_formalization/jordan/tactics_jordan.hl"
     ],
-    "sha256": "dbc6da53c60981660ca80763057a359e0f21c8404c89adf052974dd5a64f37ad",
+    "sha256": "94a336b67ec6ed0085bd786a89bec330d5aa1bc6034b4ce4c360afc09fa1fe55",
     "source_node_count": 400
   },
   "reproduce": "scripts/direct-compatibility-closure.py --manifest ../worktrees/candle-loader-v13/candle/flyspeck_manifest.json --findings compatibility/generated/inventory-findings.jsonl --output compatibility/generated/direct-closure-summary.json",
@@ -268,7 +271,7 @@
       ">=/": 1
     },
     "non_dopen_review_occurrences": 509,
-    "site_sha256": "f355b17244d953f1c290def6142b47efc7306dfcf3bd25d5988c03fa6b6b9ce3",
+    "site_sha256": "c84a4118c275296cadf9914d29c4be831691e3a96db66c831d553c27fed34639",
     "source_files_by_category": {
       "ffi.custom_call": 0,
       "ffi.ocaml_external_declaration": 0,

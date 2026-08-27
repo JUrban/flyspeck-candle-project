@@ -24,7 +24,7 @@ ordering, JSON encoding, finding IDs, and summaries are deterministic.  The
 checked-in result is tied to:
 
 - selected direct-source Candle branch
-  `87f1fd965313c090fd4d87bcfcc493a3ad7bc79f`, read from
+  `8d80834b263c22e4f19fe208491be4250959aa19`, read from
   `worktrees/candle-loader-v13`;
 - clean direct-S3 Flyspeck
   `1ce0353008eba83d3c76ae9a25c3c242e4802d53`, read from the dedicated
@@ -100,7 +100,7 @@ source delta remain separately visible.  The 23 new pointer records are host reg
 oracles and are explicitly outside the generated direct boot; all 217 earlier
 pointer reviews still match.  Both historical FFI records disappear from the
 selected source, leaving zero selected FFI calls.  The current findings digest
-is `4521df8a230be72fbd5c52db1f5e7d4747cfa37c1b497945f8e3269715f404b6`.
+is `6e45a3471500f9bd0de3dcca59f19fc844e0e2eaa18e42551ca6722479e264e0`.
 
 The removed calls were the former startup `chdir` bridge and the former
 `Sys.command` `system` bridge.  Their ledger entries remain as deferred
@@ -113,7 +113,7 @@ member, and reaches the authenticated direct frontier without the old patch.
 `compatibility/generated/direct-closure-summary.json` projects this broad
 snapshot onto the 400-node direct manifest by exact repository path and source
 SHA-256.  It selects 3,689 findings in 329 files with site digest
-`f355b17244d953f1c290def6142b47efc7306dfcf3bd25d5988c03fa6b6b9ce3`.
+`c84a4118c275296cadf9914d29c4be831691e3a96db66c831d553c27fed34639`.
 Of those, 3,180 are the separately governed Dopen corpus and 509 are other
 compatibility-sensitive occurrences.
 
