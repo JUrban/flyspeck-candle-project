@@ -38,6 +38,8 @@ compute-heavy leaf.
 - `manifest.lock.toml`: immutable source and toolchain identities.
 - `docs/requirements.md`: roadmap-derived gates and evidence required to close
   them.
+- `docs/full-l2-runbook.md`: fresh/resume operation, evidence outputs, and the
+  DMTCP trust boundary for the full L2 run.
 - `docs/progress/`: dated, evidence-backed interim reports.
 - `scripts/verify-lock.sh`: checks local source identities and roadmap hash.
 - `scripts/test-producer-resume.sh`: destructive-process restart smoke test.
