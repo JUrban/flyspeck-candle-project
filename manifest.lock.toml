@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "eed3d0952a01f17d792c57d31f298310edf3e885"
+development_head = "21e93dad706842a2c5143e1bd811fc9b1fb4181d"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -132,23 +132,24 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "dffb3bed57b5904ce6da68545a0daae75b82a8a723de0025a27d662d49b13f1d"
+sha256 = "ff7c6d79eb751566ddd55c60892fee2087a04bf32b61c659baa0d104de1c155c"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "eed3d0952a01f17d792c57d31f298310edf3e885"
+generator_candle = "21e93dad706842a2c5143e1bd811fc9b1fb4181d"
 build_entries = 297
 unique_build_entries = 287
-source_nodes = 399
-dependency_edges = 419
+source_nodes = 398
+dependency_edges = 417
 generated_inputs = 42
-runtime_library_directives = 6
-runtime_qualified_uses = 41
+runtime_library_directives = 5
+runtime_qualified_uses = 39
 runtime_open_attributed_uses = 3
-runtime_capability_uses = 44
+runtime_capability_uses = 42
 runtime_module_opens = 2
 runtime_libraries = ["str.cma", "unix.cma"]
 runtime_library_activation = "blocked-pending-static-binding-evidence"
 str_binding = "partial-pure-source-differential-gate"
 unix_binding = "unimplemented"
+entry_route = ["candle:hol.ml", "flyspeck:text_formalization/build/strictbuild.hl"]
 claim = "G6 inventory only; not loader execution evidence"
 
 [toolchain.hol4]
