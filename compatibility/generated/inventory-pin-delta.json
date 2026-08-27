@@ -1,0 +1,366 @@
+{
+  "comparison_kind": "direct_s3_pin_correction_from_pft_development_evidence",
+  "comparison_lane": {
+    "flyspeck_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+    "inventory_findings_sha256": "29bf0bf9bb9c23b0ba4e77b271e1fc82282023c16e703dcd0cb5ac027a5e75e7",
+    "project_git_commit": "5d620bcdd3412f3e4a9ed3d9dcb3ed9ae71c22ff",
+    "role": "pft_development_prior_inventory",
+    "totals": {
+      "findings": 6049,
+      "lexical_notes": 1,
+      "source_bytes_scanned": 100751549,
+      "source_files_scanned": 1347
+    }
+  },
+  "contract_sha256": "7a5dec1222048bbce2dcfc2a190fd5d0f4945e9c3a8dd4339eb0eb4b6002423f",
+  "delta": {
+    "by_category": {
+      "ffi.custom_call": {
+        "comparison": 2,
+        "selected": 2,
+        "selected_minus_comparison": 0
+      },
+      "ffi.ocaml_external_declaration": {
+        "comparison": 0,
+        "selected": 0,
+        "selected_minus_comparison": 0
+      },
+      "module.declaration_alias": {
+        "comparison": 5,
+        "selected": 5,
+        "selected_minus_comparison": 0
+      },
+      "module.declaration_first_class_unpack": {
+        "comparison": 0,
+        "selected": 0,
+        "selected_minus_comparison": 0
+      },
+      "module.declaration_functor": {
+        "comparison": 1,
+        "selected": 1,
+        "selected_minus_comparison": 0
+      },
+      "module.declaration_other": {
+        "comparison": 39,
+        "selected": 39,
+        "selected_minus_comparison": 0
+      },
+      "module.declaration_structure": {
+        "comparison": 605,
+        "selected": 601,
+        "selected_minus_comparison": -4
+      },
+      "module.first_class_pack": {
+        "comparison": 0,
+        "selected": 0,
+        "selected_minus_comparison": 0
+      },
+      "module.first_class_unpack": {
+        "comparison": 0,
+        "selected": 0,
+        "selected_minus_comparison": 0
+      },
+      "module.include": {
+        "comparison": 95,
+        "selected": 95,
+        "selected_minus_comparison": 0
+      },
+      "module.type_declaration": {
+        "comparison": 65,
+        "selected": 65,
+        "selected_minus_comparison": 0
+      },
+      "open.declaration": {
+        "comparison": 4926,
+        "selected": 4925,
+        "selected_minus_comparison": -1
+      },
+      "open.local_let": {
+        "comparison": 3,
+        "selected": 3,
+        "selected_minus_comparison": 0
+      },
+      "open.local_parenthesized": {
+        "comparison": 91,
+        "selected": 91,
+        "selected_minus_comparison": 0
+      },
+      "pointer_equality.infix_use": {
+        "comparison": 210,
+        "selected": 210,
+        "selected_minus_comparison": 0
+      },
+      "pointer_equality.operator_binding": {
+        "comparison": 4,
+        "selected": 4,
+        "selected_minus_comparison": 0
+      },
+      "pointer_equality.operator_reference": {
+        "comparison": 3,
+        "selected": 3,
+        "selected_minus_comparison": 0
+      }
+    },
+    "by_repository": {
+      "candle": {
+        "comparison": 954,
+        "selected": 954,
+        "selected_minus_comparison": 0
+      },
+      "flyspeck": {
+        "comparison": 5095,
+        "selected": 5090,
+        "selected_minus_comparison": -5
+      }
+    },
+    "totals": {
+      "findings": {
+        "comparison": 6049,
+        "selected": 6044,
+        "selected_minus_comparison": -5
+      },
+      "lexical_notes": {
+        "comparison": 1,
+        "selected": 1,
+        "selected_minus_comparison": 0
+      },
+      "source_bytes_scanned": {
+        "comparison": 100751549,
+        "selected": 100736789,
+        "selected_minus_comparison": -14760
+      },
+      "source_files_scanned": {
+        "comparison": 1347,
+        "selected": 1339,
+        "selected_minus_comparison": -8
+      }
+    }
+  },
+  "eligible_source_path_delta_comparison_to_selected": [
+    {
+      "path": "formal_lp/hypermap/verify_all.hl",
+      "status": "M"
+    },
+    {
+      "path": "load_flyspeck.ml",
+      "status": "M"
+    },
+    {
+      "path": "text_formalization/build/strictbuild.hl",
+      "status": "M"
+    },
+    {
+      "path": "text_formalization/candle/basics_length3_leaf.hl",
+      "status": "D"
+    },
+    {
+      "path": "text_formalization/candle/export_basics_length3.hl",
+      "status": "D"
+    },
+    {
+      "path": "text_formalization/candle/export_full_targets.hl",
+      "status": "D"
+    },
+    {
+      "path": "text_formalization/candle/export_hol_library.hl",
+      "status": "D"
+    },
+    {
+      "path": "text_formalization/candle/export_main_targets.hl",
+      "status": "D"
+    },
+    {
+      "path": "text_formalization/candle/export_refinement_leaves.hl",
+      "status": "D"
+    },
+    {
+      "path": "text_formalization/candle/export_restartable_build.hl",
+      "status": "D"
+    },
+    {
+      "path": "text_formalization/candle/vukhacky_real_leaf.hl",
+      "status": "D"
+    },
+    {
+      "path": "text_formalization/nonlinear/mk_all_ineq.hl",
+      "status": "M"
+    }
+  ],
+  "evidence_boundary": "This artifact compares source inventory and reviewed triage records. It does not promote PFT-only sources into the selected S3 route or prove dynamic reachability or semantic compatibility.",
+  "reproducible_command": "scripts/update-compatibility-inventory.sh /project/repos",
+  "schema_version": 1,
+  "selected_lane": {
+    "flyspeck_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
+    "inventory_findings_sha256": "bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c",
+    "inventory_path_key": "../worktrees/flyspeck-v13-source",
+    "role": "direct_s3_clean_upstream",
+    "totals": {
+      "findings": 6044,
+      "lexical_notes": 1,
+      "source_bytes_scanned": 100736789,
+      "source_files_scanned": 1339
+    }
+  },
+  "stable_occurrences": {
+    "comparison_only": 5,
+    "comparison_only_records": [
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Candle_leaf_hales_tactic = struct",
+        "location": {
+          "column": 1,
+          "end_column": 41,
+          "end_line": 19,
+          "line": 19
+        },
+        "repository": "flyspeck",
+        "source_path": "text_formalization/candle/basics_length3_leaf.hl"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Candle_leaf_basics = struct",
+        "location": {
+          "column": 1,
+          "end_column": 35,
+          "end_line": 57,
+          "line": 57
+        },
+        "repository": "flyspeck",
+        "source_path": "text_formalization/candle/basics_length3_leaf.hl"
+      },
+      {
+        "category": "open.declaration",
+        "lexeme": "open Candle_leaf_hales_tactic",
+        "location": {
+          "column": 1,
+          "end_column": 30,
+          "end_line": 59,
+          "line": 59
+        },
+        "repository": "flyspeck",
+        "source_path": "text_formalization/candle/basics_length3_leaf.hl"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Candle_flyspeck_l2 = struct",
+        "location": {
+          "column": 1,
+          "end_column": 35,
+          "end_line": 4,
+          "line": 4
+        },
+        "repository": "flyspeck",
+        "source_path": "text_formalization/candle/export_full_targets.hl"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Candle_leaf_vukhacky = struct",
+        "location": {
+          "column": 1,
+          "end_column": 37,
+          "end_line": 20,
+          "line": 20
+        },
+        "repository": "flyspeck",
+        "source_path": "text_formalization/candle/vukhacky_real_leaf.hl"
+      }
+    ],
+    "matched": 6044,
+    "method": "All finding fields except finding_id, repository_commit, and source_sha256; this distinguishes content/coordinate changes from commit-derived identifier churn.",
+    "selected_only": 0,
+    "selected_only_records": []
+  },
+  "triage": {
+    "ffi": {
+      "comparison_artifact_sha256": "dff487602275e016894cc673b6c82f1f52354a4b5fce3317bb49e51684af1f09",
+      "comparison_only_records": 0,
+      "comparison_records": 2,
+      "selected_artifact_sha256": "bb76fda85b027cab92922ca7f7fbcab22020ac750a411cc186da918f948e4e82",
+      "selected_counts": {
+        "by_s3_dependency_status": {
+          "required_runtime_call": 2
+        },
+        "total": 2
+      },
+      "selected_minus_comparison": 0,
+      "selected_only_records": 0,
+      "selected_records": 2,
+      "stable_records_matched": 2
+    },
+    "pointer": {
+      "comparison_artifact_sha256": "d61ce28f408be6037482cb6749bbf279c6c7bed0929ecc4984d661f340eb7499",
+      "comparison_only_records": 0,
+      "comparison_records": 217,
+      "selected_artifact_sha256": "916383da7885b54887261061fd267d677eb04da1787e4b4d18b67353771e4c68",
+      "selected_counts": {
+        "by_ledger_disposition": {
+          "excluded_from_pointer_identity_after_name_resolution": 2,
+          "excluded_from_selected_s3_route": 202,
+          "open_identity_contract": 12,
+          "open_immediate_representation_contract": 1
+        },
+        "by_operator_resolution": {
+          "builtin_physical_equality": 209,
+          "local_custom_operator_definition": 4,
+          "locally_rebound_custom_value_equality": 4
+        },
+        "by_review_rule": {
+          "PTR-CANDLE-BITMATCH-IMMEDIATES": 4,
+          "PTR-CANDLE-FUSION-ORDER-SHORTCUT": 1,
+          "PTR-CANDLE-FUSION-SHARING": 13,
+          "PTR-CANDLE-INFORMAL-BIGINT-BINDING": 1,
+          "PTR-CANDLE-INFORMAL-BIGINT-USE": 1,
+          "PTR-CANDLE-NTRIE-IMMEDIATES": 3,
+          "PTR-CANDLE-PAJ-IMMEDIATES": 123,
+          "PTR-CANDLE-PROOFRECORDING-BASICS-SHARING": 3,
+          "PTR-CANDLE-PROOFRECORDING-INT-ID": 1,
+          "PTR-CANDLE-PROOFRECORDING-THM-ORDER-SHORTCUT": 1,
+          "PTR-CANDLE-PROOFRECORDING-THM-SHARING": 3,
+          "PTR-CANDLE-QBF-IMMEDIATES": 2,
+          "PTR-CANDLE-TACTICTRACE-IMMEDIATE": 1,
+          "PTR-CANDLE-THECOPS-ROLLBACK-SENTINEL": 1,
+          "PTR-FLYSPECK-AZURE-BASICS-SHARING": 3,
+          "PTR-FLYSPECK-AZURE-BIGINT-BINDING": 1,
+          "PTR-FLYSPECK-AZURE-BIGINT-USE": 1,
+          "PTR-FLYSPECK-AZURE-CALCNUM-SHORTCUT": 1,
+          "PTR-FLYSPECK-AZURE-FUSION-ORDER-SHORTCUT": 1,
+          "PTR-FLYSPECK-AZURE-FUSION-SHARING": 13,
+          "PTR-FLYSPECK-AZURE-GROBNER-IDENTITY-KEY": 1,
+          "PTR-FLYSPECK-AZURE-LIB-SHARING": 10,
+          "PTR-FLYSPECK-AZURE-MESON-SHARING": 6,
+          "PTR-FLYSPECK-AZURE-MESON-SHORTCUT": 1,
+          "PTR-FLYSPECK-AZURE-PAJ-IMMEDIATE": 1,
+          "PTR-FLYSPECK-FORMAL-INFORMAL-BIGINT-BINDING": 1,
+          "PTR-FLYSPECK-FORMAL-INFORMAL-BIGINT-USE": 1,
+          "PTR-FLYSPECK-GENERAL-LIB-SHARING": 10,
+          "PTR-FLYSPECK-GENERAL-PRINT-IDENTITY-FILTER": 1,
+          "PTR-FLYSPECK-INFORMAL-PRINT-IDENTITY-FILTER": 1,
+          "PTR-FLYSPECK-JORDAN-IDENTITY-FILTER": 1,
+          "PTR-FLYSPECK-LP-CUSTOM-BINDING": 1,
+          "PTR-FLYSPECK-LP-CUSTOM-USE": 1,
+          "PTR-FLYSPECK-LP-PROVE-INT": 1,
+          "PTR-FLYSPECK-LP-TEST-INT": 2
+        },
+        "by_s3_dependency_status": {
+          "not_selected_source": 202,
+          "required_source": 15
+        },
+        "by_semantic_intent": {
+          "custom_value_equality": 4,
+          "custom_value_equality_definition": 4,
+          "identity_filter_predicate": 3,
+          "identity_key_lookup": 1,
+          "identity_shortcut_before_structural_comparison": 5,
+          "immediate_scalar_value_comparison": 138,
+          "rollback_tail_identity_sentinel": 1,
+          "structural_sharing_control": 61
+        },
+        "total": 217
+      },
+      "selected_minus_comparison": 0,
+      "selected_only_records": 0,
+      "selected_records": 217,
+      "stable_records_matched": 217
+    }
+  }
+}
