@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == c21996e0b8597cc5713bcd8be7d4697bd582e70f7f0fb0a088727648964ed954 ]]
+[[ "$direct_manifest_sha" == 70deb347ff2bcd2c527a523552ed593f15d4eed39529b8c393f7884a573abc81 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -155,6 +155,8 @@ jq -e '
     contains("neutralize_state exactly once")) and
   (.static_full_build_contract.failure_policy |
     contains("must not be erased")) and
+  (.static_full_build_contract.preload_authentication |
+    contains("before strictbuild")) and
   (.source_nodes | has("flyspeck:load_flyspeck.ml") | not) and
   .source_digest_contract.activation_status ==
     "preflight-before-strictbuild" and
@@ -207,7 +209,7 @@ jq -e '
     "partial-source-bindings" and
   .ocaml_compatibility_contract.selected_members.Digest ==
     ["file", "string", "t", "to_hex"] and
-  (.ocaml_compatibility_contract.qualified_uses | length) == 17 and
+  (.ocaml_compatibility_contract.qualified_uses | length) == 19 and
   .ocaml_compatibility_contract.module_opens == [] and
   .ocaml_compatibility_contract.opened_module_uses == [] and
   .ocaml_compatibility_contract.binding_evidence.Digest.status ==
@@ -277,7 +279,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  a3195068e6062d8e9abd4ddbee3d7d8dd271dd89
+  c3336d58e0e9a15ecb08c0bf43eb200b0b71be8d
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa

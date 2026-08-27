@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "a3195068e6062d8e9abd4ddbee3d7d8dd271dd89"
+development_head = "c3336d58e0e9a15ecb08c0bf43eb200b0b71be8d"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -132,9 +132,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "c21996e0b8597cc5713bcd8be7d4697bd582e70f7f0fb0a088727648964ed954"
+sha256 = "70deb347ff2bcd2c527a523552ed593f15d4eed39529b8c393f7884a573abc81"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "a3195068e6062d8e9abd4ddbee3d7d8dd271dd89"
+generator_candle = "c3336d58e0e9a15ecb08c0bf43eb200b0b71be8d"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 399
@@ -155,7 +155,7 @@ unix_binding = "startup-metadata-only-explicit-fail-otherwise"
 deterministic_process_inputs = 2
 ocaml_compatibility_activation = "partial-source-bindings"
 digest_binding = "pure-source-differential-gate"
-digest_qualified_uses = 17
+digest_qualified_uses = 19
 digest_module_opens = 0
 digest_selected_members = ["file", "string", "t", "to_hex"]
 source_digest_activation = "preflight-before-strictbuild"
@@ -172,6 +172,7 @@ static_full_build_unique_targets = 287
 static_full_build_program = "worktrees/candle-loader-v13/candle/flyspeck_full_build.ml"
 static_full_build_program_sha256 = "1bb71f85fd66c23d974599ded954344fd54f8b6904ebb4e51c4325d9ca0e8947"
 static_full_build_program_md5 = "5853a6e82e9303ba52ad874c98282842"
+static_full_build_preload_authentication = "loader MD5 before strictbuild; outer release SHA-256"
 toplevel_interface_activation = "blocked-no-dummy-or-no-op"
 format_qualified_uses = 106
 toploop_qualified_uses = 19
