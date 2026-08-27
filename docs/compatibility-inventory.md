@@ -23,7 +23,9 @@ uses `git ls-files`, so untracked build products cannot enter the result.  Outpu
 ordering, JSON encoding, finding IDs, and summaries are deterministic.  The
 checked-in result is tied to:
 
-- Candle `177a9c1e759355a325842650d224b56a3d4437dd`;
+- selected direct-source Candle branch
+  `a08e551a4398907776112eb72db1573f65cf2012`, read from
+  `worktrees/candle-loader-v13`;
 - clean direct-S3 Flyspeck
   `1ce0353008eba83d3c76ae9a25c3c242e4802d53`, read from the dedicated
   `worktrees/flyspeck-v13-source` worktree;
@@ -47,8 +49,8 @@ The complete machine-readable coordinates are in
 - `compatibility/generated/pointer-triage.json`: one reviewed G3 record for
   every pointer-token finding, with name resolution, intent, selected-route
   status, evidence, and ledger disposition;
-- `compatibility/generated/ffi-triage.json`: both G4 calls with selected-route
-  call chains, current ABI observations, security posture, and proof duties;
+- `compatibility/generated/ffi-triage.json`: the selected-source custom-FFI
+  result (currently zero calls) and its explicit clean-binary evidence boundary;
 - `compatibility/generated/inventory-pin-delta.json`: reproducible, stable-
   occurrence comparison with the earlier PFT-head inventory;
 - `compatibility/schema/*.schema.json`: JSON Schema for findings, summary, and
@@ -56,59 +58,56 @@ The complete machine-readable coordinates are in
 
 ## Snapshot result
 
-The scan covers 1,339 tracked OCaml-family files (100,736,789 source bytes): 679
-in Candle and 660 in Flyspeck.  It records 6,044 findings.
+The scan covers 1,362 tracked OCaml-family files (100,855,095 source bytes): 702
+in Candle and 660 in Flyspeck.  It records 6,070 findings.
 
 | Syntax family | Count | Source-level classification |
 |---|---:|---|
 | Declaration `open` | 4,925 | path form plus `open!` flag |
 | `let open ... in` | 3 | local let-open |
-| `M.(...)` | 91 | parenthesized local-open syntax |
-| Module structures | 601 | `module M ... = struct` |
+| `M.(...)` | 89 | parenthesized local-open syntax |
+| Module structures | 608 | `module M ... = struct` |
 | Module aliases | 5 | simple, dotted, or functor-application right side |
 | Module functor declarations | 1 | parameter/functor syntax |
 | Other module declarations | 39 | deliberately left unparsed for AST review |
 | `include` | 95 | path form |
 | Module type declarations | 65 | declaration syntax |
 | First-class module pack/unpack | 0 | lexical absence in this repository snapshot only |
-| `==`/`!=` infix uses | 210 | token and operand shape; name resolution unresolved |
+| `==`/`!=` infix uses | 232 | token and operand shape; name resolution unresolved |
 | `==`/`!=` operator bindings | 4 | operator-definition syntax |
-| `==`/`!=` operator references | 3 | parenthesized operator-as-value syntax |
-| `customFFI` calls | 2 | both have literal command names |
+| `==`/`!=` operator references | 4 | parenthesized operator-as-value syntax |
+| `customFFI` calls | 0 | lexical absence in the selected source snapshot |
 | OCaml `external` declarations | 0 | lexical absence after quotation masking |
 
-The module-path inventory contains 5,081 simple, 31 dotted, seven
+The module-path inventory contains 5,081 simple, 29 dotted, seven
 functor-application, zero anonymous-structure, and 39 unparsed-expression
 forms.  Counts include explicit zeros so absence is distinguishable from an
 unimplemented classifier.
 
 ### Direct-pin correction from the PFT evidence
 
-The prior checked-in inventory used PFT development head `2ea440e9...`.  The
-machine-readable comparison pins that evidence at project commit
-`5d620bcdd3412f3e4a9ed3d9dcb3ed9ae71c22ff` and compares it with the direct
-source result without treating commit-derived finding-ID changes as source
-changes.  Direct minus PFT is eight files, 14,760 bytes, and five findings
-smaller.  The five PFT-only occurrences are four module structures and one
-declaration `open` in PFT-added `text_formalization/candle` sources.  There are
-no direct-only findings.  All 217 pointer-review records and both FFI-review
-records match by stable reviewed content, so the G3/G4 classifications and
-selected-route counts do not change.  The findings digest changed from
-`29bf0bf9...` to
-`bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c`.
+The prior checked-in inventory combined Candle `177a9c1e...` with PFT
+development Flyspeck `2ea440e9...`.  The machine-readable comparison pins that
+evidence at project commit `5d620bcdd3412f3e4a9ed3d9dcb3ed9ae71c22ff` and
+compares stable occurrences without confusing commit-derived IDs with source
+changes.  The new selected snapshot has 15 more files, 103,546 more bytes, and
+21 more findings in total: Candle contributes 26 net findings while the clean
+direct Flyspeck pin removes five PFT-only findings.  There are 31 old-only and
+52 new-only stable occurrences.  The 23 new pointer records are host regression
+oracles and are explicitly outside the generated direct boot; all 217 earlier
+pointer reviews still match.  Both historical FFI records disappear from the
+selected source, leaving zero selected FFI calls.  The current findings digest
+is `a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a`.
 
-The two custom FFI calls are:
-
-- Candle `candle/chdir_to_root.ml:14`, command `chdir`;
-- Candle `candle/ocaml.ml:294`, command `system`.
-
-They are call-site evidence only.  The inventory does not claim that their C
-implementation has a versioned ABI, total validation, sandboxing, or a sound
-trust policy; those remain B3 ledger work.
+The removed calls were the former startup `chdir` bridge and the former
+`Sys.command` `system` bridge.  Their ledger entries remain open as historical
+platform-boundary obligations until a clean executable is rebuilt.  Source
+elimination alone cannot establish that the preserved frontier binary lacks
+the old C patch.
 
 ## G3/G4 source-backed triage
 
-The reviewed overlay covers all 217 pointer-token findings exactly once.  On
+The reviewed overlay covers all 240 pointer-token findings exactly once.  On
 the explicitly selected S3 source route, it finds 15 tokens:
 
 - 12 built-in physical-identity uses: ten structural-sharing controls in
@@ -126,24 +125,25 @@ the explicitly selected S3 source route, it finds 15 tokens:
   theorem-producing function `eq_eq`, so these two tokens are not pointer
   identity after name resolution.
 
-The remaining 202 tokens are classified and excluded from this selected route:
+The remaining 225 tokens are classified and excluded from this selected route:
 alternative Azure, Proofrecording, and kernel trees; host-side `pa_j` build
-inputs; and optional, test, or informal sources.  The exclusion means only
+inputs; the 23 exact-normalization host oracles; and optional, test, or informal
+sources.  The exclusion means only
 "not selected by the pinned S3 route".  It is not a global dead-code claim.
 Every record retains its source coordinate, evidence, confidence, and reviewed
 rule ID.  The generator rejects gaps, overlaps, unused rules, or moved FFI
 sites.
 
-Both custom FFI calls are required at runtime.  `chdir` is appended to the
-Candle boot image and invoked immediately to enter the repository root.
-`system` is reached on the full route: LP verification consumes the tracked
-`formal_lp/glpk/binary/hard_7.tar.gz`, whose certificate reader invokes
-`Sys.command` for `tar` and `rm`.  A minimized success-path smoke returns child
-status 7 as expected.  The current C patch documents a byte-array
-convention but uses assertions, implicit C strings, and an unrestricted host
-shell.  Thus G4 remains open.  The generated review lists the exact ABI,
-validation, deterministic-error, command-policy, sandbox, and platform-trust
-obligations without treating source review as a refinement proof.
+The selected source and build recipe now contain no custom FFI call.  Startup
+uses a repository-root launcher with relative boot/config links.  `Sys.command`
+fails closed; the one tracked compressed LP certificate is prepared outside
+the proof runtime under an exact archive/member/hash contract, and the selected
+runtime receives a fixed sorted inventory of 39 authenticated `.dat` paths.
+The compiled shell-free frontier reaches the unchanged Dopen failure after
+loading that inventory.  G4 nevertheless remains in progress: the preserved
+frontier executable predates the remedy and still embeds the historical C
+patch.  A clean rebuild, binary inspection, and complete direct regression are
+promotion requirements.
 
 There is one lexical note.  Flyspeck
 `jHOLLight/Tests/test-compiled.hl:1` starts an unterminated string (`needs
@@ -201,9 +201,9 @@ artifact digests.  It rechecks inventory repository HEAD/dirty state, tracked fi
 counts, every referenced source digest, every aggregate category/path/operator
 count, the JSONL digest, and all ledger selectors against the current artifacts.
 
-The eight local entries comprise three remaining syntax-review queues, three
-concrete selected-route pointer/name-resolution obligations, and separate
-`chdir`/`system` platform-contract obligations.  Each contains all
+The eleven local entries comprise the remaining syntax-review queues, concrete
+selected-route pointer/name-resolution and exact-normalization obligations,
+and the retained historical `chdir`/`system` elimination obligations.  Each contains all
 v1.3 lifecycle fields: minimal reproducer, OCaml outcome, Candle outcome,
 semantic category, remedy, proof obligation, regression IDs, affected files,
 and status.  Empty/pending values are honest because an inventory hit is not a
@@ -218,10 +218,11 @@ obligation, stable regression IDs, and evidence.
    repository-snapshot inventory.
 2. Turn each actual failure into a minimized OCaml/Candle oracle before marking
    it a confirmed divergence.
-3. Choose and implement remedies for the two confirmed pointer incompatibility
-   entries, then prove or differentially validate all 13 selected built-in
-   uses; retain medium-confidence filter intent as an explicit review item.
-4. Implement and test total, versioned `chdir` and constrained/sandboxed
-   `system` contracts, then discharge the platform-refinement trust statement.
+3. Close the full-run fingerprint and scale gates for the implemented exact
+   pointer normalizations; retain medium-confidence filter intent as an
+   explicit review item.
+4. Rebuild Candle from the selected no-custom-FFI source/build recipe, inspect
+   the executable for the legacy patch, and run the 39-certificate/full-source
+   regression before promoting G4.
 5. Move stable regression IDs and lifecycle fields into the authoritative
    Candle-native ledger, then advance the immutable import coordinate.

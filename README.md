@@ -31,8 +31,9 @@ hash-bound, semantics-proved normalization.  The twelve allocated-value
 identity sites now have a separate exact, site-specific source remedy with
 local differential, callback/exception-order, sharing, and zero-residual-
 operator tests.  The compiled loader now authenticates and selects those four
-outputs plus strictbuild and two parser-path normalizations, for seven exact
-authenticated outputs in total, but the remedy remains
+outputs, strictbuild, two parser-path normalizations, and two LP-runtime
+normalizations, for nine exact authenticated outputs in total, but the remedy
+remains
 `regression_pending` until a full selected run closes its non-use and
 fingerprint gates and Flyspeck-scale performance is accepted.  Exact static
 `#load`, `#flyspeck_needs`, and always-evaluate `#flyspeck_loadt` actions are
@@ -43,7 +44,12 @@ now completes normalized `general/parser_verbose.hl` and stops at the exact
 the verified Dopen work.  The exact direct graph contains 3,180 declaration
 opens across 234 Flyspeck files and 193 module names; a generated site digest
 and earliest-stratum counts prevent a synthetic-only Dopen result from closing
-G2.
+G2.  The selected source and build recipe now contain no custom FFI: startup
+uses repository-root relative boot/config links, `Sys.command` fails closed,
+and LP verification receives a separately prepared hash-bound `hard_7.dat`
+through a fixed 39-certificate inventory.  The clean-binary rebuild is still a
+release gate because the preserved frontier executable embeds the historical
+FFI patch.
 The first baseline is deliberately
 allowed to expose and retain compatibility failures; fixture theorem counts,
 parser-only successes, and broad source patching do not promote a gate.

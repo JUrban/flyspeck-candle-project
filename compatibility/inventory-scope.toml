@@ -10,8 +10,8 @@ scope_kind = "tracked_ocaml_family_repository_snapshot"
 extensions = [".ml", ".mli", ".hl", ".vhl", ".cml", ".mll", ".mly"]
 
 [repositories.candle]
-path = "candle"
-pinned_commit = "177a9c1e759355a325842650d224b56a3d4437dd"
+path = "../worktrees/candle-loader-v13"
+pinned_commit = "a08e551a4398907776112eb72db1573f65cf2012"
 
 [repositories.flyspeck]
 # Direct S3 compatibility evidence must come from the clean upstream worktree.

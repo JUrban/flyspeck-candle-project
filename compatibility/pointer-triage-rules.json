@@ -142,6 +142,26 @@
       "s3_dependency": {"status": "not_selected_source", "basis": "disabled_optional_extension", "evidence": ["hol_lib.ml:89-91 has loads \"thecops.ml\" inside a comment and therefore disables it on the selected foundation route."]},
       "ledger_disposition": "excluded_from_selected_s3_route"
     },
+    {
+      "id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "selector": {"repository": "candle", "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "regression_oracle_physical_identity",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "host_regression_oracle_outside_generated_boot", "evidence": ["The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-FLYSPECK-IMMEDIATE-ORACLE",
+      "selector": {"repository": "candle", "source_path": "candle/flyspeck_immediate_ocaml_oracle.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "regression_oracle_immediate_scalar_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["The host-OCaml oracle compares physical and structural equality on a fixed list of immediate integers to justify the selected n == 1 normalization."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "host_regression_oracle_outside_generated_boot", "evidence": ["The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_immediate_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
 
     {
       "id": "PTR-FLYSPECK-AZURE-BIGINT-BINDING",

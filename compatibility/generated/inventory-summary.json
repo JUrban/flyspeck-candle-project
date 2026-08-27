@@ -1,32 +1,32 @@
 {
   "artifacts": {
     "findings_jsonl": "inventory-findings.jsonl",
-    "findings_sha256": "bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c",
+    "findings_sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a",
     "lexical_notes_json": "inventory-lexical-notes.json"
   },
   "counts": {
     "by_category": {
-      "ffi.custom_call": 2,
+      "ffi.custom_call": 0,
       "ffi.ocaml_external_declaration": 0,
       "module.declaration_alias": 5,
       "module.declaration_first_class_unpack": 0,
       "module.declaration_functor": 1,
       "module.declaration_other": 39,
-      "module.declaration_structure": 601,
+      "module.declaration_structure": 608,
       "module.first_class_pack": 0,
       "module.first_class_unpack": 0,
       "module.include": 95,
       "module.type_declaration": 65,
       "open.declaration": 4925,
       "open.local_let": 3,
-      "open.local_parenthesized": 91,
-      "pointer_equality.infix_use": 210,
+      "open.local_parenthesized": 89,
+      "pointer_equality.infix_use": 232,
       "pointer_equality.operator_binding": 4,
-      "pointer_equality.operator_reference": 3
+      "pointer_equality.operator_reference": 4
     },
     "by_category_and_repository": {
       "ffi.custom_call": {
-        "candle": 2,
+        "candle": 0,
         "flyspeck": 0
       },
       "ffi.ocaml_external_declaration": {
@@ -50,7 +50,7 @@
         "flyspeck": 14
       },
       "module.declaration_structure": {
-        "candle": 201,
+        "candle": 208,
         "flyspeck": 400
       },
       "module.first_class_pack": {
@@ -78,11 +78,11 @@
         "flyspeck": 0
       },
       "open.local_parenthesized": {
-        "candle": 90,
+        "candle": 88,
         "flyspeck": 1
       },
       "pointer_equality.infix_use": {
-        "candle": 157,
+        "candle": 179,
         "flyspeck": 53
       },
       "pointer_equality.operator_binding": {
@@ -90,67 +90,66 @@
         "flyspeck": 3
       },
       "pointer_equality.operator_reference": {
-        "candle": 0,
+        "candle": 1,
         "flyspeck": 3
       }
     },
     "by_module_path_form": {
       "anonymous_structure": 0,
-      "dotted": 31,
+      "dotted": 29,
       "functor_application": 7,
       "simple": 5081,
       "unparsed_expression": 39
     },
     "by_repository": {
-      "candle": 954,
+      "candle": 980,
       "flyspeck": 5090
     },
     "by_source_dialect": {
       "camlp_legacy_generated_ml": 171,
       "hol_light_script": 4872,
-      "ocaml_implementation": 964,
+      "ocaml_implementation": 990,
       "ocaml_interface": 32,
       "ocamllex_source": 1,
       "verification_source_vhl": 4
     },
-    "custom_ffi_by_command_form": {
-      "literal": 2
-    },
+    "custom_ffi_by_command_form": {},
     "files_with_findings_by_category": {
-      "ffi.custom_call": 2,
+      "ffi.custom_call": 0,
       "ffi.ocaml_external_declaration": 0,
       "module.declaration_alias": 4,
       "module.declaration_first_class_unpack": 0,
       "module.declaration_functor": 1,
       "module.declaration_other": 19,
-      "module.declaration_structure": 487,
+      "module.declaration_structure": 489,
       "module.first_class_pack": 0,
       "module.first_class_unpack": 0,
       "module.include": 84,
       "module.type_declaration": 65,
       "open.declaration": 576,
       "open.local_let": 3,
-      "open.local_parenthesized": 28,
-      "pointer_equality.infix_use": 38,
+      "open.local_parenthesized": 27,
+      "pointer_equality.infix_use": 40,
       "pointer_equality.operator_binding": 4,
-      "pointer_equality.operator_reference": 3
+      "pointer_equality.operator_reference": 4
     },
     "lexical_notes_by_kind": {
       "unterminated_string": 1
     },
     "pointer_by_static_operand_category": {
       "expression_operand_present": 52,
-      "identifier_and_immediate_syntax": 39,
-      "identifier_operands": 119
+      "identifier_and_immediate_syntax": 40,
+      "identifier_operands": 136,
+      "syntactic_self_comparison": 4
     },
     "pointer_by_syntactic_role": {
-      "infix_use": 210,
+      "infix_use": 232,
       "operator_binding": 4,
-      "operator_reference": 3
+      "operator_reference": 4
     },
     "pointer_by_token": {
-      "bang_equal": 11,
-      "double_equal": 206
+      "bang_equal": 12,
+      "double_equal": 228
     }
   },
   "evidence_boundary": {
@@ -180,16 +179,16 @@
   "inventory_id": "candle-flyspeck-ocaml-syntax-v1",
   "repositories": {
     "candle": {
-      "commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "dirty": false,
       "encodings": {
         "latin-1": 2,
-        "utf-8": 677
+        "utf-8": 700
       },
-      "findings": 954,
-      "path_key": "candle",
-      "source_bytes_scanned": 48562653,
-      "source_files_scanned": 679
+      "findings": 980,
+      "path_key": "../worktrees/candle-loader-v13",
+      "source_bytes_scanned": 48680959,
+      "source_files_scanned": 702
     },
     "flyspeck": {
       "commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
@@ -211,11 +210,11 @@
   },
   "schema_version": 1,
   "scope_kind": "tracked_ocaml_family_repository_snapshot",
-  "scope_sha256": "daf73881a64b98fb63354460bc0d824cf24780e16fd1a474354bdd3d83f9a02c",
+  "scope_sha256": "e04b759053a0139531dc043ae623edd8bc4133787c6eef2e5c893906ded66b8b",
   "totals": {
-    "findings": 6044,
+    "findings": 6070,
     "lexical_notes": 1,
-    "source_bytes_scanned": 100736789,
-    "source_files_scanned": 1339
+    "source_bytes_scanned": 100855095,
+    "source_files_scanned": 1362
   }
 }

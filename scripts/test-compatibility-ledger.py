@@ -31,6 +31,9 @@ class LedgerLifecycleTests(unittest.TestCase):
         entry = copy.deepcopy(self.ledger["entries"][0])
         entry["entry_kind"] = "confirmed_divergence"
         entry["divergence_state"] = "confirmed_divergence"
+        entry["affected_files_status"] = "enumerated"
+        entry["affected_corpus_files"] = [{"repository": "candle", "path": "x.ml"}]
+        entry["minimal_reproducer"] = {"status": "not_created", "path": None}
         with self.assertRaisesRegex(validator.ValidationError, "needs reproducer"):
             validator.validate_local_entry(entry)
 
@@ -47,6 +50,7 @@ class LedgerLifecycleTests(unittest.TestCase):
             "candle_outcome": {"status": "observed", "outcome": "accepted", "evidence": ["candle.log"]},
             "chosen_remedy": {"status": "implemented", "kind": "language_fix", "description": "implemented"},
             "proof_obligation": {"status": "discharged", "description": "proved", "evidence": ["theory.log"]},
+            "regression_ids": [],
         })
         with self.assertRaisesRegex(validator.ValidationError, "stable regression IDs"):
             validator.validate_local_entry(entry)

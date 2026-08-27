@@ -17,8 +17,8 @@
     "by_category": {
       "ffi.custom_call": {
         "comparison": 2,
-        "selected": 2,
-        "selected_minus_comparison": 0
+        "selected": 0,
+        "selected_minus_comparison": -2
       },
       "ffi.ocaml_external_declaration": {
         "comparison": 0,
@@ -47,8 +47,8 @@
       },
       "module.declaration_structure": {
         "comparison": 605,
-        "selected": 601,
-        "selected_minus_comparison": -4
+        "selected": 608,
+        "selected_minus_comparison": 3
       },
       "module.first_class_pack": {
         "comparison": 0,
@@ -82,13 +82,13 @@
       },
       "open.local_parenthesized": {
         "comparison": 91,
-        "selected": 91,
-        "selected_minus_comparison": 0
+        "selected": 89,
+        "selected_minus_comparison": -2
       },
       "pointer_equality.infix_use": {
         "comparison": 210,
-        "selected": 210,
-        "selected_minus_comparison": 0
+        "selected": 232,
+        "selected_minus_comparison": 22
       },
       "pointer_equality.operator_binding": {
         "comparison": 4,
@@ -97,15 +97,15 @@
       },
       "pointer_equality.operator_reference": {
         "comparison": 3,
-        "selected": 3,
-        "selected_minus_comparison": 0
+        "selected": 4,
+        "selected_minus_comparison": 1
       }
     },
     "by_repository": {
       "candle": {
         "comparison": 954,
-        "selected": 954,
-        "selected_minus_comparison": 0
+        "selected": 980,
+        "selected_minus_comparison": 26
       },
       "flyspeck": {
         "comparison": 5095,
@@ -116,8 +116,8 @@
     "totals": {
       "findings": {
         "comparison": 6049,
-        "selected": 6044,
-        "selected_minus_comparison": -5
+        "selected": 6070,
+        "selected_minus_comparison": 21
       },
       "lexical_notes": {
         "comparison": 1,
@@ -126,13 +126,13 @@
       },
       "source_bytes_scanned": {
         "comparison": 100751549,
-        "selected": 100736789,
-        "selected_minus_comparison": -14760
+        "selected": 100855095,
+        "selected_minus_comparison": 103546
       },
       "source_files_scanned": {
         "comparison": 1347,
-        "selected": 1339,
-        "selected_minus_comparison": -8
+        "selected": 1362,
+        "selected_minus_comparison": 15
       }
     }
   },
@@ -191,19 +191,331 @@
   "schema_version": 1,
   "selected_lane": {
     "flyspeck_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53",
-    "inventory_findings_sha256": "bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c",
+    "inventory_findings_sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a",
     "inventory_path_key": "../worktrees/flyspeck-v13-source",
     "role": "direct_s3_clean_upstream",
     "totals": {
-      "findings": 6044,
+      "findings": 6070,
       "lexical_notes": 1,
-      "source_bytes_scanned": 100736789,
-      "source_files_scanned": 1339
+      "source_bytes_scanned": 100855095,
+      "source_files_scanned": 1362
     }
   },
   "stable_occurrences": {
-    "comparison_only": 5,
+    "comparison_only": 31,
     "comparison_only_records": [
+      {
+        "category": "ffi.custom_call",
+        "lexeme": "Runtime.customFFI",
+        "location": {
+          "column": 11,
+          "end_column": 28,
+          "end_line": 14,
+          "line": 14
+        },
+        "repository": "candle",
+        "source_path": "candle/chdir_to_root.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Candle = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 42,
+          "line": 42
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Pair = struct",
+        "location": {
+          "column": 1,
+          "end_column": 21,
+          "end_line": 56,
+          "line": 56
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Int = struct",
+        "location": {
+          "column": 1,
+          "end_column": 20,
+          "end_line": 62,
+          "line": 62
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Float = struct",
+        "location": {
+          "column": 1,
+          "end_column": 22,
+          "end_line": 69,
+          "line": 69
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Double.(",
+        "location": {
+          "column": 8,
+          "end_column": 21,
+          "end_line": 77,
+          "line": 77
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Double.(",
+        "location": {
+          "column": 13,
+          "end_column": 26,
+          "end_line": 78,
+          "line": 78
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module List = struct",
+        "location": {
+          "column": 1,
+          "end_column": 21,
+          "end_line": 87,
+          "line": 87
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Char = struct",
+        "location": {
+          "column": 1,
+          "end_column": 21,
+          "end_line": 138,
+          "line": 138
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Char.(",
+        "location": {
+          "column": 8,
+          "end_column": 19,
+          "end_line": 140,
+          "line": 140
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Char.(",
+        "location": {
+          "column": 13,
+          "end_column": 24,
+          "end_line": 141,
+          "line": 141
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module String = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 148,
+          "line": 148
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Word64.(",
+        "location": {
+          "column": 23,
+          "end_column": 36,
+          "end_line": 165,
+          "line": 165
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Word64.(",
+        "location": {
+          "column": 40,
+          "end_column": 53,
+          "end_line": 165,
+          "line": 165
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Array = struct",
+        "location": {
+          "column": 1,
+          "end_column": 22,
+          "end_line": 171,
+          "line": 171
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Printexc = struct",
+        "location": {
+          "column": 1,
+          "end_column": 25,
+          "end_line": 184,
+          "line": 184
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Format = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 188,
+          "line": 188
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Random = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 233,
+          "line": 233
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Hashtbl = struct",
+        "location": {
+          "column": 1,
+          "end_column": 24,
+          "end_line": 253,
+          "line": 253
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Bytes = struct",
+        "location": {
+          "column": 1,
+          "end_column": 22,
+          "end_line": 268,
+          "line": 268
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Sys = struct",
+        "location": {
+          "column": 1,
+          "end_column": 20,
+          "end_line": 285,
+          "line": 285
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "ffi.custom_call",
+        "lexeme": "Cake.Runtime.customFFI",
+        "location": {
+          "column": 13,
+          "end_column": 35,
+          "end_line": 294,
+          "line": 294
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Filename = struct",
+        "location": {
+          "column": 1,
+          "end_column": 25,
+          "end_line": 306,
+          "line": 306
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Word8.(",
+        "location": {
+          "column": 20,
+          "end_column": 32,
+          "end_line": 191,
+          "line": 191
+        },
+        "repository": "candle",
+        "source_path": "candle/pft/replay.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Word8.(",
+        "location": {
+          "column": 19,
+          "end_column": 31,
+          "end_line": 215,
+          "line": 215
+        },
+        "repository": "candle",
+        "source_path": "candle/pft/replay.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Kernel = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 16,
+          "line": 16
+        },
+        "repository": "candle",
+        "source_path": "candle/pft/tests/export_compute_basis.ml"
+      },
       {
         "category": "module.declaration_structure",
         "lexeme": "module Candle_leaf_hales_tactic = struct",
@@ -265,47 +577,672 @@
         "source_path": "text_formalization/candle/vukhacky_real_leaf.hl"
       }
     ],
-    "matched": 6044,
+    "matched": 6018,
     "method": "All finding fields except finding_id, repository_commit, and source_sha256; this distinguishes content/coordinate changes from commit-derived identifier churn.",
-    "selected_only": 0,
-    "selected_only_records": []
+    "selected_only": 52,
+    "selected_only_records": [
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Source_action_boundary_module = struct",
+        "location": {
+          "column": 1,
+          "end_column": 46,
+          "end_line": 1,
+          "line": 1
+        },
+        "repository": "candle",
+        "source_path": "candle/compatibility/fixtures/source_action_boundary_module.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Source_action_internal_semis_module = struct",
+        "location": {
+          "column": 1,
+          "end_column": 52,
+          "end_line": 1,
+          "line": 1
+        },
+        "repository": "candle",
+        "source_path": "candle/compatibility/fixtures/source_action_internal_semis_module.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Nested = struct",
+        "location": {
+          "column": 1,
+          "end_column": 25,
+          "end_line": 4,
+          "line": 4
+        },
+        "repository": "candle",
+        "source_path": "candle/compatibility/fixtures/source_action_internal_semis_module.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 31,
+          "end_column": 33,
+          "end_line": 13,
+          "line": 13
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 33,
+          "end_column": 35,
+          "end_line": 30,
+          "line": 30
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 25,
+          "end_column": 27,
+          "end_line": 31,
+          "line": 31
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 29,
+          "end_column": 31,
+          "end_line": 49,
+          "line": 49
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 19,
+          "end_column": 21,
+          "end_line": 67,
+          "line": 67
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 30,
+          "end_column": 32,
+          "end_line": 67,
+          "line": 67
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 15,
+          "end_column": 17,
+          "end_line": 86,
+          "line": 86
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 17,
+          "end_column": 19,
+          "end_line": 94,
+          "line": 94
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 19,
+          "end_column": 21,
+          "end_line": 100,
+          "line": 100
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 19,
+          "end_column": 21,
+          "end_line": 105,
+          "line": 105
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 83,
+          "end_column": 85,
+          "end_line": 218,
+          "line": 218
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 87,
+          "end_column": 89,
+          "end_line": 219,
+          "line": 219
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 50,
+          "end_column": 52,
+          "end_line": 222,
+          "line": 222
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 52,
+          "end_column": 54,
+          "end_line": 223,
+          "line": 223
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 49,
+          "end_column": 51,
+          "end_line": 226,
+          "line": 226
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 51,
+          "end_column": 53,
+          "end_line": 227,
+          "line": 227
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 65,
+          "end_column": 67,
+          "end_line": 236,
+          "line": 236
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 69,
+          "end_column": 71,
+          "end_line": 237,
+          "line": 237
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 51,
+          "end_column": 53,
+          "end_line": 240,
+          "line": 240
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 61,
+          "end_column": 63,
+          "end_line": 252,
+          "line": 252
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 65,
+          "end_column": 67,
+          "end_line": 253,
+          "line": 253
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.operator_reference",
+        "lexeme": "!=",
+        "location": {
+          "column": 41,
+          "end_column": 43,
+          "end_line": 263,
+          "line": 263
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+      },
+      {
+        "category": "pointer_equality.infix_use",
+        "lexeme": "==",
+        "location": {
+          "column": 30,
+          "end_column": 32,
+          "end_line": 6,
+          "line": 6
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_immediate_ocaml_oracle.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Candle_flyspeck_l2 = struct",
+        "location": {
+          "column": 1,
+          "end_column": 35,
+          "end_line": 4,
+          "line": 4
+        },
+        "repository": "candle",
+        "source_path": "candle/flyspeck_l2_target.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Candle = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 43,
+          "line": 43
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Pair = struct",
+        "location": {
+          "column": 1,
+          "end_column": 21,
+          "end_line": 57,
+          "line": 57
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Int = struct",
+        "location": {
+          "column": 1,
+          "end_column": 20,
+          "end_line": 63,
+          "line": 63
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Float = struct",
+        "location": {
+          "column": 1,
+          "end_column": 22,
+          "end_line": 70,
+          "line": 70
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Double.(",
+        "location": {
+          "column": 8,
+          "end_column": 21,
+          "end_line": 78,
+          "line": 78
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Double.(",
+        "location": {
+          "column": 13,
+          "end_column": 26,
+          "end_line": 79,
+          "line": 79
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module List = struct",
+        "location": {
+          "column": 1,
+          "end_column": 21,
+          "end_line": 88,
+          "line": 88
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Char = struct",
+        "location": {
+          "column": 1,
+          "end_column": 21,
+          "end_line": 139,
+          "line": 139
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Char.(",
+        "location": {
+          "column": 8,
+          "end_column": 19,
+          "end_line": 141,
+          "line": 141
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Char.(",
+        "location": {
+          "column": 13,
+          "end_column": 24,
+          "end_line": 142,
+          "line": 142
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module String = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 149,
+          "line": 149
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Word64.(",
+        "location": {
+          "column": 23,
+          "end_column": 36,
+          "end_line": 166,
+          "line": 166
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "open.local_parenthesized",
+        "lexeme": "Cake.Word64.(",
+        "location": {
+          "column": 40,
+          "end_column": 53,
+          "end_line": 166,
+          "line": 166
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Buffer = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 175,
+          "line": 175
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Digest = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 208,
+          "line": 208
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Str = struct",
+        "location": {
+          "column": 1,
+          "end_column": 20,
+          "end_line": 330,
+          "line": 330
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Array = struct",
+        "location": {
+          "column": 1,
+          "end_column": 22,
+          "end_line": 548,
+          "line": 548
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Printexc = struct",
+        "location": {
+          "column": 1,
+          "end_column": 25,
+          "end_line": 561,
+          "line": 561
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Format = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 565,
+          "line": 565
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Random = struct",
+        "location": {
+          "column": 1,
+          "end_column": 23,
+          "end_line": 610,
+          "line": 610
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Hashtbl = struct",
+        "location": {
+          "column": 1,
+          "end_column": 24,
+          "end_line": 630,
+          "line": 630
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Bytes = struct",
+        "location": {
+          "column": 1,
+          "end_column": 22,
+          "end_line": 645,
+          "line": 645
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Sys = struct",
+        "location": {
+          "column": 1,
+          "end_column": 20,
+          "end_line": 662,
+          "line": 662
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Unix = struct",
+        "location": {
+          "column": 1,
+          "end_column": 21,
+          "end_line": 735,
+          "line": 735
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      },
+      {
+        "category": "module.declaration_structure",
+        "lexeme": "module Filename = struct",
+        "location": {
+          "column": 1,
+          "end_column": 25,
+          "end_line": 767,
+          "line": 767
+        },
+        "repository": "candle",
+        "source_path": "candle/ocaml.ml"
+      }
+    ]
   },
   "triage": {
     "ffi": {
       "comparison_artifact_sha256": "dff487602275e016894cc673b6c82f1f52354a4b5fce3317bb49e51684af1f09",
-      "comparison_only_records": 0,
+      "comparison_only_records": 2,
       "comparison_records": 2,
-      "selected_artifact_sha256": "bb76fda85b027cab92922ca7f7fbcab22020ac750a411cc186da918f948e4e82",
+      "selected_artifact_sha256": "6efdddbdc4fe6ccd83162943fd1cc6726be33cdf3428d61398a65a5348036855",
       "selected_counts": {
-        "by_s3_dependency_status": {
-          "required_runtime_call": 2
-        },
-        "total": 2
+        "by_s3_dependency_status": {},
+        "total": 0
       },
-      "selected_minus_comparison": 0,
+      "selected_minus_comparison": -2,
       "selected_only_records": 0,
-      "selected_records": 2,
-      "stable_records_matched": 2
+      "selected_records": 0,
+      "stable_records_matched": 0
     },
     "pointer": {
       "comparison_artifact_sha256": "d61ce28f408be6037482cb6749bbf279c6c7bed0929ecc4984d661f340eb7499",
       "comparison_only_records": 0,
       "comparison_records": 217,
-      "selected_artifact_sha256": "916383da7885b54887261061fd267d677eb04da1787e4b4d18b67353771e4c68",
+      "selected_artifact_sha256": "8a95b6b7676fa7497692c6b90c531e26117a2c9a470cd522d2cc517290bfe5af",
       "selected_counts": {
         "by_ledger_disposition": {
           "excluded_from_pointer_identity_after_name_resolution": 2,
-          "excluded_from_selected_s3_route": 202,
+          "excluded_from_selected_s3_route": 225,
           "open_identity_contract": 12,
           "open_immediate_representation_contract": 1
         },
         "by_operator_resolution": {
-          "builtin_physical_equality": 209,
+          "builtin_physical_equality": 232,
           "local_custom_operator_definition": 4,
           "locally_rebound_custom_value_equality": 4
         },
         "by_review_rule": {
           "PTR-CANDLE-BITMATCH-IMMEDIATES": 4,
+          "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE": 22,
+          "PTR-CANDLE-FLYSPECK-IMMEDIATE-ORACLE": 1,
           "PTR-CANDLE-FUSION-ORDER-SHORTCUT": 1,
           "PTR-CANDLE-FUSION-SHARING": 13,
           "PTR-CANDLE-INFORMAL-BIGINT-BINDING": 1,
@@ -342,7 +1279,7 @@
           "PTR-FLYSPECK-LP-TEST-INT": 2
         },
         "by_s3_dependency_status": {
-          "not_selected_source": 202,
+          "not_selected_source": 225,
           "required_source": 15
         },
         "by_semantic_intent": {
@@ -352,14 +1289,16 @@
           "identity_key_lookup": 1,
           "identity_shortcut_before_structural_comparison": 5,
           "immediate_scalar_value_comparison": 138,
+          "regression_oracle_immediate_scalar_comparison": 1,
+          "regression_oracle_physical_identity": 22,
           "rollback_tail_identity_sentinel": 1,
           "structural_sharing_control": 61
         },
-        "total": 217
+        "total": 240
       },
-      "selected_minus_comparison": 0,
-      "selected_only_records": 0,
-      "selected_records": 217,
+      "selected_minus_comparison": 23,
+      "selected_only_records": 23,
+      "selected_records": 240,
       "stable_records_matched": 217
     }
   }

@@ -44,7 +44,7 @@
         "category": {"enum": ["pointer_equality.infix_use", "pointer_equality.operator_binding", "pointer_equality.operator_reference"]},
         "operator": {"enum": ["==", "!="]},
         "operator_resolution": {"enum": ["builtin_physical_equality", "local_custom_operator_definition", "locally_rebound_custom_value_equality"]},
-        "semantic_intent": {"enum": ["custom_value_equality", "custom_value_equality_definition", "identity_filter_predicate", "identity_key_lookup", "identity_shortcut_before_structural_comparison", "immediate_scalar_value_comparison", "rollback_tail_identity_sentinel", "structural_sharing_control"]},
+        "semantic_intent": {"enum": ["custom_value_equality", "custom_value_equality_definition", "identity_filter_predicate", "identity_key_lookup", "identity_shortcut_before_structural_comparison", "immediate_scalar_value_comparison", "regression_oracle_immediate_scalar_comparison", "regression_oracle_physical_identity", "rollback_tail_identity_sentinel", "structural_sharing_control"]},
         "semantic_confidence": {"enum": ["high", "medium"]},
         "semantic_evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
         "s3_dependency": {"$ref": "#/$defs/dependency"},

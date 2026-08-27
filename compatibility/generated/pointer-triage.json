@@ -2,17 +2,19 @@
   "counts": {
     "by_ledger_disposition": {
       "excluded_from_pointer_identity_after_name_resolution": 2,
-      "excluded_from_selected_s3_route": 202,
+      "excluded_from_selected_s3_route": 225,
       "open_identity_contract": 12,
       "open_immediate_representation_contract": 1
     },
     "by_operator_resolution": {
-      "builtin_physical_equality": 209,
+      "builtin_physical_equality": 232,
       "local_custom_operator_definition": 4,
       "locally_rebound_custom_value_equality": 4
     },
     "by_review_rule": {
       "PTR-CANDLE-BITMATCH-IMMEDIATES": 4,
+      "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE": 22,
+      "PTR-CANDLE-FLYSPECK-IMMEDIATE-ORACLE": 1,
       "PTR-CANDLE-FUSION-ORDER-SHORTCUT": 1,
       "PTR-CANDLE-FUSION-SHARING": 13,
       "PTR-CANDLE-INFORMAL-BIGINT-BINDING": 1,
@@ -49,7 +51,7 @@
       "PTR-FLYSPECK-LP-TEST-INT": 2
     },
     "by_s3_dependency_status": {
-      "not_selected_source": 202,
+      "not_selected_source": 225,
       "required_source": 15
     },
     "by_semantic_intent": {
@@ -59,17 +61,19 @@
       "identity_key_lookup": 1,
       "identity_shortcut_before_structural_comparison": 5,
       "immediate_scalar_value_comparison": 138,
+      "regression_oracle_immediate_scalar_comparison": 1,
+      "regression_oracle_physical_identity": 22,
       "rollback_tail_identity_sentinel": 1,
       "structural_sharing_control": 61
     },
-    "total": 217
+    "total": 240
   },
   "evidence_boundary": "Manual source review classifies the role of each pinned token and membership in the explicitly selected S3 source route. A required source dependency is not proof that the expression is dynamically evaluated. A not-selected record is an exclusion from this route, not a claim that the file is dead in every HOL Light workflow.",
-  "inventory_findings_sha256": "bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c",
+  "inventory_findings_sha256": "a39f4662ff656db594828c0b1ceeabca0507271feea5176995abc56d073b795a",
   "records": [
     {
       "category": "pointer_equality.operator_binding",
-      "finding_id": "CF-0f2bc346876f187a6af8",
+      "finding_id": "CF-525538bd2da74d581759",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 7,
@@ -80,7 +84,7 @@
       "operator": "==",
       "operator_resolution": "local_custom_operator_definition",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-INFORMAL-BIGINT-BINDING",
       "s3_dependency": {
         "basis": "outside_explicit_full_sequence",
@@ -98,7 +102,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-af04d4ae88ab8cf05ed4",
+      "finding_id": "CF-2141bc97ed4275543bfc",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 28,
@@ -109,7 +113,7 @@
       "operator": "==",
       "operator_resolution": "locally_rebound_custom_value_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-INFORMAL-BIGINT-USE",
       "s3_dependency": {
         "basis": "outside_explicit_full_sequence",
@@ -127,7 +131,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-333c5c7048beb8218280",
+      "finding_id": "CF-3932d773767ac6bb4c64",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 31,
@@ -138,7 +142,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -156,7 +160,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-74e4e138dbc6f07b8faf",
+      "finding_id": "CF-377e62717f2b099c3b37",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 42,
@@ -167,7 +171,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -185,7 +189,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-94c258918deb9c0f81ec",
+      "finding_id": "CF-56d89dcd1ac24208e5b3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -196,7 +200,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -214,7 +218,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-12be6e1da024cbfa2be9",
+      "finding_id": "CF-c60ad64b5cacdc71847b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -225,7 +229,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -243,7 +247,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-db869373ff9c71e6be65",
+      "finding_id": "CF-5cbee6e17b8f7cd666be",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -254,7 +258,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-NTRIE-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -272,7 +276,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9c9adfffb4135df573ad",
+      "finding_id": "CF-55dd656f999626ccbdc5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -283,7 +287,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-NTRIE-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -301,7 +305,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1084518f16a2b3c71ba6",
+      "finding_id": "CF-3bb654bf400a67b858ba",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 29,
@@ -312,7 +316,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-NTRIE-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_library_outside_selected_roots",
@@ -330,7 +334,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-67d7db72dae5fd9c8ff5",
+      "finding_id": "CF-c35576d48823c05e5053",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 26,
@@ -341,7 +345,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -359,7 +363,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-42149847604fe675bfc4",
+      "finding_id": "CF-e71a34e63cf4abb3a1f4",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 37,
@@ -370,7 +374,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -388,7 +392,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c8dc5eac4fcda4666d02",
+      "finding_id": "CF-8064fa791054dde15f15",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 14,
@@ -399,7 +403,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-BASICS-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -417,7 +421,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7bbef056180a3db5fb32",
+      "finding_id": "CF-f33c40cbe81ae682d462",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -428,7 +432,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-INT-ID",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -446,7 +450,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-11da02433203c7673bcc",
+      "finding_id": "CF-da3f6dc5b2745fb29bab",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 12,
@@ -457,7 +461,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-THM-ORDER-SHORTCUT",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -475,7 +479,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-66311e7c7d51817ed222",
+      "finding_id": "CF-4aa50e1d68c2a9a17866",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -486,7 +490,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-THM-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -504,7 +508,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-aeedfa2e34767bdaca15",
+      "finding_id": "CF-10ca300da4127228bb6f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 21,
@@ -515,7 +519,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-THM-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -533,7 +537,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-10f16f75ec0a109aad4a",
+      "finding_id": "CF-6359e5666034bc484d39",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 32,
@@ -544,7 +548,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PROOFRECORDING-THM-SHARING",
       "s3_dependency": {
         "basis": "alternative_patch_tree",
@@ -562,7 +566,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-99c03095b41ed9dbb56b",
+      "finding_id": "CF-1d34ce96c7a2bfde6a79",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 111,
@@ -573,7 +577,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-QBF-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_extension_outside_selected_roots",
@@ -591,7 +595,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f46f85daf27ece51dc82",
+      "finding_id": "CF-1a0b5081b21bf814a4a5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 50,
@@ -602,7 +606,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-QBF-IMMEDIATES",
       "s3_dependency": {
         "basis": "optional_extension_outside_selected_roots",
@@ -620,7 +624,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f8f651d1818cbae1b4e3",
+      "finding_id": "CF-3b6e3c254013d9da4142",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 11,
@@ -631,7 +635,7 @@
       "operator": "!=",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-TACTICTRACE-IMMEDIATE",
       "s3_dependency": {
         "basis": "development_tool_outside_selected_roots",
@@ -649,7 +653,674 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c909ac9cfa2076c5915f",
+      "finding_id": "CF-bace00b0c52db9faaf53",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 31,
+        "end_column": 33,
+        "end_line": 13,
+        "line": 13
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-23215e6e74ad7b8c262e",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 33,
+        "end_column": 35,
+        "end_line": 30,
+        "line": 30
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-2bac16b775db305b9f25",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 25,
+        "end_column": 27,
+        "end_line": 31,
+        "line": 31
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-c56eba51563fd322b06d",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 29,
+        "end_column": 31,
+        "end_line": 49,
+        "line": 49
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-d3da1682d843cce50c3c",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 19,
+        "end_column": 21,
+        "end_line": 67,
+        "line": 67
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-733e0cee7b5d9b6c7a91",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 30,
+        "end_column": 32,
+        "end_line": 67,
+        "line": 67
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-bd4c92146f3a3d1675ce",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 15,
+        "end_column": 17,
+        "end_line": 86,
+        "line": 86
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-14612d8d8d012cc6ee85",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 17,
+        "end_column": 19,
+        "end_line": 94,
+        "line": 94
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-4c20a34918cd2a1c81ca",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 19,
+        "end_column": 21,
+        "end_line": 100,
+        "line": 100
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-b4dd8b4ea6c4db4d8d00",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 19,
+        "end_column": 21,
+        "end_line": 105,
+        "line": 105
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-e1b52b06637d5cc6029a",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 83,
+        "end_column": 85,
+        "end_line": 218,
+        "line": 218
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-23ed04538f51ac3dd305",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 87,
+        "end_column": 89,
+        "end_line": 219,
+        "line": 219
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-c8854f8415c228cd1848",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 50,
+        "end_column": 52,
+        "end_line": 222,
+        "line": 222
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-f0cf81f04a9025cfcd2b",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 52,
+        "end_column": 54,
+        "end_line": 223,
+        "line": 223
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-21f888480fde432dcc5a",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 49,
+        "end_column": 51,
+        "end_line": 226,
+        "line": 226
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-ad850237e5da5352ab69",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 51,
+        "end_column": 53,
+        "end_line": 227,
+        "line": 227
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-37049cb517001b2acdc9",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 65,
+        "end_column": 67,
+        "end_line": 236,
+        "line": 236
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-6008df8bebee7de40b4a",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 69,
+        "end_column": 71,
+        "end_line": 237,
+        "line": 237
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-706467a58a5814d21022",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 51,
+        "end_column": 53,
+        "end_line": 240,
+        "line": 240
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-f71cff5014d9ba6d9d2a",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 61,
+        "end_column": 63,
+        "end_line": 252,
+        "line": 252
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-b91b7ce4c9996f9b8b72",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 65,
+        "end_column": 67,
+        "end_line": 253,
+        "line": 253
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.operator_reference",
+      "finding_id": "CF-022cf89ae7d629671626",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 41,
+        "end_column": 43,
+        "end_line": 263,
+        "line": 263
+      },
+      "operator": "!=",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IDENTITY-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_identity_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The file is the host-OCaml differential oracle for the exact selected identity normalizations; its original implementations and assertions deliberately observe physical identity and sharing."
+      ],
+      "semantic_intent": "regression_oracle_physical_identity",
+      "source_path": "candle/flyspeck_identity_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-a73cf55b4c050014596d",
+      "ledger_disposition": "excluded_from_selected_s3_route",
+      "location": {
+        "column": 30,
+        "end_column": 32,
+        "end_line": 6,
+        "line": 6
+      },
+      "operator": "==",
+      "operator_resolution": "builtin_physical_equality",
+      "repository": "candle",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
+      "review_rule_id": "PTR-CANDLE-FLYSPECK-IMMEDIATE-ORACLE",
+      "s3_dependency": {
+        "basis": "host_regression_oracle_outside_generated_boot",
+        "evidence": [
+          "The direct-source manifest and generated CakeML boot actions do not load candle/flyspeck_immediate_ocaml_oracle.ml; the file is executed only by the separate normalization regression gate."
+        ],
+        "status": "not_selected_source"
+      },
+      "semantic_confidence": "high",
+      "semantic_evidence": [
+        "The host-OCaml oracle compares physical and structural equality on a fixed list of immediate integers to justify the selected n == 1 normalization."
+      ],
+      "semantic_intent": "regression_oracle_immediate_scalar_comparison",
+      "source_path": "candle/flyspeck_immediate_ocaml_oracle.ml"
+    },
+    {
+      "category": "pointer_equality.infix_use",
+      "finding_id": "CF-f21600ddb61d2454b249",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 20,
@@ -660,7 +1331,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -678,7 +1349,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f7454405b175738b96e3",
+      "finding_id": "CF-d4b2991c96561aac8325",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 28,
@@ -689,7 +1360,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -707,7 +1378,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7a93a6b7a16f068ad9fe",
+      "finding_id": "CF-a04fe7fabaf8add33a64",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 39,
@@ -718,7 +1389,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -736,7 +1407,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-540f76d56282c7a29eba",
+      "finding_id": "CF-1ccb20991ee60a6d880e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 27,
@@ -747,7 +1418,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -765,7 +1436,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5d451cb9349a790e9f88",
+      "finding_id": "CF-54edbf941693d1df79fc",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 41,
@@ -776,7 +1447,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -794,7 +1465,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a6be4447dfaf2014aa06",
+      "finding_id": "CF-cd89d43fffafaf9d6231",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 31,
@@ -805,7 +1476,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -823,7 +1494,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-87b4d2f839675e496e14",
+      "finding_id": "CF-b433c5e162fbf6a29a00",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 30,
@@ -834,7 +1505,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -852,7 +1523,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-238133089b4bb80ac64f",
+      "finding_id": "CF-a842a1c8bf002278c4af",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 41,
@@ -863,7 +1534,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -881,7 +1552,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f8dedfef252da47760b9",
+      "finding_id": "CF-6e8dd314696e33dd807e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 34,
@@ -892,7 +1563,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -910,7 +1581,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-02bccf7df31c1b3a2889",
+      "finding_id": "CF-a5ba7ea6c3ebe5202690",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -921,7 +1592,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -939,7 +1610,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4dced808c1061e81d13c",
+      "finding_id": "CF-75e0f1a53de1aa28af99",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 12,
@@ -950,7 +1621,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-ORDER-SHORTCUT",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -968,7 +1639,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2fd179e790394e246034",
+      "finding_id": "CF-d05f285884c33eb2e5df",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 25,
@@ -979,7 +1650,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -997,7 +1668,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-0d1704d481903a6c03a8",
+      "finding_id": "CF-f27b8094bd43eba0a1a2",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 21,
@@ -1008,7 +1679,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1026,7 +1697,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d1a851d443d659f85a01",
+      "finding_id": "CF-3275373ebdedc0650147",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 32,
@@ -1037,7 +1708,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-FUSION-SHARING",
       "s3_dependency": {
         "basis": "replaced_kernel_component",
@@ -1055,7 +1726,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-329dc90ed3222ad321aa",
+      "finding_id": "CF-aa4b850840abca8849f9",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1066,7 +1737,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1084,7 +1755,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-0d56e41c236975991a71",
+      "finding_id": "CF-f08a486f59159eb3ba0d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1095,7 +1766,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1113,7 +1784,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-eacecf12f0fdd661cbd8",
+      "finding_id": "CF-68caf6af7c98540c7a6e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1124,7 +1795,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1142,7 +1813,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4f727b2551710a653a20",
+      "finding_id": "CF-2262305d7bce06ed8700",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -1153,7 +1824,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1171,7 +1842,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-58f3547c82fcb333abbd",
+      "finding_id": "CF-15df6df0f2f7cf015f9b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -1182,7 +1853,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1200,7 +1871,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-12eb287029e4bc67b005",
+      "finding_id": "CF-bd613866f3f4557aeaa7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1211,7 +1882,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1229,7 +1900,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9be8fe2496c923cfeae1",
+      "finding_id": "CF-adfdf5493d7fd80b1455",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1240,7 +1911,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1258,7 +1929,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cc89e7ed2f7a4c2f441e",
+      "finding_id": "CF-5e0ab777bedca1ba4faa",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -1269,7 +1940,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1287,7 +1958,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-73cd36840427ac9f9713",
+      "finding_id": "CF-9339e4244daba0e88d4a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -1298,7 +1969,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1316,7 +1987,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8b6e859a524e63b3f662",
+      "finding_id": "CF-e97c43617d50ad0ad0fb",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1327,7 +1998,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1345,7 +2016,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c39df20201d543b40850",
+      "finding_id": "CF-a47e91c3efb5850ed96e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1356,7 +2027,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1374,7 +2045,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-243296583f46e47ebd04",
+      "finding_id": "CF-30035606c10b20ec9012",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1385,7 +2056,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1403,7 +2074,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-47ec4099c316ee10b03d",
+      "finding_id": "CF-4a23e14e5fd1b0e4e7cf",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1414,7 +2085,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1432,7 +2103,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1220d0b80dfa8f702d95",
+      "finding_id": "CF-288feb4f212a47ff55f9",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -1443,7 +2114,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1461,7 +2132,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-36cf14ac5408e3e3d262",
+      "finding_id": "CF-bf38db5d5a7cd4a7db01",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -1472,7 +2143,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1490,7 +2161,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d0284d90a84c06b98b10",
+      "finding_id": "CF-5fe743c997ebc1e39a53",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1501,7 +2172,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1519,7 +2190,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-dcdae5a0d5c92b07a30a",
+      "finding_id": "CF-d69c3e974f588a426bf7",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1530,7 +2201,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1548,7 +2219,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e61f737e31c1dedaa431",
+      "finding_id": "CF-6f20b7d3fda7a98af89a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -1559,7 +2230,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1577,7 +2248,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-68df43f10f69f5657f62",
+      "finding_id": "CF-88696386bc3e537bb2f5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -1588,7 +2259,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1606,7 +2277,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cc4f62e69abdcc71ec65",
+      "finding_id": "CF-e482ae3e9439043cff24",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1617,7 +2288,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1635,7 +2306,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4c7a1634c47be8365854",
+      "finding_id": "CF-ee3f9286880674755e25",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1646,7 +2317,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1664,7 +2335,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-93c132f3f89333455660",
+      "finding_id": "CF-05272c1f7d4146a460c6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1675,7 +2346,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1693,7 +2364,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-83001ca389f628beefcc",
+      "finding_id": "CF-6da5e0daf4ef51705ab6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1704,7 +2375,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1722,7 +2393,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-1396ae248eb2350667d6",
+      "finding_id": "CF-32be3e2a095821a65bfb",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -1733,7 +2404,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1751,7 +2422,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c487ea95536d6c276465",
+      "finding_id": "CF-dfed29ea7f3ea4adb083",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -1762,7 +2433,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1780,7 +2451,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-50c42cd5810c4a223800",
+      "finding_id": "CF-a1e1b929cd8ae32fe6c5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1791,7 +2462,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1809,7 +2480,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-644a555296b6990c71d4",
+      "finding_id": "CF-c0b9a2c7ea26e2b474b0",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1820,7 +2491,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1838,7 +2509,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7f9bcabf7ccf943809b9",
+      "finding_id": "CF-89b0502c2e627d44694b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -1849,7 +2520,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1867,7 +2538,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cf398c57464b6dda03f1",
+      "finding_id": "CF-2b1e2c954b63e1676f26",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -1878,7 +2549,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1896,7 +2567,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c2003af37f01313537a4",
+      "finding_id": "CF-0e57c01e657e03020498",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1907,7 +2578,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1925,7 +2596,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-16a980d2b5b790229d60",
+      "finding_id": "CF-cc90f1f150cd37350a6d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -1936,7 +2607,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1954,7 +2625,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cd7f5b32b6ba6db0a017",
+      "finding_id": "CF-209f227d4a50d7a50450",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -1965,7 +2636,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -1983,7 +2654,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-fe9931ea18e5c9ab2e78",
+      "finding_id": "CF-3a3f7239bd04103c601b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -1994,7 +2665,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2012,7 +2683,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9cdab01e8154dfa46929",
+      "finding_id": "CF-d5317d683d4737579a4c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -2023,7 +2694,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2041,7 +2712,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-aba85ccab7189488db40",
+      "finding_id": "CF-e1c69604b6da50c0e0f5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2052,7 +2723,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2070,7 +2741,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2cde6666263ef313175e",
+      "finding_id": "CF-2d98705b6c012a1fd040",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2081,7 +2752,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2099,7 +2770,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5fe0576e2851e90806f3",
+      "finding_id": "CF-d2be63b8a360f7244fe6",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -2110,7 +2781,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2128,7 +2799,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-d57c642d5c67304c2c1c",
+      "finding_id": "CF-5cbb7488c73306c32206",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -2139,7 +2810,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2157,7 +2828,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-81a4824db85c3056c030",
+      "finding_id": "CF-8f5b8d922a839ce240b5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2168,7 +2839,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2186,7 +2857,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9a6562ca9f31823cf75f",
+      "finding_id": "CF-d9aafa5a9bc56d6fb8f9",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2197,7 +2868,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2215,7 +2886,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2a8f7b4958a0c4ea8f17",
+      "finding_id": "CF-6366c3bf64266f062538",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2226,7 +2897,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2244,7 +2915,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b52dcc498309930459f8",
+      "finding_id": "CF-ad5e5099de4a1fd536e5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -2255,7 +2926,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2273,7 +2944,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ba4ca0fff392faeb9ba4",
+      "finding_id": "CF-31ae912f559eceb0eca5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -2284,7 +2955,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2302,7 +2973,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-67c78bb59d77e0c6a264",
+      "finding_id": "CF-17c88a1c4b7201ea5c30",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2313,7 +2984,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2331,7 +3002,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-69d81a683ec8ca60f7a4",
+      "finding_id": "CF-ee743eb00e4a4b91c8e3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2342,7 +3013,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2360,7 +3031,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c8b8a1d52488fbd5b4c6",
+      "finding_id": "CF-f18feeb428011df34e8a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -2371,7 +3042,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2389,7 +3060,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9c9ba88b29883abe8846",
+      "finding_id": "CF-ceb4fba0eca92ada172c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -2400,7 +3071,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2418,7 +3089,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9a164a5bc002ec228682",
+      "finding_id": "CF-3eed2b2e2bc93a99b55e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2429,7 +3100,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2447,7 +3118,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b10e746c6327c0bf1898",
+      "finding_id": "CF-8cbb22dc2c331887e35a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2458,7 +3129,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2476,7 +3147,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cc50a58070941879ffb8",
+      "finding_id": "CF-82b593ee4471e6cf3788",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2487,7 +3158,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2505,7 +3176,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3eef69569415e00710cd",
+      "finding_id": "CF-f46af6a5450fde57e8b4",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -2516,7 +3187,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2534,7 +3205,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-657f08beaafc5b66e96d",
+      "finding_id": "CF-b8fce6f21fb60949a8fc",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -2545,7 +3216,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2563,7 +3234,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-c42bad33ac3d45eb06ff",
+      "finding_id": "CF-361d88e1b88192c2059d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2574,7 +3245,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2592,7 +3263,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-775ba01cc10637584c06",
+      "finding_id": "CF-38fa77d36eee38870825",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2603,7 +3274,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2621,7 +3292,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9df22ec144456662ed2b",
+      "finding_id": "CF-567d48070e35f0d1974a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -2632,7 +3303,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2650,7 +3321,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e5225be594b7471dd238",
+      "finding_id": "CF-e4b8669637e4c8134558",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -2661,7 +3332,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2679,7 +3350,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a8461d61de6a13622e74",
+      "finding_id": "CF-8ff9299af7968ec42627",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2690,7 +3361,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2708,7 +3379,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-915dbd36fcdb66e89623",
+      "finding_id": "CF-1481cd4d29e85f70739d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2719,7 +3390,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2737,7 +3408,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-0daac9b97d55507a6e91",
+      "finding_id": "CF-1d88ce3d007ac246f8ad",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2748,7 +3419,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2766,7 +3437,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-56015bd7fca880a4ed76",
+      "finding_id": "CF-f5623fe711faa6880513",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -2777,7 +3448,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2795,7 +3466,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e67a32da70f9edf8e827",
+      "finding_id": "CF-553dbc0f020696329968",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -2806,7 +3477,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2824,7 +3495,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-bcd6f478b12797299e7a",
+      "finding_id": "CF-26ba964d0f4f81386243",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2835,7 +3506,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2853,7 +3524,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-fd4e543f103672c3b935",
+      "finding_id": "CF-fd7e864a8d47155317fb",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -2864,7 +3535,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2882,7 +3553,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8b44c23c847bdf9d6ec2",
+      "finding_id": "CF-e48789f0117699eed45d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -2893,7 +3564,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2911,7 +3582,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8f21791faaca43383181",
+      "finding_id": "CF-bef8cb0ecc204ab127d8",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -2922,7 +3593,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2940,7 +3611,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-be1693593ce63f7a75d7",
+      "finding_id": "CF-eff6d20a4651ee5e8f6c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2951,7 +3622,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2969,7 +3640,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3b04638ac142660d57ad",
+      "finding_id": "CF-c004717b77eb97d2d609",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -2980,7 +3651,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -2998,7 +3669,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-dca54cd90f0f04a40978",
+      "finding_id": "CF-81b4ce708f902bec9f73",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3009,7 +3680,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3027,7 +3698,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-60c8db08ca25fd0bfd08",
+      "finding_id": "CF-b663470596dc74a1b615",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3038,7 +3709,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3056,7 +3727,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-76dc1135354278f388ee",
+      "finding_id": "CF-f9e304745b42cd2312c3",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -3067,7 +3738,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3085,7 +3756,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-76e9e571a4009a26c958",
+      "finding_id": "CF-14540a28cb1389da7a30",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3096,7 +3767,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3114,7 +3785,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4b82843b67e6a12a1028",
+      "finding_id": "CF-078b9420fbd3139d49f0",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3125,7 +3796,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3143,7 +3814,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-65c062d53cb341c33057",
+      "finding_id": "CF-35610d04de5380bce1ce",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -3154,7 +3825,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3172,7 +3843,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f5b0f70df1b373faa081",
+      "finding_id": "CF-cb35bf1bf4062b6905d4",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -3183,7 +3854,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3201,7 +3872,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-09c65d0c0ab7b5f7c414",
+      "finding_id": "CF-1aa551ea2121a67b220c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3212,7 +3883,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3230,7 +3901,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-44019b894df438bb5d31",
+      "finding_id": "CF-3258780f682778ab6112",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3241,7 +3912,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3259,7 +3930,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6c9760c553d8b983c063",
+      "finding_id": "CF-3dc5d738476bdcb319a2",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3270,7 +3941,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3288,7 +3959,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-014933bd61c9af51936b",
+      "finding_id": "CF-1e78e0b4aface9f8b6a8",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3299,7 +3970,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3317,7 +3988,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3e32954548919d847c6f",
+      "finding_id": "CF-771d164a530bf6d9bf3c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -3328,7 +3999,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3346,7 +4017,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-843b3949777aa8e56c03",
+      "finding_id": "CF-35058df2836328c116e4",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3357,7 +4028,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3375,7 +4046,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a553f365633c5ab8265d",
+      "finding_id": "CF-d204ed1559a2c8b9503e",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3386,7 +4057,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3404,7 +4075,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ff6f83ba07ea0e72489c",
+      "finding_id": "CF-cc076af13a7ec99d6423",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -3415,7 +4086,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3433,7 +4104,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4393b436013fe10d8406",
+      "finding_id": "CF-ab3d8150b0b623c93dc1",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -3444,7 +4115,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3462,7 +4133,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2f2db34dd944733ce210",
+      "finding_id": "CF-f110ccba17f9b3f6c7dd",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3473,7 +4144,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3491,7 +4162,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-9ecd13ef2040350e7622",
+      "finding_id": "CF-da563a7bf2a7f2f2aac5",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3502,7 +4173,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3520,7 +4191,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e796d39496b0dc0c04d6",
+      "finding_id": "CF-47139745950a61f367fc",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3531,7 +4202,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3549,7 +4220,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f390c078d71743d4f4fb",
+      "finding_id": "CF-c7b49a3ef94cb169731d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3560,7 +4231,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3578,7 +4249,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-54b0e6756c9b1717dc4d",
+      "finding_id": "CF-ddfcdbf1f693e1ce6d82",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -3589,7 +4260,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3607,7 +4278,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-4a29e882114cd75e0a85",
+      "finding_id": "CF-008bcf230c0d1f97d987",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3618,7 +4289,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3636,7 +4307,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-51eb05fb76b13bf59c1e",
+      "finding_id": "CF-41e6f3cce30f22a7a9bc",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3647,7 +4318,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3665,7 +4336,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a4de59df466d20b3ef71",
+      "finding_id": "CF-dce17c1609b514606eed",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 44,
@@ -3676,7 +4347,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3694,7 +4365,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f76e30fdd8272d18c63c",
+      "finding_id": "CF-217cb68ee08c89fafe1a",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 60,
@@ -3705,7 +4376,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3723,7 +4394,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-8b05d67231b7fe19ee11",
+      "finding_id": "CF-d21ba2235028100bb963",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3734,7 +4405,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3752,7 +4423,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-a23bec41ff2e66ee2bc2",
+      "finding_id": "CF-027383c047705a918378",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3763,7 +4434,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3781,7 +4452,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-74052d54f07255fd59d1",
+      "finding_id": "CF-7f478843c89c52252524",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3792,7 +4463,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3810,7 +4481,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ad541acf4bfe6c041360",
+      "finding_id": "CF-cf1275d88be1a9f45c4b",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3821,7 +4492,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3839,7 +4510,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5958f8dfcefb3efd2e7f",
+      "finding_id": "CF-88b75d990b7816d4ff0d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -3850,7 +4521,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3868,7 +4539,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7a040953abc6bd29fa55",
+      "finding_id": "CF-2fc49c45c80c200b6f6f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3879,7 +4550,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3897,7 +4568,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-e654a3ede3bcc210a57c",
+      "finding_id": "CF-77ff0c9ccf3d52741cbb",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3908,7 +4579,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3926,7 +4597,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-5d066f590651488963a0",
+      "finding_id": "CF-fc6773ce9e328ba91a8c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -3937,7 +4608,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3955,7 +4626,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-587690cf28bfaf797cd2",
+      "finding_id": "CF-75f557110ee51c02f45c",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -3966,7 +4637,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -3984,7 +4655,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ee48856d353718e2aa52",
+      "finding_id": "CF-280a553970116aec104d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -3995,7 +4666,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4013,7 +4684,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-b2852f12395af3f76a21",
+      "finding_id": "CF-89b81e199c5503f6b7ab",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -4024,7 +4695,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4042,7 +4713,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-3eac4aaed826b5f47358",
+      "finding_id": "CF-1b8203b664fc2931c6ed",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4053,7 +4724,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4071,7 +4742,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-dbb21e846347f01ee350",
+      "finding_id": "CF-1948fc8ef76f1e61a867",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4082,7 +4753,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4100,7 +4771,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-289ff078e081e96a1945",
+      "finding_id": "CF-1648ffbbf357f6961c2f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4111,7 +4782,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4129,7 +4800,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-47bac9ca15c4223ccb1c",
+      "finding_id": "CF-97c297dc7deb6ec82a00",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4140,7 +4811,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4158,7 +4829,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-805ddc1873223da54a0e",
+      "finding_id": "CF-5ee550fa709659ded6ae",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -4169,7 +4840,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4187,7 +4858,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6d275e1244a66a3b8e1d",
+      "finding_id": "CF-271b01ba8a47d39c0cbc",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -4198,7 +4869,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4216,7 +4887,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-37d69c6970f60792dba2",
+      "finding_id": "CF-0c17b5e4e67e43883a28",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4227,7 +4898,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4245,7 +4916,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-449823a0c06c8f1adf1f",
+      "finding_id": "CF-e32810c94732cd008659",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4256,7 +4927,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4274,7 +4945,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-2933a9c6e533fa5ed77b",
+      "finding_id": "CF-d8acfd8c4fe008c78f9f",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4285,7 +4956,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4303,7 +4974,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-10afce04386b4b53b147",
+      "finding_id": "CF-72dcc595b1983546fe30",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4314,7 +4985,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4332,7 +5003,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-099b9295794c45862255",
+      "finding_id": "CF-578352d863dc9c8bd37d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -4343,7 +5014,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4361,7 +5032,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-7f0bf667c52d21acbfd4",
+      "finding_id": "CF-128a1d6dee4c49e934bd",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -4372,7 +5043,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4390,7 +5061,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-54c02970963e4503a3c7",
+      "finding_id": "CF-08e0f2733f455b722021",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4401,7 +5072,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4419,7 +5090,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-12d7dbcacdbdb095bc0a",
+      "finding_id": "CF-972368da4ea9b38c75c0",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4430,7 +5101,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4448,7 +5119,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-dcba60205f4d7c12a000",
+      "finding_id": "CF-d043878d6c734eeff386",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4459,7 +5130,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4477,7 +5148,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-ed9d322b27fa7283bc99",
+      "finding_id": "CF-285cceee8deca73b233d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 10,
@@ -4488,7 +5159,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4506,7 +5177,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-cdc3c00e2b352e84bf4b",
+      "finding_id": "CF-6e13e78757fb56d40ccb",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 15,
@@ -4517,7 +5188,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4535,7 +5206,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-6990e20fc634de591963",
+      "finding_id": "CF-4d468b7ff94db17231d2",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 45,
@@ -4546,7 +5217,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4564,7 +5235,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-0257001cbaaa89a66ac9",
+      "finding_id": "CF-a3dacb6bb5982ebfb542",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4575,7 +5246,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4593,7 +5264,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-501934222d33c61ea999",
+      "finding_id": "CF-7d3ca33aebb87a84e6df",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4604,7 +5275,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-PAJ-IMMEDIATES",
       "s3_dependency": {
         "basis": "host_parser_build_tool",
@@ -4622,7 +5293,7 @@
     },
     {
       "category": "pointer_equality.infix_use",
-      "finding_id": "CF-f126286b8f5dfa4fcfbc",
+      "finding_id": "CF-e584ee6a0f4ff0f04a8d",
       "ledger_disposition": "excluded_from_selected_s3_route",
       "location": {
         "column": 19,
@@ -4633,7 +5304,7 @@
       "operator": "==",
       "operator_resolution": "builtin_physical_equality",
       "repository": "candle",
-      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "repository_commit": "a08e551a4398907776112eb72db1573f65cf2012",
       "review_rule_id": "PTR-CANDLE-THECOPS-ROLLBACK-SENTINEL",
       "s3_dependency": {
         "basis": "disabled_optional_extension",
@@ -6362,7 +7033,7 @@
     }
   ],
   "reproduce": "scripts/update-compatibility-inventory.sh /project/repos",
-  "review_rules_sha256": "0fe74c7b7b68a619bcfabd2b20ce5cacdd3e947ba271ffebe6c2cc290563340f",
+  "review_rules_sha256": "77fbe669c85a3a97d145a0418f2df159cbdff664a5129b8baa1fa8f165bcd239",
   "schema_version": 1,
   "triage_kind": "pointer_equality_source_review"
 }
