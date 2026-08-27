@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flyspeck-candle.invalid/schema/project-compatibility-ledger-v1.json",
+  "title": "Project compatibility ledger index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "ledger_kind", "compatibility_specification",
+    "import_contract", "imports", "related_artifacts", "entries"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "ledger_kind": {"const": "project_index_with_authoritative_imports"},
+    "compatibility_specification": {"type": "string", "minLength": 1},
+    "import_contract": {"type": "object"},
+    "imports": {"type": "array", "items": {"$ref": "#/$defs/import"}},
+    "related_artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
+    "entries": {"type": "array", "items": {"$ref": "#/$defs/entry"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "import": {
+      "type": "object",
+      "required": [
+        "id", "repository_path_key", "git_commit", "artifact_path",
+        "artifact_sha256", "source_schema_version", "authoritative_id_prefix",
+        "entry_ids", "field_map", "schema_gaps"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "repository_path_key": {"type": "string", "minLength": 1},
+        "git_commit": {"$ref": "#/$defs/gitCommit"},
+        "artifact_path": {"type": "string", "minLength": 1},
+        "artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "source_schema_version": {"type": "integer", "minimum": 1},
+        "authoritative_id_prefix": {"type": "string", "minLength": 1},
+        "entry_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "field_map": {"type": "object"},
+        "schema_gaps": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": ["id", "repository_path_key", "git_commit", "artifact_path", "artifact_sha256", "relationship"],
+      "properties": {
+        "id": {"type": "string"},
+        "repository_path_key": {"type": "string"},
+        "git_commit": {"$ref": "#/$defs/gitCommit"},
+        "artifact_path": {"type": "string"},
+        "artifact_sha256": {"$ref": "#/$defs/sha256"},
+        "schema_version": {"type": "integer"},
+        "declared_target_count": {"type": "integer", "minimum": 0},
+        "declared_source_count": {"type": "integer", "minimum": 0},
+        "relationship": {"type": "string"}
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "entry_kind", "divergence_state", "priority", "status",
+        "summary", "semantic_category", "minimal_reproducer",
+        "ocaml_reference", "candle_outcome", "chosen_remedy",
+        "proof_obligation", "regression_ids", "affected_corpus_files",
+        "affected_files_status", "inventory_selector", "notes"
+      ],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Z][A-Z0-9-]+$"},
+        "entry_kind": {"enum": ["inventory_review", "confirmed_divergence"]},
+        "divergence_state": {"enum": ["review_candidate", "confirmed_divergence", "equivalent_behavior", "outside_dependency_closure"]},
+        "priority": {"enum": ["P0", "P1", "P2"]},
+        "status": {"enum": ["inventory_pending", "reproducer_pending", "oracle_pending", "remedy_pending", "proof_pending", "regression_pending", "resolved", "deferred"]},
+        "summary": {"type": "string", "minLength": 1},
+        "semantic_category": {"type": "string", "minLength": 1},
+        "minimal_reproducer": {"$ref": "#/$defs/minimalReproducer"},
+        "ocaml_reference": {"$ref": "#/$defs/outcome"},
+        "candle_outcome": {"$ref": "#/$defs/outcome"},
+        "chosen_remedy": {"$ref": "#/$defs/remedy"},
+        "proof_obligation": {"$ref": "#/$defs/proof"},
+        "regression_ids": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "affected_corpus_files": {"type": "array", "items": {"$ref": "#/$defs/sourceFile"}, "uniqueItems": true},
+        "affected_files_status": {"enum": ["inventory_query", "enumerated"]},
+        "inventory_selector": {"type": "object"},
+        "notes": {"type": "string"}
+      }
+    },
+    "minimalReproducer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "path"],
+      "properties": {
+        "status": {"enum": ["not_created", "ready"]},
+        "path": {"type": ["string", "null"]}
+      }
+    },
+    "outcome": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "outcome", "evidence"],
+      "properties": {
+        "status": {"enum": ["not_run", "observed"]},
+        "outcome": {"type": ["string", "null"]},
+        "evidence": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "remedy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "kind", "description"],
+      "properties": {
+        "status": {"enum": ["undecided", "chosen", "implemented"]},
+        "kind": {"type": ["string", "null"]},
+        "description": {"type": ["string", "null"]}
+      }
+    },
+    "proof": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "description", "evidence"],
+      "properties": {
+        "status": {"enum": ["not_assessed", "open", "discharged", "not_applicable_documented"]},
+        "description": {"type": ["string", "null"]},
+        "evidence": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "sourceFile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["repository", "path"],
+      "properties": {
+        "repository": {"type": "string"},
+        "path": {"type": "string"}
+      }
+    }
+  }
+}

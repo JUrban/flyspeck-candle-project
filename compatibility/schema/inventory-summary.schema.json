@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flyspeck-candle.invalid/schema/inventory-summary-v1.json",
+  "title": "Candle/Flyspeck compatibility inventory summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "inventory_id", "scope_kind", "roadmap", "generator",
+    "scope_sha256", "reproducible_command", "repositories", "extensions",
+    "totals", "counts", "artifacts", "evidence_boundary"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "inventory_id": {"type": "string", "minLength": 1},
+    "scope_kind": {"type": "string", "minLength": 1},
+    "roadmap": {
+      "type": "object",
+      "required": ["version", "sha256"],
+      "properties": {
+        "version": {"const": "1.3"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "generator": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {"type": "string"},
+        "version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "scope_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reproducible_command": {"type": "string", "minLength": 1},
+    "repositories": {"type": "object", "minProperties": 1},
+    "extensions": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+    "totals": {
+      "type": "object",
+      "required": ["source_files_scanned", "source_bytes_scanned", "findings", "lexical_notes"],
+      "properties": {
+        "source_files_scanned": {"type": "integer", "minimum": 0},
+        "source_bytes_scanned": {"type": "integer", "minimum": 0},
+        "findings": {"type": "integer", "minimum": 0},
+        "lexical_notes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "counts": {
+      "type": "object",
+      "required": [
+        "by_category", "by_repository", "by_category_and_repository",
+        "files_with_findings_by_category", "by_module_path_form",
+        "pointer_by_token", "pointer_by_syntactic_role",
+        "pointer_by_static_operand_category", "custom_ffi_by_command_form",
+        "lexical_notes_by_kind"
+      ]
+    },
+    "artifacts": {
+      "type": "object",
+      "required": ["findings_jsonl", "findings_sha256", "lexical_notes_json"],
+      "properties": {
+        "findings_jsonl": {"type": "string"},
+        "findings_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "lexical_notes_json": {"type": "string"}
+      }
+    },
+    "evidence_boundary": {
+      "type": "object",
+      "required": ["dependency_closure_known", "semantic_intent_inferred", "pointer_purpose_default", "notes"],
+      "properties": {
+        "dependency_closure_known": {"const": false},
+        "semantic_intent_inferred": {"const": false},
+        "pointer_purpose_default": {"const": "unresolved_static_analysis"},
+        "notes": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
+

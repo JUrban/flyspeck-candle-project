@@ -1,0 +1,152 @@
+{
+  "schema_version": 1,
+  "ledger_kind": "project_index_with_authoritative_imports",
+  "compatibility_specification": "observable OCaml behavior for the pinned HOL Light/Flyspeck subset",
+  "import_contract": {
+    "entry_identity": "The authoritative source ledger owns its entry bodies and IDs; this project index records only immutable source coordinates, digests, field mappings, and entry IDs.",
+    "merge_key": "id",
+    "duplicate_policy": "reject duplicate IDs across local and imported ledgers",
+    "update_policy": "advance an import only by changing its git commit, artifact digest, declared entry IDs, and any schema-adapter notes in one reviewed commit",
+    "projection_policy": "source-native fields remain authoritative; field_map documents the lossless v1.3 projection and schema_gaps documents work still needed at the source"
+  },
+  "imports": [
+    {
+      "id": "candle-native-compatibility-ledger",
+      "repository_path_key": "candle",
+      "git_commit": "2306980c0c76f9e5c9a30e259694d4044110fab1",
+      "artifact_path": "candle/compatibility/ledger.json",
+      "artifact_sha256": "94eeeacd5efb8a151492ad8565e9f5854a3aa02385c9b375cdacf36112ca23da",
+      "source_schema_version": 1,
+      "authoritative_id_prefix": "CANDLE-",
+      "entry_ids": [
+        "CANDLE-OCAML-FLOAT-LITERAL-001"
+      ],
+      "field_map": {
+        "semantic_category": "category",
+        "status": "status",
+        "minimal_reproducer": "minimal_reproducer",
+        "ocaml_reference": "ocaml_reference",
+        "candle_outcome": "candle_observation",
+        "chosen_remedy": "candidate_remedy",
+        "proof_obligation": "proof_obligation",
+        "regression_requirement": "regression_requirement",
+        "affected_corpus_locations": "affected_source_locations"
+      },
+      "schema_gaps": [
+        "The source ledger has a regression requirement but not yet one or more stable regression IDs.",
+        "Remedy and proof-obligation lifecycle statuses are not yet separate source fields.",
+        "Affected targets/locations are source strings rather than repository-qualified location objects."
+      ]
+    }
+  ],
+  "related_artifacts": [
+    {
+      "id": "candle-great100-target-manifest",
+      "repository_path_key": "candle",
+      "git_commit": "2306980c0c76f9e5c9a30e259694d4044110fab1",
+      "artifact_path": "candle/top100_manifest.json",
+      "artifact_sha256": "e936a0a9d097b1e8410911b505773b28a92c91c62ced322041526df834c430e2",
+      "schema_version": 1,
+      "declared_target_count": 65,
+      "declared_source_count": 66,
+      "relationship": "Authoritative Candle-native target inventory; compatibility findings link to its stable target names rather than cloning the manifest."
+    }
+  ],
+  "entries": [
+    {
+      "id": "PROJECT-OPEN-DECLARATION-REVIEW-001",
+      "entry_kind": "inventory_review",
+      "divergence_state": "review_candidate",
+      "priority": "P0",
+      "status": "inventory_pending",
+      "summary": "Determine the accepted declaration-open and module-path subset from pinned source occurrences",
+      "semantic_category": "syntax.name_resolution.open.declaration",
+      "minimal_reproducer": {"status": "not_created", "path": null},
+      "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
+      "candle_outcome": {"status": "not_run", "outcome": null, "evidence": []},
+      "chosen_remedy": {"status": "undecided", "kind": null, "description": null},
+      "proof_obligation": {"status": "not_assessed", "description": null, "evidence": []},
+      "regression_ids": [],
+      "affected_corpus_files": [],
+      "affected_files_status": "inventory_query",
+      "inventory_selector": {"categories": ["open.declaration"]},
+      "notes": "An inventory hit is not itself an incompatibility. Confirm behavior with minimized OCaml/Candle tests before changing divergence_state."
+    },
+    {
+      "id": "PROJECT-LOCAL-OPEN-REVIEW-001",
+      "entry_kind": "inventory_review",
+      "divergence_state": "review_candidate",
+      "priority": "P0",
+      "status": "inventory_pending",
+      "summary": "Decide support or normalization policy for let-open and parenthesized local-open syntax",
+      "semantic_category": "syntax.name_resolution.open.local",
+      "minimal_reproducer": {"status": "not_created", "path": null},
+      "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
+      "candle_outcome": {"status": "not_run", "outcome": null, "evidence": []},
+      "chosen_remedy": {"status": "undecided", "kind": null, "description": null},
+      "proof_obligation": {"status": "not_assessed", "description": null, "evidence": []},
+      "regression_ids": [],
+      "affected_corpus_files": [],
+      "affected_files_status": "inventory_query",
+      "inventory_selector": {"categories": ["open.local_let", "open.local_parenthesized"]},
+      "notes": "Repository-snapshot presence does not prove production dependency-closure membership."
+    },
+    {
+      "id": "PROJECT-MODULE-CONSTRUCT-REVIEW-001",
+      "entry_kind": "inventory_review",
+      "divergence_state": "review_candidate",
+      "priority": "P0",
+      "status": "inventory_pending",
+      "summary": "Classify required include, alias, functor, module-type, and first-class-module behavior",
+      "semantic_category": "syntax.modules",
+      "minimal_reproducer": {"status": "not_created", "path": null},
+      "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
+      "candle_outcome": {"status": "not_run", "outcome": null, "evidence": []},
+      "chosen_remedy": {"status": "undecided", "kind": null, "description": null},
+      "proof_obligation": {"status": "not_assessed", "description": null, "evidence": []},
+      "regression_ids": [],
+      "affected_corpus_files": [],
+      "affected_files_status": "inventory_query",
+      "inventory_selector": {"category_prefixes": ["module."]},
+      "notes": "Syntactic forms are machine-classified; module semantics and actual load reachability remain unclassified."
+    },
+    {
+      "id": "PROJECT-POINTER-EQUALITY-REVIEW-001",
+      "entry_kind": "inventory_review",
+      "divergence_state": "review_candidate",
+      "priority": "P0",
+      "status": "inventory_pending",
+      "summary": "Review each physical equality use for correctness, optimization, hash-consing, cycle detection, or dead-code intent",
+      "semantic_category": "runtime.pointer_identity",
+      "minimal_reproducer": {"status": "not_created", "path": null},
+      "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
+      "candle_outcome": {"status": "not_run", "outcome": null, "evidence": []},
+      "chosen_remedy": {"status": "undecided", "kind": null, "description": null},
+      "proof_obligation": {"status": "not_assessed", "description": null, "evidence": []},
+      "regression_ids": [],
+      "affected_corpus_files": [],
+      "affected_files_status": "inventory_query",
+      "inventory_selector": {"category_prefixes": ["pointer_equality."]},
+      "notes": "The inventory records only operator, operand shape, and non-authoritative lexical hints; semantic purpose remains unresolved."
+    },
+    {
+      "id": "PROJECT-CUSTOM-FFI-REVIEW-001",
+      "entry_kind": "inventory_review",
+      "divergence_state": "review_candidate",
+      "priority": "P0",
+      "status": "inventory_pending",
+      "summary": "Reconcile every customFFI call site with a versioned command/encoding/error/sandbox contract",
+      "semantic_category": "runtime.custom_ffi",
+      "minimal_reproducer": {"status": "not_created", "path": null},
+      "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
+      "candle_outcome": {"status": "not_run", "outcome": null, "evidence": []},
+      "chosen_remedy": {"status": "undecided", "kind": null, "description": null},
+      "proof_obligation": {"status": "not_assessed", "description": null, "evidence": []},
+      "regression_ids": [],
+      "affected_corpus_files": [],
+      "affected_files_status": "inventory_query",
+      "inventory_selector": {"categories": ["ffi.custom_call", "ffi.ocaml_external_declaration"]},
+      "notes": "The scanner identifies call/declaration syntax only; it does not infer the runtime command implementation or trust policy."
+    }
+  ]
+}

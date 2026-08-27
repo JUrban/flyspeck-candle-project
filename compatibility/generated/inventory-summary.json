@@ -1,0 +1,214 @@
+{
+  "artifacts": {
+    "findings_jsonl": "inventory-findings.jsonl",
+    "findings_sha256": "3974900809439c172e9ede3f75410c4ee300409ff04359d0f59f1173ceb87d03",
+    "lexical_notes_json": "inventory-lexical-notes.json"
+  },
+  "counts": {
+    "by_category": {
+      "ffi.custom_call": 2,
+      "ffi.ocaml_external_declaration": 0,
+      "module.declaration_alias": 5,
+      "module.declaration_first_class_unpack": 0,
+      "module.declaration_functor": 1,
+      "module.declaration_other": 39,
+      "module.declaration_structure": 605,
+      "module.first_class_pack": 0,
+      "module.first_class_unpack": 0,
+      "module.include": 95,
+      "module.type_declaration": 65,
+      "open.declaration": 4926,
+      "open.local_let": 3,
+      "open.local_parenthesized": 91,
+      "pointer_equality.infix_use": 224,
+      "pointer_equality.operator_binding": 4,
+      "pointer_equality.operator_reference": 3
+    },
+    "by_category_and_repository": {
+      "ffi.custom_call": {
+        "candle": 2,
+        "flyspeck": 0
+      },
+      "ffi.ocaml_external_declaration": {
+        "candle": 0,
+        "flyspeck": 0
+      },
+      "module.declaration_alias": {
+        "candle": 3,
+        "flyspeck": 2
+      },
+      "module.declaration_first_class_unpack": {
+        "candle": 0,
+        "flyspeck": 0
+      },
+      "module.declaration_functor": {
+        "candle": 1,
+        "flyspeck": 0
+      },
+      "module.declaration_other": {
+        "candle": 25,
+        "flyspeck": 14
+      },
+      "module.declaration_structure": {
+        "candle": 201,
+        "flyspeck": 404
+      },
+      "module.first_class_pack": {
+        "candle": 0,
+        "flyspeck": 0
+      },
+      "module.first_class_unpack": {
+        "candle": 0,
+        "flyspeck": 0
+      },
+      "module.include": {
+        "candle": 15,
+        "flyspeck": 80
+      },
+      "module.type_declaration": {
+        "candle": 33,
+        "flyspeck": 32
+      },
+      "open.declaration": {
+        "candle": 423,
+        "flyspeck": 4503
+      },
+      "open.local_let": {
+        "candle": 3,
+        "flyspeck": 0
+      },
+      "open.local_parenthesized": {
+        "candle": 90,
+        "flyspeck": 1
+      },
+      "pointer_equality.infix_use": {
+        "candle": 157,
+        "flyspeck": 67
+      },
+      "pointer_equality.operator_binding": {
+        "candle": 1,
+        "flyspeck": 3
+      },
+      "pointer_equality.operator_reference": {
+        "candle": 0,
+        "flyspeck": 3
+      }
+    },
+    "by_module_path_form": {
+      "anonymous_structure": 0,
+      "dotted": 31,
+      "functor_application": 7,
+      "simple": 5082,
+      "unparsed_expression": 39
+    },
+    "by_repository": {
+      "candle": 954,
+      "flyspeck": 5109
+    },
+    "custom_ffi_by_command_form": {
+      "literal": 2
+    },
+    "files_with_findings_by_category": {
+      "ffi.custom_call": 2,
+      "ffi.ocaml_external_declaration": 0,
+      "module.declaration_alias": 4,
+      "module.declaration_first_class_unpack": 0,
+      "module.declaration_functor": 1,
+      "module.declaration_other": 19,
+      "module.declaration_structure": 490,
+      "module.first_class_pack": 0,
+      "module.first_class_unpack": 0,
+      "module.include": 84,
+      "module.type_declaration": 65,
+      "open.declaration": 577,
+      "open.local_let": 3,
+      "open.local_parenthesized": 28,
+      "pointer_equality.infix_use": 40,
+      "pointer_equality.operator_binding": 4,
+      "pointer_equality.operator_reference": 3
+    },
+    "lexical_notes_by_kind": {
+      "unterminated_string": 1
+    },
+    "pointer_by_static_operand_category": {
+      "expression_operand_present": 54,
+      "identifier_and_immediate_syntax": 41,
+      "identifier_operands": 128,
+      "syntactic_self_comparison": 1
+    },
+    "pointer_by_syntactic_role": {
+      "infix_use": 224,
+      "operator_binding": 4,
+      "operator_reference": 3
+    },
+    "pointer_by_token": {
+      "bang_equal": 11,
+      "double_equal": 220
+    }
+  },
+  "evidence_boundary": {
+    "dependency_closure_known": false,
+    "notes": [
+      "Findings are lexical syntax occurrences in tracked snapshot files, not proven production dependencies.",
+      "Comments, strings, HOL quotations, character literals, OCaml quoted strings, and Camlp quotation bodies are masked.",
+      "Pointer-equality purpose requires review; review hints are lexical signals, not classifications.",
+      "A lexical note marks an input the conservative masker could not close and must be reviewed."
+    ],
+    "pointer_purpose_default": "unresolved_static_analysis",
+    "semantic_intent_inferred": false
+  },
+  "extensions": [
+    ".ml",
+    ".mli",
+    ".hl",
+    ".vhl",
+    ".cml",
+    ".mll",
+    ".mly"
+  ],
+  "generator": {
+    "name": "inventory_compatibility.py",
+    "version": 1
+  },
+  "inventory_id": "candle-flyspeck-ocaml-syntax-v1",
+  "repositories": {
+    "candle": {
+      "commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "dirty": false,
+      "encodings": {
+        "latin-1": 2,
+        "utf-8": 677
+      },
+      "findings": 954,
+      "path_key": "candle",
+      "source_bytes_scanned": 48562653,
+      "source_files_scanned": 679
+    },
+    "flyspeck": {
+      "commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "dirty": false,
+      "encodings": {
+        "latin-1": 1,
+        "utf-8": 667
+      },
+      "findings": 5109,
+      "path_key": "flyspeck",
+      "source_bytes_scanned": 52188896,
+      "source_files_scanned": 668
+    }
+  },
+  "reproducible_command": "scripts/update-compatibility-inventory.sh /project/repos",
+  "roadmap": {
+    "sha256": "13fc3a6209787e9fa9c1879cb482fef6837252ec96b3ae506d312646c898863f",
+    "version": "1.3"
+  },
+  "schema_version": 1,
+  "scope_kind": "tracked_ocaml_family_repository_snapshot",
+  "scope_sha256": "56febe7fb0ebae82531cc1b6060e2831b37ef9ddbe9eeebd4b7e6d760ff92921",
+  "totals": {
+    "findings": 6063,
+    "lexical_notes": 1,
+    "source_bytes_scanned": 100751549,
+    "source_files_scanned": 1347
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flyspeck-candle.invalid/schema/inventory-finding-v1.json",
+  "title": "Candle/Flyspeck compatibility syntax finding",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "finding_id", "category", "repository",
+    "repository_commit", "source_path", "source_sha256", "location",
+    "lexeme", "excerpt", "details"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "finding_id": {"type": "string", "pattern": "^CF-[0-9a-f]{20}$"},
+    "category": {
+      "enum": [
+        "open.declaration", "open.local_let", "open.local_parenthesized",
+        "module.include", "module.declaration_structure",
+        "module.declaration_alias", "module.declaration_functor",
+        "module.declaration_first_class_unpack", "module.declaration_other",
+        "module.type_declaration", "module.first_class_pack",
+        "module.first_class_unpack", "pointer_equality.infix_use",
+        "pointer_equality.operator_binding", "pointer_equality.operator_reference",
+        "ffi.custom_call", "ffi.ocaml_external_declaration"
+      ]
+    },
+    "repository": {"type": "string", "minLength": 1},
+    "repository_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_path": {"type": "string", "minLength": 1},
+    "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["line", "column", "end_line", "end_column"],
+      "properties": {
+        "line": {"type": "integer", "minimum": 1},
+        "column": {"type": "integer", "minimum": 1},
+        "end_line": {"type": "integer", "minimum": 1},
+        "end_column": {"type": "integer", "minimum": 1}
+      }
+    },
+    "lexeme": {"type": "string"},
+    "excerpt": {"type": "string"},
+    "details": {"type": "object"}
+  }
+}
