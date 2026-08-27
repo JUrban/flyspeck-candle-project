@@ -97,10 +97,24 @@ def validate_local_entry(entry: dict[str, Any]) -> None:
         require(bool(entry["candle_outcome"]["evidence"]), f"{entry_id}: resolved entry needs Candle evidence")
 
 
-def selector_matches(finding: dict[str, Any], selector: dict[str, Any]) -> bool:
+def selector_matches(
+    finding: dict[str, Any],
+    selector: dict[str, Any],
+    pointer_by_id: dict[str, dict[str, Any]],
+    ffi_by_id: dict[str, dict[str, Any]],
+) -> bool:
     categories = selector.get("categories", [])
     prefixes = selector.get("category_prefixes", [])
-    return finding["category"] in categories or any(finding["category"].startswith(prefix) for prefix in prefixes)
+    syntax_match = finding["category"] in categories or any(finding["category"].startswith(prefix) for prefix in prefixes)
+    if categories or prefixes:
+        return syntax_match
+    if "triage_dispositions" in selector:
+        record = pointer_by_id.get(finding["finding_id"])
+        return record is not None and record["ledger_disposition"] in selector["triage_dispositions"]
+    if "ffi_ledger_ids" in selector:
+        record = ffi_by_id.get(finding["finding_id"])
+        return record is not None and record["ledger_id"] in selector["ffi_ledger_ids"]
+    return False
 
 
 def git_text(repo: Path, *args: str) -> str:
@@ -261,6 +275,86 @@ def load_and_validate_inventory(
     return findings
 
 
+def canonical_bytes(document: Any) -> bytes:
+    return (json.dumps(document, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def validate_generated_counts(document: dict[str, Any], records: list[dict[str, Any]]) -> None:
+    require(document["counts"]["total"] == len(records), f"{document['triage_kind']}: total count mismatch")
+    if document["triage_kind"] == "pointer_equality_source_review":
+        for field, count_key in (
+            ("operator_resolution", "by_operator_resolution"),
+            ("semantic_intent", "by_semantic_intent"),
+            ("ledger_disposition", "by_ledger_disposition"),
+            ("review_rule_id", "by_review_rule"),
+        ):
+            actual = dict(sorted(Counter(record[field] for record in records).items()))
+            require(document["counts"][count_key] == actual, f"pointer triage {count_key} mismatch")
+    actual_dependencies = dict(sorted(Counter(record["s3_dependency"]["status"] for record in records).items()))
+    require(document["counts"]["by_s3_dependency_status"] == actual_dependencies, "triage dependency counts mismatch")
+
+
+def load_and_validate_triage(
+    inventory_dir: Path,
+    pointer_schema: Path,
+    ffi_schema: Path,
+    pointer_rules: Path,
+    ffi_review: Path,
+    findings: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    raw_findings = (inventory_dir / "inventory-findings.jsonl").read_bytes()
+    finding_by_id = {finding["finding_id"]: finding for finding in findings}
+    documents = []
+    for filename, schema in (("pointer-triage.json", pointer_schema), ("ffi-triage.json", ffi_schema)):
+        path = inventory_dir / filename
+        require(path.is_file(), f"missing generated triage artifact: {path}")
+        document = json.loads(path.read_text(encoding="utf-8"))
+        validate_with_json_schema(document, schema)
+        require(document["inventory_findings_sha256"] == sha256(raw_findings), f"{filename}: inventory digest mismatch")
+        validate_generated_counts(document, document["records"])
+        documents.append(document)
+
+    pointer, ffi = documents
+    rules_document = json.loads(pointer_rules.read_text(encoding="utf-8"))
+    review_document = json.loads(ffi_review.read_text(encoding="utf-8"))
+    require(pointer["review_rules_sha256"] == sha256(canonical_bytes(rules_document)), "pointer review-rules digest mismatch")
+    require(ffi["review_source_sha256"] == sha256(canonical_bytes(review_document)), "FFI review-source digest mismatch")
+
+    pointer_by_id: dict[str, dict[str, Any]] = {}
+    for record in pointer["records"]:
+        finding_id = record["finding_id"]
+        require(finding_id not in pointer_by_id, f"duplicate pointer triage finding: {finding_id}")
+        require(finding_id in finding_by_id, f"pointer triage references unknown finding: {finding_id}")
+        finding = finding_by_id[finding_id]
+        require(finding["category"].startswith("pointer_equality."), f"{finding_id}: triage is not a pointer finding")
+        for field in ("repository", "repository_commit", "source_path", "location", "category"):
+            require(record[field] == finding[field], f"{finding_id}: triage {field} differs from inventory")
+        require(record["operator"] == finding["details"]["operator"], f"{finding_id}: triage operator differs")
+        pointer_by_id[finding_id] = record
+    expected_pointer_ids = {finding["finding_id"] for finding in findings if finding["category"].startswith("pointer_equality.")}
+    require(set(pointer_by_id) == expected_pointer_ids, "pointer triage does not cover every inventory pointer finding exactly once")
+
+    ffi_by_id: dict[str, dict[str, Any]] = {}
+    ledger_ids: set[str] = set()
+    for record in ffi["records"]:
+        finding_id = record["finding_id"]
+        require(finding_id not in ffi_by_id, f"duplicate FFI triage finding: {finding_id}")
+        require(record["ledger_id"] not in ledger_ids, f"duplicate FFI ledger ID: {record['ledger_id']}")
+        require(finding_id in finding_by_id, f"FFI triage references unknown finding: {finding_id}")
+        finding = finding_by_id[finding_id]
+        require(finding["category"] == "ffi.custom_call", f"{finding_id}: triage is not a custom FFI call")
+        for field in ("repository", "repository_commit", "source_path", "location"):
+            require(record[field] == finding[field], f"{finding_id}: FFI triage {field} differs from inventory")
+        require(record["command"] == finding["details"]["command_literal_raw"], f"{finding_id}: FFI command differs")
+        reproducer = inventory_dir.parent / record["minimal_reproducer"].removeprefix("compatibility/")
+        require(reproducer.is_file(), f"{finding_id}: missing FFI reproducer: {record['minimal_reproducer']}")
+        ffi_by_id[finding_id] = record
+        ledger_ids.add(record["ledger_id"])
+    expected_ffi_ids = {finding["finding_id"] for finding in findings if finding["category"] == "ffi.custom_call"}
+    require(set(ffi_by_id) == expected_ffi_ids, "FFI triage does not cover every customFFI finding exactly once")
+    return pointer_by_id, ffi_by_id
+
+
 def validate_imports(ledger: dict[str, Any], repos_root: Path) -> set[str]:
     imported_ids: set[str] = set()
     for source in ledger["imports"]:
@@ -304,6 +398,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--summary-schema", type=Path, required=True)
     parser.add_argument("--repos-root", type=Path, required=True)
     parser.add_argument("--inventory-dir", type=Path, required=True)
+    parser.add_argument("--pointer-triage-schema", type=Path, required=True)
+    parser.add_argument("--ffi-triage-schema", type=Path, required=True)
+    parser.add_argument("--pointer-rules", type=Path, required=True)
+    parser.add_argument("--ffi-review", type=Path, required=True)
     return parser.parse_args(argv)
 
 
@@ -326,13 +424,27 @@ def main(argv: list[str] | None = None) -> int:
             args.summary_schema,
             args.repos_root,
         )
+        pointer_by_id, ffi_by_id = load_and_validate_triage(
+            args.inventory_dir,
+            args.pointer_triage_schema,
+            args.ffi_triage_schema,
+            args.pointer_rules,
+            args.ffi_review,
+            findings,
+        )
         for entry in ledger["entries"]:
-            if entry["affected_files_status"] == "inventory_query":
-                count = sum(selector_matches(finding, entry["inventory_selector"]) for finding in findings)
-                require(count > 0, f"{entry['id']}: inventory selector matches no findings")
+            matched = [
+                finding for finding in findings
+                if selector_matches(finding, entry["inventory_selector"], pointer_by_id, ffi_by_id)
+            ]
+            require(matched, f"{entry['id']}: inventory selector matches no findings")
+            if entry["affected_files_status"] == "enumerated":
+                actual_files = {(finding["repository"], finding["source_path"]) for finding in matched}
+                declared_files = {(item["repository"], item["path"]) for item in entry["affected_corpus_files"]}
+                require(declared_files == actual_files, f"{entry['id']}: enumerated affected files differ from selector")
         print(
-            f"ledger ok: {len(local_ids)} project review entries, "
-            f"{len(imported_ids)} authoritative imported entry, {len(findings)} inventory findings"
+            f"ledger ok: {len(local_ids)} project entries, {len(imported_ids)} authoritative imported entry, "
+            f"{len(findings)} inventory findings, {len(pointer_by_id)} pointer reviews, {len(ffi_by_id)} FFI reviews"
         )
     except (OSError, KeyError, TypeError, ValueError, subprocess.SubprocessError, ValidationError) as error:
         print(f"ledger validation failed: {error}", file=sys.stderr)

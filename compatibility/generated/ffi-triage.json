@@ -1,0 +1,108 @@
+{
+  "counts": {
+    "by_s3_dependency_status": {
+      "required_runtime_call": 2
+    },
+    "total": 2
+  },
+  "evidence_boundary": "This is a source-backed call-chain and current-C-glue review, not a verified refinement result. Runtime ABI, total validation, deterministic failure behavior, sandbox policy, and the platform trust argument remain proof obligations.",
+  "inventory_findings_sha256": "29bf0bf9bb9c23b0ba4e77b271e1fc82282023c16e703dcd0cb5ac027a5e75e7",
+  "records": [
+    {
+      "command": "chdir",
+      "current_abi": {
+        "command_encoding": "literal custom command name chdir",
+        "error_mapping": "nonzero a[0] becomes Sys_error(\"Sys.chdir: unsuccessful FFI\")",
+        "input_encoding": "caller-allocated zero-filled byte array of OCaml string length plus one, with path bytes copied at offset zero",
+        "output_encoding": "a[0] = 0 on C chdir success and 1 on failure",
+        "validation_observed": "C glue asserts alen >= 1 but does not validate a terminating NUL, embedded NULs, path policy, or writable output before invoking chdir"
+      },
+      "finding_id": "CF-282ec324cdbe73b06e95",
+      "ledger_disposition": "open_ffi_contract",
+      "ledger_id": "PROJECT-FFI-CHDIR-001",
+      "location": {
+        "column": 11,
+        "end_column": 28,
+        "end_line": 14,
+        "line": 14
+      },
+      "minimal_reproducer": "compatibility/oracles/custom_ffi_chdir.ml",
+      "proof_obligations": [
+        "Specify and prove the byte-array/NUL and result-byte ABI between CakeML customFFI, chdir_to_root.ml, and the C glue for every input, including empty and embedded-NUL paths.",
+        "Replace process-aborting assertions and implicit C-string assumptions with total deterministic validation and documented errors.",
+        "Show successful boot enters the pinned Candle repository root and failure cannot silently continue from a different source tree.",
+        "Account for the patched C function and host chdir syscall in the platform trust boundary, including OS portability and regression tests."
+      ],
+      "repository": "candle",
+      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "s3_dependency": {
+        "basis": "compiler_boot_image_startup",
+        "evidence": [
+          "build-instructions.sh:39 appends the call site to candle_boot.ml; candle/chdir_to_root.ml:17 invokes chdir immediately at boot."
+        ],
+        "status": "required_runtime_call"
+      },
+      "security_posture": "open_platform_trust_item",
+      "semantic_confidence": "high",
+      "semantic_intent": "process_working_directory_bootstrap",
+      "source_evidence": [
+        "candle/chdir_to_root.ml:8-17 constructs a zero-filled len+1 byte buffer, copies the requested path, calls customFFI chdir, and maps a nonzero byte to Sys_error.",
+        "build-instructions.sh:34-44 appends chdir_to_root.ml to candle_boot.ml because the binary starts in candle/build and must enter CANDLE_ROOT.",
+        "candle/basis_ffi.c.patch:6-13 checks only alen >= 1, calls C chdir(a), and writes a boolean failure flag to a[0]."
+      ],
+      "source_path": "candle/chdir_to_root.ml"
+    },
+    {
+      "command": "system",
+      "current_abi": {
+        "command_encoding": "literal custom command name system",
+        "error_mapping": "positive a[0] becomes Sys_error; otherwise Sys.command returns the unsigned exit-status byte",
+        "input_encoding": "zero-filled byte array of max(2, command byte length plus one), interpreted by C system as a NUL-terminated shell command",
+        "output_encoding": "a[0] = 0 and a[1] = WEXITSTATUS for normal exit; a[0] > 0 for system failure or non-normal termination",
+        "validation_observed": "C glue uses assertions for minimum size/NUL existence and intentionally passes the string to the host shell; it does not constrain commands, environment, PATH, filesystem effects, or output determinism"
+      },
+      "finding_id": "CF-748db480583c63713851",
+      "ledger_disposition": "open_ffi_contract",
+      "ledger_id": "PROJECT-FFI-SYSTEM-001",
+      "location": {
+        "column": 13,
+        "end_column": 35,
+        "end_line": 294,
+        "line": 294
+      },
+      "minimal_reproducer": "compatibility/oracles/custom_ffi_system.ml",
+      "proof_obligations": [
+        "Specify and prove the command/result ABI and its equivalence to the required OCaml Sys.command observations, including exit, signal, launch-failure, and embedded-NUL cases.",
+        "Replace process-aborting assertions with total deterministic validation and a stable error convention.",
+        "Define the allowed command grammar, executable/path/environment inputs, filesystem effects, and sandbox policy for the selected Flyspeck certificate workflow.",
+        "Eliminate or justify shell interpretation of repository/environment-derived paths and prove that certificate extraction/cleanup cannot escape the designated workspace.",
+        "Account for the unverified C glue, host shell, tar, and rm in the platform trust statement and add differential, malformed-input, and sandbox regression tests."
+      ],
+      "repository": "candle",
+      "repository_commit": "177a9c1e759355a325842650d224b56a3d4437dd",
+      "s3_dependency": {
+        "basis": "selected_full_sequence_lp_certificate_consumer",
+        "evidence": [
+          "text_formalization/build/build.hl:243,249,250 selects lp_certificate.hl, verify_all.hl, and tame/linear_programming_results.hl.",
+          "tame/linear_programming_results.hl:40-43 calls Verify_all.verify_all; formal_lp/glpk/binary contains hard_7.tar.gz; lp_certificate.hl:124-141 dispatches .gz inputs through Sys.command."
+        ],
+        "status": "required_runtime_call"
+      },
+      "security_posture": "open_high_risk_shell_and_platform_trust_item",
+      "semantic_confidence": "high",
+      "semantic_intent": "ocaml_sys_command_shell_bridge",
+      "source_evidence": [
+        "candle/ocaml.ml:286-301 implements Sys.command by zero-initializing max(2,slen+1) bytes, copying the command, calling customFFI system, rejecting missing termination status, and returning a[1].",
+        "hol_lib.ml:17-27 unconditionally loads candle/ocaml.ml in the selected foundation.",
+        "formal_lp/hypermap/main/lp_certificate.hl:124-141 uses Sys.command to unpack .tar.gz certificates and remove the temporary directory.",
+        "formal_lp/glpk/binary/hard_7.tar.gz is a tracked selected certificate, so Verify_all.verify_hard reaches the compressed-certificate branch during tame/linear_programming_results.hl:40-43.",
+        "candle/basis_ffi.c.patch:15-31 asserts alen >= 2 and some NUL, calls C system, returns WEXITSTATUS, and reports non-exited children via positive a[0]."
+      ],
+      "source_path": "candle/ocaml.ml"
+    }
+  ],
+  "reproduce": "scripts/update-compatibility-inventory.sh /project/repos",
+  "review_source_sha256": "0754f2aa5508f641f9e71179f9caf8aa5b76a490db0b54a13c7c2af52a32ef15",
+  "schema_version": 1,
+  "triage_kind": "custom_ffi_source_review"
+}

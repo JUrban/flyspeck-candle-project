@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flyspeck-candle.invalid/schema/pointer-triage-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "triage_kind", "inventory_findings_sha256", "review_rules_sha256", "evidence_boundary", "reproduce", "counts", "records"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "triage_kind": {"const": "pointer_equality_source_review"},
+    "inventory_findings_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "review_rules_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence_boundary": {"type": "string", "minLength": 1},
+    "reproduce": {"type": "string", "minLength": 1},
+    "counts": {"type": "object"},
+    "records": {"type": "array", "items": {"$ref": "#/$defs/record"}}
+  },
+  "$defs": {
+    "location": {
+      "type": "object", "additionalProperties": false,
+      "required": ["line", "column", "end_line", "end_column"],
+      "properties": {
+        "line": {"type": "integer", "minimum": 1}, "column": {"type": "integer", "minimum": 1},
+        "end_line": {"type": "integer", "minimum": 1}, "end_column": {"type": "integer", "minimum": 1}
+      }
+    },
+    "dependency": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "basis", "evidence"],
+      "properties": {
+        "status": {"enum": ["required_source", "not_selected_source"]},
+        "basis": {"type": "string", "minLength": 1},
+        "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["finding_id", "repository", "repository_commit", "source_path", "location", "category", "operator", "operator_resolution", "semantic_intent", "semantic_confidence", "semantic_evidence", "s3_dependency", "ledger_disposition", "review_rule_id"],
+      "properties": {
+        "finding_id": {"type": "string", "pattern": "^CF-[0-9a-f]{20}$"},
+        "repository": {"enum": ["candle", "flyspeck"]},
+        "repository_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "source_path": {"type": "string", "minLength": 1},
+        "location": {"$ref": "#/$defs/location"},
+        "category": {"enum": ["pointer_equality.infix_use", "pointer_equality.operator_binding", "pointer_equality.operator_reference"]},
+        "operator": {"enum": ["==", "!="]},
+        "operator_resolution": {"enum": ["builtin_physical_equality", "local_custom_operator_definition", "locally_rebound_custom_value_equality"]},
+        "semantic_intent": {"enum": ["custom_value_equality", "custom_value_equality_definition", "identity_filter_predicate", "identity_key_lookup", "identity_shortcut_before_structural_comparison", "immediate_scalar_value_comparison", "rollback_tail_identity_sentinel", "structural_sharing_control"]},
+        "semantic_confidence": {"enum": ["high", "medium"]},
+        "semantic_evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "s3_dependency": {"$ref": "#/$defs/dependency"},
+        "ledger_disposition": {"enum": ["open_identity_contract", "open_immediate_representation_contract", "excluded_from_pointer_identity_after_name_resolution", "excluded_from_selected_s3_route"]},
+        "review_rule_id": {"type": "string", "pattern": "^PTR-[A-Z0-9-]+$"}
+      }
+    }
+  }
+}

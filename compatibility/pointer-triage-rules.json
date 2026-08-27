@@ -1,0 +1,357 @@
+{
+  "schema_version": 1,
+  "evidence_boundary": "Manual source review classifies the role of each pinned token and membership in the explicitly selected S3 source route. A required source dependency is not proof that the expression is dynamically evaluated. A not-selected record is an exclusion from this route, not a claim that the file is dead in every HOL Light workflow.",
+  "rules": [
+    {
+      "id": "PTR-CANDLE-INFORMAL-BIGINT-BINDING",
+      "selector": {"repository": "candle", "source_path": "Formal_ineqs/informal/informal_float.hl", "lines": [455]},
+      "operator_resolution": "local_custom_operator_definition",
+      "semantic_intent": "custom_value_equality_definition",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["Formal_ineqs/informal/informal_float.hl:454-456 binds (==) to Big_int.eq_big_int in the enclosing let."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "outside_explicit_full_sequence", "evidence": ["text_formalization/build/build.hl:38-383 is the selected full sequence; it contains no Formal_ineqs/informal/informal_float.hl entry."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-INFORMAL-BIGINT-USE",
+      "selector": {"repository": "candle", "source_path": "Formal_ineqs/informal/informal_float.hl", "lines": [456]},
+      "operator_resolution": "locally_rebound_custom_value_equality",
+      "semantic_intent": "custom_value_equality",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["Formal_ineqs/informal/informal_float.hl:455-456 places the infix expression in the let scope where (==) is Big_int.eq_big_int."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "outside_explicit_full_sequence", "evidence": ["text_formalization/build/build.hl:38-383 contains no Candle Formal_ineqs informal source."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-BITMATCH-IMMEDIATES",
+      "selector": {"repository": "candle", "source_path": "Library/bitmatch.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["Library/bitmatch.ml:575 compares integer counters with zero; :950 compares a bit-mask integer with zero; :1007 compares boolean options."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "optional_library_outside_selected_roots", "evidence": ["hol_lib.ml:17-134 and Multivariate/flyspeck.ml:5-8 select the direct foundation; neither selects Library/bitmatch.ml."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-NTRIE-IMMEDIATES",
+      "selector": {"repository": "candle", "source_path": "Ntrie/ntrie.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["Ntrie/ntrie.ml:236-257 gives mk_small_ntrie an OCaml int input; all three == uses compare those integers with zero or one another."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "optional_library_outside_selected_roots", "evidence": ["The selected hol_lib.ml foundation does not load Ntrie/ntrie.ml."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-PROOFRECORDING-BASICS-SHARING",
+      "selector": {"repository": "candle", "source_path": "Proofrecording/diffs/basics.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "structural_sharing_control",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["Proofrecording/diffs/basics.ml:113-126 returns the original term precisely when recursive substitution returned the original child objects."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_patch_tree", "evidence": ["The occurrences are under Proofrecording/diffs; hol_lib.ml loads basics.ml from the repository root instead."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-PROOFRECORDING-INT-ID",
+      "selector": {"repository": "candle", "source_path": "Proofrecording/diffs/proofobjects_coq.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["Proofrecording/diffs/proofobjects_coq.ml:509-511 defines Nvar's first field as int; :999-1003 compares two such identifiers."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_patch_tree", "evidence": ["The source is under Proofrecording/diffs and is not in the selected hol_lib.ml foundation or Flyspeck sequence."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-PROOFRECORDING-THM-ORDER-SHORTCUT",
+      "selector": {"repository": "candle", "source_path": "Proofrecording/diffs/thm.ml", "lines": [60]},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_shortcut_before_structural_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["Proofrecording/diffs/thm.ml:59-61 uses identity as the fast zero case before structural term ordering."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_patch_tree", "evidence": ["hol_lib.ml selects candle/kernel.ml, not Proofrecording/diffs/thm.ml."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-PROOFRECORDING-THM-SHARING",
+      "selector": {"repository": "candle", "source_path": "Proofrecording/diffs/thm.ml", "lines": [92, 99]},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "structural_sharing_control",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["Proofrecording/diffs/thm.ml:91-100 tests whether recursive list/term transformations returned their original objects before rebuilding."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_patch_tree", "evidence": ["hol_lib.ml selects candle/kernel.ml, not Proofrecording/diffs/thm.ml."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-QBF-IMMEDIATES",
+      "selector": {"repository": "candle", "source_path": "QBF/qbf.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["QBF/qbf.ml:564 compares compare's int result with zero; :966 compares two List.length int results."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "optional_extension_outside_selected_roots", "evidence": ["QBF/qbf.ml is not selected by hol_lib.ml, Multivariate/flyspeck.ml, or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-TACTICTRACE-IMMEDIATE",
+      "selector": {"repository": "candle", "source_path": "TacticTrace/tracer.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["TacticTrace/tracer.ml:939-944 obtains l1/l2 as line-number ints and uses != to choose the sort difference."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "development_tool_outside_selected_roots", "evidence": ["TacticTrace/tracer.ml is an instrumentation source absent from the selected foundation and full Flyspeck sequence."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-FUSION-ORDER-SHORTCUT",
+      "selector": {"repository": "candle", "source_path": "fusion.ml", "lines": [442]},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_shortcut_before_structural_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["fusion.ml:441-443 uses identity as the fast zero case before recursive term ordering."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "replaced_kernel_component", "evidence": ["hol_lib.ml:48-50 explicitly loads candle/kernel.ml as the Candle kernel; it does not load fusion.ml."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-FUSION-SHARING",
+      "selector": {"repository": "candle", "source_path": "fusion.ml", "lines": [192, 356, 360, 381, 386, 388, 392, 474, 481]},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "structural_sharing_control",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["fusion.ml:191-193,355-392,473-481 uses identity to preserve original type, term, and list nodes when transformations return unchanged children."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "replaced_kernel_component", "evidence": ["hol_lib.ml:48-50 explicitly loads candle/kernel.ml instead of fusion.ml."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-PAJ-IMMEDIATES",
+      "selector": {"repository": "candle", "source_path_prefix": "pa_j/"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["All pa_j findings compare lexer integer positions/counts or characters; repeated reviewed forms include i == String.length, n == 1, and x.[0] == '*'."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "host_parser_build_tool", "evidence": ["Makefile:73-87 selects one pa_j version to build the host OCaml/Camlp syntax extension; build-instructions.sh:14-44 builds and boots the separate CakeML compiler without loading pa_j sources."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-CANDLE-THECOPS-ROLLBACK-SENTINEL",
+      "selector": {"repository": "candle", "source_path": "thecops.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "rollback_tail_identity_sentinel",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["thecops.ml:350-359 saves a substitution-list tail and mutates env until its current list is the identical saved tail."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "disabled_optional_extension", "evidence": ["hol_lib.ml:89-91 has loads \"thecops.ml\" inside a comment and therefore disables it on the selected foundation route."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+
+    {
+      "id": "PTR-FLYSPECK-AZURE-BIGINT-BINDING",
+      "selector": {"repository": "flyspeck", "source_path": "azure/formal_ineqs-nat/informal/informal_float.hl", "lines": [348]},
+      "operator_resolution": "local_custom_operator_definition",
+      "semantic_intent": "custom_value_equality_definition",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/formal_ineqs-nat/informal/informal_float.hl:347-349 binds (==) to Big_int.eq_big_int."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["The selected loader roots text_formalization/build/build.hl and ../formal_lp paths; no azure path appears in Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-BIGINT-USE",
+      "selector": {"repository": "flyspeck", "source_path": "azure/formal_ineqs-nat/informal/informal_float.hl", "lines": [349]},
+      "operator_resolution": "locally_rebound_custom_value_equality",
+      "semantic_intent": "custom_value_equality",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/formal_ineqs-nat/informal/informal_float.hl:348-349 places the use inside the Big_int.eq_big_int binding."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-BASICS-SHARING",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/basics.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "structural_sharing_control",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/hol-light-nat/basics.ml:115-128 preserves the original term when substitution returned identical children."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-CALCNUM-SHORTCUT",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/calc_num.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_shortcut_before_structural_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/hol-light-nat/calc_num.ml:263-266 treats identical term objects as the fast orderrelation case before further analysis."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-FUSION-ORDER-SHORTCUT",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/fusion.ml", "lines": [443]},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_shortcut_before_structural_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/hol-light-nat/fusion.ml:442-444 uses identity as the fast term-ordering case."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-FUSION-SHARING",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/fusion.ml", "lines": [193, 357, 361, 382, 387, 389, 393, 475, 482]},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "structural_sharing_control",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/hol-light-nat/fusion.ml:192-193,356-393,474-482 preserves original type, term, and list nodes when recursive results retain identity."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-GROBNER-IDENTITY-KEY",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/grobner.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_key_lookup",
+      "semantic_confidence": "medium",
+      "semantic_evidence": ["azure/hol-light-nat/grobner.ml:487-489 uses == as the key predicate of the local assoceq lookup; the source does not document why identity rather than structural equality is required."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-LIB-SHARING",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/lib.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "structural_sharing_control",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/hol-light-nat/lib.ml:213-222,349-350,482-483,635-654 checks unchanged recursive results before reusing list or trie nodes."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-MESON-SHORTCUT",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/meson.ml", "lines": [257]},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_shortcut_before_structural_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/hol-light-nat/meson.ml:256-258 uses identity as the fast case before recursive first-order term equality."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-MESON-SHARING",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/meson.ml", "lines": [75, 198, 202, 213, 217, 722]},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "structural_sharing_control",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/hol-light-nat/meson.ml:74-75,197-217,721-722 uses identity for unchanged-list sentinels and to avoid rebuilding unchanged terms/atoms."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-AZURE-PAJ-IMMEDIATE",
+      "selector": {"repository": "flyspeck", "source_path": "azure/hol-light-nat/pa_j.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["azure/hol-light-nat/pa_j.ml:864 compares the lexer repetition count n with integer 1."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "alternative_azure_tree", "evidence": ["No azure path appears in the selected loader or Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-FORMAL-INFORMAL-BIGINT-BINDING",
+      "selector": {"repository": "flyspeck", "source_path": "formal_ineqs/informal/informal_float.hl", "lines": [450]},
+      "operator_resolution": "local_custom_operator_definition",
+      "semantic_intent": "custom_value_equality_definition",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["formal_ineqs/informal/informal_float.hl:449-451 binds (==) to Big_int.eq_big_int."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "informal_source_outside_explicit_full_sequence", "evidence": ["Build.build_sequence_full includes formal LP proof/checker inputs but not formal_ineqs/informal/informal_float.hl."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-FORMAL-INFORMAL-BIGINT-USE",
+      "selector": {"repository": "flyspeck", "source_path": "formal_ineqs/informal/informal_float.hl", "lines": [451]},
+      "operator_resolution": "locally_rebound_custom_value_equality",
+      "semantic_intent": "custom_value_equality",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["formal_ineqs/informal/informal_float.hl:450-451 places the use inside the Big_int.eq_big_int binding."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "informal_source_outside_explicit_full_sequence", "evidence": ["Build.build_sequence_full does not select formal_ineqs/informal/informal_float.hl."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-LP-CUSTOM-BINDING",
+      "selector": {"repository": "flyspeck", "source_path": "formal_lp/hypermap/computations/list_hypermap_computations.hl", "lines": [895], "categories": ["pointer_equality.operator_binding"]},
+      "operator_resolution": "local_custom_operator_definition",
+      "semantic_intent": "custom_value_equality_definition",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["formal_lp/hypermap/computations/list_hypermap_computations.hl:881-896 defines eq_eq as theorem-producing equality and binds (==) to it."],
+      "s3_dependency": {"status": "required_source", "basis": "explicit_full_sequence", "evidence": ["text_formalization/build/build.hl:235 explicitly selects ../formal_lp/hypermap/computations/list_hypermap_computations.hl before the target."]},
+      "ledger_disposition": "excluded_from_pointer_identity_after_name_resolution"
+    },
+    {
+      "id": "PTR-FLYSPECK-LP-CUSTOM-USE",
+      "selector": {"repository": "flyspeck", "source_path": "formal_lp/hypermap/computations/list_hypermap_computations.hl", "lines": [896]},
+      "operator_resolution": "locally_rebound_custom_value_equality",
+      "semantic_intent": "custom_value_equality",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["formal_lp/hypermap/computations/list_hypermap_computations.hl:895-896 places the expression in the let binding where (==) is eq_eq, producing a theorem rather than a bool."],
+      "s3_dependency": {"status": "required_source", "basis": "explicit_full_sequence", "evidence": ["text_formalization/build/build.hl:235 explicitly selects the file before the target."]},
+      "ledger_disposition": "excluded_from_pointer_identity_after_name_resolution"
+    },
+    {
+      "id": "PTR-FLYSPECK-LP-PROVE-INT",
+      "selector": {"repository": "flyspeck", "source_path": "formal_lp/hypermap/main/prove_flyspeck_lp.hl"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["formal_lp/hypermap/main/prove_flyspeck_lp.hl:1041-1050 binds n to count_terminals and compares that OCaml int to 1."],
+      "s3_dependency": {"status": "required_source", "basis": "explicit_full_sequence", "evidence": ["text_formalization/build/build.hl:248 explicitly selects ../formal_lp/hypermap/main/prove_flyspeck_lp.hl before verify_all and the target."]},
+      "ledger_disposition": "open_immediate_representation_contract"
+    },
+    {
+      "id": "PTR-FLYSPECK-LP-TEST-INT",
+      "selector": {"repository": "flyspeck", "source_path": "formal_lp/hypermap/main/test_hard.hl"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "immediate_scalar_value_comparison",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["formal_lp/hypermap/main/test_hard.hl:310-334 compares count_terminals int values to 1 in two test helpers."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "test_source_outside_explicit_full_sequence", "evidence": ["Build.build_sequence_full selects prove_flyspeck_lp.hl at :248 but has no test_hard.hl entry."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-INFORMAL-PRINT-IDENTITY-FILTER",
+      "selector": {"repository": "flyspeck", "source_path": "informal_code/emacs/print-types.ml"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_filter_predicate",
+      "semantic_confidence": "medium",
+      "semantic_evidence": ["informal_code/emacs/print-types.ml:27 passes (!=) s to List.filter; the source does not state whether retaining separately allocated equal strings is intentional."],
+      "s3_dependency": {"status": "not_selected_source", "basis": "informal_tooling_tree", "evidence": ["The source is under informal_code/emacs and no informal_code path is in Build.build_sequence_full."]},
+      "ledger_disposition": "excluded_from_selected_s3_route"
+    },
+    {
+      "id": "PTR-FLYSPECK-GENERAL-LIB-SHARING",
+      "selector": {"repository": "flyspeck", "source_path": "text_formalization/general/lib.hl"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "structural_sharing_control",
+      "semantic_confidence": "high",
+      "semantic_evidence": ["text_formalization/general/lib.hl:209-221,345-350,474-478,622-650 tests whether recursive transforms returned original list/trie nodes and reuses originals when unchanged."],
+      "s3_dependency": {"status": "required_source", "basis": "explicit_full_sequence", "evidence": ["text_formalization/build/build.hl:40 explicitly selects general/lib.hl near the start of Build.build_sequence_full."]},
+      "ledger_disposition": "open_identity_contract"
+    },
+    {
+      "id": "PTR-FLYSPECK-GENERAL-PRINT-IDENTITY-FILTER",
+      "selector": {"repository": "flyspeck", "source_path": "text_formalization/general/print_types.hl"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_filter_predicate",
+      "semantic_confidence": "medium",
+      "semantic_evidence": ["text_formalization/general/print_types.hl:26-34 passes (!=) s to List.filter over suppressed strings; the source-level name unsuppress suggests removal but does not settle physical versus value equality."],
+      "s3_dependency": {"status": "required_source", "basis": "strict_loader_and_explicit_full_sequence", "evidence": ["text_formalization/build/strictbuild.hl:119 explicitly needs general/print_types.hl; build/build.hl:42 also includes it in Build.build_sequence_full."]},
+      "ledger_disposition": "open_identity_contract"
+    },
+    {
+      "id": "PTR-FLYSPECK-JORDAN-IDENTITY-FILTER",
+      "selector": {"repository": "flyspeck", "source_path": "text_formalization/jordan/tactics_jordan.hl"},
+      "operator_resolution": "builtin_physical_equality",
+      "semantic_intent": "identity_filter_predicate",
+      "semantic_confidence": "medium",
+      "semantic_evidence": ["text_formalization/jordan/tactics_jordan.hl:246-258 filters the exact abstraction binder x out of a term-node list with (!=); physical identity is observable, while a broader structural exclusion is not justified by the source alone."],
+      "s3_dependency": {"status": "required_source", "basis": "explicit_full_sequence", "evidence": ["text_formalization/build/build.hl:63 explicitly selects jordan/tactics_jordan.hl."]},
+      "ledger_disposition": "open_identity_contract"
+    }
+  ]
+}

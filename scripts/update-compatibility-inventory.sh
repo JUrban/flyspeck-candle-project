@@ -7,7 +7,12 @@ if [[ $# -ne 1 ]]; then
 fi
 
 project_root=$(cd "$(dirname "$0")/.." && pwd)
-exec python3 "$project_root/scripts/inventory_compatibility.py" \
+python3 "$project_root/scripts/inventory_compatibility.py" \
   --scope "$project_root/compatibility/inventory-scope.toml" \
   --repos-root "$1" \
+  --output-dir "$project_root/compatibility/generated"
+exec python3 "$project_root/scripts/triage_compatibility.py" \
+  --findings "$project_root/compatibility/generated/inventory-findings.jsonl" \
+  --pointer-rules "$project_root/compatibility/pointer-triage-rules.json" \
+  --ffi-review "$project_root/compatibility/ffi-review.json" \
   --output-dir "$project_root/compatibility/generated"

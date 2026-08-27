@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flyspeck-candle.invalid/schema/ffi-triage-v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "triage_kind", "inventory_findings_sha256", "review_source_sha256", "evidence_boundary", "reproduce", "counts", "records"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "triage_kind": {"const": "custom_ffi_source_review"},
+    "inventory_findings_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "review_source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "evidence_boundary": {"type": "string", "minLength": 1},
+    "reproduce": {"type": "string", "minLength": 1},
+    "counts": {"type": "object"},
+    "records": {"type": "array", "items": {"$ref": "#/$defs/record"}}
+  },
+  "$defs": {
+    "record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["command", "ledger_id", "semantic_intent", "semantic_confidence", "source_evidence", "s3_dependency", "current_abi", "minimal_reproducer", "proof_obligations", "security_posture", "ledger_disposition", "finding_id", "repository", "repository_commit", "source_path", "location"],
+      "properties": {
+        "command": {"enum": ["chdir", "system"]},
+        "ledger_id": {"enum": ["PROJECT-FFI-CHDIR-001", "PROJECT-FFI-SYSTEM-001"]},
+        "semantic_intent": {"enum": ["process_working_directory_bootstrap", "ocaml_sys_command_shell_bridge"]},
+        "semantic_confidence": {"const": "high"},
+        "source_evidence": {"type": "array", "minItems": 3, "items": {"type": "string", "minLength": 1}},
+        "s3_dependency": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "basis", "evidence"],
+          "properties": {
+            "status": {"const": "required_runtime_call"}, "basis": {"type": "string", "minLength": 1},
+            "evidence": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        "current_abi": {
+          "type": "object", "additionalProperties": false,
+          "required": ["command_encoding", "input_encoding", "output_encoding", "error_mapping", "validation_observed"],
+          "properties": {
+            "command_encoding": {"type": "string"}, "input_encoding": {"type": "string"},
+            "output_encoding": {"type": "string"}, "error_mapping": {"type": "string"},
+            "validation_observed": {"type": "string"}
+          }
+        },
+        "minimal_reproducer": {"type": "string", "pattern": "^compatibility/oracles/.+\\.ml$"},
+        "proof_obligations": {"type": "array", "minItems": 4, "items": {"type": "string", "minLength": 1}},
+        "security_posture": {"type": "string", "pattern": "^open_"},
+        "ledger_disposition": {"const": "open_ffi_contract"},
+        "finding_id": {"type": "string", "pattern": "^CF-[0-9a-f]{20}$"},
+        "repository": {"const": "candle"},
+        "repository_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "source_path": {"type": "string", "pattern": "^candle/.+\\.ml$"},
+        "location": {"type": "object"}
+      }
+    }
+  }
+}
