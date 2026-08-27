@@ -133,7 +133,7 @@ check_development flyspeck codex/candle-replay \
   2ea440e9f7c55734d1e47738e44a6129ce0ecf5a
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
-  d52a9a847c4dff2509231b3a05199de922547916
+  a2674c3005da788bb6f1ac9046444edbc70983aa
 check_development hol-light-flyspeck codex/flyspeck-pft-compat \
   d8366986e22555c4e4c8ff49667d646d15c35f14 \
-  ead33fbf82d7499919dead57b4ce8b2b06256f55
+  1ea3b9a8c614ffee4116789e23a6dcaa03bdc0b9

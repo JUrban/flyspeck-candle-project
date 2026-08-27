@@ -96,10 +96,12 @@ checkpoint_bytes=$(du -cb "${checkpoint_files[@]}" | tail -n 1 | cut -f1)
 
 timeout 600 dmtcp_restart --new-coordinator --coord-port 0 \
   --ckptdir "$resume_tmp/checkpoint" "${checkpoint_files[@]}" \
+  </dev/null \
   >"$resume_tmp/restart.log" 2>&1
-rg -q '^PFT_CHECKPOINT_RESTORED$' "$resume_tmp/restart.log"
+rg -q '^PFT_CHECKPOINT_RESTORED$' \
+  "$resume_tmp/producer.log" "$resume_tmp/restart.log"
 rg -Fq 'PFT_RESUME_SMOKE_OK commands=304 limits=(63,64,99)' \
-  "$resume_tmp/restart.log"
+  "$resume_tmp/producer.log" "$resume_tmp/restart.log"
 
 cmp "$resume_tmp/baseline.pft.bin" "$resume_tmp/resumed.pft.bin"
 resume_sha=$(sha256sum "$resume_tmp/resumed.pft.bin" | cut -d' ' -f1)

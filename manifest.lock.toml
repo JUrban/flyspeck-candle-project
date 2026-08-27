@@ -58,10 +58,10 @@ development_head = "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a"
 url = "https://github.com/jrh13/hol-light.git"
 observed_master = "433477862bb90b328a593e012e09390e99b2439b"
 development_branch = "codex/flyspeck-pft-producer"
-development_head = "d52a9a847c4dff2509231b3a05199de922547916"
+development_head = "a2674c3005da788bb6f1ac9046444edbc70983aa"
 compatibility_base = "d8366986e22555c4e4c8ff49667d646d15c35f14"
 compatibility_branch = "codex/flyspeck-pft-compat"
-compatibility_head = "ead33fbf82d7499919dead57b4ce8b2b06256f55"
+compatibility_head = "1ea3b9a8c614ffee4116789e23a6dcaa03bdc0b9"
 
 [toolchain.cakeml_binary]
 url = "https://cakeml.org/regression/artefacts/3286/cake-x64-64.tar.gz"
@@ -111,7 +111,7 @@ axioms = ["ETA_AX", "SELECT_AX", "INFINITY_AX"]
 [artifacts.producer_resume]
 path = "repos/candle/candle/pft/tests/fixtures/producer-resume.pft.bin"
 sha256 = "7a3c7cefe5649bd70ddb8fa6a8c6c18443068c9e1e522385c9dce2d767aa0dc2"
-producer_hol_light = "ead33fbf82d7499919dead57b4ce8b2b06256f55"
+producer_hol_light = "1ea3b9a8c614ffee4116789e23a6dcaa03bdc0b9"
 commands = 305
 table_limits = [63, 64, 99]
 targets = ["candle$RESUME_BEFORE", "candle$RESUME_AFTER"]

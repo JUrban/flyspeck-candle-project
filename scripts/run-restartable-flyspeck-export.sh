@@ -225,6 +225,7 @@ run_restart_generation() {
     env DMTCP_GZIP="$checkpoint_gzip" \
       timeout 86400 dmtcp_restart --new-coordinator --coord-port 0 \
         --port-file "$port_file" --ckptdir "$checkpoint_dir" "$checkpoint" \
+        </dev/null \
         >"$log_dir/generation-$(printf '%04d' "$generation").log" 2>&1
   ) &
   restart_pid=$!
