@@ -157,26 +157,26 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 94a336b67ec6ed0085bd786a89bec330d5aa1bc6034b4ce4c360afc09fa1fe55 ]]
+[[ "$direct_manifest_sha" == ea7a3e50fa1063d3b2ea82dd288c5a17adcb5d067a4c13089ea961ec47108eaf ]]
 python3 "$project_dir/scripts/check-direct-dopen-corpus.py" \
   --manifest "$direct_manifest" \
   --findings "$project_dir/compatibility/generated/inventory-findings.jsonl" \
   >/dev/null
 direct_closure="$project_dir/compatibility/generated/direct-closure-summary.json"
 [[ $(sha256sum "$direct_closure" | cut -d' ' -f1) == \
-  4f0fa796accb2fe5476314df3f6b921e20660e1e5e9b1e12f9cef3525cd87d42 ]]
+  2a4bbe8f5e212f99b95e62f73106262b6901a908dda7d7dfecf27784445bb3c1 ]]
 jq -e '
   .manifest.sha256 ==
-    "94a336b67ec6ed0085bd786a89bec330d5aa1bc6034b4ce4c360afc09fa1fe55" and
+    "ea7a3e50fa1063d3b2ea82dd288c5a17adcb5d067a4c13089ea961ec47108eaf" and
   .manifest.source_node_count == 400 and
   .manifest.normalization_source_count == 13 and
   .inventory.sha256 ==
-    "6e45a3471500f9bd0de3dcca59f19fc844e0e2eaa18e42551ca6722479e264e0" and
+    "8095917929b90b2edcbd8afb87d21ab8b0c96614ff894b94feb920a1540eca82" and
   .selected.finding_count == 3689 and
   .selected.source_files_with_findings == 329 and
   .selected.non_dopen_review_occurrences == 509 and
   .selected.site_sha256 ==
-    "c84a4118c275296cadf9914d29c4be831691e3a96db66c831d553c27fed34639" and
+    "659c7a21819f0bdd14b0b08c1ebea5c0d4ea3ac2556ae4bcc772ff3fe79865cd" and
   .selected.by_category["open.declaration"] == 3180 and
   .selected.by_category["open.local_let"] == 0 and
   .selected.by_category["open.local_parenthesized"] == 79 and
@@ -206,7 +206,14 @@ jq -e '
   (.source_node_strata["candle:candle/flyspeck_l2_target.ml"] |
     contains(["final_assembly"])) and
   .dopen_corpus_contract.activation_status ==
-    "inventory-complete-pending-verified-dopen" and
+    "verified-source-stack-integration-pending-compiler-rebuild-and-corpus-run" and
+  .dopen_corpus_contract.verified_cakeml_integration ==
+    {"branch":"codex/flyspeck-v13-integration",
+     "commit":"c006dc4998c354f820d652ce619c0714918a5ed4",
+     "dopen_proof_target":"compiler/inference/tests/dopenTestsTheory.uo",
+     "dopen_proof_theories":39,
+     "ocaml_parser_target":"compiler/parsing/ocaml/camlTestsTheory.uo",
+     "proof_hol4_commit":"a390cbabd3a4521bab4ee20281e3e42933a8a3ae"} and
   .dopen_corpus_contract.occurrence_count == 3180 and
   .dopen_corpus_contract.source_file_count == 234 and
   .dopen_corpus_contract.module_path_count == 193 and
@@ -621,7 +628,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  8d80834b263c22e4f19fe208491be4250959aa19
+  ba90c9151e3340432740aad39c091a5cf123584c
 check_worktree candle-clean-build \
   "$workspace_dir/worktrees/candle-clean-build-v13" \
   codex/flyspeck-v13-clean-build \
@@ -632,6 +639,21 @@ check_worktree cakeml-flyspeck-actions \
   codex/flyspeck-v13-actions \
   14856fcfddeb3fdafdf8a1080e567a55d3102698 \
   1b17732f902fde2efd985905d277a972da73ae0f
+check_worktree cakeml-flyspeck-dopen \
+  "$workspace_dir/worktrees/cakeml-dopen-v13" \
+  codex/flyspeck-v13-dopen \
+  dcc03f2866f05b1db18b9f45c731ce45c3a3133e \
+  8267fcc5bdd81acb4aba906d33f030f59ff3abb9
+check_worktree cakeml-flyspeck-integration \
+  "$workspace_dir/worktrees/cakeml-flyspeck-v13-integration" \
+  codex/flyspeck-v13-integration \
+  dcc03f2866f05b1db18b9f45c731ce45c3a3133e \
+  c006dc4998c354f820d652ce619c0714918a5ed4
+check_worktree HOL-cakeml-dopen \
+  "$workspace_dir/worktrees/HOL-cakeml-dopen-v13" \
+  master \
+  a390cbabd3a4521bab4ee20281e3e42933a8a3ae \
+  a390cbabd3a4521bab4ee20281e3e42933a8a3ae
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa

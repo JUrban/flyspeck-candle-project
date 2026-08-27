@@ -16,12 +16,12 @@
       "included_in_selected_inventory": false
     },
     "inventory_artifacts": {
-      "findings_sha256": "6e45a3471500f9bd0de3dcca59f19fc844e0e2eaa18e42551ca6722479e264e0",
-      "pointer_triage_sha256": "6a66cd4a5fa9225eb792b19f2207c708a9a370601005fbe7d7f9356be485ca78",
-      "ffi_triage_sha256": "d7a3bcb27dcceceb2cfbd6722d8d6b3c8f5fc23aa800d8e7ed1466af088f8c5f",
-      "direct_closure_sha256": "4f0fa796accb2fe5476314df3f6b921e20660e1e5e9b1e12f9cef3525cd87d42",
+      "findings_sha256": "8095917929b90b2edcbd8afb87d21ab8b0c96614ff894b94feb920a1540eca82",
+      "pointer_triage_sha256": "117bfd7336f6af072f157b12ffdd4f3767be0360d55706e84291ba592541ff15",
+      "ffi_triage_sha256": "b60ebdf7c76bea9933a23b701daa958e2925ca84b162ff02682136cd73138100",
+      "direct_closure_sha256": "2a4bbe8f5e212f99b95e62f73106262b6901a908dda7d7dfecf27784445bb3c1",
       "pin_contract_sha256": "7a5dec1222048bbce2dcfc2a190fd5d0f4945e9c3a8dd4339eb0eb4b6002423f",
-      "pin_delta_sha256": "3fba772a5ef8175c256ca90909194219c06c335331629e88b714ef6133f3799b"
+      "pin_delta_sha256": "8f250cdc4046473066dd25b0eb70476d3ea593a24a54d9bb260339968f6b721d"
     }
   },
   "import_contract": {
@@ -106,7 +106,7 @@
       "ocaml_reference": {"status": "observed", "outcome": "OCaml 4.14.1 resolves simple and dotted M.(operator) references to the module binding despite conflicting outer operators, and evaluates the separate M.(general expression) oracle with local-open resolution", "evidence": ["scripts/test-local-open-compatibility.sh => selected operator-reference oracle and general-expression reference oracle pass"]},
       "candle_outcome": {"status": "observed", "outcome": "The clean compiled Candle executable matches OCaml for the selected operator-reference shape, including dotted paths and shadowing; it fails closed on the broader unselected M.(general expression) shape with Undefined variable: Array.get", "evidence": ["scripts/test-local-open-compatibility.sh against clean executable SHA-256 c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f", "compatibility/oracles/open_local_parenthesized_general.ml => pinned negative divergence"]},
       "chosen_remedy": {"status": "implemented", "kind": "exact_selected_syntax_subset", "description": "Accept the already supported M.(operator) form and gate the direct manifest to exactly that body shape; do not claim or enable the broader M.(general expression) form."},
-      "proof_obligation": {"status": "discharged", "description": "For the selected direct closure only, prove every occurrence has the supported operator-reference shape and pin differential name-resolution behavior plus the known broader negative boundary.", "evidence": ["direct compatibility closure SHA-256 4f0fa796accb2fe5476314df3f6b921e20660e1e5e9b1e12f9cef3525cd87d42: 79 operator_reference, zero general_expression", "scripts/test-local-open-compatibility.sh"]},
+      "proof_obligation": {"status": "discharged", "description": "For the selected direct closure only, prove every occurrence has the supported operator-reference shape and pin differential name-resolution behavior plus the known broader negative boundary.", "evidence": ["direct compatibility closure SHA-256 2a4bbe8f5e212f99b95e62f73106262b6901a908dda7d7dfecf27784445bb3c1: 79 operator_reference, zero general_expression", "scripts/test-local-open-compatibility.sh"]},
       "regression_ids": ["CANDLE-LOCAL-OPEN-OPERATOR-001", "CANDLE-LOCAL-OPEN-GENERAL-NEGATIVE-001"],
       "affected_corpus_files": [],
       "affected_files_status": "inventory_query",
@@ -125,7 +125,7 @@
       "ocaml_reference": {"status": "observed", "outcome": "OCaml 4.14.1 accepts the selected ordinary structure, module type, signature constraint, alias, and include forms with the expected name resolution", "evidence": ["scripts/test-module-compatibility.sh => module_selected_supported_oracle_ok"]},
       "candle_outcome": {"status": "observed", "outcome": "The clean compiled Candle executable matches OCaml for the selected ordinary module forms; the separately tracked Set.Make functor application is excluded from this supported subset and fails closed", "evidence": ["scripts/test-module-compatibility.sh against clean executable SHA-256 c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f"]},
       "chosen_remedy": {"status": "implemented", "kind": "exact_selected_syntax_subset", "description": "Accept the already supported ordinary module forms and gate their differential behavior; route the sole selected functor application through PROJECT-MODULE-S3-SET-MAKE-001 instead of claiming general functor support."},
-      "proof_obligation": {"status": "discharged", "description": "Classify every exact selected module occurrence, prove the 15 lexical 'other' declarations are multiline ordinary or constrained structures, and pin the supported behavior and sole excluded functor boundary.", "evidence": ["direct compatibility closure SHA-256 4f0fa796accb2fe5476314df3f6b921e20660e1e5e9b1e12f9cef3525cd87d42", "scripts/test-module-compatibility.sh", "docs/progress/2026-08-27-v1.3-module-subset.md"]},
+      "proof_obligation": {"status": "discharged", "description": "Classify every exact selected module occurrence, prove the 15 lexical 'other' declarations are multiline ordinary or constrained structures, and pin the supported behavior and sole excluded functor boundary.", "evidence": ["direct compatibility closure SHA-256 2a4bbe8f5e212f99b95e62f73106262b6901a908dda7d7dfecf27784445bb3c1", "scripts/test-module-compatibility.sh", "docs/progress/2026-08-27-v1.3-module-subset.md"]},
       "regression_ids": ["CANDLE-MODULE-SELECTED-SUPPORTED-001", "CANDLE-MODULE-FUNCTOR-BOUNDARY-001"],
       "affected_corpus_files": [],
       "affected_files_status": "inventory_query",
@@ -182,7 +182,7 @@
       "ocaml_reference": {"status": "observed", "outcome": "Pinned OCaml 4.14.1 permits Sys.chdir to the current directory and preserves the observed cwd", "evidence": ["scripts/test-unix-process-route-compatibility.sh => SYS_CHDIR_REFERENCE_OK"]},
       "candle_outcome": {"status": "observed", "outcome": "Candle supplies Sys.chdir only as an explicit failure so deferred GLPK bodies typecheck; arbitrary commands, process creation, mkdir, and chdir all abort while deterministic startup metadata and telemetry pass", "evidence": ["Candle 87f1fd965313c090fd4d87bcfcc493a3ad7bc79f", "scripts/test-unix-process-route-compatibility.sh", "candle/compatibility/unix_process_route_audit.md"]},
       "chosen_remedy": {"status": "implemented", "kind": "exact_selected_route_nonuse_with_fail_closed_bindings", "description": "Retain shared GLPK pure definitions, add a fail-closed Sys.chdir name so their deferred bodies typecheck, eliminate the LP archive filesystem/shell lane through the existing authenticated ordinary-input normalization, and reject every unexpected process or mutable-directory invocation."},
-      "proof_obligation": {"status": "open", "description": "The manifest freezes all 32 reviewed GLPK call-chain occurrences, the sole internal open, zero selected external qualified consumers, and the LP mkdir normalization. Promote only after the complete compiled run confirms the generator route is not entered and final theorem statement/assumption/fingerprint evidence matches the reference.", "evidence": ["direct manifest SHA-256 94a336b67ec6ed0085bd786a89bec330d5aa1bc6034b4ce4c360afc09fa1fe55", "Candle manifest unit suite 39/39", "compiled all-source corruption gate passes", "scripts/test-unix-process-route-compatibility.sh"]},
+      "proof_obligation": {"status": "open", "description": "The manifest freezes all 32 reviewed GLPK call-chain occurrences, the sole internal open, zero selected external qualified consumers, and the LP mkdir normalization. Promote only after the complete compiled run confirms the generator route is not entered and final theorem statement/assumption/fingerprint evidence matches the reference.", "evidence": ["direct manifest SHA-256 ea7a3e50fa1063d3b2ea82dd288c5a17adcb5d067a4c13089ea961ec47108eaf", "Candle manifest unit suite 39/39", "compiled all-source corruption gate passes", "scripts/test-unix-process-route-compatibility.sh"]},
       "regression_ids": ["CANDLE-FLYSPECK-UNIX-CHDIR-NEGATIVE-001", "CANDLE-FLYSPECK-GLPK-PROCESS-CHAIN-001", "CANDLE-FLYSPECK-LP-MKDIR-ELIMINATION-001"],
       "affected_corpus_files": [{"repository": "flyspeck", "path": "formal_lp/glpk/glpk_link.ml"}, {"repository": "flyspeck", "path": "formal_lp/glpk/lpproc.ml"}, {"repository": "flyspeck", "path": "formal_lp/hypermap/main/lp_certificate.hl"}],
       "affected_files_status": "enumerated",

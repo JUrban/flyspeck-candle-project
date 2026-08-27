@@ -1,7 +1,7 @@
 {
   "artifacts": {
     "findings_jsonl": "inventory-findings.jsonl",
-    "findings_sha256": "6e45a3471500f9bd0de3dcca59f19fc844e0e2eaa18e42551ca6722479e264e0",
+    "findings_sha256": "8095917929b90b2edcbd8afb87d21ab8b0c96614ff894b94feb920a1540eca82",
     "lexical_notes_json": "inventory-lexical-notes.json"
   },
   "counts": {
@@ -179,7 +179,7 @@
   "inventory_id": "candle-flyspeck-ocaml-syntax-v1",
   "repositories": {
     "candle": {
-      "commit": "8d80834b263c22e4f19fe208491be4250959aa19",
+      "commit": "ba90c9151e3340432740aad39c091a5cf123584c",
       "dirty": false,
       "encodings": {
         "latin-1": 2,
@@ -210,7 +210,7 @@
   },
   "schema_version": 1,
   "scope_kind": "tracked_ocaml_family_repository_snapshot",
-  "scope_sha256": "7aa456fc23c430d5d6bf327a134b53da03c4e2e27193f650890a5bbe359a6383",
+  "scope_sha256": "fa16021a4cc4d6d9cb2b91c446eb751557d745929039e4b52d4141469c9c6cfb",
   "totals": {
     "findings": 6074,
     "lexical_notes": 1,

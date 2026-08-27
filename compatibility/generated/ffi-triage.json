@@ -4,7 +4,7 @@
     "total": 0
   },
   "evidence_boundary": "The selected direct-source Candle branch and generated boot contain no Runtime.customFFI call. The clean executable c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f uses the pristine archive basis_ffi.c and reaches the authenticated Dopen frontier; historical chdir/system observations remain as outside-closure ledger history.",
-  "inventory_findings_sha256": "6e45a3471500f9bd0de3dcca59f19fc844e0e2eaa18e42551ca6722479e264e0",
+  "inventory_findings_sha256": "8095917929b90b2edcbd8afb87d21ab8b0c96614ff894b94feb920a1540eca82",
   "records": [],
   "reproduce": "scripts/update-compatibility-inventory.sh /project/repos",
   "review_source_sha256": "8e5eff6e3c80faae65894d48beaab83f4147663c23ab8e0bd9dafb827a85654e",
