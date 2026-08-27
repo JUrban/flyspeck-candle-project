@@ -77,7 +77,7 @@ purpose = "pinned reference semantics and differential oracle source for the dir
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "eb88bc98789591d793626ebd894399095b3019d2"
+development_head = "921e7f25f480a08f3cec296befd0bc50adb94bbc"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -145,9 +145,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "5897debad9e9004b8fef240c848d1b9b552960f717f6124c04d56e3c3829546b"
+sha256 = "6ef2189d4d7caf5f45d283a55f86c106242e5f6d4864325532402ed8336a2b80"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "eb88bc98789591d793626ebd894399095b3019d2"
+generator_candle = "921e7f25f480a08f3cec296befd0bc50adb94bbc"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 400
@@ -156,6 +156,14 @@ generated_inputs = 42
 build_strata = 8
 build_strata_order = ["base", "arithmetic", "nonlinear_support", "analysis", "geometry", "lp_support", "text_formalization", "final_assembly"]
 build_strata_entry_counts = [30, 8, 12, 11, 91, 33, 106, 6]
+dopen_corpus_activation = "inventory-complete-pending-verified-dopen"
+dopen_corpus_occurrences = 3180
+dopen_corpus_source_files = 234
+dopen_corpus_module_paths = 193
+dopen_corpus_path_forms = ["simple:3180", "dotted:0"]
+dopen_corpus_override_suppression = 0
+dopen_corpus_site_sha256 = "bce30814051df12ea23c14f2918a55e6b839b72760fd58b8996e32f1c05bf282"
+dopen_corpus_earliest_stratum_occurrences = [29, 22, 13, 35, 841, 177, 2048, 15]
 runtime_library_directives = 5
 runtime_qualified_uses = 39
 runtime_open_attributed_uses = 3

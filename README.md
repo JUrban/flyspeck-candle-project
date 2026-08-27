@@ -40,7 +40,10 @@ active and fail-closed.  Phrase-start recognition, module-item separators, and
 loaded-file EOF are covered by compiled regressions.  The clean direct loader
 now completes normalized `general/parser_verbose.hl` and stops at the exact
 `open Parser_verbose` declaration in `general/debug.hl`, pending integration of
-the verified Dopen work.
+the verified Dopen work.  The exact direct graph contains 3,180 declaration
+opens across 234 Flyspeck files and 193 module names; a generated site digest
+and earliest-stratum counts prevent a synthetic-only Dopen result from closing
+G2.
 The first baseline is deliberately
 allowed to expose and retain compatibility failures; fixture theorem counts,
 parser-only successes, and broad source patching do not promote a gate.

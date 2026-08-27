@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 5897debad9e9004b8fef240c848d1b9b552960f717f6124c04d56e3c3829546b ]]
+[[ "$direct_manifest_sha" == 6ef2189d4d7caf5f45d283a55f86c106242e5f6d4864325532402ed8336a2b80 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -140,6 +140,20 @@ jq -e '
   ([.source_node_strata[] | select(length == 0)] | length) == 0 and
   (.source_node_strata["candle:candle/flyspeck_l2_target.ml"] |
     contains(["final_assembly"])) and
+  .dopen_corpus_contract.activation_status ==
+    "inventory-complete-pending-verified-dopen" and
+  .dopen_corpus_contract.occurrence_count == 3180 and
+  .dopen_corpus_contract.source_file_count == 234 and
+  .dopen_corpus_contract.module_path_count == 193 and
+  .dopen_corpus_contract.path_form_counts == {"dotted": 0, "simple": 3180} and
+  .dopen_corpus_contract.override_warning_suppression_count == 0 and
+  .dopen_corpus_contract.site_sha256 ==
+    "bce30814051df12ea23c14f2918a55e6b839b72760fd58b8996e32f1c05bf282" and
+  [.dopen_corpus_contract.earliest_stratum_counts[].name] ==
+    ["base", "arithmetic", "nonlinear_support", "analysis", "geometry",
+     "lp_support", "text_formalization", "final_assembly"] and
+  [.dopen_corpus_contract.earliest_stratum_counts[].occurrence_count] ==
+    [29, 22, 13, 35, 841, 177, 2048, 15] and
   .static_full_build_contract.activation_status ==
     "exact-action-and-overlay-active-pending-full-run" and
   .static_full_build_contract.generated_source ==
@@ -400,7 +414,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  eb88bc98789591d793626ebd894399095b3019d2
+  921e7f25f480a08f3cec296befd0bc50adb94bbc
 check_worktree cakeml-flyspeck-actions \
   "$workspace_dir/worktrees/cakeml-flyspeck-actions-v13" \
   codex/flyspeck-v13-actions \
