@@ -177,9 +177,12 @@ run_restart_generation() {
   local restart_pid
   local wait_index
   find "$port_file" -maxdepth 0 -type f -delete 2>/dev/null || true
-  timeout 86400 dmtcp_restart --new-coordinator --coord-port 0 \
-    --port-file "$port_file" --ckptdir "$checkpoint_dir" "$checkpoint" \
-    >"$log_dir/generation-$(printf '%04d' "$generation").log" 2>&1 &
+  (
+    cd "$checkpoint_dir"
+    timeout 86400 dmtcp_restart --new-coordinator --coord-port 0 \
+      --port-file "$port_file" --ckptdir "$checkpoint_dir" "$checkpoint" \
+      >"$log_dir/generation-$(printf '%04d' "$generation").log" 2>&1
+  ) &
   restart_pid=$!
   for ((wait_index = 0; wait_index < 100; wait_index++)); do
     [[ -s "$port_file" ]] && break
