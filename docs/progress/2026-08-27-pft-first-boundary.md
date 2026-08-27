@@ -38,6 +38,19 @@ The supervisor now re-executes once from a complete in-memory copy.  A later
 project commit can no longer change the program of an active supervisor.  The
 saved trace and DMTCP image were not modified while this was diagnosed.
 
+Generation 1 then restored the hashed image with a new coordinator and
+published the exact status
+
+```text
+resumed  0  Multivariate/flyspeck.ml  8427171576  954134966  104393  243740  30827635
+```
+
+The trace subsequently grew beyond the boundary while the restored producer
+held the same approximately 21 GiB resident set.  `/proc` confirms the active
+supervisor has `CANDLE_PFT_SUPERVISOR_IN_MEMORY=1` and the pinned project
+directory in its environment.  This establishes usable checkpoint recovery;
+it does not yet establish completion of the full validation run.
+
 ## Cross-run byte comparison
 
 An older gzip-checkpoint run used identical Candle, producer, Flyspeck, and
