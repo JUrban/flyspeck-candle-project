@@ -1,6 +1,20 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Bash reads a long-running script incrementally.  Replacing this file while a
+# producer is active can therefore splice old and new source into one shell
+# process.  Re-execute once from a complete in-memory copy so later project
+# commits cannot change the active supervisor program.
+if [[ ${CANDLE_PFT_SUPERVISOR_IN_MEMORY:-0} != 1 ]]; then
+  supervisor_source=$(realpath -- "${BASH_SOURCE[0]}")
+  supervisor_project_dir=$(
+    cd -- "$(dirname -- "$supervisor_source")/.." && pwd
+  )
+  exec env CANDLE_PFT_SUPERVISOR_IN_MEMORY=1 \
+    CANDLE_PFT_PROJECT_DIR="$supervisor_project_dir" \
+    bash -c "$(<"$supervisor_source")" "$supervisor_source" "$@"
+fi
+
 usage() {
   printf 'usage: %s <main|full> <output.pft.bin> <state-directory>\n' "$0" >&2
   exit 2
@@ -10,7 +24,7 @@ usage() {
 sequence=$1
 [[ "$sequence" == main || "$sequence" == full ]] || usage
 
-project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+project_dir=${CANDLE_PFT_PROJECT_DIR:?missing in-memory project directory}
 workspace_dir=$(cd -- "$project_dir/.." && pwd)
 repos_dir="$workspace_dir/repos"
 candle_dir="$repos_dir/candle"
