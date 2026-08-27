@@ -61,6 +61,13 @@ uses the same boundary for the checked-in `main` and `full` sequences.  This
 implements G2/G8 restart semantics but does not supply the full-trace resource
 measurement or final theorem replay needed to mark either row proved.
 
+The live locked full run has also crossed exporter-managed source boundaries
+20 and 30.  Boundary 20 restored with exact byte offset, command count, and
+type/term/theorem counters before proof production continued.  The coordinator
+discovery repair and the rejected mid-proof snapshot are recorded in
+`docs/progress/2026-08-27-full-l2-run.md`.  This is stronger operational
+evidence for G2/G8, but remains interim until export and compiled replay finish.
+
 The full-input audit decodes all 39 LP certificate shards and matches their
 19,715 unique graph identifiers bijectively with the 19,715-entry tame archive.
 The full target script saves the LP theorem, nonlinear theorem, prior
