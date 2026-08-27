@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 952b169ac491ae733fd437d44695be41f975b7c93840a9fd008344074d95997f ]]
+[[ "$direct_manifest_sha" == 47a0f9e1c3588f4032c02a9b9a122018a68ffef05997d858b2fd9c6c00375b75 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -160,9 +160,9 @@ jq -e '
   .source_normalization_contract.activation_status ==
     "exact-overlay-selection-active-pending-full-run" and
   .source_normalization_contract.contract_sha256 ==
-    "8ab1778d840f8d3a3c9a03257c88306ae7e440a9786059c669ce7af9ae026ad7" and
+    "f356deaafcaf066eb8060f1475dd8a1ab51d2b500f99b2679622c03cd24682c1" and
   .source_normalization_contract.entry_count == 5 and
-  ([.source_normalization_contract.entries[].operation_count] | add) == 9 and
+  ([.source_normalization_contract.entries[].operation_count] | add) == 13 and
   .source_normalization_contract.reference_implementation.commit ==
     "99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93" and
   [.source_normalization_contract.entries[].id] ==
@@ -182,7 +182,7 @@ jq -e '
      "d1ae25218cce2f2f510966d574d48d283c04748a1b6c8d8dfc0c2ca52438a60f",
      "cb6ab239f202554f204188a3feac089cd2cc69645088e0d95659aeabb304b6de",
      "e34517f72ed00eeb30275f1dca01210604665a43d96aa1d759c9f6890f0312e5",
-     "e47dcc238750e2cfe338821724d8287e1ee86b7d1d89b7cb737a49d3825d00ef"] and
+     "e8678c01ebb0ddcd647b0155f05caee931be482161f1d34319c1c6cb3fdf74c3"] and
   .source_normalization_contract.selected_graph_non_use_bindings.identifiers ==
     ["qmap", "unsuppress", "use_file_b"] and
   .source_nodes["flyspeck:formal_lp/hypermap/main/prove_flyspeck_lp.hl"].execution_normalization.id ==
@@ -286,7 +286,11 @@ jq -e '
   ([.loader_action_contract.syntax_position_counts[] |
     select(.position == "embedded-expression") | .count] | add) == 11 and
   (.loader_action_contract.required_actions.flyspeck_needs |
-    contains("neutralize state exactly once"))
+    contains("neutralize state exactly once")) and
+  (.loader_action_contract.required_actions["#flyspeck_loadt"] |
+    contains("evaluate on every occurrence")) and
+  (.loader_action_contract.ordinary_directive_boundary_status |
+    contains("exact phrase-start recognition"))
 ' "$direct_manifest" >/dev/null
 direct_digest_program="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_source_digests.ml"
 direct_digest_program_sha=$(sha256sum "$direct_digest_program" | cut -d' ' -f1)
@@ -305,7 +309,7 @@ do
 done
 direct_normalization_contract="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_normalizations.json"
 [[ $(sha256sum "$direct_normalization_contract" | cut -d' ' -f1) == \
-  8ab1778d840f8d3a3c9a03257c88306ae7e440a9786059c669ce7af9ae026ad7 ]]
+  f356deaafcaf066eb8060f1475dd8a1ab51d2b500f99b2679622c03cd24682c1 ]]
 direct_candle="$workspace_dir/worktrees/candle-loader-v13/candle"
 (
   cd "$direct_candle"
@@ -318,12 +322,12 @@ python3 "$direct_candle/check_flyspeck_normalized_identity.py" \
   --flyspeck-root "$workspace_dir/worktrees/flyspeck-v13-source" >/dev/null
 direct_boot="$direct_candle/build/candle_boot.ml"
 [[ $(sha256sum "$direct_boot" | cut -d' ' -f1) == \
-  1584a0019586bc7be33df844dcaa76a61c85e3efa860da8b73581932cee68270 ]]
+  c19c392bc76e969b3a34a59932f2ee67f4b781ab707b75259c57a8b551ded675 ]]
 static_load_source_sha=$(sha256sum \
   "$workspace_dir/worktrees/cakeml-flyspeck-actions-v13/candle/prover/candle_boot.ml" |
   cut -d' ' -f1)
 [[ "$static_load_source_sha" == \
-  2ffea9afb9d3fefb5039be313da1929b191d720fb15c1fcbbd41c26d9293f2e8 ]]
+  ec202123865b131038b7038dc2c8191f67d816146b8d063b9590f346c317b8b3 ]]
 "$direct_candle/test_static_load_directive.sh" \
   "$workspace_dir/worktrees/candle-loader-v13/candle.sh" >/dev/null
 CANDLE_BINARY="$workspace_dir/worktrees/candle-loader-v13/candle.sh" \
@@ -371,12 +375,12 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  7c175d6f3b6fc948d392ba639d988ff63ca361f6
+  e700e269bcd4b8266347fd4e4bb49f6a5eb7b073
 check_worktree cakeml-flyspeck-actions \
   "$workspace_dir/worktrees/cakeml-flyspeck-actions-v13" \
   codex/flyspeck-v13-actions \
   14856fcfddeb3fdafdf8a1080e567a55d3102698 \
-  a0303d78e230a4d1fe8615f4571abd1235be677e
+  0e749990546e2c8108851360585667a8e173f48c
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa

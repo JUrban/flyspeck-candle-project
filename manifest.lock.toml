@@ -46,7 +46,7 @@ observed_master = "dcc03f2866f05b1db18b9f45c731ce45c3a3133e"
 url = "https://github.com/CakeML/cakeml.git"
 base = "14856fcfddeb3fdafdf8a1080e567a55d3102698"
 development_branch = "codex/flyspeck-v13-actions"
-development_head = "a0303d78e230a4d1fe8615f4571abd1235be677e"
+development_head = "0e749990546e2c8108851360585667a8e173f48c"
 purpose = "exact static libraries, authenticated Flyspeck source actions, normalization selection, and boot Filename compatibility"
 
 [repositories.hol4]
@@ -77,7 +77,7 @@ purpose = "pinned reference semantics and differential oracle source for the dir
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "7c175d6f3b6fc948d392ba639d988ff63ca361f6"
+development_head = "e700e269bcd4b8266347fd4e4bb49f6a5eb7b073"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -145,9 +145,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "952b169ac491ae733fd437d44695be41f975b7c93840a9fd008344074d95997f"
+sha256 = "47a0f9e1c3588f4032c02a9b9a122018a68ffef05997d858b2fd9c6c00375b75"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "0cba3641faf6892ff7db190bd46f19c4a01eafab"
+generator_candle = "e700e269bcd4b8266347fd4e4bb49f6a5eb7b073"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 400
@@ -164,13 +164,13 @@ runtime_module_opens = 2
 runtime_libraries = ["str.cma", "unix.cma"]
 runtime_library_activation = "exact-static-link-selection-active-member-compatibility-partial"
 static_load_gate = "worktrees/candle-loader-v13/candle/test_static_load_directive.sh"
-static_load_cakeml_commit = "a0303d78e230a4d1fe8615f4571abd1235be677e"
-static_load_cakeml_source_sha256 = "2ffea9afb9d3fefb5039be313da1929b191d720fb15c1fcbbd41c26d9293f2e8"
-static_load_boot_sha256 = "1584a0019586bc7be33df844dcaa76a61c85e3efa860da8b73581932cee68270"
+static_load_cakeml_commit = "0e749990546e2c8108851360585667a8e173f48c"
+static_load_cakeml_source_sha256 = "ec202123865b131038b7038dc2c8191f67d816146b8d063b9590f346c317b8b3"
+static_load_boot_sha256 = "c19c392bc76e969b3a34a59932f2ee67f4b781ab707b75259c57a8b551ded675"
 source_action_gate = "worktrees/candle-loader-v13/candle/test_flyspeck_needs_directive.sh"
-source_action_cakeml_commit = "a0303d78e230a4d1fe8615f4571abd1235be677e"
-source_action_cakeml_source_sha256 = "2ffea9afb9d3fefb5039be313da1929b191d720fb15c1fcbbd41c26d9293f2e8"
-source_action_boot_bytes = 34490
+source_action_cakeml_commit = "0e749990546e2c8108851360585667a8e173f48c"
+source_action_cakeml_source_sha256 = "ec202123865b131038b7038dc2c8191f67d816146b8d063b9590f346c317b8b3"
+source_action_boot_bytes = 38087
 str_binding = "partial-pure-source-differential-gate"
 unix_binding = "startup-metadata-only-explicit-fail-otherwise"
 deterministic_process_inputs = 2
@@ -196,12 +196,12 @@ static_full_build_program_md5 = "fa440c6eae11574a55adab1f881fd834"
 static_full_build_preload_authentication = "loader MD5 before strictbuild; outer release SHA-256"
 source_normalization_activation = "exact-overlay-selection-active-pending-full-run"
 source_normalization_contract = "worktrees/candle-loader-v13/candle/flyspeck_normalizations.json"
-source_normalization_contract_sha256 = "8ab1778d840f8d3a3c9a03257c88306ae7e440a9786059c669ce7af9ae026ad7"
+source_normalization_contract_sha256 = "f356deaafcaf066eb8060f1475dd8a1ab51d2b500f99b2679622c03cd24682c1"
 source_normalization_entries = 5
-source_normalization_operations = 9
+source_normalization_operations = 13
 source_normalization_ids = ["PROJECT-POINTER-S3-IMMEDIATE-001", "PROJECT-POINTER-S3-ALLOCATED-LIB-001", "PROJECT-POINTER-S3-UNSUPPRESS-001", "PROJECT-POINTER-S3-RELABEL-001", "PROJECT-TOPLOOP-S3-USE-FILE-B-001"]
 source_normalization_original_sha256 = ["8ed592aa6515b9fe76cef8f101c98953bfe53b21d0cf023ccb45aaa62f97cc3f", "a429247955e1e095e5663813e9609c43697d83d80f357c7855af3b76a3145865", "193abcdff7657f421398203c67e67d32ce5204ce4ba5a04adad53f37fd161ae6", "3af61cf6961097eae9b67f3f3aaeef8fbd8c9a2ec2dfef1e95594561bac58ebe", "c5238451804b274b8feab8ce9a60eb481a13e1015c3a3d9ad2037beba5e42c6a"]
-source_normalization_output_sha256 = ["243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4", "d1ae25218cce2f2f510966d574d48d283c04748a1b6c8d8dfc0c2ca52438a60f", "cb6ab239f202554f204188a3feac089cd2cc69645088e0d95659aeabb304b6de", "e34517f72ed00eeb30275f1dca01210604665a43d96aa1d759c9f6890f0312e5", "e47dcc238750e2cfe338821724d8287e1ee86b7d1d89b7cb737a49d3825d00ef"]
+source_normalization_output_sha256 = ["243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4", "d1ae25218cce2f2f510966d574d48d283c04748a1b6c8d8dfc0c2ca52438a60f", "cb6ab239f202554f204188a3feac089cd2cc69645088e0d95659aeabb304b6de", "e34517f72ed00eeb30275f1dca01210604665a43d96aa1d759c9f6890f0312e5", "e8678c01ebb0ddcd647b0155f05caee931be482161f1d34319c1c6cb3fdf74c3"]
 source_normalization_non_use_ids = ["qmap", "unsuppress", "use_file_b"]
 source_normalization_reference_ocaml = "4.14.1@99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93"
 toplevel_interface_activation = "blocked-no-dummy-or-no-op"
@@ -212,7 +212,7 @@ obj_qualified_uses = 3
 toplevel_dynamic_source_payloads = 4
 toplevel_selected_update_database = "flyspeck:text_formalization/general/update_database_400.ml"
 entry_route = ["candle:hol.ml", "flyspeck:text_formalization/build/strictbuild.hl"]
-claim = "authenticated exact source actions and five-output overlay active; current direct execution stops at strictbuild loadt and is not S1/S2/S3 evidence"
+claim = "authenticated exact source actions and five-output overlay active; strictbuild loadt and phrase/EOF boundaries are closed; current direct execution stops at parser_verbose let or-pattern and is not S1/S2/S3 evidence"
 
 [toolchain.hol4]
 polyml = "5.7.1"
