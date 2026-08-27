@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "fa209f9dd213292f05b3f4dbf7516b3148bc1319"
+development_head = "02c3493f6df6cb4b0845b14994bacef0c05a8163"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -132,9 +132,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "2c8dc12519f99c0ec9d08ecf8a9fa710ce50f01007d3f75042eabd343d8b46f1"
+sha256 = "b9cc303fcb6af8bf46ddabe18edfabb7ce266a64c17a2b42104e17ff79509056"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "fa209f9dd213292f05b3f4dbf7516b3148bc1319"
+generator_candle = "02c3493f6df6cb4b0845b14994bacef0c05a8163"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 399
@@ -170,9 +170,17 @@ static_full_build_directive = "#flyspeck_needs"
 static_full_build_entries = 297
 static_full_build_unique_targets = 287
 static_full_build_program = "worktrees/candle-loader-v13/candle/flyspeck_full_build.ml"
-static_full_build_program_sha256 = "1bb71f85fd66c23d974599ded954344fd54f8b6904ebb4e51c4325d9ca0e8947"
-static_full_build_program_md5 = "5853a6e82e9303ba52ad874c98282842"
+static_full_build_program_sha256 = "3b509d7187b49d557d080e5f07e9ca9b9e0c736c766cbb16178db8f3d83737bf"
+static_full_build_program_md5 = "c6cc507c34ae22b8f07d1c3ba0979e56"
 static_full_build_preload_authentication = "loader MD5 before strictbuild; outer release SHA-256"
+source_normalization_activation = "ready-pending-compiled-loader-integration"
+source_normalization_contract = "worktrees/candle-loader-v13/candle/flyspeck_normalizations.json"
+source_normalization_contract_sha256 = "d326dc023dbd996aab1d9a542be2f3433b37550e716cfc903da2956c8972aba6"
+source_normalization_entries = 1
+source_normalization_ids = ["PROJECT-POINTER-S3-IMMEDIATE-001"]
+source_normalization_original_sha256 = "8ed592aa6515b9fe76cef8f101c98953bfe53b21d0cf023ccb45aaa62f97cc3f"
+source_normalization_output_sha256 = "243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4"
+source_normalization_reference_ocaml = "4.14.1@99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93"
 toplevel_interface_activation = "blocked-no-dummy-or-no-op"
 format_qualified_uses = 106
 toploop_qualified_uses = 19

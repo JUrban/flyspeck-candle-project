@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 2c8dc12519f99c0ec9d08ecf8a9fa710ce50f01007d3f75042eabd343d8b46f1 ]]
+[[ "$direct_manifest_sha" == b9cc303fcb6af8bf46ddabe18edfabb7ce266a64c17a2b42104e17ff79509056 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -145,9 +145,9 @@ jq -e '
   .static_full_build_contract.generated_source ==
     "candle:candle/flyspeck_full_build.ml" and
   .static_full_build_contract.generated_source_sha256 ==
-    "1bb71f85fd66c23d974599ded954344fd54f8b6904ebb4e51c4325d9ca0e8947" and
+    "3b509d7187b49d557d080e5f07e9ca9b9e0c736c766cbb16178db8f3d83737bf" and
   .static_full_build_contract.generated_source_md5 ==
-    "5853a6e82e9303ba52ad874c98282842" and
+    "c6cc507c34ae22b8f07d1c3ba0979e56" and
   .static_full_build_contract.directive == "#flyspeck_needs" and
   .static_full_build_contract.entry_count == 297 and
   .static_full_build_contract.unique_target_count == 287 and
@@ -157,6 +157,22 @@ jq -e '
     contains("must not be erased")) and
   (.static_full_build_contract.preload_authentication |
     contains("before strictbuild")) and
+  .source_normalization_contract.activation_status ==
+    "ready-pending-compiled-loader-integration" and
+  .source_normalization_contract.contract_sha256 ==
+    "d326dc023dbd996aab1d9a542be2f3433b37550e716cfc903da2956c8972aba6" and
+  .source_normalization_contract.entry_count == 1 and
+  .source_normalization_contract.reference_implementation.commit ==
+    "99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93" and
+  .source_normalization_contract.entries[0].id ==
+    "PROJECT-POINTER-S3-IMMEDIATE-001" and
+  .source_normalization_contract.entries[0].source_sha256 ==
+    "8ed592aa6515b9fe76cef8f101c98953bfe53b21d0cf023ccb45aaa62f97cc3f" and
+  .source_normalization_contract.entries[0].normalized_sha256 ==
+    "243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4" and
+  .source_nodes["flyspeck:formal_lp/hypermap/main/prove_flyspeck_lp.hl"].execution_normalization.id ==
+    "PROJECT-POINTER-S3-IMMEDIATE-001" and
+  ([.source_nodes[] | select(has("execution_normalization"))] | length) == 1 and
   (.source_nodes | has("flyspeck:load_flyspeck.ml") | not) and
   .source_digest_contract.activation_status ==
     "preflight-before-strictbuild" and
@@ -250,8 +266,17 @@ direct_digest_program_sha=$(sha256sum "$direct_digest_program" | cut -d' ' -f1)
 [[ "$direct_digest_program_sha" == 0af74c3dab90d8c37234a07b55c632257dcced97fa7fca924fa5fb8f6bc362ab ]]
 direct_full_build="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_full_build.ml"
 direct_full_build_sha=$(sha256sum "$direct_full_build" | cut -d' ' -f1)
-[[ "$direct_full_build_sha" == 1bb71f85fd66c23d974599ded954344fd54f8b6904ebb4e51c4325d9ca0e8947 ]]
+[[ "$direct_full_build_sha" == 3b509d7187b49d557d080e5f07e9ca9b9e0c736c766cbb16178db8f3d83737bf ]]
 [[ $(rg -c '^#flyspeck_needs ' "$direct_full_build") == 297 ]]
+rg -Fq \
+  'normalization=PROJECT-POINTER-S3-IMMEDIATE-001 normalized_sha256=243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4' \
+  "$direct_full_build"
+direct_normalization_contract="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_normalizations.json"
+[[ $(sha256sum "$direct_normalization_contract" | cut -d' ' -f1) == \
+  d326dc023dbd996aab1d9a542be2f3433b37550e716cfc903da2956c8972aba6 ]]
+python3 "$workspace_dir/worktrees/candle-loader-v13/candle/test_flyspeck_normalize.py" >/dev/null
+python3 "$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_normalize.py" \
+  --flyspeck-root "$workspace_dir/worktrees/flyspeck-v13-source" --check >/dev/null
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
 certificate_inventory_sha=$(
@@ -292,7 +317,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  fa209f9dd213292f05b3f4dbf7516b3148bc1319
+  02c3493f6df6cb4b0845b14994bacef0c05a8163
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
