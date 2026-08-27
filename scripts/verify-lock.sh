@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 70deb347ff2bcd2c527a523552ed593f15d4eed39529b8c393f7884a573abc81 ]]
+[[ "$direct_manifest_sha" == 2c8dc12519f99c0ec9d08ecf8a9fa710ce50f01007d3f75042eabd343d8b46f1 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -230,7 +230,20 @@ jq -e '
     "4.14.1" and
   .toplevel_interface_contract.conditional_source_selection.selected ==
     "flyspeck:text_formalization/general/update_database_400.ml" and
-  (.toplevel_interface_contract.dynamic_source_payloads | length) == 4
+  (.toplevel_interface_contract.dynamic_source_payloads | length) == 4 and
+  (.toplevel_interface_contract.consumer_inventory.reviewed_occurrences | length) == 20 and
+  .toplevel_interface_contract.consumer_inventory.typed_theorem_lookup.occurrences == 23810 and
+  .toplevel_interface_contract.consumer_inventory.typed_theorem_lookup.source_files == 22 and
+  .loader_action_contract.activation_status ==
+    "blocked-exact-token-actions-not-integrated" and
+  .loader_action_contract.source_site_count == 434 and
+  .loader_action_contract.generated_static_root_directives == 297 and
+  ([.loader_action_contract.syntax_position_counts[] |
+    select(.position == "standalone-phrase") | .count] | add) == 422 and
+  ([.loader_action_contract.syntax_position_counts[] |
+    select(.position == "embedded-expression") | .count] | add) == 12 and
+  (.loader_action_contract.required_actions.flyspeck_needs |
+    contains("neutralize state exactly once"))
 ' "$direct_manifest" >/dev/null
 direct_digest_program="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_source_digests.ml"
 direct_digest_program_sha=$(sha256sum "$direct_digest_program" | cut -d' ' -f1)
@@ -279,7 +292,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  c3336d58e0e9a15ecb08c0bf43eb200b0b71be8d
+  fa209f9dd213292f05b3f4dbf7516b3148bc1319
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
