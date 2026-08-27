@@ -203,8 +203,21 @@ if [[ $fresh_run == 1 ]]; then
   run_initial_generation
 fi
 
+first_generation=1
+if [[ $fresh_run == 0 ]]; then
+  latest_generation_log=$(
+    find "$log_dir" -maxdepth 1 -type f -name 'generation-[0-9]*.log' \
+      -printf '%f\n' | sort | tail -n 1
+  )
+  if [[ "$latest_generation_log" =~ ^generation-([0-9]+)\.log$ ]]; then
+    first_generation=$((10#${BASH_REMATCH[1]} + 1))
+  fi
+fi
+
 complete=0
-for ((generation = 1; generation <= max_generations; generation++)); do
+for ((generation = first_generation;
+      generation <= max_generations;
+      generation++)); do
   phase=$(cut -f1 "$status_file" 2>/dev/null || true)
   if [[ "$phase" == complete ]]; then
     complete=1
