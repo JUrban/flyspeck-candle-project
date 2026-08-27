@@ -60,6 +60,12 @@ development_branch = "codex/flyspeck-v13-source"
 development_head = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
 purpose = "governing S3 direct-source snapshot; excludes PFT development changes"
 
+[repositories.ocaml_reference]
+url = "https://github.com/ocaml/ocaml.git"
+tag = "4.14.1"
+commit = "99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93"
+purpose = "pinned reference semantics and differential oracle source for the direct S3 route"
+
 [repositories.candle_loader]
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"

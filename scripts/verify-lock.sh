@@ -299,6 +299,7 @@ printf 'ok: full LP/nonlinear inputs %s (archive %s)\n' \
   "$certificate_inventory_sha" "$archive_sha"
 
 check_head cakeml dcc03f2866f05b1db18b9f45c731ce45c3a3133e
+check_head ocaml-4.14 99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93
 check_development candle codex/flyspeck-pft \
   5b1888b9a0c1da7ca0ef2e80526b726f2e27df9d \
   177a9c1e759355a325842650d224b56a3d4437dd
