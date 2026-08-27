@@ -17,4 +17,6 @@ exec python3 "$project_root/scripts/validate_compatibility_ledger.py" \
   --pointer-triage-schema "$project_root/compatibility/schema/pointer-triage.schema.json" \
   --ffi-triage-schema "$project_root/compatibility/schema/ffi-triage.schema.json" \
   --pointer-rules "$project_root/compatibility/pointer-triage-rules.json" \
-  --ffi-review "$project_root/compatibility/ffi-review.json"
+  --ffi-review "$project_root/compatibility/ffi-review.json" \
+  --pin-contract "$project_root/compatibility/inventory-pin-contract.json" \
+  --pin-delta-schema "$project_root/compatibility/schema/inventory-pin-delta.schema.json"

@@ -2,6 +2,27 @@
   "schema_version": 1,
   "ledger_kind": "project_index_with_authoritative_imports",
   "compatibility_specification": "observable OCaml behavior for the pinned HOL Light/Flyspeck subset",
+  "source_provenance": {
+    "selected_direct_source": {
+      "role": "direct_s3_clean_upstream",
+      "repository": "flyspeck",
+      "path_key": "../worktrees/flyspeck-v13-source",
+      "git_commit": "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
+    },
+    "separate_development_source": {
+      "role": "pft_development",
+      "repository": "flyspeck",
+      "git_commit": "2ea440e9f7c55734d1e47738e44a6129ce0ecf5a",
+      "included_in_selected_inventory": false
+    },
+    "inventory_artifacts": {
+      "findings_sha256": "bfb6e369eb2f0b02b0e58febcb0bcf466f66e1aee3ea30fe8e9665212be4d67c",
+      "pointer_triage_sha256": "916383da7885b54887261061fd267d677eb04da1787e4b4d18b67353771e4c68",
+      "ffi_triage_sha256": "bb76fda85b027cab92922ca7f7fbcab22020ac750a411cc186da918f948e4e82",
+      "pin_contract_sha256": "7a5dec1222048bbce2dcfc2a190fd5d0f4945e9c3a8dd4339eb0eb4b6002423f",
+      "pin_delta_sha256": "b930b78521dd4f47347e9471e268298cea2e61fbc65080212ec91904881944d9"
+    }
+  },
   "import_contract": {
     "entry_identity": "The authoritative source ledger owns its entry bodies and IDs; this project index records only immutable source coordinates, digests, field mappings, and entry IDs.",
     "merge_key": "id",

@@ -6,12 +6,13 @@
   "additionalProperties": false,
   "required": [
     "schema_version", "ledger_kind", "compatibility_specification",
-    "import_contract", "imports", "related_artifacts", "entries"
+    "source_provenance", "import_contract", "imports", "related_artifacts", "entries"
   ],
   "properties": {
     "schema_version": {"const": 1},
     "ledger_kind": {"const": "project_index_with_authoritative_imports"},
     "compatibility_specification": {"type": "string", "minLength": 1},
+    "source_provenance": {"$ref": "#/$defs/sourceProvenance"},
     "import_contract": {"type": "object"},
     "imports": {"type": "array", "items": {"$ref": "#/$defs/import"}},
     "related_artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}},
@@ -20,6 +21,53 @@
   "$defs": {
     "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "gitCommit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "sourceProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selected_direct_source", "separate_development_source",
+        "inventory_artifacts"
+      ],
+      "properties": {
+        "selected_direct_source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "repository", "path_key", "git_commit"],
+          "properties": {
+            "role": {"const": "direct_s3_clean_upstream"},
+            "repository": {"const": "flyspeck"},
+            "path_key": {"type": "string", "minLength": 1},
+            "git_commit": {"$ref": "#/$defs/gitCommit"}
+          }
+        },
+        "separate_development_source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "repository", "git_commit", "included_in_selected_inventory"],
+          "properties": {
+            "role": {"const": "pft_development"},
+            "repository": {"const": "flyspeck"},
+            "git_commit": {"$ref": "#/$defs/gitCommit"},
+            "included_in_selected_inventory": {"const": false}
+          }
+        },
+        "inventory_artifacts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "findings_sha256", "pointer_triage_sha256", "ffi_triage_sha256",
+            "pin_contract_sha256", "pin_delta_sha256"
+          ],
+          "properties": {
+            "findings_sha256": {"$ref": "#/$defs/sha256"},
+            "pointer_triage_sha256": {"$ref": "#/$defs/sha256"},
+            "ffi_triage_sha256": {"$ref": "#/$defs/sha256"},
+            "pin_contract_sha256": {"$ref": "#/$defs/sha256"},
+            "pin_delta_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        }
+      }
+    },
     "import": {
       "type": "object",
       "required": [
