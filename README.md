@@ -20,27 +20,26 @@ The upstream repositories are checked out as sibling directories under
 this repository holds the locked manifest, cross-repository tooling, acceptance
 criteria, and progress reports.
 
-Current work is at the Gate 1 / Gate 2 boundary.  The compiled Candle endpoint
-consumes both official HOL4-writer traces and a direct HOL Light bootstrap
-trace, rejects the committed malformed/unauthorized suite, enforces exact
+The direct S3 stream is in Phase 0.  Current critical-path work audits and
+rebuilds verified Dopen on current CakeML, derives a machine-readable OCaml
+compatibility ledger from the pinned corpus, and executes the actual 65-load
+Great 100 source inventory from clean compiled-Candle states.  The first
+baseline is deliberately allowed to expose and retain compatibility failures;
+fixture theorem counts and parser-only successes do not promote a gate.  A
+manifest-rooted direct Flyspeck loader and broad source patching follow the S1
+compatibility closure rather than standing in for it.
+
+The PFT validation stream is substantially further along.  Its compiled Candle
+endpoint consumes both official HOL4-writer traces and direct HOL Light
+bootstrap traces, rejects malformed and unauthorized input, enforces exact
 standard-axiom identities, and returns deterministic replay evidence.  The
-HOL Light producer can write primitive inferences online with bounded producer
-memory and can safely delete and reuse replay slots.  The tested-pin producer
-has now emitted two real theorems from Flyspeck's `general/hol-library.hl`, and
-the compiled endpoint replayed their exact statements under the locked axiom
-policy.  Pinned, digest-checked extractions of Flyspeck's original
-list/refinement and real-arithmetic/refinement proof blocks also replay exactly,
-completing the three-class producer route selection.  Candle's compute source
-is now aligned with the verified kernel's pair-condition equation, and a
-source-derived 62-equation fixture positively exercises `COMPUTE_INIT` and
-`COMPUTE` through the compiled endpoint.  The bounded producer now also has a
-proved DMTCP checkpoint/kill/restore boundary and a head-locked supervisor for
-the real Flyspeck `main` and `full` source sequences.  The complete LP archive
-inventory is pinned, long LP/nonlinear phases have internal restart boundaries,
-and the full target now eliminates both HOL-side premises to leave only the
-Isabelle tame-classification premise.  The remaining acceptance work includes
-measuring, completing, and replaying that full run and a Flyspeck-specific
-compute-heavy leaf.
+bounded producer has a tested DMTCP checkpoint/kill/restore boundary and a
+head-locked supervisor for the real Flyspeck `main` and `full` sequences.  The
+complete LP archive inventory is pinned, long LP/nonlinear phases have internal
+restart boundaries, and the validation target leaves only the explicit
+Isabelle tame-classification premise.  These results remain useful P1 evidence
+but do not advance S2 or S3 until independently matched by direct source
+execution.
 
 ## Layout
 
@@ -49,7 +48,8 @@ compute-heavy leaf.
 - `docs/requirements.md`: superseded v1.2 PFT-validation ledger retained for
   the independent replay lane.
 - `docs/full-l2-runbook.md`: fresh/resume operation, evidence outputs, and the
-  DMTCP trust boundary for the full L2 run.
+  DMTCP trust boundary for the full PFT-validation run; “L2” in this historical
+  filename is not a v1.3 S2/S3 claim.
 - `docs/progress/`: dated, evidence-backed interim reports.
 - `scripts/verify-lock.sh`: checks local source identities and roadmap hash.
 - `scripts/test-producer-resume.sh`: destructive-process restart smoke test.
