@@ -26,8 +26,14 @@ Flyspeck loader.  The current direct manifest freezes 297 build entries, 399
 source nodes, exact loader actions, generated-input hashes, and eight build
 strata.  Compatibility work is call-site-specific and fail-closed: for
 example, the selected LP verifier's one immediate-int `==` has an exact
-hash-bound, semantics-proved normalization, while the twelve allocated-value
-identity sites remain open and untouched.  The first baseline is deliberately
+hash-bound, semantics-proved normalization.  The twelve allocated-value
+identity sites now have a separate exact, site-specific source remedy with
+local differential, callback/exception-order, sharing, and zero-residual-
+operator tests.  That remedy remains `regression_pending` until the compiled
+loader applies it, a full selected run closes its non-use and fingerprint
+gates, and Flyspeck-scale performance is accepted.  Exact static `#load`
+selection is active and fail-closed; the next clean direct frontier is the real
+`Toploop.use_file` call in `strictbuild.hl`.  The first baseline is deliberately
 allowed to expose and retain compatibility failures; fixture theorem counts,
 parser-only successes, and broad source patching do not promote a gate.
 

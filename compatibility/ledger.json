@@ -136,15 +136,15 @@
       "entry_kind": "confirmed_divergence",
       "divergence_state": "confirmed_divergence",
       "priority": "P0",
-      "status": "remedy_pending",
+      "status": "regression_pending",
       "summary": "Candle cannot express OCaml physical equality/inequality at the 12 selected non-reference call sites",
       "semantic_category": "runtime.pointer_identity.selected_source",
       "minimal_reproducer": {"status": "ready", "path": "compatibility/oracles/pointer_identity_list.ml"},
       "ocaml_reference": {"status": "observed", "outcome": "OCaml 4.14.1 accepts and passes both non-reference list == and list != identity oracles", "evidence": ["ocaml -noinit -noprompt compatibility/oracles/pointer_identity_list.ml => pointer-identity-list-oracle: ok", "ocaml -noinit -noprompt compatibility/oracles/pointer_identity_inequality.ml => exit 0"]},
       "candle_outcome": {"status": "observed", "outcome": "list == is rejected because Candle types == as reference-only; list != reaches an unsupported relational-operator parser path", "evidence": ["timeout 20s /project/repos/candle/candle.sh < compatibility/oracles/pointer_identity_list.ml => Type mismatch between _0 ref -> _0 ref -> bool and int list -> _1 at line 2", "timeout 20s /project/repos/candle/candle.sh < compatibility/oracles/pointer_identity_inequality.ml => Impossible: nRelOp; Parsing failed at line 2", "Candle executable SHA-256 d361be3839f31811328d5a0da1ecea15a8a73f369c77e34a288355f16bb930d3"]},
-      "chosen_remedy": {"status": "undecided", "kind": null, "description": null},
-      "proof_obligation": {"status": "open", "description": "Give the selected Candle subset a verified physical-identity observation matching OCaml, or justify a source transformation for every call site and prove preservation of structural results, identity-visible results, termination, and allocation-sensitive control flow.", "evidence": ["compatibility/generated/pointer-triage.json: ledger_disposition=open_identity_contract"]},
-      "regression_ids": [],
+      "chosen_remedy": {"status": "implemented", "kind": "exact_hash_bound_site_specific_source_normalization", "description": "Authenticate four original source files and apply eight ordered unique byte replacements. Explicit change results preserve filter/partition/uniq/undefine structural and unchanged-object behavior; selected-graph qmap and unsuppress calls fail closed; Jordan binder exclusion uses structural equality with an explicit alpha/name-fingerprint boundary."},
+      "proof_obligation": {"status": "open", "description": "Local differential, exception-order, unchanged-sharing, zero-residual-operator, and compiled normalized-block oracles pass. The obligation remains open until the compiled direct loader applies/authenticates the overlay, the exact full selected run proves qmap/unsuppress non-use, Jordan binder spelling and final theorem/assumption fingerprints match, and Flyspeck-scale allocation/performance is accepted.", "evidence": ["Candle 8682a8d: schema-2 normalization contract with four entries/eight operations", "Candle 5522cdd: integrated direct-loader branch and static #load evidence", "candle/flyspeck_identity_ocaml_oracle.ml: exhaustive lists through length five, callback/exception order, sharing, trie, fail-closed, and Jordan boundary", "candle/check_flyspeck_normalized_identity.py: zero executable ==/!= operators in all four outputs", "candle/test_flyspeck_identity_normalization.sh: OCaml and compiled Candle normalized oracles pass", "candle/compatibility/identity_normalization_audit.md: measured local allocation overhead and open release gates"]},
+      "regression_ids": ["CANDLE-FLYSPECK-IDENTITY-NORMALIZATION-HOST-001", "CANDLE-FLYSPECK-IDENTITY-NORMALIZATION-COMPILED-001", "CANDLE-FLYSPECK-IDENTITY-ZERO-RESIDUAL-001"],
       "affected_corpus_files": [
         {"repository": "flyspeck", "path": "text_formalization/general/lib.hl"},
         {"repository": "flyspeck", "path": "text_formalization/general/print_types.hl"},
@@ -152,7 +152,7 @@
       ],
       "affected_files_status": "enumerated",
       "inventory_selector": {"triage_dispositions": ["open_identity_contract"]},
-      "notes": "Ten sites intentionally control structural reuse. Two identity-filter sites have medium-confidence high-level intent and therefore may not be silently rewritten to structural inequality. The == and != failures are both live syntax/type incompatibilities even though source dependency alone does not prove every call is dynamically evaluated."
+      "notes": "The source remedy is implemented and locally regression-tested, but not promoted. qmap and unsuppress are deliberately selected-graph non-use refinements; any caller drift aborts. Jordan structural exclusion can choose a differently spelled alpha-equivalent binder for separately allocated equal variables, so exact selected-run fingerprints remain promotion-blocking. The full loader has not yet applied the overlay."
     },
     {
       "id": "PROJECT-POINTER-S3-IMMEDIATE-001",

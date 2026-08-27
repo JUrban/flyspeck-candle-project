@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == b9cc303fcb6af8bf46ddabe18edfabb7ce266a64c17a2b42104e17ff79509056 ]]
+[[ "$direct_manifest_sha" == b56efac1577375285901b9538f1c41e30a2a166d0939fc5d32fde084ee8882bf ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -145,9 +145,9 @@ jq -e '
   .static_full_build_contract.generated_source ==
     "candle:candle/flyspeck_full_build.ml" and
   .static_full_build_contract.generated_source_sha256 ==
-    "3b509d7187b49d557d080e5f07e9ca9b9e0c736c766cbb16178db8f3d83737bf" and
+    "44ae6acc8b43e9408694f64457e0c1fe8b481865abc9afdd2921fcf981094b4a" and
   .static_full_build_contract.generated_source_md5 ==
-    "c6cc507c34ae22b8f07d1c3ba0979e56" and
+    "fa440c6eae11574a55adab1f881fd834" and
   .static_full_build_contract.directive == "#flyspeck_needs" and
   .static_full_build_contract.entry_count == 297 and
   .static_full_build_contract.unique_target_count == 287 and
@@ -160,19 +160,37 @@ jq -e '
   .source_normalization_contract.activation_status ==
     "ready-pending-compiled-loader-integration" and
   .source_normalization_contract.contract_sha256 ==
-    "d326dc023dbd996aab1d9a542be2f3433b37550e716cfc903da2956c8972aba6" and
-  .source_normalization_contract.entry_count == 1 and
+    "a8c94a3d9bd7d01a3858d42d7f913ae39cceb1d71e153089950fb70bf0e20752" and
+  .source_normalization_contract.entry_count == 4 and
+  ([.source_normalization_contract.entries[].operation_count] | add) == 8 and
   .source_normalization_contract.reference_implementation.commit ==
     "99cb5d93fc30f1a6f3e69f5aa5d2063994d33a93" and
-  .source_normalization_contract.entries[0].id ==
-    "PROJECT-POINTER-S3-IMMEDIATE-001" and
-  .source_normalization_contract.entries[0].source_sha256 ==
-    "8ed592aa6515b9fe76cef8f101c98953bfe53b21d0cf023ccb45aaa62f97cc3f" and
-  .source_normalization_contract.entries[0].normalized_sha256 ==
-    "243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4" and
+  [.source_normalization_contract.entries[].id] ==
+    ["PROJECT-POINTER-S3-IMMEDIATE-001",
+     "PROJECT-POINTER-S3-ALLOCATED-LIB-001",
+     "PROJECT-POINTER-S3-UNSUPPRESS-001",
+     "PROJECT-POINTER-S3-RELABEL-001"] and
+  [.source_normalization_contract.entries[].source_sha256] ==
+    ["8ed592aa6515b9fe76cef8f101c98953bfe53b21d0cf023ccb45aaa62f97cc3f",
+     "a429247955e1e095e5663813e9609c43697d83d80f357c7855af3b76a3145865",
+     "193abcdff7657f421398203c67e67d32ce5204ce4ba5a04adad53f37fd161ae6",
+     "3af61cf6961097eae9b67f3f3aaeef8fbd8c9a2ec2dfef1e95594561bac58ebe"] and
+  [.source_normalization_contract.entries[].normalized_sha256] ==
+    ["243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4",
+     "d1ae25218cce2f2f510966d574d48d283c04748a1b6c8d8dfc0c2ca52438a60f",
+     "cb6ab239f202554f204188a3feac089cd2cc69645088e0d95659aeabb304b6de",
+     "e34517f72ed00eeb30275f1dca01210604665a43d96aa1d759c9f6890f0312e5"] and
+  .source_normalization_contract.selected_graph_non_use_bindings.identifiers ==
+    ["qmap", "unsuppress"] and
   .source_nodes["flyspeck:formal_lp/hypermap/main/prove_flyspeck_lp.hl"].execution_normalization.id ==
     "PROJECT-POINTER-S3-IMMEDIATE-001" and
-  ([.source_nodes[] | select(has("execution_normalization"))] | length) == 1 and
+  .source_nodes["flyspeck:text_formalization/general/lib.hl"].execution_normalization.id ==
+    "PROJECT-POINTER-S3-ALLOCATED-LIB-001" and
+  .source_nodes["flyspeck:text_formalization/general/print_types.hl"].execution_normalization.id ==
+    "PROJECT-POINTER-S3-UNSUPPRESS-001" and
+  .source_nodes["flyspeck:text_formalization/jordan/tactics_jordan.hl"].execution_normalization.id ==
+    "PROJECT-POINTER-S3-RELABEL-001" and
+  ([.source_nodes[] | select(has("execution_normalization"))] | length) == 4 and
   (.source_nodes | has("flyspeck:load_flyspeck.ml") | not) and
   .source_digest_contract.activation_status ==
     "preflight-before-strictbuild" and
@@ -192,7 +210,11 @@ jq -e '
   .diagnostics.unsupported_runtime_members == [] and
   .diagnostics.unsupported_compatibility_members == [] and
   .static_library_contract.activation_status ==
-    "blocked-pending-static-binding-evidence" and
+    "exact-static-link-selection-active-member-compatibility-partial" and
+  .static_library_contract.activation_source ==
+    "cakeml:candle/prover/candle_boot.ml" and
+  .static_library_contract.activation_gate ==
+    "candle:candle/test_static_load_directive.sh" and
   (.static_library_contract.directives | length) == 5 and
   (.static_library_contract.qualified_uses | length) == 39 and
   (.static_library_contract.opened_module_uses | length) == 3 and
@@ -266,17 +288,39 @@ direct_digest_program_sha=$(sha256sum "$direct_digest_program" | cut -d' ' -f1)
 [[ "$direct_digest_program_sha" == 0af74c3dab90d8c37234a07b55c632257dcced97fa7fca924fa5fb8f6bc362ab ]]
 direct_full_build="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_full_build.ml"
 direct_full_build_sha=$(sha256sum "$direct_full_build" | cut -d' ' -f1)
-[[ "$direct_full_build_sha" == 3b509d7187b49d557d080e5f07e9ca9b9e0c736c766cbb16178db8f3d83737bf ]]
+[[ "$direct_full_build_sha" == 44ae6acc8b43e9408694f64457e0c1fe8b481865abc9afdd2921fcf981094b4a ]]
 [[ $(rg -c '^#flyspeck_needs ' "$direct_full_build") == 297 ]]
-rg -Fq \
+for normalization_marker in \
   'normalization=PROJECT-POINTER-S3-IMMEDIATE-001 normalized_sha256=243a2031e595efa9bf0b85b552f9620f4ab45cbca8dcebef821f2eae68c3bba4' \
-  "$direct_full_build"
+  'normalization=PROJECT-POINTER-S3-ALLOCATED-LIB-001 normalized_sha256=d1ae25218cce2f2f510966d574d48d283c04748a1b6c8d8dfc0c2ca52438a60f' \
+  'normalization=PROJECT-POINTER-S3-UNSUPPRESS-001 normalized_sha256=cb6ab239f202554f204188a3feac089cd2cc69645088e0d95659aeabb304b6de' \
+  'normalization=PROJECT-POINTER-S3-RELABEL-001 normalized_sha256=e34517f72ed00eeb30275f1dca01210604665a43d96aa1d759c9f6890f0312e5'
+do
+  rg -Fq "$normalization_marker" "$direct_full_build"
+done
 direct_normalization_contract="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_normalizations.json"
 [[ $(sha256sum "$direct_normalization_contract" | cut -d' ' -f1) == \
-  d326dc023dbd996aab1d9a542be2f3433b37550e716cfc903da2956c8972aba6 ]]
-python3 "$workspace_dir/worktrees/candle-loader-v13/candle/test_flyspeck_normalize.py" >/dev/null
-python3 "$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_normalize.py" \
+  a8c94a3d9bd7d01a3858d42d7f913ae39cceb1d71e153089950fb70bf0e20752 ]]
+direct_candle="$workspace_dir/worktrees/candle-loader-v13/candle"
+(
+  cd "$direct_candle"
+  python3 -m unittest \
+    test_flyspeck_normalize test_check_flyspeck_normalized_identity >/dev/null
+)
+python3 "$direct_candle/flyspeck_normalize.py" \
   --flyspeck-root "$workspace_dir/worktrees/flyspeck-v13-source" --check >/dev/null
+python3 "$direct_candle/check_flyspeck_normalized_identity.py" \
+  --flyspeck-root "$workspace_dir/worktrees/flyspeck-v13-source" >/dev/null
+direct_boot="$direct_candle/build/candle_boot.ml"
+[[ $(sha256sum "$direct_boot" | cut -d' ' -f1) == \
+  ebfa178269c4f21eae84d572ee4239fba9f3c62db9a03e75142655cf3a57bebe ]]
+static_load_source_sha=$(
+  git -C "$workspace_dir/worktrees/cakeml-dopen-v13" \
+    show ef8fb79c102f8f46f8b2c24323fbb73418d79bac:candle/prover/candle_boot.ml |
+    sha256sum | cut -d' ' -f1
+)
+[[ "$static_load_source_sha" == \
+  fb278ab76dc9b8cd3ae2e2a102e094b8150952b6710503205b3864b989713a5c ]]
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
 certificate_inventory_sha=$(
@@ -318,7 +362,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  02c3493f6df6cb4b0845b14994bacef0c05a8163
+  5522cdd63659178e2cee91994c6b9f46ef463f26
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
