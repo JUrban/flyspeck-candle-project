@@ -54,7 +54,7 @@ byte-for-byte identical.  The final artifact hashes are:
 - lexical notes:
   `5dbf6debb9b58c8e83c38d085444f1f3f9591a4e098436e32ab8610332b1546e`;
 - summary:
-  `26f4216bbebb10f1836d05f7fb9205da486b9909a988a474922de791434e4eec`.
+  `bbcd41eef9ce6be52bdbb4208e630146edde1edb93339ac99f53c11c438108b4`.
 
 The validator checks JSON Schema when `jsonschema` is available, always checks
 lifecycle invariants, verifies generated JSONL count/digest, rederives all
