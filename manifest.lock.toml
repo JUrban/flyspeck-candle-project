@@ -64,7 +64,7 @@ purpose = "governing S3 direct-source snapshot; excludes PFT development changes
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-loader"
-development_head = "feb20bbf8361172d5bab5c1717ed1cd3da5d0174"
+development_head = "b41ae5c44e93353925b4644619e41237ac72ade8"
 purpose = "v1.3 direct-source manifest, loader, and target"
 
 [repositories.hol_light]
@@ -132,9 +132,9 @@ axioms = []
 
 [artifacts.direct_source_manifest]
 path = "worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
-sha256 = "824910cc2dee7453074e6d5bbb3236dbd59277e9ff7f79b588e4f2dde0991d58"
+sha256 = "15085c56faf676071e25d90ef7200e027c5edaaa40eaa5ab28cf23c2b07346b0"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
-generator_candle = "feb20bbf8361172d5bab5c1717ed1cd3da5d0174"
+generator_candle = "b41ae5c44e93353925b4644619e41237ac72ade8"
 build_entries = 297
 unique_build_entries = 287
 source_nodes = 398
@@ -155,6 +155,13 @@ digest_binding = "pure-source-differential-gate"
 digest_qualified_uses = 13
 digest_module_opens = 0
 digest_selected_members = ["file", "string", "t", "to_hex"]
+toplevel_interface_activation = "blocked-no-dummy-or-no-op"
+format_qualified_uses = 106
+toploop_qualified_uses = 19
+lexing_qualified_uses = 5
+obj_qualified_uses = 3
+toplevel_dynamic_source_payloads = 4
+toplevel_selected_update_database = "flyspeck:text_formalization/general/update_database_400.ml"
 entry_route = ["candle:hol.ml", "flyspeck:text_formalization/build/strictbuild.hl"]
 claim = "G6 inventory only; not loader execution evidence"
 

@@ -122,7 +122,7 @@ printf 'ok: restartable producer %s (DMTCP 4.1.0)\n' "$resume_fixture_sha"
 
 direct_manifest="$workspace_dir/worktrees/candle-loader-v13/candle/flyspeck_manifest.json"
 direct_manifest_sha=$(sha256sum "$direct_manifest" | cut -d' ' -f1)
-[[ "$direct_manifest_sha" == 824910cc2dee7453074e6d5bbb3236dbd59277e9ff7f79b588e4f2dde0991d58 ]]
+[[ "$direct_manifest_sha" == 15085c56faf676071e25d90ef7200e027c5edaaa40eaa5ab28cf23c2b07346b0 ]]
 jq -e '
   .repositories.flyspeck.commit ==
     "1ce0353008eba83d3c76ae9a25c3c242e4802d53" and
@@ -176,7 +176,20 @@ jq -e '
   .ocaml_compatibility_contract.binding_evidence.Digest.gate ==
     "candle:candle/test_digest_compat.sh" and
   (.ocaml_compatibility_contract.binding_evidence.Digest.assurance_limit |
-    contains("not yet formally linked"))
+    contains("not yet formally linked")) and
+  .toplevel_interface_contract.activation_status ==
+    "blocked-no-dummy-or-no-op" and
+  ([.toplevel_interface_contract.qualified_uses[] | select(.module == "Format")] | length) == 106 and
+  ([.toplevel_interface_contract.qualified_uses[] | select(.module == "Toploop")] | length) == 19 and
+  ([.toplevel_interface_contract.qualified_uses[] | select(.module == "Lexing")] | length) == 5 and
+  ([.toplevel_interface_contract.qualified_uses[] | select(.module == "Obj")] | length) == 3 and
+  .toplevel_interface_contract.unbound_members.Format ==
+    ["formatter_of_buffer", "pp_set_margin", "sprintf", "std_formatter"] and
+  .toplevel_interface_contract.conditional_source_selection.pinned_ocaml_version ==
+    "4.14.1" and
+  .toplevel_interface_contract.conditional_source_selection.selected ==
+    "flyspeck:text_formalization/general/update_database_400.ml" and
+  (.toplevel_interface_contract.dynamic_source_payloads | length) == 4
 ' "$direct_manifest" >/dev/null
 printf 'ok: direct-source manifest %s\n' "$direct_manifest_sha"
 
@@ -218,7 +231,7 @@ check_worktree candle-loader \
   "$workspace_dir/worktrees/candle-loader-v13" \
   codex/flyspeck-v13-loader \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  feb20bbf8361172d5bab5c1717ed1cd3da5d0174
+  b41ae5c44e93353925b4644619e41237ac72ade8
 check_development hol-light codex/flyspeck-pft-producer \
   433477862bb90b328a593e012e09390e99b2439b \
   a2674c3005da788bb6f1ac9046444edbc70983aa
