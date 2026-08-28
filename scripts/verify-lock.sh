@@ -4,6 +4,141 @@ set -euo pipefail
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 workspace_dir=$(cd -- "$project_dir/.." && pwd)
 repos_dir="$workspace_dir/repos"
+lock_path="$project_dir/manifest.lock.toml"
+
+# The TOML is the governing lock, not a parallel narrative copy of the shell
+# literals below.  Require both lock implementations to be their committed
+# project blobs, then parse the TOML and bind its current integration fields to
+# the retained files and repositories before any legacy checks run.
+git -C "$project_dir" diff --quiet -- manifest.lock.toml scripts/verify-lock.sh
+git -C "$project_dir" diff --cached --quiet -- \
+  manifest.lock.toml scripts/verify-lock.sh
+/usr/bin/python3 -I -S - "$lock_path" "$workspace_dir" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tomllib
+
+lock_path, workspace = map(Path, sys.argv[1:])
+with lock_path.open("rb") as source:
+    lock = tomllib.load(source)
+
+def require(condition, message):
+    if not condition:
+        raise SystemExit(f"manifest lock mismatch: {message}")
+
+def sha256(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+def git(root, *arguments):
+    return subprocess.check_output(
+        ["/usr/bin/git", "-C", str(root), *arguments],
+        text=True,
+        env={
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+        },
+    ).strip()
+
+require(lock["schema"] == 1, "schema")
+require(lock["target_claim_level"] == "S3", "target claim")
+require(lock["release_ready"] is False, "release readiness")
+require("claim_level" not in lock, "ambiguous achieved claim_level remains")
+require(lock["resource_policy"]["heavy_stage_ram_ceiling_gib"] == 120,
+        "heavy-stage RAM ceiling")
+
+repositories = lock["repositories"]
+repo_roots = {
+    "candle_flyspeck_integration": workspace / "worktrees/candle-integration-v13",
+    "cakeml_flyspeck_integration": workspace / "worktrees/cakeml-flyspeck-v13-integration",
+}
+for name, root in repo_roots.items():
+    record = repositories[name]
+    require(git(root, "rev-parse", "HEAD") == record["development_head"],
+            f"{name} HEAD")
+    require(git(root, "branch", "--show-current") ==
+            record["development_branch"], f"{name} branch")
+    require(git(root, "status", "--porcelain") == "", f"{name} cleanliness")
+
+artifact = lock["artifacts"]["candle_flyspeck_integration_manifest"]
+candle_root = repo_roots["candle_flyspeck_integration"]
+path_checks = {
+    "manifest": (
+        workspace / artifact["path"], artifact["sha256"]),
+    "source digest program": (
+        candle_root / "candle/flyspeck_source_digests.ml",
+        artifact["source_digest_program_sha256"]),
+    "stratum runner": (
+        candle_root / "candle/flyspeck_stratum_runtime.py",
+        artifact["stratum_runtime_runner_sha256"]),
+    "stratum planner": (
+        candle_root / "candle/flyspeck_stratum_plan.py",
+        artifact["stratum_planner_sha256"]),
+    "artifact provenance helper": (
+        candle_root / "candle/cakeml_artifact_provenance.py",
+        artifact["artifact_provenance_helper_sha256"]),
+    "runtime lock helper": (
+        candle_root / "candle/runtime_lock.py",
+        artifact["runtime_lock_helper_sha256"]),
+    "normalization receipt": (
+        workspace / artifact["normalization_overlay_receipt"],
+        artifact["normalization_overlay_receipt_sha256"]),
+    "generated input receipt": (
+        workspace / artifact["generated_input_receipt"],
+        artifact["generated_input_receipt_sha256"]),
+    "stratum plan": (
+        workspace / artifact["stratum_plan"],
+        artifact["stratum_plan_sha256"]),
+    "host materialization": (
+        workspace / artifact["stratum_host_materialization"],
+        artifact["stratum_host_materialization_sha256"]),
+    "host schedule": (
+        workspace / artifact["stratum_host_schedule_template"],
+        artifact["stratum_host_schedule_template_sha256"]),
+}
+for label, (path, expected) in path_checks.items():
+    require(path.is_file(), f"missing {label}: {path}")
+    require(sha256(path) == expected, f"{label} SHA-256")
+
+integration = repositories["candle_flyspeck_integration"]
+require(artifact["generator_candle"] == integration["development_head"],
+        "manifest generator/current Candle head")
+require(artifact["sha256"] == integration["direct_manifest_sha256"],
+        "manifest/repository declaration")
+require(artifact["source_digest_program_sha256"] ==
+        integration["source_digest_program_sha256"],
+        "source-digest declaration")
+require(integration["host_unit_tests"] == 188, "host unit-test count")
+
+plan = json.loads((workspace / artifact["stratum_plan"]).read_text())
+materialization = json.loads(
+    (workspace / artifact["stratum_host_materialization"]).read_text())
+schedule = json.loads(
+    (workspace / artifact["stratum_host_schedule_template"]).read_text())
+require(plan["repositories"]["candle_materialization_head"] ==
+        integration["development_head"], "plan/current Candle head")
+require(plan["manifest_sha256"] == artifact["sha256"],
+        "plan/manifest")
+require(plan["normalization_overlay"]["receipt_sha256"] ==
+        artifact["normalization_overlay_receipt_sha256"],
+        "plan/normalization receipt")
+require(plan["generated_inputs"]["receipt_sha256"] ==
+        artifact["generated_input_receipt_sha256"],
+        "plan/generated receipt")
+require(materialization["plan_sha256"] == artifact["stratum_plan_sha256"],
+        "materialization/plan")
+require(materialization["planner_source_sha256"] ==
+        artifact["stratum_planner_sha256"], "materialization/planner")
+require(schedule["plan_sha256"] == artifact["stratum_plan_sha256"],
+        "schedule/plan")
+
+print("ok: manifest.lock.toml governs current direct integration inputs")
+PY
 
 check_head() {
   local repo=$1
@@ -842,20 +977,63 @@ reference_v5_run="$workspace_dir/flyspeck-candle-runs/s1-reference-gcd-pristine-
 # CLI intentionally rejects that mismatch after a development-head advance;
 # this lock section separately authenticates the old plan/request/transcript
 # hashes and keeps the candidate explicitly unapproved.
-/usr/bin/python3 -I - \
+/usr/bin/python3 -I -S - \
   "$workspace_dir/worktrees/candle-integration-v13" \
   "$reference_v5_run-plan.json" \
   "$reference_v5_run-request.ml" \
   "$reference_v5_run.log" \
   "$reference_v5_run-candidate.json" <<'PY'
+import hashlib
 import json
 from pathlib import Path
+import subprocess
 import sys
+import types
 
 root, plan_path, request_path, transcript_path, candidate_path = map(
     Path, sys.argv[1:])
-sys.path.insert(0, str(root / "candle"))
-import reference_fingerprints as reference
+
+historical_commit = "7211fb1c95a8da60bb0d78812a31a7bf46af232c"
+expected_blobs = {
+    "candle/regression.py":
+        "16266148a2497fb40f9edba8e5346bfbf0c8a2fc0800400bd5ba1073d39c889f",
+    "candle/reference_fingerprints.py":
+        "761c8cdcc06110e0020bdbe112ba8de7a9767969cbcb42013812ca28284eea67",
+}
+
+def blob(path):
+    source = subprocess.check_output(
+        ["/usr/bin/git", "-C", str(root), "show",
+         f"{historical_commit}:{path}"],
+        env={
+            "GIT_CONFIG_NOSYSTEM": "1",
+            "GIT_CONFIG_GLOBAL": "/dev/null",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+        },
+    )
+    if hashlib.sha256(source).hexdigest() != expected_blobs[path]:
+        raise SystemExit(f"historical source blob mismatch: {path}")
+    return source
+
+def load_exact(name, path):
+    source = blob(path)
+    module = types.ModuleType(name)
+    module.__file__ = f"git:{historical_commit}:{path}"
+    module.__package__ = ""
+    sys.modules[name] = module
+    exec(compile(source, module.__file__, "exec", dont_inherit=True),
+         module.__dict__)
+    return module
+
+# The replay path does not spawn Candle and never calls pexpect.  Supply a
+# fail-closed placeholder so exact regression.py can define its functions
+# without importing any ambient site package; attribute access would fail.
+sys.modules["pexpect"] = types.ModuleType("pexpect")
+load_exact("regression", "candle/regression.py")
+reference = load_exact(
+    "reference_fingerprints", "candle/reference_fingerprints.py")
 
 plan = json.loads(plan_path.read_text(encoding="utf-8"))
 request = request_path.read_text(encoding="utf-8")

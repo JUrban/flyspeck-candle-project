@@ -1,5 +1,6 @@
 schema = 1
-claim_level = "S3"
+target_claim_level = "S3"
+release_ready = false
 roadmap_version = "1.3"
 roadmap_sha256 = "13fc3a6209787e9fa9c1879cb482fef6837252ec96b3ae506d312646c898863f"
 superseded_roadmap_version = "1.2"
@@ -25,6 +26,7 @@ satisfies_source_execution = false
 [resource_policy]
 interactive_cpu_limit = 10
 interactive_ram_gib_range = [60, 80]
+heavy_stage_ram_ceiling_gib = 120
 developer_profile = "4 vCPU, 8 GiB RAM, 30 GiB free disk"
 small_ci_profile = "8 vCPU, 16 GiB RAM, 100 GiB SSD"
 scale_profile = "32+ vCPU, 64-128 GiB RAM, fast SSD"
