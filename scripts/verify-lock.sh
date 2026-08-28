@@ -851,9 +851,8 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
   bff75422adaac4c73489b6bec4b50b36c6a20a4d18660b98c77edd8802b40051 ]]
 (
   cd "$workspace_dir/worktrees/candle-integration-v13"
-  /usr/bin/python3 -I -m unittest \
-    candle.test_flyspeck_stratum_plan \
-    candle.test_flyspeck_stratum_runtime \
+  /usr/bin/python3 -I -m unittest discover \
+    -s candle -p 'test_flyspeck_stratum_*.py' \
     >/dev/null 2>&1
 )
 integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-a9ba565-ac925270"
