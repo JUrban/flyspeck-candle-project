@@ -716,6 +716,34 @@ jq -e '
   .request.sha256 ==
     "5120a84e200be58a323c6ea1c673dc5da695fdf6980170318f40239437292635"
 ' "$reference_plan" >/dev/null
+reference_run_prefix="$workspace_dir/flyspeck-candle-runs/s1-reference-gcd-pristine-v3-run1"
+[[ $(sha256sum "$reference_run_prefix-plan.json" | cut -d' ' -f1) == \
+  165cf0fa2808a8a5bcfbe88018a237d27802ee485eff3ae7aa3e91cd1405db0d ]]
+[[ $(sha256sum "$reference_run_prefix-request.ml" | cut -d' ' -f1) == \
+  a28149b82eb581b2c876341a2feeef2f5606c5f34f4532f37a9d16378e1ee46f ]]
+[[ $(sha256sum "$reference_run_prefix.log" | cut -d' ' -f1) == \
+  29d12c42f225f0a9ab7ec0a8d0b0ec98f683a9c2f8fa40d8f74c1feb4a04149d ]]
+[[ $(sha256sum "$reference_run_prefix-candidate.json" | cut -d' ' -f1) == \
+  9033c92943e234d9f6234b9d55a42c92c46956a2260d7d75195e8a94be643470 ]]
+(
+  cd "$workspace_dir/worktrees/candle-integration-v13"
+  python3 candle/reference_fingerprints.py validate \
+    "$reference_run_prefix-candidate.json" \
+    --plan "$reference_run_prefix-plan.json" \
+    --request "$reference_run_prefix-request.ml" \
+    --transcript "$reference_run_prefix.log" >/dev/null
+)
+jq -e --slurp '
+  .[0].candidate_identities == .[1].candidate_identities and
+  .[1].schema == "candle-s1-reference-candidate-v3" and
+  .[1].approval_status == "candidate_unapproved" and
+  .[1].promotion_allowed == false and
+  .[1].process_exit_code == 0 and
+  .[1].plan_pins.reference.git_head ==
+    "433477862bb90b328a593e012e09390e99b2439b"
+' \
+  "$workspace_dir/flyspeck-candle-runs/s1-reference-gcd-v2-candidate.json" \
+  "$reference_run_prefix-candidate.json" >/dev/null
 check_worktree candle-clean-build \
   "$workspace_dir/worktrees/candle-clean-build-v13" \
   codex/flyspeck-v13-clean-build \

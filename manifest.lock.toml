@@ -351,6 +351,26 @@ reference_head = "433477862bb90b328a593e012e09390e99b2439b"
 collector_candle = "efa0cab334de4831ac2d202349ba808b01057308"
 claim = "clean pristine-reference execution plan only; not an observed identity and not S1 evidence"
 
+[artifacts.s1_gcd_pristine_v3_run1]
+plan_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v3-run1-plan.json"
+plan_sha256 = "165cf0fa2808a8a5bcfbe88018a237d27802ee485eff3ae7aa3e91cd1405db0d"
+request_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v3-run1-request.ml"
+request_sha256 = "a28149b82eb581b2c876341a2feeef2f5606c5f34f4532f37a9d16378e1ee46f"
+transcript_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v3-run1.log"
+transcript_sha256 = "29d12c42f225f0a9ab7ec0a8d0b0ec98f683a9c2f8fa40d8f74c1feb4a04149d"
+candidate_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v3-run1-candidate.json"
+candidate_sha256 = "9033c92943e234d9f6234b9d55a42c92c46956a2260d7d75195e8a94be643470"
+schema = "candle-s1-reference-candidate-v3"
+status = "candidate_unapproved"
+promotion_allowed = false
+reference_head = "433477862bb90b328a593e012e09390e99b2439b"
+collector_candle = "efa0cab334de4831ac2d202349ba808b01057308"
+process_exit_code = 0
+wall_seconds = 137.38
+peak_rss_kib = 361796
+pft_v2_identity_object_equal = true
+claim = "validated pristine-reference observation only; pending verified Candle differential and not S1 evidence"
+
 [toolchain.hol4]
 polyml = "5.7.1"
 jobs = 4
