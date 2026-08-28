@@ -633,7 +633,7 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  d5f831ede13be1173c064a982f0eb52d3ab6fa14
+  379a8363eb142d90874c39a7d1a3bbfb816b96f4
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
   f59c5b32e87f9032881a41ae9c3925e18e5edfc93bd88b1ab15aea0e0fc73f70 ]]
@@ -644,7 +644,7 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_source_digests.ml" | cut -d' ' -f1) == \
   4bfb739c1bd10172fc8963c1d6b317105048e9fe096b368e07791ec9e0ed8dd2 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_runtime.py" | cut -d' ' -f1) == \
-  2dc081b50b1d4aed13d4147644d5b993283a17dcc16dd98f10826c5e02c00603 ]]
+  f280a56a262e4cfb1bb477aeadde1987222e75cf3b5eef63ae49cb36e2da64e6 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_setup.ml" | cut -d' ' -f1) == \
   870c71eb30bf73d4c6ac6ef7ca18a7ce40c871beccf6175deb220bff7c3087bc ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_check.ml" | cut -d' ' -f1) == \
@@ -666,17 +666,17 @@ integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-
   ced55e51ee22a38c68ea0e0ba73688157572934d538810aa94a9bf18075068ee ]]
 [[ $(jq '.entries | length' \
   "$integration_overlay/flyspeck_normalization_receipt.json") == 16 ]]
-integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-d5f831e/plan.json"
+integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-379a836/plan.json"
 [[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
-  b7a7b83646bcf3541b481c7aa5db52be8bedf314806b29937ffbfc15986735bd ]]
+  9fd3dc2392e78b69410c7d25be8bf0682d1dc9194ac84940986f5005bb034ec0 ]]
 jq -e '
   .schema == 1 and
   (.actions | length) == 297 and
   (.boundaries | length) == 8 and
   .repositories.candle_materialization_head ==
-    "d5f831ede13be1173c064a982f0eb52d3ab6fa14" and
+    "379a8363eb142d90874c39a7d1a3bbfb816b96f4" and
   .repositories.candle_integration_base ==
-    "d5f831ede13be1173c064a982f0eb52d3ab6fa14" and
+    "379a8363eb142d90874c39a7d1a3bbfb816b96f4" and
   .ordered_action_sha256 ==
     "f932d67cfb1a1dd120d7099dde19cd3a669f6a583e810ea5fa31cbb39ba5c4ae" and
   .normalization_overlay.entry_count == 16 and
