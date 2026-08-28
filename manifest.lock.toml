@@ -103,13 +103,13 @@ purpose = "v1.3 direct-source manifest, loader, and target"
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-candle-integration"
-development_head = "273cd9c25e16963e2068e6230ee4dbe54ae486f9"
+development_head = "2cbdc8c0152f61dfa43fcd24f0e8c602734ceb21"
 integration_merge = "b2cf35876ad54888cbcec58d7cd10a55ff467359"
 parents = ["ba90c9151e3340432740aad39c091a5cf123584c", "02faa155195e7a80ea900bfad46d08cedcedf3ef"]
 direct_manifest_sha256 = "aa681c20c232bc5b5116704044d3e50a8753fe685d36d699f9d71297aef7a5e2"
 source_digest_program_sha256 = "76bb4583e0050d54e7d37ab9360b212088e829a8b2b529d31329a552037987a4"
-host_unit_tests = 64
-purpose = "integrated direct loader, authenticated source graph, Great-100 remedies, selected SOS compatibility, and pinned local compiler handoff pending rebuilt-compiler execution"
+host_unit_tests = 67
+purpose = "integrated direct loader, authenticated source graph, Great-100 remedies including complete-line inactivity semantics, selected SOS compatibility, and pinned local compiler handoff pending rebuilt-compiler execution"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
