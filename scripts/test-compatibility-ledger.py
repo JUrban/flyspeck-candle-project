@@ -34,6 +34,27 @@ class LedgerLifecycleTests(unittest.TestCase):
         with self.assertRaisesRegex(validator.ValidationError, "needs reproducer"):
             validator.validate_local_entry(entry)
 
+    def test_dopen_review_fails_closed_before_compiled_provenance(self):
+        entry = next(
+            item for item in self.ledger["entries"]
+            if item["id"] == "PROJECT-OPEN-DECLARATION-REVIEW-001"
+        )
+        self.assertEqual(entry["status"], "regression_pending")
+        self.assertEqual(entry["chosen_remedy"]["status"], "chosen")
+        self.assertEqual(entry["proof_obligation"]["status"], "open")
+        self.assertIn(
+            "PROJECT-DOPEN-ARTIFACT-PROVENANCE-GATE",
+            entry["regression_ids"],
+        )
+        self.assertIn(
+            "A synthetic Dopen smoke alone is insufficient",
+            entry["proof_obligation"]["description"],
+        )
+        self.assertIn(
+            "4e312c0f7e18b9c5789c8ac4e0af257bff895cf5",
+            entry["notes"],
+        )
+
     def test_resolved_requires_regression_and_proof_evidence(self):
         entry = copy.deepcopy(self.ledger["entries"][0])
         entry.update({
@@ -47,6 +68,7 @@ class LedgerLifecycleTests(unittest.TestCase):
             "candle_outcome": {"status": "observed", "outcome": "accepted", "evidence": ["candle.log"]},
             "chosen_remedy": {"status": "implemented", "kind": "language_fix", "description": "implemented"},
             "proof_obligation": {"status": "discharged", "description": "proved", "evidence": ["theory.log"]},
+            "regression_ids": [],
         })
         with self.assertRaisesRegex(validator.ValidationError, "stable regression IDs"):
             validator.validate_local_entry(entry)
