@@ -995,10 +995,14 @@ root, plan_path, request_path, transcript_path, candidate_path = map(
 
 historical_commit = "7211fb1c95a8da60bb0d78812a31a7bf46af232c"
 expected_blobs = {
+    "candle/fingerprint.ml":
+        "f5c9563154606fb2dbcdebf8fef26c802a9d22210253a51d7dcb2e2db76a2fdd",
     "candle/regression.py":
         "16266148a2497fb40f9edba8e5346bfbf0c8a2fc0800400bd5ba1073d39c889f",
     "candle/reference_fingerprints.py":
         "761c8cdcc06110e0020bdbe112ba8de7a9767969cbcb42013812ca28284eea67",
+    "candle/top100_manifest.json":
+        "224d375269b8babc95207913e4eb130be9e570d260132329d02191836398b941",
 }
 
 def blob(path):
@@ -1020,7 +1024,11 @@ def blob(path):
 def load_exact(name, path):
     source = blob(path)
     module = types.ModuleType(name)
-    module.__file__ = f"git:{historical_commit}:{path}"
+    # Preserve the historical source bytes while making data-file resolution
+    # land in the already authenticated current Candle tree.  The two data
+    # dependencies are checked against their historical blobs immediately
+    # below.
+    module.__file__ = str(root / path)
     module.__package__ = ""
     sys.modules[name] = module
     exec(compile(source, module.__file__, "exec", dont_inherit=True),
@@ -1030,6 +1038,9 @@ def load_exact(name, path):
 # The replay path does not spawn Candle and never calls pexpect.  Supply a
 # fail-closed placeholder so exact regression.py can define its functions
 # without importing any ambient site package; attribute access would fail.
+for data_path in ("candle/top100_manifest.json", "candle/fingerprint.ml"):
+    if (root / data_path).read_bytes() != blob(data_path):
+        raise SystemExit(f"current historical replay input drift: {data_path}")
 sys.modules["pexpect"] = types.ModuleType("pexpect")
 load_exact("regression", "candle/regression.py")
 reference = load_exact(
