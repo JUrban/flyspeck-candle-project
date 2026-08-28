@@ -103,14 +103,14 @@ purpose = "v1.3 direct-source manifest, loader, and target"
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-candle-integration"
-development_head = "efa0cab334de4831ac2d202349ba808b01057308"
+development_head = "0f14b83cb2a75cd2ee1147be06284441bc20c89e"
 integration_merge = "b2cf35876ad54888cbcec58d7cd10a55ff467359"
 parents = ["ba90c9151e3340432740aad39c091a5cf123584c", "02faa155195e7a80ea900bfad46d08cedcedf3ef"]
 direct_manifest_sha256 = "4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77"
 great100_manifest_sha256 = "224d375269b8babc95207913e4eb130be9e570d260132329d02191836398b941"
 source_digest_program_sha256 = "fecab8f91c7c38836f7eadc73b2aae8b64256f58b5ccca4e94903d84fc89a2d6"
 host_unit_tests = 109
-purpose = "integrated direct loader, authenticated source graph and read-only attempt snapshots, independently reconstructed cumulative plans, exact outer-action ledger deltas, nonce-bound resource-limited receipts and unapproved direct boundary fingerprints, exact fail-closed LP result-ID coverage, fatal nonlinear TRUTH/digest gates and 7479-leaf traversal coverage, fail-closed Great-100 S1 identity comparison with persistent per-target logs, 65 audited mappings, and schema-v3 closed reference-runtime provenance, bounded real-source Dopen prefix gate, selected SOS and OCaml runtime compatibility with typed compare/hash normalizations, and artifact-provenance-enforced local compiler handoff pending rebuilt-compiler execution"
+purpose = "integrated direct loader, authenticated source graph and read-only attempt snapshots, independently reconstructed cumulative plans, exact outer-action ledger deltas, nonce-bound resource-limited receipts and unapproved direct boundary fingerprints, exact fail-closed LP result-ID coverage, fatal nonlinear TRUTH/digest gates and 7479-leaf traversal coverage, fail-closed Great-100 S1 identity comparison with persistent per-target logs, 65 audited mappings, and schema-v4 reference-runtime provenance including findlib configuration and package roots, bounded real-source Dopen prefix gate, selected SOS and OCaml runtime compatibility with typed compare/hash normalizations, and artifact-provenance-enforced local compiler handoff pending rebuilt-compiler execution"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
@@ -314,7 +314,7 @@ claim = "authenticated exact source actions, 13-output overlay including Set.Mak
 [artifacts.candle_flyspeck_integration_manifest]
 path = "worktrees/candle-integration-v13/candle/flyspeck_manifest.json"
 sha256 = "4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77"
-generator_candle = "efa0cab334de4831ac2d202349ba808b01057308"
+generator_candle = "0f14b83cb2a75cd2ee1147be06284441bc20c89e"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
 source_nodes = 400
 build_actions = 297
@@ -326,8 +326,8 @@ normalization_overlay_receipt = "flyspeck-candle-runs/v13-normalized-overlay-f7d
 normalization_overlay_receipt_sha256 = "e234c83d12d1b9e6525ed6e92de4244cbe2158634032ed113212d1e318a221d1"
 full_build_sha256 = "1a86ee399ae3f2a19387aad5a058a8f51de1ebf85baea6b6045e4897a6077b32"
 source_digest_program_sha256 = "fecab8f91c7c38836f7eadc73b2aae8b64256f58b5ccca4e94903d84fc89a2d6"
-stratum_plan = "flyspeck-candle-runs/v13-stratum-plan-efa0cab/plan.json"
-stratum_plan_sha256 = "4d6211b1bcee1cea8fc9518287f65febecd7e082a20b0cb0b5e47ad78b42865a"
+stratum_plan = "flyspeck-candle-runs/v13-stratum-plan-0f14b83/plan.json"
+stratum_plan_sha256 = "c4b22b12d44bb9f01b381c8af846106d595c67a3dad9d681b1cfeb4b42cc1ee3"
 ordered_action_sha256 = "76c86806a9dee0d465c577d2da9a9adbcd8017b0e8305e58a4f73cf4fad46088"
 normalization_binding_sha256 = "37dbd2dcb965dedf922a8c84ce1ba06484a3c6205106e3c451c2c5a6ebb1dc35"
 lp_exact_result_coverage = "static-fail-closed-gate-implemented-pending-compiled-39-file-run"
@@ -370,6 +370,18 @@ wall_seconds = 137.38
 peak_rss_kib = 361796
 pft_v2_identity_object_equal = true
 claim = "validated pristine-reference observation only; pending verified Candle differential and not S1 evidence"
+
+[artifacts.s1_gcd_pristine_v4_plan]
+path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v4-plan.json"
+sha256 = "16f047d0d6051f1f5d9ad9e0e75330471de7127141c8b365195cbd724395d111"
+request_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v4-request.ml"
+request_sha256 = "c41a42d8ff059e33617e3a4c3e1ad5b4663fc8cdd4e7df0790e159a25f8389f9"
+schema = "candle-s1-reference-plan-v4"
+status = "planned_not_executed"
+reference_head = "433477862bb90b328a593e012e09390e99b2439b"
+collector_candle = "0f14b83cb2a75cd2ee1147be06284441bc20c89e"
+findlib_configuration_sha256 = "29d5cfc50cd5888d2f329eacd668a7de6b0f491791a3eb4e2031bb4655a12d52"
+claim = "clean pristine-reference execution plan with findlib selection closure; not an observed identity and not S1 evidence"
 
 [toolchain.hol4]
 polyml = "5.7.1"
