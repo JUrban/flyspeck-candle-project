@@ -633,10 +633,10 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  638dfe68efece006984ec7ff92bd6170becec75b
+  1bc910fe90a95323628e117d5bf8669d5ed68c1e
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
-  1c24d61d64e8f361473c495069012ec6d46c13d992d47c3c6e864bd53682973b ]]
+  4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_normalizations.json" | cut -d' ' -f1) == \
   ac925270aa6a8605a8f70ab170ff965c3e4a4d6410623e3d3a6d51976ff1da08 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_full_build.ml" | cut -d' ' -f1) == \
@@ -660,15 +660,15 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
     candle.test_flyspeck_stratum_runtime \
     >/dev/null 2>&1
 )
-integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-ac925270aa6a8605"
+integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-f7dac3a-ac925270"
 [[ $(sha256sum "$integration_overlay/flyspeck_normalization_receipt.json" | \
   cut -d' ' -f1) == \
   e234c83d12d1b9e6525ed6e92de4244cbe2158634032ed113212d1e318a221d1 ]]
 [[ $(jq '.entries | length' \
   "$integration_overlay/flyspeck_normalization_receipt.json") == 18 ]]
-integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-638dfe6/plan.json"
+integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-1bc910f/plan.json"
 [[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
-  80f871e99afb12f5297309fa988e2665272ee935227f691b0efaf2cd896ca7eb ]]
+  7e0751fdb5d4108675c318d2b7c741265a168e84abf3030ab4125005a23befe5 ]]
 jq -e '
   .schema == 1 and
   (.actions | length) == 297 and
@@ -679,9 +679,9 @@ jq -e '
   [.diagnostic_cutpoints[].completed_action_count] == [3, 19] and
   [.diagnostic_cutpoints[].diagnostic_only] == [true, true] and
   .repositories.candle_materialization_head ==
-    "638dfe68efece006984ec7ff92bd6170becec75b" and
+    "1bc910fe90a95323628e117d5bf8669d5ed68c1e" and
   .repositories.candle_integration_base ==
-    "638dfe68efece006984ec7ff92bd6170becec75b" and
+    "1bc910fe90a95323628e117d5bf8669d5ed68c1e" and
   .ordered_action_sha256 ==
     "76c86806a9dee0d465c577d2da9a9adbcd8017b0e8305e58a4f73cf4fad46088" and
   .normalization_overlay.entry_count == 18 and
@@ -710,7 +710,7 @@ check_worktree cakeml-flyspeck-integration \
   "$workspace_dir/worktrees/cakeml-flyspeck-v13-integration" \
   codex/flyspeck-v13-integration \
   dcc03f2866f05b1db18b9f45c731ce45c3a3133e \
-  936219bbc3021fa20418d62e85155f2d0092b9f9
+  0c170aa374ec178e5db8a9fe9276244ed7e0dcf7
 check_worktree HOL-cakeml-dopen \
   "$workspace_dir/worktrees/HOL-cakeml-dopen-v13" \
   master \
