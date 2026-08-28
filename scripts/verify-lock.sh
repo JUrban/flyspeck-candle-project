@@ -633,7 +633,12 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  79ba0f4c6459b75a33788ed9d5d9a7e3c45c8c84
+  efa0cab334de4831ac2d202349ba808b01057308
+check_worktree hol-light-s1-pristine \
+  "$workspace_dir/worktrees/hol-light-s1-pristine-v13" \
+  codex/flyspeck-s1-pristine-v13 \
+  433477862bb90b328a593e012e09390e99b2439b \
+  433477862bb90b328a593e012e09390e99b2439b
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
   4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77 ]]
@@ -668,9 +673,9 @@ integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-
   e234c83d12d1b9e6525ed6e92de4244cbe2158634032ed113212d1e318a221d1 ]]
 [[ $(jq '.entries | length' \
   "$integration_overlay/flyspeck_normalization_receipt.json") == 18 ]]
-integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-79ba0f4/plan.json"
+integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-efa0cab/plan.json"
 [[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
-  815c55731e5b3c5312ed778bf2d6e9d85078b4ba1086770f661d2ee8152bce97 ]]
+  4d6211b1bcee1cea8fc9518287f65febecd7e082a20b0cb0b5e47ad78b42865a ]]
 jq -e '
   .schema == 1 and
   (.actions | length) == 297 and
@@ -681,9 +686,9 @@ jq -e '
   [.diagnostic_cutpoints[].completed_action_count] == [3, 19] and
   [.diagnostic_cutpoints[].diagnostic_only] == [true, true] and
   .repositories.candle_materialization_head ==
-    "79ba0f4c6459b75a33788ed9d5d9a7e3c45c8c84" and
+    "efa0cab334de4831ac2d202349ba808b01057308" and
   .repositories.candle_integration_base ==
-    "79ba0f4c6459b75a33788ed9d5d9a7e3c45c8c84" and
+    "efa0cab334de4831ac2d202349ba808b01057308" and
   .ordered_action_sha256 ==
     "76c86806a9dee0d465c577d2da9a9adbcd8017b0e8305e58a4f73cf4fad46088" and
   .normalization_overlay.entry_count == 18 and
@@ -693,6 +698,24 @@ jq -e '
     "authenticated host-side action plan only; not Candle execution or S2/S3 evidence" and
   .evidence_boundary.host_status_cannot_upgrade_assurance == true
 ' "$integration_plan" >/dev/null
+reference_plan="$workspace_dir/flyspeck-candle-runs/s1-reference-gcd-pristine-v3-plan.json"
+reference_request="$workspace_dir/flyspeck-candle-runs/s1-reference-gcd-pristine-v3-request.ml"
+[[ $(sha256sum "$reference_plan" | cut -d' ' -f1) == \
+  d9a3bbe4ce11458ef5f30bc5bbac06a38ab11e84111da054611b49255e14d314 ]]
+[[ $(sha256sum "$reference_request" | cut -d' ' -f1) == \
+  5120a84e200be58a323c6ea1c673dc5da695fdf6980170318f40239437292635 ]]
+jq -e '
+  .schema == "candle-s1-reference-plan-v3" and
+  .status == "planned_not_executed" and
+  .reference.git_head == "433477862bb90b328a593e012e09390e99b2439b" and
+  .reference.git_status == [] and
+  .input.collector_repository.git_head ==
+    "efa0cab334de4831ac2d202349ba808b01057308" and
+  .input.collector_repository.git_status == [] and
+  .input.collector_repository.collector_matches_head == true and
+  .request.sha256 ==
+    "5120a84e200be58a323c6ea1c673dc5da695fdf6980170318f40239437292635"
+' "$reference_plan" >/dev/null
 check_worktree candle-clean-build \
   "$workspace_dir/worktrees/candle-clean-build-v13" \
   codex/flyspeck-v13-clean-build \
