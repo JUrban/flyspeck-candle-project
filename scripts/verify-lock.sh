@@ -633,18 +633,18 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  f9242917bba8de338465409b3898bf104ec863fb
+  80adfa0c7ff279839023d9e21960d0da0d1bc3b6
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
-  f59c5b32e87f9032881a41ae9c3925e18e5edfc93bd88b1ab15aea0e0fc73f70 ]]
+  1c24d61d64e8f361473c495069012ec6d46c13d992d47c3c6e864bd53682973b ]]
 [[ $(sha256sum "$integration_candle/flyspeck_normalizations.json" | cut -d' ' -f1) == \
-  ee96d0327a611074817ae2e458f8013880cad6f1c059fa9b9481b4c3060d48ad ]]
+  ac925270aa6a8605a8f70ab170ff965c3e4a4d6410623e3d3a6d51976ff1da08 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_full_build.ml" | cut -d' ' -f1) == \
-  aebd573d379f2787c03738db27b8e04f80adc7a8a2e1546fed840b9006937e0e ]]
+  1a86ee399ae3f2a19387aad5a058a8f51de1ebf85baea6b6045e4897a6077b32 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_source_digests.ml" | cut -d' ' -f1) == \
-  4bfb739c1bd10172fc8963c1d6b317105048e9fe096b368e07791ec9e0ed8dd2 ]]
+  fecab8f91c7c38836f7eadc73b2aae8b64256f58b5ccca4e94903d84fc89a2d6 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_runtime.py" | cut -d' ' -f1) == \
-  f280a56a262e4cfb1bb477aeadde1987222e75cf3b5eef63ae49cb36e2da64e6 ]]
+  e5f2502e0a02dbe7f5547525c8d95abb0cdbaabc330dd7ec8b7cc460f905654b ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_setup.ml" | cut -d' ' -f1) == \
   870c71eb30bf73d4c6ac6ef7ca18a7ce40c871beccf6175deb220bff7c3087bc ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_check.ml" | cut -d' ' -f1) == \
@@ -660,28 +660,28 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
     candle.test_flyspeck_stratum_runtime \
     >/dev/null 2>&1
 )
-integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-ee96d0327a611074"
+integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-ac925270aa6a8605"
 [[ $(sha256sum "$integration_overlay/flyspeck_normalization_receipt.json" | \
   cut -d' ' -f1) == \
-  ced55e51ee22a38c68ea0e0ba73688157572934d538810aa94a9bf18075068ee ]]
+  e234c83d12d1b9e6525ed6e92de4244cbe2158634032ed113212d1e318a221d1 ]]
 [[ $(jq '.entries | length' \
-  "$integration_overlay/flyspeck_normalization_receipt.json") == 16 ]]
-integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-f924291/plan.json"
+  "$integration_overlay/flyspeck_normalization_receipt.json") == 18 ]]
+integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-80adfa0/plan.json"
 [[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
-  02cdc70b1b7078adf2f52c3647ec53abcf4006ea79442e0ce7a94b376a350bd4 ]]
+  6c62e46107d28ce368a0a2b63ada569e7d9b472aa82d7f56390eb08a90ba33b0 ]]
 jq -e '
   .schema == 1 and
   (.actions | length) == 297 and
   (.boundaries | length) == 8 and
   .repositories.candle_materialization_head ==
-    "f9242917bba8de338465409b3898bf104ec863fb" and
+    "80adfa0c7ff279839023d9e21960d0da0d1bc3b6" and
   .repositories.candle_integration_base ==
-    "f9242917bba8de338465409b3898bf104ec863fb" and
+    "80adfa0c7ff279839023d9e21960d0da0d1bc3b6" and
   .ordered_action_sha256 ==
-    "f932d67cfb1a1dd120d7099dde19cd3a669f6a583e810ea5fa31cbb39ba5c4ae" and
-  .normalization_overlay.entry_count == 16 and
+    "76c86806a9dee0d465c577d2da9a9adbcd8017b0e8305e58a4f73cf4fad46088" and
+  .normalization_overlay.entry_count == 18 and
   .normalization_overlay.ordered_binding_sha256 ==
-    "5769a480a74afbdaab1f8732ef430a6c707bde8a414649e1d1c76040202628a7" and
+    "37dbd2dcb965dedf922a8c84ce1ba06484a3c6205106e3c451c2c5a6ebb1dc35" and
   .claim ==
     "authenticated host-side action plan only; not Candle execution or S2/S3 evidence" and
   .evidence_boundary.host_status_cannot_upgrade_assurance == true
