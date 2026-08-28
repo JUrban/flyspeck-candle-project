@@ -396,6 +396,26 @@ runtime_stub_count = 10
 dynamic_library_count = 11
 claim = "clean pristine-reference execution plan with findlib and candidate-stub ELF closure; not an observed identity and not S1 evidence"
 
+[artifacts.s1_gcd_pristine_v5_run1]
+plan_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v5-run1-plan.json"
+plan_sha256 = "1a1437e911a3742e8ad238ea3df36bf83f0b9a6d95484bae9e04322fb4cd5494"
+request_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v5-run1-request.ml"
+request_sha256 = "05baf37221fdb4e317317482eea6aed36e9e96e895e301e29a0023b475f85827"
+transcript_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v5-run1.log"
+transcript_sha256 = "986d1c0fdce0c679d55bef73426b0f4cd27da151e089d97a23651ff3ac009d0b"
+candidate_path = "flyspeck-candle-runs/s1-reference-gcd-pristine-v5-run1-candidate.json"
+candidate_sha256 = "86159b12c91acb30aa671cd88b19de09d7b4908d919287b53922c85bd14b1a61"
+schema = "candle-s1-reference-candidate-v5"
+status = "candidate_unapproved"
+promotion_allowed = false
+reference_head = "433477862bb90b328a593e012e09390e99b2439b"
+collector_candle = "7211fb1c95a8da60bb0d78812a31a7bf46af232c"
+process_exit_code = 0
+wall_seconds = 146.96
+peak_rss_kib = 358536
+historical_identity_objects_equal = true
+claim = "validated fully closed pristine-reference observation only; pending verified Candle differential and independent approval, not S1 evidence"
+
 [toolchain.hol4]
 polyml = "5.7.1"
 jobs = 4
