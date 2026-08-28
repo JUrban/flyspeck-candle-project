@@ -1,4 +1,8 @@
-# Full Flyspeck L2 export and Candle replay
+# Historical full Flyspeck PFT export and Candle replay
+
+This runbook's `full-l2` filenames predate the governing v1.3 S0--S4
+milestones.  The workflow is the independent HOL Light-to-PFT validation lane;
+it is not direct source execution and cannot satisfy v1.3 S2 or S3.
 
 Run from the project checkout after `scripts/verify-lock.sh` succeeds.  The
 repository layout and OCaml switch are locked by `manifest.lock.toml`; the
@@ -54,6 +58,8 @@ axioms and requires these saved targets in order:
 4. `flyspeck$Candle_flyspeck_l2.tame_imp_kepler_conjecture`.
 
 The fourth theorem has statement
-`import_tame_classification ==> the_kepler_conjecture`.  This is the selected
-L2 boundary: Candle checks the HOL-side LP and nonlinear evidence, while the
-Isabelle tame-classification result remains an explicit premise.
+`import_tame_classification ==> the_kepler_conjecture`.  At this historical
+PFT `L2` boundary, Candle checks the HOL-side LP and nonlinear evidence while
+the Isabelle tame-classification result remains an explicit premise.  This is
+P1 validation evidence only; promotion to S2/S3 requires an independently
+matched direct Candle source run with no HOL Light production process.
