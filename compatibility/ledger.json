@@ -65,9 +65,9 @@
     {
       "id": "candle-great100-target-manifest",
       "repository_path_key": "candle",
-      "git_commit": "2306980c0c76f9e5c9a30e259694d4044110fab1",
+      "git_commit": "79ba0f4c6459b75a33788ed9d5d9a7e3c45c8c84",
       "artifact_path": "candle/top100_manifest.json",
-      "artifact_sha256": "e936a0a9d097b1e8410911b505773b28a92c91c62ced322041526df834c430e2",
+      "artifact_sha256": "224d375269b8babc95207913e4eb130be9e570d260132329d02191836398b941",
       "schema_version": 1,
       "declared_target_count": 65,
       "declared_source_count": 66,

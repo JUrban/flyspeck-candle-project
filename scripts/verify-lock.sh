@@ -637,6 +637,8 @@ check_worktree candle-flyspeck-integration \
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
   4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77 ]]
+[[ $(sha256sum "$integration_candle/top100_manifest.json" | cut -d' ' -f1) == \
+  224d375269b8babc95207913e4eb130be9e570d260132329d02191836398b941 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_normalizations.json" | cut -d' ' -f1) == \
   ac925270aa6a8605a8f70ab170ff965c3e4a4d6410623e3d3a6d51976ff1da08 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_full_build.ml" | cut -d' ' -f1) == \
