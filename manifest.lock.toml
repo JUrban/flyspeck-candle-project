@@ -103,13 +103,13 @@ purpose = "v1.3 direct-source manifest, loader, and target"
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-candle-integration"
-development_head = "1bc910fe90a95323628e117d5bf8669d5ed68c1e"
+development_head = "ff0d7b5e25b95ea30c9ef0b37600123aa1a50ff6"
 integration_merge = "b2cf35876ad54888cbcec58d7cd10a55ff467359"
 parents = ["ba90c9151e3340432740aad39c091a5cf123584c", "02faa155195e7a80ea900bfad46d08cedcedf3ef"]
 direct_manifest_sha256 = "4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77"
 source_digest_program_sha256 = "fecab8f91c7c38836f7eadc73b2aae8b64256f58b5ccca4e94903d84fc89a2d6"
-host_unit_tests = 107
-purpose = "integrated direct loader, authenticated source graph and read-only attempt snapshots, independently reconstructed cumulative plans, exact outer-action ledger deltas, nonce-bound resource-limited receipts and unapproved direct boundary fingerprints, exact fail-closed LP result-ID coverage, fatal nonlinear TRUTH/digest gates and 7479-leaf traversal coverage, fail-closed Great-100 S1 identity comparison and unapproved reference collection with 63 audited mappings, bounded real-source Dopen prefix gate, selected SOS and OCaml runtime compatibility with typed compare/hash normalizations, and artifact-provenance-enforced local compiler handoff pending rebuilt-compiler execution"
+host_unit_tests = 108
+purpose = "integrated direct loader, authenticated source graph and read-only attempt snapshots, independently reconstructed cumulative plans, exact outer-action ledger deltas, nonce-bound resource-limited receipts and unapproved direct boundary fingerprints, exact fail-closed LP result-ID coverage, fatal nonlinear TRUTH/digest gates and 7479-leaf traversal coverage, fail-closed Great-100 S1 identity comparison with persistent per-target logs and unapproved reference collection with 63 audited mappings, bounded real-source Dopen prefix gate, selected SOS and OCaml runtime compatibility with typed compare/hash normalizations, and artifact-provenance-enforced local compiler handoff pending rebuilt-compiler execution"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
@@ -311,7 +311,7 @@ claim = "authenticated exact source actions, 13-output overlay including Set.Mak
 [artifacts.candle_flyspeck_integration_manifest]
 path = "worktrees/candle-integration-v13/candle/flyspeck_manifest.json"
 sha256 = "4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77"
-generator_candle = "1bc910fe90a95323628e117d5bf8669d5ed68c1e"
+generator_candle = "ff0d7b5e25b95ea30c9ef0b37600123aa1a50ff6"
 source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
 source_nodes = 400
 build_actions = 297
@@ -323,8 +323,8 @@ normalization_overlay_receipt = "flyspeck-candle-runs/v13-normalized-overlay-f7d
 normalization_overlay_receipt_sha256 = "e234c83d12d1b9e6525ed6e92de4244cbe2158634032ed113212d1e318a221d1"
 full_build_sha256 = "1a86ee399ae3f2a19387aad5a058a8f51de1ebf85baea6b6045e4897a6077b32"
 source_digest_program_sha256 = "fecab8f91c7c38836f7eadc73b2aae8b64256f58b5ccca4e94903d84fc89a2d6"
-stratum_plan = "flyspeck-candle-runs/v13-stratum-plan-1bc910f/plan.json"
-stratum_plan_sha256 = "7e0751fdb5d4108675c318d2b7c741265a168e84abf3030ab4125005a23befe5"
+stratum_plan = "flyspeck-candle-runs/v13-stratum-plan-ff0d7b5/plan.json"
+stratum_plan_sha256 = "138788e2efcfb46d2073aa1a442749283e9557c38b5a091bf5c6bd40b83ba4b1"
 ordered_action_sha256 = "76c86806a9dee0d465c577d2da9a9adbcd8017b0e8305e58a4f73cf4fad46088"
 normalization_binding_sha256 = "37dbd2dcb965dedf922a8c84ce1ba06484a3c6205106e3c451c2c5a6ebb1dc35"
 lp_exact_result_coverage = "static-fail-closed-gate-implemented-pending-compiled-39-file-run"
