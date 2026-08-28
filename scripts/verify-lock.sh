@@ -633,22 +633,22 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  f55046836ba3f811cadf193ef87354fdadedd215
+  d5f831ede13be1173c064a982f0eb52d3ab6fa14
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
-  df24482a3a5a3fbcf07d0f95dd376b3aa9aa1a7841e78e7775331f18d40ae057 ]]
+  f59c5b32e87f9032881a41ae9c3925e18e5edfc93bd88b1ab15aea0e0fc73f70 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_normalizations.json" | cut -d' ' -f1) == \
-  e24fd9785115aa261438682a3d049520a49e14af2ae831b3785bd51a1a36a5fb ]]
+  ee96d0327a611074817ae2e458f8013880cad6f1c059fa9b9481b4c3060d48ad ]]
 [[ $(sha256sum "$integration_candle/flyspeck_full_build.ml" | cut -d' ' -f1) == \
-  b0b42a913de1032eeb6ebb1afc6e812aba68147a071a78e48289621c40bbc6d1 ]]
+  aebd573d379f2787c03738db27b8e04f80adc7a8a2e1546fed840b9006937e0e ]]
 [[ $(sha256sum "$integration_candle/flyspeck_source_digests.ml" | cut -d' ' -f1) == \
-  4b4d1793fd865bbf42924e0589dc2b76dbe6e9955ee3910f3087f5ce8f24ed65 ]]
+  4bfb739c1bd10172fc8963c1d6b317105048e9fe096b368e07791ec9e0ed8dd2 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_runtime.py" | cut -d' ' -f1) == \
-  5746cd43004bf8a4927cb63fb3f594eb6d0bb794f75634e24383dd2eae59992d ]]
+  2dc081b50b1d4aed13d4147644d5b993283a17dcc16dd98f10826c5e02c00603 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_setup.ml" | cut -d' ' -f1) == \
-  74abac96240f9c2f36b2c74fd4ef47ea2d12f574e1b77e3dd63e36db75e9f168 ]]
+  870c71eb30bf73d4c6ac6ef7ca18a7ce40c871beccf6175deb220bff7c3087bc ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_check.ml" | cut -d' ' -f1) == \
-  2348eea910b74e4f33257327c6f99b652f3737dc1c55f3f5ec8dcd6c7c873c77 ]]
+  d1b8551f0a60188d23d9bf5563437702d5922ccedfacccbaf7c5a65a895bcdac ]]
 [[ $(sha256sum "$integration_candle/fingerprint.ml" | cut -d' ' -f1) == \
   f5c9563154606fb2dbcdebf8fef26c802a9d22210253a51d7dcb2e2db76a2fdd ]]
 [[ $(sha256sum "$integration_candle/flyspeck_l2_target.ml" | cut -d' ' -f1) == \
@@ -660,24 +660,28 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
     candle.test_flyspeck_stratum_runtime \
     >/dev/null 2>&1
 )
-integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-e24fd9785115aa26"
+integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-ee96d0327a611074"
 [[ $(sha256sum "$integration_overlay/flyspeck_normalization_receipt.json" | \
   cut -d' ' -f1) == \
-  d2c967beef1f30eb55a3a48e6ff324042d288ff6286b81437a8f0bd340cdf4e8 ]]
+  ced55e51ee22a38c68ea0e0ba73688157572934d538810aa94a9bf18075068ee ]]
 [[ $(jq '.entries | length' \
   "$integration_overlay/flyspeck_normalization_receipt.json") == 16 ]]
-integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-aac2a6a/plan.json"
+integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-d5f831e/plan.json"
 [[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
-  ca34246de6faf58a9b4e47586fd225938113f2930c6c271cc88f61e01179d224 ]]
+  b7a7b83646bcf3541b481c7aa5db52be8bedf314806b29937ffbfc15986735bd ]]
 jq -e '
   .schema == 1 and
   (.actions | length) == 297 and
   (.boundaries | length) == 8 and
+  .repositories.candle_materialization_head ==
+    "d5f831ede13be1173c064a982f0eb52d3ab6fa14" and
+  .repositories.candle_integration_base ==
+    "d5f831ede13be1173c064a982f0eb52d3ab6fa14" and
   .ordered_action_sha256 ==
-    "4fda9469e478c7feaa67c9f507eeba4b5abae8901ed381772e720d1c73afd673" and
+    "f932d67cfb1a1dd120d7099dde19cd3a669f6a583e810ea5fa31cbb39ba5c4ae" and
   .normalization_overlay.entry_count == 16 and
   .normalization_overlay.ordered_binding_sha256 ==
-    "95392d7c01e507f59a7f45049c2eeec3f57b7ad4c31b8cccd0209d7c1c9e7869" and
+    "5769a480a74afbdaab1f8732ef430a6c707bde8a414649e1d1c76040202628a7" and
   .claim ==
     "authenticated host-side action plan only; not Candle execution or S2/S3 evidence" and
   .evidence_boundary.host_status_cannot_upgrade_assurance == true
