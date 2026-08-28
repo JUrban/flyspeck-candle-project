@@ -7,12 +7,22 @@ repos_dir="$workspace_dir/repos"
 lock_path="$project_dir/manifest.lock.toml"
 
 # The TOML is the governing lock, not a parallel narrative copy of the shell
-# literals below.  Require both lock implementations to be their committed
-# project blobs, then parse the TOML and bind its current integration fields to
-# the retained files and repositories before any legacy checks run.
-git -C "$project_dir" diff --quiet -- manifest.lock.toml scripts/verify-lock.sh
-git -C "$project_dir" diff --cached --quiet -- \
-  manifest.lock.toml scripts/verify-lock.sh
+# literals below.  Require both lock implementations to be ordinary index
+# entries whose working bytes equal the exact HEAD blobs, then parse the TOML
+# and bind its current integration fields to the retained files and
+# repositories before any legacy checks run.
+project_git() {
+  /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_NO_REPLACE_OBJECTS=1 \
+    /usr/bin/git -c core.fsmonitor=false -c core.untrackedCache=false \
+      -c core.preloadIndex=false -C "$project_dir" "$@"
+}
+for project_input in manifest.lock.toml scripts/verify-lock.sh; do
+  [[ $(project_git ls-files -v -- "$project_input") == "H $project_input" ]]
+  project_git cat-file blob "HEAD:$project_input" | \
+    /usr/bin/cmp -s - "$project_dir/$project_input"
+done
 /usr/bin/python3 -I -S - "$lock_path" "$workspace_dir" <<'PY'
 import hashlib
 import json
@@ -70,6 +80,16 @@ candle_root = repo_roots["candle_flyspeck_integration"]
 path_checks = {
     "manifest": (
         workspace / artifact["path"], artifact["sha256"]),
+    "Great 100 manifest": (
+        candle_root / "candle/top100_manifest.json",
+        repositories["candle_flyspeck_integration"]
+                    ["great100_manifest_sha256"]),
+    "normalization contract": (
+        candle_root / "candle/flyspeck_normalizations.json",
+        artifact["normalization_contract_sha256"]),
+    "full build driver": (
+        candle_root / "candle/flyspeck_full_build.ml",
+        artifact["full_build_sha256"]),
     "source digest program": (
         candle_root / "candle/flyspeck_source_digests.ml",
         artifact["source_digest_program_sha256"]),
@@ -85,6 +105,18 @@ path_checks = {
     "runtime lock helper": (
         candle_root / "candle/runtime_lock.py",
         artifact["runtime_lock_helper_sha256"]),
+    "stratum setup": (
+        candle_root / "candle/flyspeck_stratum_setup.ml",
+        artifact["stratum_runtime_setup_sha256"]),
+    "stratum check": (
+        candle_root / "candle/flyspeck_stratum_check.ml",
+        artifact["stratum_runtime_check_sha256"]),
+    "fingerprint serializer": (
+        candle_root / "candle/fingerprint.ml",
+        artifact["stratum_fingerprint_serializer_sha256"]),
+    "L2 target": (
+        candle_root / "candle/flyspeck_l2_target.ml",
+        artifact["stratum_l2_target_sha256"]),
     "normalization receipt": (
         workspace / artifact["normalization_overlay_receipt"],
         artifact["normalization_overlay_receipt_sha256"]),
@@ -124,9 +156,17 @@ require(plan["repositories"]["candle_materialization_head"] ==
         integration["development_head"], "plan/current Candle head")
 require(plan["manifest_sha256"] == artifact["sha256"],
         "plan/manifest")
+require(plan["ordered_action_sha256"] == artifact["ordered_action_sha256"],
+        "plan/ordered actions")
 require(plan["normalization_overlay"]["receipt_sha256"] ==
         artifact["normalization_overlay_receipt_sha256"],
         "plan/normalization receipt")
+require(plan["normalization_overlay"]["contract_sha256"] ==
+        artifact["normalization_contract_sha256"],
+        "plan/normalization contract")
+require(plan["normalization_overlay"]["ordered_binding_sha256"] ==
+        artifact["normalization_binding_sha256"],
+        "plan/normalization binding")
 require(plan["generated_inputs"]["receipt_sha256"] ==
         artifact["generated_input_receipt_sha256"],
         "plan/generated receipt")
