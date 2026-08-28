@@ -633,7 +633,7 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  ff0d7b5e25b95ea30c9ef0b37600123aa1a50ff6
+  bb82ea2eea002eea299a1bb51e62a81433c2844f
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
   4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77 ]]
@@ -666,9 +666,9 @@ integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-
   e234c83d12d1b9e6525ed6e92de4244cbe2158634032ed113212d1e318a221d1 ]]
 [[ $(jq '.entries | length' \
   "$integration_overlay/flyspeck_normalization_receipt.json") == 18 ]]
-integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-ff0d7b5/plan.json"
+integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-bb82ea2/plan.json"
 [[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
-  138788e2efcfb46d2073aa1a442749283e9557c38b5a091bf5c6bd40b83ba4b1 ]]
+  f5b6e332802cd04f5b5e201b8281e0537fa75a78175c37d88fc6c1f382580661 ]]
 jq -e '
   .schema == 1 and
   (.actions | length) == 297 and
@@ -679,9 +679,9 @@ jq -e '
   [.diagnostic_cutpoints[].completed_action_count] == [3, 19] and
   [.diagnostic_cutpoints[].diagnostic_only] == [true, true] and
   .repositories.candle_materialization_head ==
-    "ff0d7b5e25b95ea30c9ef0b37600123aa1a50ff6" and
+    "bb82ea2eea002eea299a1bb51e62a81433c2844f" and
   .repositories.candle_integration_base ==
-    "ff0d7b5e25b95ea30c9ef0b37600123aa1a50ff6" and
+    "bb82ea2eea002eea299a1bb51e62a81433c2844f" and
   .ordered_action_sha256 ==
     "76c86806a9dee0d465c577d2da9a9adbcd8017b0e8305e58a4f73cf4fad46088" and
   .normalization_overlay.entry_count == 18 and
