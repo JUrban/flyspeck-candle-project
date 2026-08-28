@@ -633,7 +633,7 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  80adfa0c7ff279839023d9e21960d0da0d1bc3b6
+  c50a4103e56be362f58e5e6717df1817cd129cfb
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
   1c24d61d64e8f361473c495069012ec6d46c13d992d47c3c6e864bd53682973b ]]
@@ -644,7 +644,7 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_source_digests.ml" | cut -d' ' -f1) == \
   fecab8f91c7c38836f7eadc73b2aae8b64256f58b5ccca4e94903d84fc89a2d6 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_runtime.py" | cut -d' ' -f1) == \
-  e5f2502e0a02dbe7f5547525c8d95abb0cdbaabc330dd7ec8b7cc460f905654b ]]
+  b8028ee9df213ded01a2a068e0e7b12ae3937b69c35510ff59b77016e62d4162 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_setup.ml" | cut -d' ' -f1) == \
   870c71eb30bf73d4c6ac6ef7ca18a7ce40c871beccf6175deb220bff7c3087bc ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_check.ml" | cut -d' ' -f1) == \
@@ -666,17 +666,22 @@ integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-
   e234c83d12d1b9e6525ed6e92de4244cbe2158634032ed113212d1e318a221d1 ]]
 [[ $(jq '.entries | length' \
   "$integration_overlay/flyspeck_normalization_receipt.json") == 18 ]]
-integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-80adfa0/plan.json"
+integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-c50a410/plan.json"
 [[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
-  6c62e46107d28ce368a0a2b63ada569e7d9b472aa82d7f56390eb08a90ba33b0 ]]
+  e0fcaa5dcf1ddbd6e2a8c0b0c00beb0c467ab9d1c57ccdf96406614242dadc98 ]]
 jq -e '
   .schema == 1 and
   (.actions | length) == 297 and
   (.boundaries | length) == 8 and
+  (.diagnostic_cutpoints | length) == 2 and
+  [.diagnostic_cutpoints[].boundary_id] ==
+    ["d0-diagnostic-through-002", "d1-diagnostic-through-018"] and
+  [.diagnostic_cutpoints[].completed_action_count] == [3, 19] and
+  [.diagnostic_cutpoints[].diagnostic_only] == [true, true] and
   .repositories.candle_materialization_head ==
-    "80adfa0c7ff279839023d9e21960d0da0d1bc3b6" and
+    "c50a4103e56be362f58e5e6717df1817cd129cfb" and
   .repositories.candle_integration_base ==
-    "80adfa0c7ff279839023d9e21960d0da0d1bc3b6" and
+    "c50a4103e56be362f58e5e6717df1817cd129cfb" and
   .ordered_action_sha256 ==
     "76c86806a9dee0d465c577d2da9a9adbcd8017b0e8305e58a4f73cf4fad46088" and
   .normalization_overlay.entry_count == 18 and
