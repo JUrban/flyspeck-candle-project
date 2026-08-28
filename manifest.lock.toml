@@ -103,13 +103,13 @@ purpose = "v1.3 direct-source manifest, loader, and target"
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-candle-integration"
-development_head = "d4eaea00e20404f8ad929415be61c8a7a5d239d9"
+development_head = "77d4e1142d5c347d75e30fc6724e9e0ab477549d"
 integration_merge = "b2cf35876ad54888cbcec58d7cd10a55ff467359"
 parents = ["ba90c9151e3340432740aad39c091a5cf123584c", "02faa155195e7a80ea900bfad46d08cedcedf3ef"]
 direct_manifest_sha256 = "6a486ebbe1ededdca51527e919fd58ced5e901744241ef22093f2d7734146437"
 source_digest_program_sha256 = "76bb4583e0050d54e7d37ab9360b212088e829a8b2b529d31329a552037987a4"
-host_unit_tests = 79
-purpose = "integrated direct loader, authenticated source graph, fail-closed Great-100 S1 identity comparison, bounded real-source Dopen prefix gate, selected SOS compatibility, and artifact-provenance-enforced local compiler handoff pending rebuilt-compiler execution"
+host_unit_tests = 82
+purpose = "integrated direct loader, authenticated source graph, fail-closed Great-100 S1 identity comparison with 63 audited mappings, bounded real-source Dopen prefix gate, selected SOS compatibility, and artifact-provenance-enforced local compiler handoff pending rebuilt-compiler execution"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
