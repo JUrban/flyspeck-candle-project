@@ -633,7 +633,7 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  2cbdc8c0152f61dfa43fcd24f0e8c602734ceb21
+  6d1d3c694a11bc6d2a14510e5fffdcaebf6b526c
 check_worktree candle-clean-build \
   "$workspace_dir/worktrees/candle-clean-build-v13" \
   codex/flyspeck-v13-clean-build \
@@ -653,7 +653,7 @@ check_worktree cakeml-flyspeck-integration \
   "$workspace_dir/worktrees/cakeml-flyspeck-v13-integration" \
   codex/flyspeck-v13-integration \
   dcc03f2866f05b1db18b9f45c731ce45c3a3133e \
-  fec48e7d76b7d3b132ef2d420279a5f0655c76f7
+  936219bbc3021fa20418d62e85155f2d0092b9f9
 check_worktree HOL-cakeml-dopen \
   "$workspace_dir/worktrees/HOL-cakeml-dopen-v13" \
   master \
