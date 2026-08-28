@@ -633,7 +633,7 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  7211fb1c95a8da60bb0d78812a31a7bf46af232c
+  0788eaaaed32cd7967ce4eab3dc8ab551f4ea13e
 check_worktree hol-light-s1-pristine \
   "$workspace_dir/worktrees/hol-light-s1-pristine-v13" \
   codex/flyspeck-s1-pristine-v13 \
@@ -641,7 +641,7 @@ check_worktree hol-light-s1-pristine \
   433477862bb90b328a593e012e09390e99b2439b
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
-  4fc41309fcf3ef611f8ae1b62fe38ac91b69d8d0f9373dfd5b0db677caf8eb77 ]]
+  2bb61e249baa2e8158da4b57f419a269504c7617f6bccefdec5465fcaab85380 ]]
 [[ $(sha256sum "$integration_candle/top100_manifest.json" | cut -d' ' -f1) == \
   224d375269b8babc95207913e4eb130be9e570d260132329d02191836398b941 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_normalizations.json" | cut -d' ' -f1) == \
@@ -649,9 +649,15 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_full_build.ml" | cut -d' ' -f1) == \
   1a86ee399ae3f2a19387aad5a058a8f51de1ebf85baea6b6045e4897a6077b32 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_source_digests.ml" | cut -d' ' -f1) == \
-  fecab8f91c7c38836f7eadc73b2aae8b64256f58b5ccca4e94903d84fc89a2d6 ]]
+  917b6f7989cf8b17d3564d34c4f4f3a636af7ea84541a27271a32ea8b254e1dc ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_runtime.py" | cut -d' ' -f1) == \
-  5b9ba2cc798523bb28908409fa167499403b8ac05476ade729cad89fc3fe49f1 ]]
+  5470818d0fa738122648e882b13e4ee52295b26617f4a393516f6d947bb920e0 ]]
+[[ $(sha256sum "$integration_candle/flyspeck_stratum_plan.py" | cut -d' ' -f1) == \
+  a99a268915d2a6a0ce7f5c597bc40131b301a08612bca7935444d9c885e1e9f6 ]]
+[[ $(sha256sum "$integration_candle/cakeml_artifact_provenance.py" | cut -d' ' -f1) == \
+  aaa7ee626af0e6306355cf70459a574e5110661e83c08738042277e701074fc7 ]]
+[[ $(sha256sum "$integration_candle/runtime_lock.py" | cut -d' ' -f1) == \
+  4e649ded14b52bdeeaa2cd8adea54deea7e1ded35c2e11213265fc76b4a69612 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_setup.ml" | cut -d' ' -f1) == \
   0b7915d1d4d33a6092b038a7ee00e16a5f52a831ffa3136617caefe986f44487 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_check.ml" | cut -d' ' -f1) == \
@@ -667,15 +673,22 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
     candle.test_flyspeck_stratum_runtime \
     >/dev/null 2>&1
 )
-integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-f7dac3a-ac925270"
+integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-0788eaa-ac925270"
 [[ $(sha256sum "$integration_overlay/flyspeck_normalization_receipt.json" | \
   cut -d' ' -f1) == \
   e234c83d12d1b9e6525ed6e92de4244cbe2158634032ed113212d1e318a221d1 ]]
 [[ $(jq '.entries | length' \
   "$integration_overlay/flyspeck_normalization_receipt.json") == 18 ]]
-integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-7211fb1/plan.json"
+integration_generated="$workspace_dir/flyspeck-candle-runs/v13-generated-lp-0788eaa-0ca1b5b6"
+[[ $(sha256sum "$integration_generated/flyspeck_lp_archive_receipt.json" | \
+  cut -d' ' -f1) == \
+  77d099cb5035c20645f83f5ab5e19abd77b28eb2b32292e8f3314d4867366841 ]]
+[[ $(jq '.outputs | length' \
+  "$integration_generated/flyspeck_lp_archive_receipt.json") == 1 ]]
+integration_plan_root="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-0788eaa"
+integration_plan="$integration_plan_root/plan.json"
 [[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
-  ded121c7fdaf398bed65ab02e154a642de49130546999f7f84e87ca18b9fd840 ]]
+  7cf9ac7e1ccbe52b5c158bd7ad196a55962f7c66cc8a2aa46d1f55de653e59a6 ]]
 jq -e '
   .schema == 1 and
   (.actions | length) == 297 and
@@ -686,9 +699,9 @@ jq -e '
   [.diagnostic_cutpoints[].completed_action_count] == [3, 19] and
   [.diagnostic_cutpoints[].diagnostic_only] == [true, true] and
   .repositories.candle_materialization_head ==
-    "7211fb1c95a8da60bb0d78812a31a7bf46af232c" and
+    "0788eaaaed32cd7967ce4eab3dc8ab551f4ea13e" and
   .repositories.candle_integration_base ==
-    "7211fb1c95a8da60bb0d78812a31a7bf46af232c" and
+    "0788eaaaed32cd7967ce4eab3dc8ab551f4ea13e" and
   .ordered_action_sha256 ==
     "76c86806a9dee0d465c577d2da9a9adbcd8017b0e8305e58a4f73cf4fad46088" and
   .normalization_overlay.entry_count == 18 and
@@ -698,6 +711,39 @@ jq -e '
     "authenticated host-side action plan only; not Candle execution or S2/S3 evidence" and
   .evidence_boundary.host_status_cannot_upgrade_assurance == true
 ' "$integration_plan" >/dev/null
+integration_materialization="$integration_plan_root/host-materialization.json"
+[[ $(sha256sum "$integration_materialization" | cut -d' ' -f1) == \
+  d2d4d6e732f2ff748ce733f3e9e49bedad190d37269e8455b5dd667f2d317f30 ]]
+jq -e '
+  .schema == 1 and
+  .plan_sha256 ==
+    "7cf9ac7e1ccbe52b5c158bd7ad196a55962f7c66cc8a2aa46d1f55de653e59a6" and
+  .planner_source_sha256 ==
+    "a99a268915d2a6a0ce7f5c597bc40131b301a08612bca7935444d9c885e1e9f6" and
+  .validated_counts == {
+    "actions": 297,
+    "boundaries": 8,
+    "diagnostic_cutpoints": 2,
+    "generated_inputs": 43,
+    "normalization_outputs": 18,
+    "source_nodes": 400
+  } and
+  .claim == "host path and validation receipt only; not S2/S3 evidence"
+' "$integration_materialization" >/dev/null
+integration_schedule="$integration_plan_root/host-schedule-template.json"
+[[ $(sha256sum "$integration_schedule" | cut -d' ' -f1) == \
+  f97a5f4bd1670e79c0ebfdd4048d4f0fb886854ac25a8ff88245749d298338f2 ]]
+jq -e '
+  .schema == 1 and
+  .plan_sha256 ==
+    "7cf9ac7e1ccbe52b5c158bd7ad196a55962f7c66cc8a2aa46d1f55de653e59a6" and
+  (.boundaries | length) == 8 and
+  (.diagnostic_cutpoints | length) == 2 and
+  [.boundaries[].state] == ["not-started", "not-started", "not-started",
+    "not-started", "not-started", "not-started", "not-started",
+    "not-started"] and
+  .claim == "host scheduling state only; never S2/S3 evidence"
+' "$integration_schedule" >/dev/null
 reference_plan="$workspace_dir/flyspeck-candle-runs/s1-reference-gcd-pristine-v3-plan.json"
 reference_request="$workspace_dir/flyspeck-candle-runs/s1-reference-gcd-pristine-v3-request.ml"
 [[ $(sha256sum "$reference_plan" | cut -d' ' -f1) == \
@@ -791,14 +837,35 @@ reference_v5_run="$workspace_dir/flyspeck-candle-runs/s1-reference-gcd-pristine-
   986d1c0fdce0c679d55bef73426b0f4cd27da151e089d97a23651ff3ac009d0b ]]
 [[ $(sha256sum "$reference_v5_run-candidate.json" | cut -d' ' -f1) == \
   86159b12c91acb30aa671cd88b19de09d7b4908d919287b53922c85bd14b1a61 ]]
-(
-  cd "$workspace_dir/worktrees/candle-integration-v13"
-  python3 candle/reference_fingerprints.py validate \
-    "$reference_v5_run-candidate.json" \
-    --plan "$reference_v5_run-plan.json" \
-    --request "$reference_v5_run-request.ml" \
-    --transcript "$reference_v5_run.log" >/dev/null
-)
+# Replay the content-addressed historical candidate without claiming that its
+# older collector/manifest pins are the current release inputs.  The ordinary
+# CLI intentionally rejects that mismatch after a development-head advance;
+# this lock section separately authenticates the old plan/request/transcript
+# hashes and keeps the candidate explicitly unapproved.
+/usr/bin/python3 -I - \
+  "$workspace_dir/worktrees/candle-integration-v13" \
+  "$reference_v5_run-plan.json" \
+  "$reference_v5_run-request.ml" \
+  "$reference_v5_run.log" \
+  "$reference_v5_run-candidate.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+root, plan_path, request_path, transcript_path, candidate_path = map(
+    Path, sys.argv[1:])
+sys.path.insert(0, str(root / "candle"))
+import reference_fingerprints as reference
+
+plan = json.loads(plan_path.read_text(encoding="utf-8"))
+request = request_path.read_text(encoding="utf-8")
+transcript = transcript_path.read_text(encoding="utf-8")
+candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+reference.validate_candidate(candidate, plan, request, transcript)
+if (candidate["approval_status"] != "candidate_unapproved"
+        or candidate["promotion_allowed"] is not False):
+    raise SystemExit("historical reference candidate was promoted")
+PY
 jq -e --slurp '
   .[0].candidate_identities == .[2].candidate_identities and
   .[1].candidate_identities == .[2].candidate_identities and
@@ -833,7 +900,7 @@ check_worktree cakeml-flyspeck-integration \
   "$workspace_dir/worktrees/cakeml-flyspeck-v13-integration" \
   codex/flyspeck-v13-integration \
   dcc03f2866f05b1db18b9f45c731ce45c3a3133e \
-  0c170aa374ec178e5db8a9fe9276244ed7e0dcf7
+  36e2245f42d4759063615c97fec51865798ca894
 check_worktree HOL-cakeml-dopen \
   "$workspace_dir/worktrees/HOL-cakeml-dopen-v13" \
   master \
