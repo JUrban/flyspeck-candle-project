@@ -159,19 +159,19 @@
       "entry_kind": "confirmed_divergence",
       "divergence_state": "confirmed_divergence",
       "priority": "P0",
-      "status": "remedy_pending",
+      "status": "regression_pending",
       "summary": "Candle rejects the selected OCaml immediate-int n == 1 LP verifier branch",
       "semantic_category": "runtime.pointer_identity.immediate_value",
       "minimal_reproducer": {"status": "ready", "path": "compatibility/oracles/pointer_identity_immediate.ml"},
       "ocaml_reference": {"status": "observed", "outcome": "OCaml 4.14.1 accepts the n == 1 shape and evaluates it true", "evidence": ["ocaml -noinit -noprompt compatibility/oracles/pointer_identity_immediate.ml => pointer-identity-immediate-oracle: ok"]},
       "candle_outcome": {"status": "observed", "outcome": "type failure: Candle's == expects references, not ints", "evidence": ["timeout 20s /project/repos/candle/candle.sh < compatibility/oracles/pointer_identity_immediate.ml => Type mismatch between _0 ref -> _0 ref -> bool and int -> _1 at line 2", "Candle executable SHA-256 d361be3839f31811328d5a0da1ecea15a8a73f369c77e34a288355f16bb930d3"]},
-      "chosen_remedy": {"status": "undecided", "kind": null, "description": null},
-      "proof_obligation": {"status": "open", "description": "Show the Candle meaning of the selected == expression agrees with OCaml 4.14.1 for every count_terminals int value, independently of heap representation, or normalize it to value equality and prove the branch is unchanged.", "evidence": ["formal_lp/hypermap/main/prove_flyspeck_lp.hl:1041-1054", "compatibility/generated/pointer-triage.json: PTR-FLYSPECK-LP-PROVE-INT"]},
-      "regression_ids": [],
+      "chosen_remedy": {"status": "implemented", "kind": "exact_pinned_source_normalization", "description": "For the exact Flyspeck source bytes, replace the sole selected `n == 1` count_terminals branch by `n = 1`; OCaml 4.14.1 represents every int as an injective tagged immediate, so physical and structural equality choose the same branch at this site."},
+      "proof_obligation": {"status": "open", "description": "Authenticate the pinned input and normalized output bytes, run the normalized LP verifier under a compiler tied to CakeML 936219bbc3021fa20418d62e85155f2d0092b9f9, and require exact certificate coverage plus theorem and performance fingerprints. Source implementation and static normalization tests alone do not discharge the compiled-run obligation.", "evidence": ["formal_lp/hypermap/main/prove_flyspeck_lp.hl:1041-1054", "compatibility/generated/pointer-triage.json: PTR-FLYSPECK-LP-PROVE-INT", "Candle manifest SHA-256 6a486ebbe1ededdca51527e919fd58ced5e901744241ef22093f2d7734146437: PROJECT-POINTER-S3-IMMEDIATE-001"]},
+      "regression_ids": ["CANDLE-FLYSPECK-IMMEDIATE-NORMALIZATION", "PROJECT-LP-CERTIFICATE-CLOSURE-GATE"],
       "affected_corpus_files": [{"repository": "flyspeck", "path": "formal_lp/hypermap/main/prove_flyspeck_lp.hl"}],
       "affected_files_status": "enumerated",
       "inventory_selector": {"triage_dispositions": ["open_immediate_representation_contract"]},
-      "notes": "This is an integer value test expressed with OCaml physical equality, not evidence that the proof code intends allocated-object identity."
+      "notes": "This is an integer value test expressed with OCaml physical equality, not evidence that the proof code intends allocated-object identity. The authoritative direct manifest records the exact normalization as active but pending a full run; no result from the legacy compiler or the PFT lane advances this entry."
     },
     {
       "id": "PROJECT-POINTER-S3-SHADOWING-001",
@@ -216,19 +216,19 @@
       "entry_kind": "inventory_review",
       "divergence_state": "review_candidate",
       "priority": "P0",
-      "status": "proof_pending",
-      "summary": "Specify, constrain, and verify the Sys.command customFFI shell bridge used by full Flyspeck LP certificate loading",
+      "status": "regression_pending",
+      "summary": "Remove the Sys.command customFFI shell bridge from the selected direct Flyspeck LP certificate route",
       "semantic_category": "runtime.custom_ffi.system",
       "minimal_reproducer": {"status": "ready", "path": "compatibility/oracles/custom_ffi_system.ml"},
       "ocaml_reference": {"status": "not_run", "outcome": null, "evidence": []},
       "candle_outcome": {"status": "observed", "outcome": "The current success path returns the normal child exit status 7", "evidence": ["timeout 45s /project/repos/candle/candle.sh < compatibility/oracles/custom_ffi_system.ml => custom-ffi-system-oracle: ok", "Candle executable SHA-256 d361be3839f31811328d5a0da1ecea15a8a73f369c77e34a288355f16bb930d3"]},
-      "chosen_remedy": {"status": "chosen", "kind": "versioned_sandboxed_ffi_contract", "description": "Retain only with a narrow selected-workflow command policy, total validation, deterministic errors, sandbox regressions, and a platform trust statement; prefer removing shell interpretation where practical."},
-      "proof_obligation": {"status": "open", "description": "Prove command/result equivalence for required OCaml observations; define allowed commands, PATH/environment/filesystem effects and sandbox; handle malformed and signalled processes totally; account for C glue, shell, tar, and rm in trust.", "evidence": ["compatibility/generated/ffi-triage.json: command=system"]},
-      "regression_ids": [],
+      "chosen_remedy": {"status": "implemented", "kind": "authenticated_host_preparation_plus_shell_free_runtime", "description": "Authenticate and materialize the sole hard_7.tar.gz member outside the proof runtime, then select an exact normalized lp_certificate.hl that reads only ordinary manifest-listed certificate files and rejects every .gz input."},
+      "proof_obligation": {"status": "open", "description": "Under a provenance-bound current compiler, reject archive/member/output hash drift, .gz runtime inputs, missing or reordered certificate inventory, and any selected CustomFFI system call; then require exact LP certificate ID coverage and the final theorem fingerprint. The host receipt authenticates bytes and container shape, not certificate validity.", "evidence": ["compatibility/generated/ffi-triage.json: command=system", "Candle manifest SHA-256 6a486ebbe1ededdca51527e919fd58ced5e901744241ef22093f2d7734146437: PROJECT-FFI-S3-LP-SHELL-ELIMINATION-001 and lp_archive_preparation_contract"]},
+      "regression_ids": ["CANDLE-FLYSPECK-LP-SHELL-ELIMINATION", "PROJECT-LP-CERTIFICATE-CLOSURE-GATE"],
       "affected_corpus_files": [{"repository": "candle", "path": "candle/ocaml.ml"}],
       "affected_files_status": "enumerated",
       "inventory_selector": {"ffi_ledger_ids": ["PROJECT-FFI-SYSTEM-001"]},
-      "notes": "Required runtime call: the full sequence verifies the tracked hard_7.tar.gz certificate, whose reader invokes Sys.command to run tar and rm. This is a high-risk open platform item, not a confirmed language divergence."
+      "notes": "The original source call is reachable, but the authoritative selected direct runtime no longer invokes it: the exact normalized reader consumes a prepared ordinary hard_7.dat and fails closed on compressed input. The general system FFI remains outside this selected-route remedy. No compiled run under the current Dopen-capable source stack has validated the non-use claim."
     }
   ]
 }

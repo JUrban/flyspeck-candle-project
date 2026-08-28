@@ -55,6 +55,26 @@ class LedgerLifecycleTests(unittest.TestCase):
             entry["notes"],
         )
 
+    def test_lp_normalizations_remain_pending_until_compiled_closure(self):
+        immediate = next(
+            item for item in self.ledger["entries"]
+            if item["id"] == "PROJECT-POINTER-S3-IMMEDIATE-001"
+        )
+        shell = next(
+            item for item in self.ledger["entries"]
+            if item["id"] == "PROJECT-FFI-SYSTEM-001"
+        )
+        for entry in (immediate, shell):
+            self.assertEqual(entry["status"], "regression_pending")
+            self.assertEqual(entry["chosen_remedy"]["status"], "implemented")
+            self.assertEqual(entry["proof_obligation"]["status"], "open")
+            self.assertIn(
+                "PROJECT-LP-CERTIFICATE-CLOSURE-GATE",
+                entry["regression_ids"],
+            )
+        self.assertIn("no longer invokes", shell["notes"])
+        self.assertIn("legacy compiler", immediate["notes"])
+
     def test_resolved_requires_regression_and_proof_evidence(self):
         entry = copy.deepcopy(self.ledger["entries"][0])
         entry.update({
