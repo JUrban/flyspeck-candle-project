@@ -633,7 +633,38 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  d67a22aac15f78ed6171f0bda0b4bce87d300f8f
+  e78571105b92e12977a3c35a847f2cd60ddb9168
+integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
+[[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
+  8e10b3f6089363ef97cbed9f84468ff46c5c87b24d0e505fed106faa2ff23b76 ]]
+[[ $(sha256sum "$integration_candle/flyspeck_normalizations.json" | cut -d' ' -f1) == \
+  37d01c189c718ecda9f6ec18560c0eb93053a288c16421b873377cdec9a40e92 ]]
+[[ $(sha256sum "$integration_candle/flyspeck_full_build.ml" | cut -d' ' -f1) == \
+  1cdc2cac0a7815e3c9bd04d9ec8330293aa7ef47db9b2757aa1f0f8f411d1307 ]]
+[[ $(sha256sum "$integration_candle/flyspeck_source_digests.ml" | cut -d' ' -f1) == \
+  8423946c0c61e7ff7ec8c64c87aa9cd56654038c757d3f4a6eecc7101f387b1d ]]
+integration_overlay="$workspace_dir/flyspeck-candle-runs/v13-normalized-overlay-37d01c189c718ecd"
+[[ $(sha256sum "$integration_overlay/flyspeck_normalization_receipt.json" | \
+  cut -d' ' -f1) == \
+  e2ba5848bb95b0eac668f44e99ccb20b12e691c43fb31335106d1c665dbb99a2 ]]
+[[ $(jq '.entries | length' \
+  "$integration_overlay/flyspeck_normalization_receipt.json") == 14 ]]
+integration_plan="$workspace_dir/flyspeck-candle-runs/v13-stratum-plan-e785711/plan.json"
+[[ $(sha256sum "$integration_plan" | cut -d' ' -f1) == \
+  9973466f1ad64f0193403f1a6dc8ac24c312bd18fadd1472b2bcd0ff314df946 ]]
+jq -e '
+  .schema == 1 and
+  (.actions | length) == 297 and
+  (.boundaries | length) == 8 and
+  .ordered_action_sha256 ==
+    "7337a106b431c06723d6b0d04bf5be8deec0cbb288e3534aa40b671e726bc082" and
+  .normalization_overlay.entry_count == 14 and
+  .normalization_overlay.ordered_binding_sha256 ==
+    "bb99d79b85f403b41646f1173040aa6a5c1abba97679a2d975bfd29ff2e94264" and
+  .claim ==
+    "authenticated host-side action plan only; not Candle execution or S2/S3 evidence" and
+  .evidence_boundary.host_status_cannot_upgrade_assurance == true
+' "$integration_plan" >/dev/null
 check_worktree candle-clean-build \
   "$workspace_dir/worktrees/candle-clean-build-v13" \
   codex/flyspeck-v13-clean-build \

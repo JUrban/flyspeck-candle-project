@@ -103,13 +103,13 @@ purpose = "v1.3 direct-source manifest, loader, and target"
 url = "https://github.com/CakeML/candle.git"
 base = "bb5fb495c8e850d525f58f25a13a51ebbc974a10"
 development_branch = "codex/flyspeck-v13-candle-integration"
-development_head = "d67a22aac15f78ed6171f0bda0b4bce87d300f8f"
+development_head = "e78571105b92e12977a3c35a847f2cd60ddb9168"
 integration_merge = "b2cf35876ad54888cbcec58d7cd10a55ff467359"
 parents = ["ba90c9151e3340432740aad39c091a5cf123584c", "02faa155195e7a80ea900bfad46d08cedcedf3ef"]
-direct_manifest_sha256 = "6a486ebbe1ededdca51527e919fd58ced5e901744241ef22093f2d7734146437"
-source_digest_program_sha256 = "76bb4583e0050d54e7d37ab9360b212088e829a8b2b529d31329a552037987a4"
+direct_manifest_sha256 = "8e10b3f6089363ef97cbed9f84468ff46c5c87b24d0e505fed106faa2ff23b76"
+source_digest_program_sha256 = "8423946c0c61e7ff7ec8c64c87aa9cd56654038c757d3f4a6eecc7101f387b1d"
 host_unit_tests = 93
-purpose = "integrated direct loader, authenticated source graph and cumulative stratum planning, fail-closed Great-100 S1 identity comparison and unapproved reference collection with 63 audited mappings, bounded real-source Dopen prefix gate, selected SOS compatibility, and artifact-provenance-enforced local compiler handoff pending rebuilt-compiler execution"
+purpose = "integrated direct loader, authenticated source graph and cumulative stratum planning, exact fail-closed LP result-ID coverage, fail-closed Great-100 S1 identity comparison and unapproved reference collection with 63 audited mappings, bounded real-source Dopen prefix gate, selected SOS compatibility, and artifact-provenance-enforced local compiler handoff pending rebuilt-compiler execution"
 
 [repositories.hol_light]
 url = "https://github.com/jrh13/hol-light.git"
@@ -307,6 +307,28 @@ toplevel_dynamic_source_payloads = 4
 toplevel_selected_update_database = "flyspeck:text_formalization/general/update_database_400.ml"
 entry_route = ["candle:hol.ml", "flyspeck:text_formalization/build/strictbuild.hl"]
 claim = "authenticated exact source actions, 13-output overlay including Set.Make and selected compiler-internal dead-effect elimination, deterministic zero telemetry with external wall/RSS measurement, shell-free LP input boundary, static 39-certificate inventory, and clean no-custom-FFI executable active; the verified Dopen source stack is integrated but its x64-64 compiler rebuild and corpus run remain pending; this is not S1/S2/S3 evidence"
+
+[artifacts.candle_flyspeck_integration_manifest]
+path = "worktrees/candle-integration-v13/candle/flyspeck_manifest.json"
+sha256 = "8e10b3f6089363ef97cbed9f84468ff46c5c87b24d0e505fed106faa2ff23b76"
+generator_candle = "e78571105b92e12977a3c35a847f2cd60ddb9168"
+source_flyspeck = "1ce0353008eba83d3c76ae9a25c3c242e4802d53"
+source_nodes = 400
+build_actions = 297
+generated_inputs = 43
+normalization_entries = 14
+normalization_operations = 26
+normalization_contract_sha256 = "37d01c189c718ecda9f6ec18560c0eb93053a288c16421b873377cdec9a40e92"
+normalization_overlay_receipt = "flyspeck-candle-runs/v13-normalized-overlay-37d01c189c718ecd/flyspeck_normalization_receipt.json"
+normalization_overlay_receipt_sha256 = "e2ba5848bb95b0eac668f44e99ccb20b12e691c43fb31335106d1c665dbb99a2"
+full_build_sha256 = "1cdc2cac0a7815e3c9bd04d9ec8330293aa7ef47db9b2757aa1f0f8f411d1307"
+source_digest_program_sha256 = "8423946c0c61e7ff7ec8c64c87aa9cd56654038c757d3f4a6eecc7101f387b1d"
+stratum_plan = "flyspeck-candle-runs/v13-stratum-plan-e785711/plan.json"
+stratum_plan_sha256 = "9973466f1ad64f0193403f1a6dc8ac24c312bd18fadd1472b2bcd0ff314df946"
+ordered_action_sha256 = "7337a106b431c06723d6b0d04bf5be8deec0cbb288e3534aa40b671e726bc082"
+normalization_binding_sha256 = "bb99d79b85f403b41646f1173040aa6a5c1abba97679a2d975bfd29ff2e94264"
+lp_exact_result_coverage = "static-fail-closed-gate-implemented-pending-compiled-39-file-run"
+claim = "host-authenticated plan and exact ID-accounting gate only; not S2/S3 execution evidence"
 
 [toolchain.hol4]
 polyml = "5.7.1"
