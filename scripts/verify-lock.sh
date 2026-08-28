@@ -633,7 +633,7 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  e3965b3734394f45ef92fab74b602f4a6f07ccb1
+  73a0bdb5f4d219216dd0ea6df790ae8c6d95c4d4
 check_worktree candle-clean-build \
   "$workspace_dir/worktrees/candle-clean-build-v13" \
   codex/flyspeck-v13-clean-build \
