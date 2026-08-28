@@ -633,7 +633,7 @@ check_worktree candle-flyspeck-integration \
   "$workspace_dir/worktrees/candle-integration-v13" \
   codex/flyspeck-v13-candle-integration \
   bb5fb495c8e850d525f58f25a13a51ebbc974a10 \
-  c5ede8af32104be16d7c8bdbd2e683ae811c6557
+  f55046836ba3f811cadf193ef87354fdadedd215
 integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_manifest.json" | cut -d' ' -f1) == \
   df24482a3a5a3fbcf07d0f95dd376b3aa9aa1a7841e78e7775331f18d40ae057 ]]
@@ -644,11 +644,15 @@ integration_candle="$workspace_dir/worktrees/candle-integration-v13/candle"
 [[ $(sha256sum "$integration_candle/flyspeck_source_digests.ml" | cut -d' ' -f1) == \
   4b4d1793fd865bbf42924e0589dc2b76dbe6e9955ee3910f3087f5ce8f24ed65 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_runtime.py" | cut -d' ' -f1) == \
-  580b53b6c0dacd89df4472bcd2b83183cbcbd6a4e779e90e7128051262f5453f ]]
+  5746cd43004bf8a4927cb63fb3f594eb6d0bb794f75634e24383dd2eae59992d ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_setup.ml" | cut -d' ' -f1) == \
   74abac96240f9c2f36b2c74fd4ef47ea2d12f574e1b77e3dd63e36db75e9f168 ]]
 [[ $(sha256sum "$integration_candle/flyspeck_stratum_check.ml" | cut -d' ' -f1) == \
   2348eea910b74e4f33257327c6f99b652f3737dc1c55f3f5ec8dcd6c7c873c77 ]]
+[[ $(sha256sum "$integration_candle/fingerprint.ml" | cut -d' ' -f1) == \
+  f5c9563154606fb2dbcdebf8fef26c802a9d22210253a51d7dcb2e2db76a2fdd ]]
+[[ $(sha256sum "$integration_candle/flyspeck_l2_target.ml" | cut -d' ' -f1) == \
+  bff75422adaac4c73489b6bec4b50b36c6a20a4d18660b98c77edd8802b40051 ]]
 (
   cd "$workspace_dir/worktrees/candle-integration-v13"
   python3 -m unittest \
