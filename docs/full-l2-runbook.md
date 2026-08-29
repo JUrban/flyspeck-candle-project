@@ -29,6 +29,12 @@ state.  The supervisor retries a failed restored generation from the last
 recorded boundary, using a new monotonically numbered generation log.  Source
 files checkpoint in groups of ten, each LP certificate shard is a work unit,
 and serialized nonlinear cases checkpoint in groups of 25 by default.
+Each producer generation has a finite 72-hour operational timeout by default.
+This is deliberately longer than the old 24-hour limit: a healthy Flyspeck
+source action can exceed 24 hours while retaining 100% CPU and continuing to
+append trace records.  Set `CANDLE_PFT_GENERATION_TIMEOUT_SECONDS` to another
+positive integer for an operationally justified run; the timeout does not
+change PFT bytes or promotion status.
 
 DMTCP images are executable process state.  Restore only images created by the
 same trusted local run; never accept one as proof evidence or from an untrusted

@@ -46,6 +46,7 @@ checkpoint_work_units_per_generation=${CANDLE_PFT_CHECKPOINT_WORK_UNITS:-25}
 checkpoint_gzip=${CANDLE_PFT_DMTCP_GZIP:-0}
 checkpoint_gzip_explicit=${CANDLE_PFT_DMTCP_GZIP+x}
 max_generations=${CANDLE_PFT_MAX_GENERATIONS:-1000}
+generation_timeout_seconds=${CANDLE_PFT_GENERATION_TIMEOUT_SECONDS:-259200}
 active_port=
 resource_sampler_pid=
 
@@ -58,6 +59,7 @@ esac
 [[ "$checkpoint_work_units_per_generation" =~ ^[1-9][0-9]*$ ]]
 [[ "$checkpoint_gzip" =~ ^[01]$ ]]
 [[ "$max_generations" =~ ^[1-9][0-9]*$ ]]
+[[ "$generation_timeout_seconds" =~ ^[1-9][0-9]*$ ]]
 
 for command in dmtcp_coordinator dmtcp_launch dmtcp_command dmtcp_restart \
                truncate timeout python3 rg realpath git sha256sum xargs; do
@@ -199,7 +201,7 @@ run_initial_generation() {
   (
     cd "$producer_dir"
     env "${common_environment[@]}" DMTCP_COORD_PORT="$active_port" \
-      timeout 86400 dmtcp_launch --join-coordinator \
+      timeout "$generation_timeout_seconds" dmtcp_launch --join-coordinator \
         --ckptdir "$checkpoint_dir" \
         ./ocaml-hol -init "$init_script" </dev/null \
         >"$log_dir/generation-0000.log" 2>&1
@@ -223,7 +225,8 @@ run_restart_generation() {
   (
     cd "$checkpoint_dir"
     env DMTCP_GZIP="$checkpoint_gzip" \
-      timeout 86400 dmtcp_restart --new-coordinator --coord-port 0 \
+      timeout "$generation_timeout_seconds" \
+        dmtcp_restart --new-coordinator --coord-port 0 \
         --port-file "$port_file" --ckptdir "$checkpoint_dir" "$checkpoint" \
         </dev/null \
         >"$log_dir/generation-$(printf '%04d' "$generation").log" 2>&1
