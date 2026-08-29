@@ -34,10 +34,12 @@ duplicate, or reordered timing record.
 Verification completed at the selected executable heads:
 
 - Candle `a6de0957a07ae6276f702659dbbeffd3fa8199aa`:
-  `test_reference_fingerprints.py` 24/24 and `test_top100_manifest.py` 14/14.
+  full `candle/test_*.py` discovery 233/233 (including focused
+  `test_reference_fingerprints.py` 24/24 and `test_top100_manifest.py` 14/14).
 - Project `aa496e7fe11dad8e2fc08df353f9ede476685190`:
-  focused CSDP source/build/probe/route and exact-CLI tests pass; the
-  failure/resume test also completes a fresh schema-v9 two-sweep fixture.
+  `test-top100-reference-sweeps.py` 13/13, including CSDP
+  source/build/probe/route and exact-CLI rejection paths and complete fresh
+  schema-v9 failure/resume and clean two-sweep fixtures.
 - A real no-launch reconstruction against the exact HOL Light reference and
   staged external root produced the contract hashes recorded in
   `docs/s1-reference-v9-csdp-two-sweep-runbook.md`.
