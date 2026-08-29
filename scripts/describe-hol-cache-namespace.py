@@ -292,6 +292,7 @@ def tracked_worktree_shape(root: Path, label: str) -> dict[str, Any]:
     observed_files: set[str] = set()
     observed_directories: set[str] = set()
     actual_records: list[dict[str, Any]] = []
+    directory_records: list[dict[str, Any]] = []
 
     def walk(directory: Path, relative: PurePosixPath) -> None:
         before_names = sorted(entry.name for entry in os.scandir(directory))
@@ -306,6 +307,10 @@ def tracked_worktree_shape(root: Path, label: str) -> dict[str, Any]:
                 require(value in allowed_directories,
                         f"extra directory in {label}: {value}")
                 observed_directories.add(value)
+                directory_records.append({
+                    "path": value,
+                    "posix_mode": stat.S_IMODE(metadata.st_mode),
+                })
                 walk(path, item_relative)
             elif stat.S_ISREG(metadata.st_mode):
                 require(value in tracked, f"extra filesystem entry in {label}: {value}")
@@ -323,6 +328,7 @@ def tracked_worktree_shape(root: Path, label: str) -> dict[str, Any]:
                 actual_records.append({
                     "path": value,
                     "git_mode": mode,
+                    "posix_mode": identity["mode"],
                     "bytes": identity["bytes"],
                     "sha256": identity["sha256"],
                 })
@@ -343,6 +349,7 @@ def tracked_worktree_shape(root: Path, label: str) -> dict[str, Any]:
                 actual_records.append({
                     "path": value,
                     "git_mode": mode,
+                    "posix_mode": stat.S_IMODE(after.st_mode),
                     "bytes": len(target),
                     "sha256": hashlib.sha256(target).hexdigest(),
                 })
@@ -358,11 +365,14 @@ def tracked_worktree_shape(root: Path, label: str) -> dict[str, Any]:
     require(observed_directories == allowed_directories,
             f"tracked directory shape mismatch: {label}")
     actual_records.sort(key=lambda record: record["path"])
+    directory_records.sort(key=lambda record: record["path"])
     return {
+        "root_posix_mode": stat.S_IMODE(root.stat().st_mode),
         "tracked_file_count": len(tracked),
         "tracked_directory_count": len(allowed_directories),
         "ordered_tracked_content_sha256": compact_sha256(actual_records),
-        "policy": "exact-tracked-files-and-ancestor-directories-only-v1",
+        "ordered_directory_shape_sha256": compact_sha256(directory_records),
+        "policy": "exact-tracked-content-path-posix-mode-and-directories-v1",
     }
 
 

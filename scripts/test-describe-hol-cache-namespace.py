@@ -221,6 +221,15 @@ class CacheNamespaceTests(unittest.TestCase):
                 root, head, "fixture", require_no_ignored=True,
             )
             self.assertEqual(clean["ignored_artifacts"]["count"], 0)
+            (root / "tracked").chmod(0o600)
+            mode_changed = MODULE.authenticate_git_root(
+                root, head, "fixture", require_no_ignored=True,
+            )
+            self.assertNotEqual(
+                clean["worktree_shape"]["ordered_tracked_content_sha256"],
+                mode_changed["worktree_shape"]["ordered_tracked_content_sha256"],
+            )
+            (root / "tracked").chmod(0o644)
             subprocess.run(
                 ["/usr/bin/git", "-C", str(root), "update-index",
                  "--assume-unchanged", "tracked"],
