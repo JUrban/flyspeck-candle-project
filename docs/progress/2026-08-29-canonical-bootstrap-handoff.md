@@ -113,3 +113,69 @@ Only after the schema-6 link passes should the authenticated, already retained
 the pilot passes.  Parser/runtime failures then feed the batch repair loop;
 neither the cold replay nor bootstrap success by itself claims Flyspeck
 acceptance.
+
+## Exact retained parser sequence
+
+The retained plans bind Candle `6f43450` and Flyspeck `1ce0353`; they are valid
+only while those exact authority trees remain clean and unchanged.  Their
+published identities are:
+
+- pilot plan SHA-256
+  `599f1bad0bd69e6dce39608d7a8ff90fda9ae5e02e3cf739e04ad8fffa1ed5b3`
+  and host-materialization SHA-256
+  `518e3d4f93df4ebd636e7c92bfc3d19477a623faa80b61c08096ca77eeff895c`;
+- all-inventory plan SHA-256
+  `816f847dd52331f0c93c9d0ffae6e2c53ebaf25a8757498277f187c0454962fd`
+  and host-materialization SHA-256
+  `b3eee598a7a820654062638d516880577808886022944c6145aacfc548836242`.
+
+Run the pilot first, using an absent result root and the controller's explicit
+per-process limits:
+
+```sh
+/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+  /usr/bin/python3 -I -S \
+  /project/worktrees/candle-runtime-pin-964406486/candle/flyspeck_parser_diagnostic.py \
+  run \
+  --profile pilot \
+  --plan-root /project/flyspeck-candle-runs/parser-pilot-materialization-6f43450 \
+  --candle-root /project/worktrees/candle-runtime-pin-964406486 \
+  --candle-head 6f4345057185214016dd7f051a0f3b503950480e \
+  --flyspeck-root /project/worktrees/flyspeck-v13-source \
+  --flyspeck-head 1ce0353008eba83d3c76ae9a25c3c242e4802d53 \
+  --output-root /project/flyspeck-candle-runs/parser-pilot-result-6f43450-attempt-001 \
+  --timeout-seconds 600 \
+  --max-cpu-seconds 600 \
+  --max-address-space-gib 16 \
+  --max-output-mib 1
+```
+
+Require a published `parse-pass` outcome for all 20 attempts.  A published
+`parse-failure` is retained diagnostic evidence, not a passing command merely
+because the controller itself exited normally.  Only a complete pilot pass
+permits the corresponding 400-input run:
+
+```sh
+/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+  /usr/bin/python3 -I -S \
+  /project/worktrees/candle-runtime-pin-964406486/candle/flyspeck_parser_diagnostic.py \
+  run \
+  --profile all-inventory \
+  --plan-root /project/flyspeck-candle-runs/all-inventory-materialization-6f43450 \
+  --candle-root /project/worktrees/candle-runtime-pin-964406486 \
+  --candle-head 6f4345057185214016dd7f051a0f3b503950480e \
+  --flyspeck-root /project/worktrees/flyspeck-v13-source \
+  --flyspeck-head 1ce0353008eba83d3c76ae9a25c3c242e4802d53 \
+  --output-root /project/flyspeck-candle-runs/parser-all-inventory-result-6f43450-attempt-001 \
+  --timeout-seconds 600 \
+  --max-cpu-seconds 600 \
+  --max-address-space-gib 16 \
+  --max-output-mib 1
+```
+
+The controller launches inputs serially, one fresh parser process per input,
+and seals one authenticated runtime image for the run.  These 16 GiB limits
+apply independently to each parser process; the 120 GiB bootstrap exception is
+neither needed nor inherited.  Preserve every result root.  If either profile
+reports failures, classify the complete ordered failure set before changing
+code and rematerialize both plans after any committed Candle authority change.
