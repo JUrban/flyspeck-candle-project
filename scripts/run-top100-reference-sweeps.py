@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import secrets
 import signal
 import stat
 import subprocess
@@ -53,6 +54,9 @@ ATTEMPT_FILES = {
     "collect.stdout", "collect.stderr", "validate.stdout", "validate.stderr",
     "success.json", "failure.json",
 }
+CONTRACT_PENDING_RE = re.compile(
+    r"\.collection-contract\.json\.pending\.([0-9a-f]{64})",
+)
 HANDLED_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
 ACTIVE_PROCESS: subprocess.Popen[bytes] | None = None
 PENDING_SIGNAL: int | None = None
@@ -245,6 +249,121 @@ def exclusive_write(path: Path, value: bytes, label: str) -> None:
         os.close(descriptor)
     require(file_record(path, label, single_link=True) == bytes_record(value),
             f"{label} write verification failed")
+
+
+def fsync_directory(descriptor: int) -> None:
+    os.fsync(descriptor)
+
+
+def require_publication_file(
+    path: Path, label: str, *, links: int, mode: int = 0o444,
+) -> os.stat_result:
+    path = ordinary_file(path, label)
+    metadata = path.lstat()
+    require(metadata.st_uid == os.geteuid(),
+            f"{label} is not owned by the current effective user")
+    require(metadata.st_nlink == links,
+            f"{label} has unexpected link count {metadata.st_nlink}")
+    require(stat.S_IMODE(metadata.st_mode) == mode,
+            f"{label} has unexpected mode {stat.S_IMODE(metadata.st_mode):04o}")
+    return metadata
+
+
+def finish_link_publication(
+    parent: Path, pending: Path, terminal: Path, value: bytes, label: str,
+) -> None:
+    """NOREPLACE-link one complete pending inode and remove only its alias."""
+    parent = private_directory(parent, f"{label} publication directory")
+    pending_before = require_publication_file(
+        pending, f"pending {label}", links=1,
+    )
+    require(file_record(pending, f"pending {label}") == bytes_record(value),
+            f"pending {label} bytes differ before publication")
+    require(not os.path.lexists(terminal),
+            f"terminal {label} already exists: {terminal}")
+    directory_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
+    try:
+        try:
+            os.link(
+                pending.name, terminal.name,
+                src_dir_fd=directory_fd, dst_dir_fd=directory_fd,
+                follow_symlinks=False,
+            )
+        except FileExistsError as error:
+            raise CollectionFailure(
+                f"terminal {label} appeared during no-overwrite publication",
+            ) from error
+        pending_after = require_publication_file(
+            pending, f"linked pending {label}", links=2,
+        )
+        terminal_after = require_publication_file(
+            terminal, f"linked terminal {label}", links=2,
+        )
+        require(
+            (pending_before.st_dev, pending_before.st_ino) ==
+            (pending_after.st_dev, pending_after.st_ino) ==
+            (terminal_after.st_dev, terminal_after.st_ino) and
+            file_record(pending, f"linked pending {label}") ==
+            file_record(terminal, f"linked terminal {label}") ==
+            bytes_record(value),
+            f"{label} link publication changed inode or bytes",
+        )
+        fsync_directory(directory_fd)
+        os.unlink(pending.name, dir_fd=directory_fd)
+        fsync_directory(directory_fd)
+    finally:
+        os.close(directory_fd)
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    require_publication_file(terminal, f"published {label}", links=1)
+    require(file_record(terminal, f"published {label}", single_link=True) ==
+            bytes_record(value), f"published {label} bytes differ")
+
+
+def publish_terminal(
+    path: Path, value: bytes, label: str, *, pending_name: str,
+) -> None:
+    """Durably stage bytes, then atomically link them to a fresh terminal name."""
+    parent = private_directory(path.parent, f"{label} publication directory")
+    require(path.parent == parent and path.name not in {"", ".", ".."},
+            f"unsafe terminal {label} path")
+    pending = parent / pending_name
+    require(pending.parent == parent and pending.name == pending_name and
+            pending_name not in {"", ".", ".."},
+            f"unsafe pending {label} name")
+    require(not os.path.lexists(path), f"terminal {label} already exists: {path}")
+    require(not os.path.lexists(pending), f"pending {label} already exists: {pending}")
+    directory_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    descriptor = -1
+    try:
+        descriptor = os.open(
+            pending.name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600, dir_fd=directory_fd,
+        )
+        view = memoryview(value)
+        while view:
+            written = os.write(descriptor, view)
+            view = view[written:]
+        os.fsync(descriptor)
+        os.fchmod(descriptor, 0o444)
+        os.fsync(descriptor)
+        before = os.fstat(descriptor)
+        named = pending.lstat()
+        require(
+            stat.S_ISREG(before.st_mode) and before.st_uid == os.geteuid() and
+            stat.S_IMODE(before.st_mode) == 0o444 and before.st_nlink == 1 and
+            (before.st_dev, before.st_ino, before.st_size) ==
+            (named.st_dev, named.st_ino, named.st_size) and
+            before.st_size == len(value),
+            f"pending {label} changed while being staged",
+        )
+        fsync_directory(directory_fd)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        os.close(directory_fd)
+    finish_link_publication(parent, pending, path, value, label)
 
 
 def atomic_write(path: Path, value: bytes, label: str) -> None:
@@ -751,6 +870,7 @@ def seal_artifact(path: Path, label: str) -> None:
     try:
         before = os.fstat(descriptor)
         os.fchmod(descriptor, stat.S_IMODE(before.st_mode) & ~0o222)
+        os.fsync(descriptor)
         after = os.fstat(descriptor)
         named = path.stat(follow_symlinks=False)
         require(
@@ -759,6 +879,16 @@ def seal_artifact(path: Path, label: str) -> None:
             (named.st_dev, named.st_ino) == (after.st_dev, after.st_ino),
             f"{label} changed while being sealed: {path}",
         )
+    finally:
+        os.close(descriptor)
+
+
+def sync_parent_directory(path: Path) -> None:
+    descriptor = os.open(
+        path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+    )
+    try:
+        fsync_directory(descriptor)
     finally:
         os.close(descriptor)
 
@@ -958,7 +1088,10 @@ def write_failure(
         "approval_status": "candidate_unapproved",
         "promotion_allowed": False,
     }
-    exclusive_write(attempt / "failure.json", canonical_json(receipt), "failure receipt")
+    publish_terminal(
+        attempt / "failure.json", canonical_json(receipt), "failure receipt",
+        pending_name=".failure.json.pending",
+    )
 
 
 def collect_target(
@@ -1014,7 +1147,10 @@ def collect_target(
         path = attempt / filename
         if os.path.lexists(path):
             seal_artifact(path, f"completed artifact {filename}")
-    exclusive_write(attempt / "success.json", canonical_json(success), "success receipt")
+    publish_terminal(
+        attempt / "success.json", canonical_json(success), "success receipt",
+        pending_name=".success.json.pending",
+    )
     return artifacts, nonce
 
 
@@ -1022,10 +1158,167 @@ def target_directory(root: Path, sweep: int, index: int) -> Path:
     return root / f"sweep-{sweep}" / f"target-{index:03d}"
 
 
+def recover_link_alias(
+    parent: Path, pending: Path, terminal: Path, label: str,
+) -> None:
+    pending_metadata = require_publication_file(
+        pending, f"pending {label}", links=2,
+    )
+    terminal_metadata = require_publication_file(
+        terminal, f"terminal {label}", links=2,
+    )
+    require(
+        (pending_metadata.st_dev, pending_metadata.st_ino) ==
+        (terminal_metadata.st_dev, terminal_metadata.st_ino) and
+        file_record(pending, f"pending {label}") ==
+        file_record(terminal, f"terminal {label}"),
+        f"conflicting pending and terminal {label}",
+    )
+    directory_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
+    try:
+        fsync_directory(directory_fd)
+        os.unlink(pending.name, dir_fd=directory_fd)
+        fsync_directory(directory_fd)
+    finally:
+        os.close(directory_fd)
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    require_publication_file(terminal, f"recovered {label}", links=1)
+
+
+def recover_attempt_publication(
+    attempt: Path, terminal_name: str, label: str,
+) -> None:
+    pending = attempt / f".{terminal_name}.pending"
+    terminal = attempt / terminal_name
+    has_pending = os.path.lexists(pending)
+    has_terminal = os.path.lexists(terminal)
+    if not has_pending:
+        if has_terminal:
+            require_publication_file(terminal, f"terminal {label}", links=1)
+        return
+    pending_path = ordinary_file(pending, f"pending {label}")
+    pending_metadata = pending_path.lstat()
+    require(pending_metadata.st_uid == os.geteuid(),
+            f"pending {label} has wrong owner")
+    require(pending_metadata.st_nlink in {1, 2},
+            f"pending {label} has unexpected link count")
+    if has_terminal:
+        terminal_metadata = ordinary_file(terminal, f"terminal {label}").lstat()
+        require(
+            pending_metadata.st_nlink == 2 and terminal_metadata.st_nlink == 2 and
+            (pending_metadata.st_dev, pending_metadata.st_ino) ==
+            (terminal_metadata.st_dev, terminal_metadata.st_ino),
+            f"conflicting pending and terminal {label}",
+        )
+        recover_link_alias(attempt, pending, terminal, label)
+        return
+    require(pending_metadata.st_nlink == 1,
+            f"orphan pending {label} has extra hard links")
+    mode = stat.S_IMODE(pending_metadata.st_mode)
+    require(mode in {0o600, 0o400, 0o444},
+            f"pending {label} has unexpected interrupted mode {mode:04o}")
+    if mode == 0o600:
+        seal_artifact(pending, f"interrupted pending {label}")
+        sync_parent_directory(pending)
+
+
+def reject_cross_type_publications(attempt: Path) -> None:
+    success = os.path.lexists(attempt / "success.json")
+    failure = os.path.lexists(attempt / "failure.json")
+    success_pending = os.path.lexists(attempt / ".success.json.pending")
+    failure_pending = os.path.lexists(attempt / ".failure.json.pending")
+    require(not (success_pending and failure_pending),
+            f"attempt has both success and failure pending publications: {attempt}")
+    require(not (success and failure_pending),
+            f"success terminal conflicts with failure pending publication: {attempt}")
+    require(not (failure and success_pending),
+            f"failure terminal conflicts with success pending publication: {attempt}")
+
+
+def contract_pending_paths(root: Path) -> list[Path]:
+    result = []
+    for entry in root.iterdir():
+        if CONTRACT_PENDING_RE.fullmatch(entry.name):
+            result.append(entry)
+    return sorted(result, key=lambda path: path.name)
+
+
+def recover_contract_publication(root: Path, expected: bytes) -> None:
+    terminal = root / "collection-contract.json"
+    pendings = contract_pending_paths(root)
+    has_terminal = os.path.lexists(terminal)
+    alias = None
+    terminal_metadata = None
+    if has_terminal:
+        terminal_metadata = ordinary_file(
+            terminal, "collection contract terminal",
+        ).lstat()
+        require(terminal_metadata.st_uid == os.geteuid(),
+                "collection contract terminal has wrong owner")
+        require(terminal_metadata.st_nlink in {1, 2},
+                "collection contract terminal has unexpected link count")
+    complete = []
+    for pending in pendings:
+        pending_path = ordinary_file(pending, "collection contract pending")
+        metadata = pending_path.lstat()
+        require(metadata.st_uid == os.geteuid() and metadata.st_nlink in {1, 2},
+                "collection contract pending owner/link count mismatch")
+        if has_terminal and terminal_metadata is not None and (
+            metadata.st_dev, metadata.st_ino
+        ) == (terminal_metadata.st_dev, terminal_metadata.st_ino):
+            require(alias is None, "multiple collection contract link aliases")
+            alias = pending
+            continue
+        require(metadata.st_nlink == 1,
+                "orphan collection contract pending has extra hard links")
+        mode = stat.S_IMODE(metadata.st_mode)
+        require(mode in {0o600, 0o400, 0o444},
+                f"collection contract pending has unexpected mode {mode:04o}")
+        if mode == 0o600:
+            seal_artifact(pending, "interrupted collection contract pending")
+            sync_parent_directory(pending)
+        elif mode == 0o444:
+            value = stable_bytes(pending, "complete collection contract pending")
+            require(value == expected,
+                    "complete collection contract pending has conflicting bytes")
+            complete.append(pending)
+    if alias is not None:
+        recover_link_alias(
+            root, alias, terminal, "collection contract",
+        )
+        has_terminal = True
+    if has_terminal:
+        require_publication_file(
+            terminal, "collection contract terminal", links=1,
+        )
+        require(stable_bytes(
+            terminal, "collection contract terminal", single_link=True,
+        ) == expected, "retained collection contract differs from current inputs")
+        require(not complete,
+                "complete pending contract conflicts with published terminal")
+        return
+    require(len(complete) <= 1,
+            "multiple complete collection contract pendings")
+    if complete:
+        finish_link_publication(
+            root, complete[0], terminal, expected, "collection contract",
+        )
+
+
+def contract_publication_interruptions(root: Path) -> list[dict[str, object]]:
+    return [
+        recorded_artifact(root, path, "interrupted collection contract publication")
+        for path in contract_pending_paths(root)
+    ]
+
+
 def validate_attempt_entries(attempt: Path) -> None:
     private_directory(attempt, "attempt directory")
     for entry in attempt.iterdir():
-        require(entry.name in ATTEMPT_FILES,
+        require(entry.name in ATTEMPT_FILES or entry.name in {
+            ".success.json.pending", ".failure.json.pending",
+        },
                 f"unexpected entry in attempt directory: {entry}")
         ordinary_file(entry, f"attempt entry {entry.name}", single_link=True)
 
@@ -1131,6 +1424,14 @@ def scan_target(
         match = ATTEMPT_RE.fullmatch(attempt.name)
         require(match is not None, f"unexpected target entry: {attempt}")
         numbers.append(int(match.group(1)))
+        private_directory(attempt, "attempt directory")
+        recover_attempt_publication(
+            attempt, "success.json", f"success receipt for {target['name']}",
+        )
+        recover_attempt_publication(
+            attempt, "failure.json", f"failure receipt for {target['name']}",
+        )
+        reject_cross_type_publications(attempt)
         validate_attempt_entries(attempt)
         has_success = os.path.lexists(attempt / "success.json")
         has_failure = os.path.lexists(attempt / "failure.json")
@@ -1238,6 +1539,7 @@ def scan_all(
         "total_target_runs": total, "completed_target_runs": completed,
         "pending_target_runs": total - completed,
         "failure_attempt_count": len(failures), "failures": failures,
+        "publication_interruptions": contract_publication_interruptions(root),
         "outcome": outcome, "closed": completed == total,
         "approval_status": "candidates_unapproved",
         "promotion_allowed": False, "sweeps": sweeps,
@@ -1252,6 +1554,9 @@ def scan_all(
     }
     status["kind"] = "candle-great100-two-sweep-reference-status"
     status["failures"] = failures
+    status["publication_interruption_count"] = len(
+        receipt["publication_interruptions"],
+    )
     return receipt, status
 
 
@@ -1271,9 +1576,16 @@ def validate_root_entries(root: Path) -> None:
         "status.json", "sweep-1", "sweep-2",
     }
     for entry in root.iterdir():
-        require(entry.name in allowed, f"unexpected artifact-root entry: {entry}")
+        is_contract_pending = CONTRACT_PENDING_RE.fullmatch(entry.name) is not None
+        require(entry.name in allowed or is_contract_pending,
+                f"unexpected artifact-root entry: {entry}")
         if entry.name.startswith("sweep-"):
             private_directory(entry, entry.name)
+        elif is_contract_pending or entry.name == "collection-contract.json":
+            path = ordinary_file(entry, entry.name)
+            metadata = path.lstat()
+            require(metadata.st_uid == os.geteuid() and metadata.st_nlink in {1, 2},
+                    f"invalid publication file at artifact root: {entry}")
         else:
             ordinary_file(entry, entry.name, single_link=True)
 
@@ -1341,15 +1653,14 @@ def run(arguments: argparse.Namespace) -> int:
         contract, _targets = build_contract(arguments)
         contract_path = artifact_root / "collection-contract.json"
         expected_contract_bytes = canonical_json(contract)
-        if os.path.lexists(contract_path):
-            observed = stable_bytes(
-                contract_path, "collection contract", single_link=True,
-            )
-            require(observed == expected_contract_bytes,
-                    "current inputs differ from the retained collection contract")
-        else:
-            exclusive_write(
+        recover_contract_publication(artifact_root, expected_contract_bytes)
+        if not os.path.lexists(contract_path):
+            publish_terminal(
                 contract_path, expected_contract_bytes, "collection contract",
+                pending_name=(
+                    ".collection-contract.json.pending."
+                    f"{secrets.token_hex(32)}"
+                ),
             )
         ensure_sweep_directories(artifact_root)
         validation_cache: set[str] = set()
