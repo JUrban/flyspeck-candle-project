@@ -74,6 +74,20 @@ class CacheNamespaceTests(unittest.TestCase):
             with self.assertRaisesRegex(MODULE.PreflightFailure, "stderr"):
                 MODULE.dynamic_closure(Path("/binary"), "binary")
 
+    def test_dynamic_closure_allows_exact_dependency_free_extension(self) -> None:
+        completed = subprocess.CompletedProcess(
+            ["ldd", "extension.so"], 0,
+            stdout="statically linked\n", stderr="",
+        )
+        with mock.patch.object(MODULE, "run", return_value=completed):
+            identity, local = MODULE.dynamic_closure(
+                Path("/extension.so"), "extension", allow_no_dependencies=True,
+            )
+            self.assertEqual(identity["dependencies"], [])
+            self.assertEqual(local["dependencies"], [])
+            with self.assertRaises(MODULE.PreflightFailure):
+                MODULE.dynamic_closure(Path("/extension.so"), "extension")
+
     def test_validate_target_is_fail_closed(self) -> None:
         for value in (
             "compiler64ProgTheory.uo",

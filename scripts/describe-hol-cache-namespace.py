@@ -498,10 +498,15 @@ def parse_ldd(stdout: str) -> list[tuple[str, Path]]:
     return entries
 
 
-def dynamic_closure(binary: Path, label: str) -> tuple[dict[str, Any], dict[str, Any]]:
+def dynamic_closure(
+    binary: Path, label: str, *, allow_no_dependencies: bool = False,
+) -> tuple[dict[str, Any], dict[str, Any]]:
     completed = run([str(LDD), str(binary)])
     require(completed.stderr == "", f"ldd wrote to stderr for {label}")
-    parsed = parse_ldd(completed.stdout)
+    if allow_no_dependencies and completed.stdout == "statically linked\n":
+        parsed: list[tuple[str, Path]] = []
+    else:
+        parsed = parse_ldd(completed.stdout)
     identity_entries = []
     local_entries = []
     for index, (name, path) in enumerate(parsed):
@@ -556,7 +561,9 @@ def python_module_inventory() -> dict[str, Any]:
             "file": file_identity(path, f"Python module {name}"),
         })
         if path.suffix == ".so":
-            closure, _local = dynamic_closure(path, f"Python extension {name}")
+            closure, _local = dynamic_closure(
+                path, f"Python extension {name}", allow_no_dependencies=True,
+            )
             extension_closures.append({"module": name, "closure": closure})
     require(records, "no file-backed Python modules were authenticated")
     return {
