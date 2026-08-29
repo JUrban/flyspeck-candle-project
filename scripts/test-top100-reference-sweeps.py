@@ -787,6 +787,56 @@ class ReferenceSweepControllerTests(unittest.TestCase):
                                     "worktree is not clean"):
             MODULE.run(fixture.arguments())
 
+    def test_csdp_source_build_probe_and_route_fail_closed(self) -> None:
+        fixture = self.fixture()
+        arguments = fixture.arguments()
+        fixture.csdp.chmod(0o755)
+        fixture.csdp.write_bytes(fixture.csdp.read_bytes() + b"tampered\n")
+        with self.assertRaises(MODULE.CollectionFailure):
+            MODULE.build_contract(arguments)
+
+        for field, expected in (
+                ("csdp_source", "CSDP source archive"),
+                ("csdp_probe_input", "CSDP probe input")):
+            self.temporary.cleanup()
+            self.temporary = tempfile.TemporaryDirectory(
+                prefix=f"candle-reference-sweeps-{field}.")
+            fixture = self.fixture()
+            arguments = fixture.arguments()
+            path = getattr(fixture, field)
+            path.chmod(0o644)
+            path.write_bytes(path.read_bytes() + b"tampered\n")
+            path.chmod(0o444)
+            with self.assertRaisesRegex(MODULE.CollectionFailure, expected):
+                MODULE.build_contract(arguments)
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-csdp-build.")
+        fixture = self.fixture()
+        statement = json.loads(fixture.csdp_build_receipt.read_text())
+        statement["recipe"]["openmp_enabled"] = True
+        fixture.csdp_build_receipt.chmod(0o644)
+        fixture.csdp_build_receipt.write_text(json.dumps(statement) + "\n")
+        fixture.csdp_build_receipt.chmod(0o444)
+        with self.assertRaisesRegex(
+                MODULE.CollectionFailure, "portable single-thread"):
+            MODULE.build_contract(fixture.arguments())
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-csdp-route.")
+        fixture = self.fixture()
+        rebound = fixture.tools / "rebound-source.tar.gz"
+        rebound.write_bytes(fixture.csdp_source.read_bytes())
+        rebound.chmod(0o444)
+        arguments = fixture.arguments()
+        arguments.csdp_source = rebound
+        arguments.csdp_source_sha256 = sha256(rebound.read_bytes())
+        with self.assertRaisesRegex(
+                MODULE.CollectionFailure, "direct 0444 package file"):
+            MODULE.build_contract(arguments)
+
         self.temporary.cleanup()
         self.temporary = tempfile.TemporaryDirectory(
             prefix="candle-reference-sweeps-gp-data.")
@@ -902,6 +952,16 @@ class ReferenceSweepControllerTests(unittest.TestCase):
         duplicated = command + ["--git-sha256", "0" * 64]
         completed = subprocess.run(
             duplicated, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(b"each CLI option exactly once", completed.stderr)
+
+        missing_csdp = list(command)
+        option_index = missing_csdp.index("--csdp-source")
+        del missing_csdp[option_index:option_index + 2]
+        completed = subprocess.run(
+            missing_csdp, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             timeout=10,
         )
         self.assertEqual(completed.returncode, 1)
