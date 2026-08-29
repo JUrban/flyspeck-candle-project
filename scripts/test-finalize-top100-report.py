@@ -190,6 +190,11 @@ class Fixture:
         self._commit_candle_repository()
         self.collection_candle_head = self.candle_head
         self._create_approval()
+        reviewer_validator = self.candle / "reference_fingerprints.py"
+        reviewer_validator.write_bytes(
+            reviewer_validator.read_bytes() +
+            b"\n# compatible descendant reviewer hardening fixture\n"
+        )
         for target in self.manifest["targets"]:
             target["fingerprint_request"]["expected_identities"][
                 "approval_sha256"
@@ -890,11 +895,21 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         self.collection_candle_head = git(
             self.candle_root, "rev-parse", "HEAD",
         )
-        collector = self.candle / "reference_fingerprints.py"
+        MODULE.COLLECTION_CANDLE_HEAD = self.collection_candle_head
+        self.collection_candle_root = self.root / "collection-candle-producer"
+        git(
+            self.candle_root, "worktree", "add", "--detach",
+            str(self.collection_candle_root), self.collection_candle_head,
+        )
+        collection_candle = self.collection_candle_root / "candle"
+        collector = collection_candle / "reference_fingerprints.py"
         collector_sha256 = digest(collector.read_bytes())
-        protocol = self.candle / "reference_protocol.py"
+        protocol = collection_candle / "reference_protocol.py"
         protocol_sha256 = digest(protocol.read_bytes())
-        manifest_pin = self.candle / "top100_manifest.json"
+        manifest_pin = collection_candle / "top100_manifest.json"
+        producer_serializer = collection_candle / "fingerprint.ml"
+        producer_source_contract = collection_candle / \
+            "reference_source_contracts.json"
         runtime = self._write(
             reference_root, "ocaml-hol", b"#!/bin/sh\nexit 0\n")
         runtime.chmod(0o755)
@@ -1146,7 +1161,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 nonce = f"{5000 + target_index * 2 + run_index:064x}"
                 request_source = "\n".join([
                     f"CANDLE_REFERENCE_SESSION_V1\t{nonce}",
-                    f"SERIALIZER {self.serializer_path.resolve()}",
+                    f"SERIALIZER {producer_serializer.resolve()}",
                     *(f"LOAD {path}" for path in target["load_files"]),
                     "THEOREMS " + ",".join(
                         theorem["name"]
@@ -1226,7 +1241,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                             "path": str(collector), "sha256": collector_sha256,
                         },
                         "collector_repository": {
-                            "root": str(self.candle_root),
+                            "root": str(self.collection_candle_root),
                             "git_head": self.collection_candle_head,
                             "git_status": [],
                             "collector_relative_path":
@@ -1256,13 +1271,12 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                         ],
                         "mapping_status": "audited",
                         "serializer": {
-                            "path": str(self.serializer_path),
+                            "path": str(producer_serializer),
                             "sha256": self.serializer_sha256,
                         },
                         "source_mode": "manifest-exact",
                         "source_contract": {
-                            "path": str(
-                                self.candle / "reference_source_contracts.json"),
+                            "path": str(producer_source_contract),
                             "sha256": digest(shared_source_contract.read_bytes()),
                             **reference_policy,
                         },
@@ -1445,7 +1459,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 },
             },
             "candle": {
-                "root": str(self.candle_root),
+                "root": str(self.collection_candle_root),
                 "git_head": self.collection_candle_head,
                 "collector": {"path": "candle/reference_fingerprints.py",
                               **record(collector)},
@@ -1454,10 +1468,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "manifest": {"path": "candle/top100_manifest.json",
                              **record(manifest_pin)},
                 "serializer": {"path": "candle/fingerprint.ml",
-                               **record(self.serializer_path)},
+                               **record(collection_candle / "fingerprint.ml")},
                 "source_contract": {
                     "path": "candle/reference_source_contracts.json",
-                    **record(self.candle /
+                    **record(collection_candle /
                               "reference_source_contracts.json")},
             },
             "reference": {"root": str(reference_root),
@@ -2025,6 +2039,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             MODULE.COLLECTION_CONTROLLER_BYTES
         self.original_collection_controller_sha256 = \
             MODULE.COLLECTION_CONTROLLER_SHA256
+        self.original_collection_candle_head = MODULE.COLLECTION_CANDLE_HEAD
         self.fixture = Fixture(Path(self.temporary.name))
         MODULE.PROGRAM_PATH = self.fixture.program_path
         MODULE._TEST_AFTER_CONTRACT_CAPTURE = None
@@ -2037,6 +2052,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             self.original_collection_controller_bytes
         MODULE.COLLECTION_CONTROLLER_SHA256 = \
             self.original_collection_controller_sha256
+        MODULE.COLLECTION_CANDLE_HEAD = self.original_collection_candle_head
         self.temporary.cleanup()
 
     def assert_rejected(self, pattern: str | None = None) -> None:
@@ -2092,13 +2108,33 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.assertEqual(bundle["source_closure"]["closure_sha256"],
                          self.fixture.closure["sha256"])
         self.assertEqual(bundle["approval_replay"]["candidate_count"], 130)
+        authority = bundle["approval_replay"]["candle_authority"]
+        self.assertNotEqual(authority["producer"]["root"],
+                            authority["reviewer"]["root"])
+        self.assertNotEqual(authority["producer"]["git_head"],
+                            authority["reviewer"]["git_head"])
+        self.assertEqual(
+            authority["relation"],
+            "producer_commit_is_ancestor_of_reviewer_commit",
+        )
+        self.assertNotEqual(
+            bundle["approval_replay"]["validator"]["sha256"],
+            bundle["approval_replay"]["reviewer"]["validator"]["sha256"],
+        )
         for component in ("validator", "protocol", "regression"):
             replay = bundle["approval_replay"][component]
             self.assertEqual(
                 (self.fixture.destination /
                  replay["committed_archive_path"]).read_bytes(),
                 (self.fixture.destination /
-                 replay["executed_archive_path"]).read_bytes(),
+                replay["executed_archive_path"]).read_bytes(),
+            )
+            reviewer = bundle["approval_replay"]["reviewer"][component]
+            self.assertEqual(
+                (self.fixture.destination /
+                 reviewer["committed_archive_path"]).read_bytes(),
+                (self.fixture.destination /
+                 reviewer["executed_archive_path"]).read_bytes(),
             )
         external = bundle["approval_replay"]["external_runtime"]
         self.assertEqual(external["policy"],
@@ -2147,6 +2183,31 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.reports[0]["schema"] = 3
         self.fixture.write_reports()
         self.assert_rejected("schema-3.*non-promotable")
+
+    def test_report_envelope_numeric_type_confusion_rejects(self) -> None:
+        for report in self.fixture.reports:
+            report["schema"] = 4.0
+            report["test_count"] = 65.0
+        self.fixture.write_reports()
+        self.assert_rejected("schema-4|non-promotable")
+
+    def test_report_counts_numeric_type_confusion_rejects(self) -> None:
+        for report in self.fixture.reports:
+            report["counts"] = {"PASS": 65.0, "FAIL": False, "TIMEOUT": 0.0}
+        self.fixture.write_reports()
+        self.assert_rejected("did not pass completely")
+
+    def test_process_exit_boolean_type_confusion_rejects(self) -> None:
+        for report in self.fixture.reports:
+            for result in report["results"]:
+                result["process_evidence"]["exit_code"] = False
+        self.fixture.write_reports()
+        self.assert_rejected("invalid process identity or exit status")
+
+    def test_authorization_schema_float_type_confusion_rejects(self) -> None:
+        self.fixture.authorization["schema"] = 1.0
+        self.fixture.write_authorization()
+        self.assert_rejected("malformed external authorization receipt")
 
     def test_copied_run_cannot_satisfy_two_distinct_runs(self) -> None:
         clone = deepcopy(self.fixture.reports[0])
@@ -2540,6 +2601,12 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.rewrite_all_reference_plans(confuse_thread_policy)
         self.assert_rejected("CSDP thread policy")
 
+    def test_reference_manifest_schema_type_confusion_rejects(self) -> None:
+        self.fixture.rewrite_all_reference_plans(
+            lambda plan: plan["input"].update(manifest_schema_version=True),
+        )
+        self.assert_rejected("reference plan target/mode mismatch")
+
     def test_candidate_exit_code_type_confusion_rejects(self) -> None:
         self.fixture.rewrite_all_reference_candidates(
             lambda candidate: candidate.update(process_exit_code=False),
@@ -2688,6 +2755,18 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         contract["controller"] = {"fabricated": True}
         self.fixture.replace_collection_documents(contract, receipt)
         self.assert_rejected("authorized launch commit")
+
+    def test_descendant_candle_cannot_replace_exact_producer(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        contract["candle"]["root"] = str(self.fixture.candle_root)
+        contract["candle"]["git_head"] = self.fixture.candle_head
+        for key, (relative, _) in MODULE.COLLECTION_CANDLE_PATHS.items():
+            contract["candle"][key] = {
+                "path": relative,
+                **record(self.fixture.candle_root / relative),
+            }
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("authorized producer commit")
 
     def test_alternate_committed_controller_is_rejected_after_rehash(self) -> None:
         alternate = self.fixture.root / "alternate-controller-project"

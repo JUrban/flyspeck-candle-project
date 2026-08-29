@@ -153,6 +153,7 @@ COLLECTION_PROJECT_HEAD = "95bb84fffade845406af92305baea0a9686ef21f"
 COLLECTION_CONTROLLER_BYTES = 109742
 COLLECTION_CONTROLLER_SHA256 = \
     "a703c01f1153bd8774f2f1ab4342950469011cbfee6d7f605485cc71d87f6301"
+COLLECTION_CANDLE_HEAD = "652a18a6735be8969462bf25f3233d23b5a4ed6d"
 COLLECTION_CANDLE_PATHS = {
     "collector": ("candle/reference_fingerprints.py", "100644"),
     "protocol": ("candle/reference_protocol.py", "100644"),
@@ -424,6 +425,11 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 def canonical_json_bytes(value: object) -> bytes:
     return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def exact_json_equal(left: object, right: object) -> bool:
+    """Compare JSON values without Python's bool/int/float coercions."""
+    return canonical_json_bytes(left) == canonical_json_bytes(right)
 
 
 def compact_json_sha256(value: object) -> str:
@@ -1115,10 +1121,12 @@ def validate_manifest_and_capture_closure(
     root: Path, manifest: dict[str, Any], manifest_snapshot: Snapshot,
     serializer_snapshot: Snapshot, stage: Path, stager: Stager,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
-    require(manifest.get("schema_version") == 1,
+    require(is_int(manifest.get("schema_version")) and
+            manifest["schema_version"] == 1,
             "unsupported Great100 manifest schema")
     targets = manifest.get("targets")
-    require(manifest.get("target_count") == 65 and isinstance(targets, list) and
+    require(is_int(manifest.get("target_count")) and
+            manifest["target_count"] == 65 and isinstance(targets, list) and
             len(targets) == 65, "Great100 manifest must contain 65 targets")
     validate_committed_snapshot(
         root, "candle/top100_manifest.json", manifest_snapshot, stage, "100644",
@@ -1467,39 +1475,45 @@ def validate_report_and_capture_logs(
     stager: Stager,
 ) -> ValidatedRun:
     require(set(report) == REPORT_KEYS, "malformed schema-4 Great100 report")
-    require(report["schema"] == 4 and report["suite"] == "top100",
+    require(is_int(report["schema"]) and report["schema"] == 4 and
+            report["suite"] == "top100",
             "only a schema-4 Great100 report is promotable")
     generated = validate_datetime(report["generated_utc"], "report generation time")
     suite_started = validate_datetime(
         report["suite_started_utc"], "suite start time",
     )
     require(generated > suite_started, "report generation does not follow suite start")
-    require(report["test_count"] == 65, "Great100 report must contain 65 targets")
+    require(is_int(report["test_count"]) and report["test_count"] == 65,
+            "Great100 report must contain 65 targets")
     require(is_int(report["jobs"]) and report["jobs"] > 0,
             "invalid Great100 worker count")
     validate_timeout_policy(report["timeout_policy"])
     for field in ("wall_seconds", "sum_test_seconds"):
         require(is_number(report[field]) and report[field] > 0,
                 f"invalid report {field}")
-    require(report["counts"] == {"PASS": 65, "FAIL": 0, "TIMEOUT": 0},
+    require(exact_json_equal(
+        report["counts"], {"PASS": 65, "FAIL": 0, "TIMEOUT": 0},
+    ),
             "Great100 suite did not pass completely")
     require(report["candle_root"] == str(root), "report Candle root mismatch")
     require(report["candle_git_status"] == [],
             "Candle worktree was not clean during the run")
     require_commit(report["candle_git_head"], "report Candle head")
-    require(report["fingerprint_contract"] == FINGERPRINT_CONTRACT,
+    require(exact_json_equal(
+        report["fingerprint_contract"], FINGERPRINT_CONTRACT,
+    ),
             "unexpected fingerprint contract")
     require(isinstance(report["s1_evidence"], dict) and
             set(report["s1_evidence"]) == S1_KEYS and
-            report["s1_evidence"] == S1_CLOSED,
+            exact_json_equal(report["s1_evidence"], S1_CLOSED),
             "Great100 S1 evidence is not closed")
-    require(report["execution_contract"] == execution_contract,
+    require(exact_json_equal(report["execution_contract"], execution_contract),
             "report execution-contract bytes differ from committed bytes")
-    require(report["source_closure"] == closure,
+    require(exact_json_equal(report["source_closure"], closure),
             "report source closure differs from live canonical closure")
-    require(report["independent_approval"] == {
+    require(exact_json_equal(report["independent_approval"], {
         "path": approval_relative, **approval_identity.as_json(),
-    }, "report independent-approval binding mismatch")
+    }), "report independent-approval binding mismatch")
 
     evidence = report["run_evidence"]
     require(isinstance(evidence, dict) and set(evidence) == RUN_EVIDENCE_KEYS,
@@ -1599,6 +1613,7 @@ def validate_report_and_capture_logs(
         process_nonce = require_nonce(process["process_nonce"], f"process {name}")
         process_nonces.append(process_nonce)
         require(is_int(process["pid"]) and process["pid"] > 0 and
+                is_int(process["exit_code"]) and
                 process["exit_code"] == 0,
                 f"invalid process identity or exit status for {name}")
         started = validate_datetime(process["started_utc"], f"{name} process start")
@@ -1704,7 +1719,8 @@ def validate_linked_and_capture(
     require(record_snapshot.identity == expected_record,
             "current linked record differs from per-process binding")
     record = snapshot_json(stage, record_snapshot, "linked provenance record")
-    require(set(record) == LINKED_RECORD_KEYS and record["schema"] == 6 and
+    require(set(record) == LINKED_RECORD_KEYS and is_int(record["schema"]) and
+            record["schema"] == 6 and
             record["kind"] == "candle-linked-pinned-cakeml",
             "unsupported linked provenance record")
     require(record["candle_commit"] == head,
@@ -1760,17 +1776,18 @@ def snapshot_utf8(stage: Path, snapshot: Snapshot, label: str) -> str:
 
 
 def prepare_reference_replay_root(
-    stage: Path, stager: Stager, validator: Snapshot, protocol: Snapshot,
-    source_contract: Snapshot, contracts: dict[str, Snapshot],
-    closure: dict[str, Any],
+    stage: Path, stager: Stager, role: str, validator: Snapshot,
+    protocol: Snapshot, regression: Snapshot, serializer: Snapshot,
+    manifest: Snapshot, source_contract: Snapshot, closure: dict[str, Any],
 ) -> dict[str, str]:
-    runtime_root = "approval/replay/runtime-root"
+    require(role in {"producer", "reviewer"}, "invalid replay role")
+    runtime_root = f"approval/replay/{role}/runtime-root"
     inputs = {
         REFERENCE_VALIDATOR_PATH: validator,
         REFERENCE_PROTOCOL_PATH: protocol,
-        "candle/regression.py": contracts["candle/regression.py"],
-        "candle/fingerprint.ml": contracts["candle/fingerprint.ml"],
-        "candle/top100_manifest.json": contracts["candle/top100_manifest.json"],
+        "candle/regression.py": regression,
+        "candle/fingerprint.ml": serializer,
+        "candle/top100_manifest.json": manifest,
         "candle/reference_source_contracts.json": source_contract,
     }
     for relative, snapshot in inputs.items():
@@ -2281,7 +2298,9 @@ def validate_reference_plan_bindings(
         "manifest_schema_version", "target", "load_files", "theorem_names",
         "mapping_status", "serializer", "source_mode", "source_contract",
     }, f"malformed v9 reference input contract for {name}")
-    require(inputs["target"] == name and inputs["manifest_schema_version"] == 1 and
+    require(inputs["target"] == name and
+            is_int(inputs["manifest_schema_version"]) and
+            inputs["manifest_schema_version"] == 1 and
             inputs["mapping_status"] == "audited" and
             inputs["source_mode"] == "manifest-exact",
             f"reference plan target/mode mismatch for {name}")
@@ -2948,12 +2967,16 @@ def validate_candidate_identity_projection(
 
 
 def run_captured_reference_replay(
-    stage: Path, validator: Snapshot, protocol: Snapshot, regression: Snapshot,
-    replay_runtime: dict[str, str], replays: list[dict[str, Any]], stager: Stager,
+    stage: Path, role: str, validator: Snapshot, protocol: Snapshot,
+    regression: Snapshot, replay_runtime: dict[str, str],
+    replays: list[dict[str, Any]], stager: Stager,
 ) -> dict[str, Any]:
     require(len(replays) == 130, "reference replay set must contain 130 runs")
+    require(role in {"producer", "reviewer"}, "invalid replay role")
+    replay_root = f"approval/replay/{role}"
     controller_identity = stager.write(
-        "approval/replay/controller.py", REFERENCE_REPLAY_CONTROLLER.encode("utf-8"),
+        f"{replay_root}/controller.py",
+        REFERENCE_REPLAY_CONTROLLER.encode("utf-8"),
     )
     instructions = {
         "schema": "candle-great100-reference-replay-v1",
@@ -2963,10 +2986,10 @@ def run_captured_reference_replay(
         "replays": replays,
     }
     instructions_identity = stager.write(
-        "approval/replay/instructions.json", canonical_json_bytes(instructions),
+        f"{replay_root}/instructions.json", canonical_json_bytes(instructions),
     )
-    controller_path = stage / "approval/replay/controller.py"
-    instructions_path = stage / "approval/replay/instructions.json"
+    controller_path = stage / replay_root / "controller.py"
+    instructions_path = stage / replay_root / "instructions.json"
     try:
         completed = subprocess.run(
             [str(PYTHON_PATH), "-I", "-S", str(controller_path), str(stage),
@@ -2982,6 +3005,7 @@ def run_captured_reference_replay(
             completed.stderr == b"",
             "captured v9 reference candidate replay failed")
     return {
+        "role": role,
         "validator": {
             "committed_archive_path": validator.archive_path,
             "executed_archive_path": replay_runtime["validator"],
@@ -2998,11 +3022,11 @@ def run_captured_reference_replay(
             **regression.identity.as_json(),
         },
         "controller": {
-            "archive_path": "approval/replay/controller.py",
+            "archive_path": f"{replay_root}/controller.py",
             **controller_identity.as_json(),
         },
         "instructions": {
-            "archive_path": "approval/replay/instructions.json",
+            "archive_path": f"{replay_root}/instructions.json",
             **instructions_identity.as_json(),
         },
         "candidate_count": len(replays),
@@ -3014,7 +3038,7 @@ def authenticate_collection_contract(
     contract: dict[str, Any], reference_policy: dict[str, Any],
     inventory: dict[str, Any], trusted_project_root: Path,
     trusted_project_head: str, stage: Path, stager: Stager,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], dict[str, Snapshot], Path, str]:
     """Authenticate the controller, repositories, and launch-time runtimes."""
     def retain_live(path: Path, archive_path: str, label: str) -> dict[str, Any]:
         source = ordinary_file(path, label)
@@ -3123,23 +3147,37 @@ def authenticate_collection_contract(
             Path(candle["root"]).is_absolute(),
             "malformed collection Candle contract")
     candle_root = Path(candle["root"])
+    candle_head = require_commit(
+        candle["git_head"], "collection Candle commit",
+    )
+    require(candle_head == COLLECTION_CANDLE_HEAD,
+            "collection Candle is not the authorized producer commit")
+    validate_git_checkout(
+        candle_root, candle_head, "collection Candle producer checkout",
+    )
     retained_candle = {}
+    producer_snapshots: dict[str, Snapshot] = {}
     for key, (relative, mode) in COLLECTION_CANDLE_PATHS.items():
         record, source = committed_file_at(
-            candle_root, candle["git_head"], relative, mode,
+            candle_root, candle_head, relative, mode,
             f"collection Candle {key}",
         )
         require(candle[key] == record,
                 f"collection Candle {key} does not match its commit")
-        identity = stager.write(
-            f"approval/reference-collection/candle/{relative}", source,
+        archive_path = f"approval/reference-collection/candle/{relative}"
+        snapshot = stager.capture(
+            candle_root / relative, archive_path,
+            f"collection Candle {key}",
         )
-        require(identity.as_json() == {
+        require(snapshot.identity.as_json() == {
             field: record[field] for field in ("bytes", "sha256")
         }, f"retained collection Candle {key} differs")
+        require(snapshot_bytes(stage, snapshot) == source,
+                f"live collection Candle {key} differs from its commit")
+        producer_snapshots[key] = snapshot
         retained_candle[key] = {
-            "archive_path": f"approval/reference-collection/candle/{relative}",
-            **identity.as_json(),
+            "archive_path": archive_path,
+            **snapshot.identity.as_json(),
         }
 
     reference = contract["reference"]
@@ -3442,7 +3480,7 @@ def authenticate_collection_contract(
     require(oracle["ld_so_cache"] == {
         "path": "/etc/ld.so.cache", "sha256": cache_identity.sha256,
     }, "collection dynamic-loader cache changed")
-    return {
+    authenticated = {
         "controller": {
             "archive_path": "approval/reference-collection/controller.py",
             **controller_identity.as_json(),
@@ -3460,6 +3498,7 @@ def authenticate_collection_contract(
         },
         "runtime": retained_runtimes,
     }
+    return authenticated, producer_snapshots, candle_root, candle_head
 
 
 def capture_collection_evidence(
@@ -3468,6 +3507,7 @@ def capture_collection_evidence(
     stage: Path, stager: Stager,
 ) -> tuple[
     dict[str, Any], dict[tuple[int, int], dict[str, Any]], dict[str, Any], Path,
+    dict[str, Snapshot], Path, str,
 ]:
     evidence = approval["collection_evidence"]
     require(isinstance(evidence, dict) and set(evidence) ==
@@ -3545,7 +3585,8 @@ def capture_collection_evidence(
             canonical_json_bytes(inventory) ==
             canonical_json_bytes(expected_inventory),
             "reference collection inventory differs from manifest")
-    authenticated_contract = authenticate_collection_contract(
+    (authenticated_contract, producer_snapshots, producer_root,
+     producer_head) = authenticate_collection_contract(
         contract, approval["reference_policy"], inventory,
         trusted_project_root, trusted_project_head, stage, stager,
     )
@@ -3634,15 +3675,17 @@ def capture_collection_evidence(
         } for name, snapshot in captured.items()
     }
     collection_capture["authenticated_contract"] = authenticated_contract
-    return contract, successes, collection_capture, collection_root
+    return (contract, successes, collection_capture, collection_root,
+            producer_snapshots, producer_root, producer_head)
 
 
 def validate_approval_and_capture(
     approval: dict[str, Any], approval_snapshot: Snapshot,
-    root: Path, manifest: dict[str, Any], expected_semantics: list[dict[str, Any]],
-    serializer_sha256: str, validator: Snapshot, protocol: Snapshot,
-    regression: Snapshot,
-    replay_runtime: dict[str, str], trusted_project_root: Path,
+    root: Path, trusted_candle_head: str, manifest: dict[str, Any],
+    closure: dict[str, Any], expected_semantics: list[dict[str, Any]],
+    serializer: Snapshot, reviewer_validator: Snapshot,
+    reviewer_protocol: Snapshot, source_contract: Snapshot,
+    regression: Snapshot, reviewer_runtime: dict[str, str], trusted_project_root: Path,
     trusted_project_head: str, stage: Path, stager: Stager,
 ) -> dict[str, Any]:
     require(set(approval) == APPROVAL_KEYS and
@@ -3657,6 +3700,7 @@ def validate_approval_and_capture(
              inventory["theorem_request_count"]) == (65, 66, 97) and
             approval["inventory_contract_sha256"] == compact_json_sha256(inventory),
             "independent approval inventory contract mismatch")
+    serializer_sha256 = serializer.identity.sha256
     require(approval["serializer_sha256"] == serializer_sha256,
             "independent approval serializer mismatch")
 
@@ -3696,11 +3740,45 @@ def validate_approval_and_capture(
     require_commit(review["review_commit"], "independent approval review commit")
 
     (collection_contract, collection_successes, collection_capture,
-     collection_root) = \
+     collection_root, producer_snapshots, producer_root, producer_head) = \
         capture_collection_evidence(
             approval, root, manifest,
             trusted_project_root, trusted_project_head, stage, stager,
         )
+    try:
+        ancestry = subprocess.run(
+            git_command(
+                root, "merge-base", "--is-ancestor",
+                producer_head, trusted_candle_head,
+            ),
+            env=git_environment(), stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=120, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValidationError(
+            "collection/reviewer Candle ancestry check could not run",
+        ) from error
+    require(ancestry.returncode == 0 and ancestry.stdout == b"" and
+            ancestry.stderr == b"",
+            "collection Candle producer is not an ancestor of the reviewer")
+    require(producer_snapshots["serializer"].identity == serializer.identity and
+            producer_snapshots["source_contract"].identity ==
+            source_contract.identity,
+            "collection/reviewer Candle data contracts are incompatible")
+    producer_manifest = snapshot_json(
+        stage, producer_snapshots["manifest"],
+        "collection Candle producer manifest",
+    )
+    require(is_int(producer_manifest.get("schema_version")) and
+            producer_manifest["schema_version"] == 1 and
+            is_int(producer_manifest.get("target_count")) and
+            producer_manifest["target_count"] == 65 and
+            canonical_json_bytes(approval_inventory_contract(
+                producer_manifest,
+            )) == canonical_json_bytes(inventory),
+            "collection/reviewer manifest inventories are incompatible")
+    producer_validator = producer_snapshots["collector"]
+    producer_protocol = producer_snapshots["protocol"]
 
     targets = approval["targets"]
     require(isinstance(targets, list) and len(targets) == 65,
@@ -3903,8 +3981,8 @@ def validate_approval_and_capture(
                         f"{artifact_name}")
             validate_reference_plan_bindings(
                 plan, candidate, target, run, policy,
-                captured_artifacts["source_contract"], root, validator, protocol,
-                serializer_sha256,
+                captured_artifacts["source_contract"], producer_root,
+                producer_validator, producer_protocol, serializer_sha256,
             )
             candle_contract = collection_contract["candle"]
             reference_contract = collection_contract["reference"]
@@ -4035,9 +4113,26 @@ def validate_approval_and_capture(
             "reference approval has no external-runtime closure")
     require(core_runtime is not None,
             "reference approval has no HOL/OCaml runtime closure")
-    replay = run_captured_reference_replay(
-        stage, validator, protocol, regression, replay_runtime, replays, stager,
+    producer_runtime = prepare_reference_replay_root(
+        stage, stager, "producer", producer_validator, producer_protocol,
+        regression, producer_snapshots["serializer"],
+        producer_snapshots["manifest"], producer_snapshots["source_contract"],
+        closure,
     )
+    replay = run_captured_reference_replay(
+        stage, "producer", producer_validator, producer_protocol, regression,
+        producer_runtime, replays, stager,
+    )
+    reviewer_replay = run_captured_reference_replay(
+        stage, "reviewer", reviewer_validator, reviewer_protocol, regression,
+        reviewer_runtime, replays, stager,
+    )
+    replay["reviewer"] = reviewer_replay
+    replay["candle_authority"] = {
+        "producer": {"root": str(producer_root), "git_head": producer_head},
+        "reviewer": {"root": str(root), "git_head": trusted_candle_head},
+        "relation": "producer_commit_is_ancestor_of_reviewer_commit",
+    }
     replay["external_runtime"] = capture_reference_external_runtime(
         external_runtime, stage, stager,
     )
@@ -4085,30 +4180,33 @@ def validate_authorization(
 ) -> None:
     require(receipt_snapshot.identity.sha256 == receipt_digest,
             "external authorization receipt digest mismatch")
-    require(set(receipt) == AUTHORIZATION_KEYS and receipt["schema"] == 1 and
+    require(set(receipt) == AUTHORIZATION_KEYS and
+            is_int(receipt["schema"]) and receipt["schema"] == 1 and
             receipt["kind"] == "candle-great100-finalization-authorization",
             "malformed external authorization receipt")
     validate_datetime(receipt["issued_utc"], "authorization issue time")
     require(isinstance(receipt["authority"], str) and receipt["authority"].strip(),
             "authorization receipt lacks authority")
-    require(receipt["reports"] == [
+    require(exact_json_equal(receipt["reports"], [
         run.report_snapshot.identity.as_json() for run in runs
-    ], "authorization receipt does not bind exact report bytes")
+    ]), "authorization receipt does not bind exact report bytes")
     require(receipt["suite_nonces"] == [run.suite_nonce for run in runs],
             "authorization receipt does not bind suite nonces")
     require(receipt["linked_record_sha256"] == linked_sha256 and
             receipt["source_closure_sha256"] == closure_sha256 and
             receipt["semantic_projection_sha256"] == semantics_sha256 and
-            receipt["independent_approval"] == approval_identity.as_json(),
+            exact_json_equal(
+                receipt["independent_approval"], approval_identity.as_json(),
+            ),
             "authorization receipt does not bind accepted evidence")
-    require(receipt["project"] == {
+    require(exact_json_equal(receipt["project"], {
         "git_head": finalizer["project_head"],
         "finalizer": {
             "path": finalizer["program_relative"],
             **finalizer["program_identity"].as_json(),
         },
-    }, "authorization receipt does not bind finalizer project/bytes")
-    require(receipt["tools"] == {
+    }), "authorization receipt does not bind finalizer project/bytes")
+    require(exact_json_equal(receipt["tools"], {
         "python": {
             "path": str(finalizer["python_path"]),
             **finalizer["python_identity"].as_json(),
@@ -4117,7 +4215,7 @@ def validate_authorization(
             "path": str(finalizer["git_path"]),
             **finalizer["git_identity"].as_json(),
         },
-    }, "authorization receipt does not bind exact finalizer tools")
+    }), "authorization receipt does not bind exact finalizer tools")
 
 
 def archive(
@@ -4175,7 +4273,7 @@ def archive(
             for index, snapshot in enumerate(report_snapshots, 1)
         )
         for report in reports:
-            require(report.get("schema") == 4,
+            require(is_int(report.get("schema")) and report["schema"] == 4,
                     "schema-3 and other legacy Great100 reports are non-promotable")
         roots = []
         for index, report in enumerate(reports, 1):
@@ -4241,9 +4339,12 @@ def archive(
             root, manifest, contract_snapshots["candle/top100_manifest.json"],
             contract_snapshots["candle/fingerprint.ml"], stage, stager,
         )
-        replay_runtime = prepare_reference_replay_root(
-            stage, stager, reference_validator, reference_protocol,
-            reference_source_contract, contract_snapshots, closure,
+        reviewer_runtime = prepare_reference_replay_root(
+            stage, stager, "reviewer", reference_validator, reference_protocol,
+            contract_snapshots["candle/regression.py"],
+            contract_snapshots["candle/fingerprint.ml"],
+            contract_snapshots["candle/top100_manifest.json"],
+            reference_source_contract, closure,
         )
 
         approval_references = [report.get("independent_approval") for report in reports]
@@ -4265,19 +4366,21 @@ def archive(
         require(approval_snapshot.identity.sha256 == manifest_approval_sha256,
                 "manifest identities do not bind the independent approval artifact")
         approval = snapshot_json(stage, approval_snapshot, "independent approval artifact")
-        require(manifest.get("identity_approval") == {
+        require(exact_json_equal(manifest.get("identity_approval"), {
             "path": approval_relative,
             "sha256": approval_snapshot.identity.sha256,
             "schema": "candle-s1-identity-approval-v2",
             "approval_status": "approved",
             "promotion_allowed": True,
-        }, "manifest identity-approval metadata mismatch")
+        }), "manifest identity-approval metadata mismatch")
         approval_replay = validate_approval_and_capture(
-            approval, approval_snapshot, root, manifest, approved_semantics,
-            contract_snapshots["candle/fingerprint.ml"].identity.sha256,
+            approval, approval_snapshot, root, heads[0], manifest,
+            closure, approved_semantics,
+            contract_snapshots["candle/fingerprint.ml"],
             reference_validator, reference_protocol,
+            reference_source_contract,
             contract_snapshots["candle/regression.py"],
-            replay_runtime, finalizer["project_root"],
+            reviewer_runtime, finalizer["project_root"],
             finalizer["project_head"], stage, stager,
         )
 
