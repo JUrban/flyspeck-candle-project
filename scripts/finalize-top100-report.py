@@ -148,6 +148,14 @@ REFERENCE_DELTA_KEYS = {
 APPROVAL_REVIEW_KEYS = {"reviewer", "approved_utc", "review_commit", "decision"}
 APPROVAL_TARGET_KEYS = {"name", "reference_runs", "expected_identity"}
 COLLECTION_EVIDENCE_KEYS = {"contract", "receipt"}
+COLLECTION_CONTROLLER_PATH = "scripts/run-top100-reference-sweeps.py"
+COLLECTION_CANDLE_PATHS = {
+    "collector": ("candle/reference_fingerprints.py", "100644"),
+    "protocol": ("candle/reference_protocol.py", "100644"),
+    "manifest": ("candle/top100_manifest.json", "100644"),
+    "serializer": ("candle/fingerprint.ml", "100644"),
+    "source_contract": ("candle/reference_source_contracts.json", "100644"),
+}
 APPROVAL_IDENTITY_KEYS = {"serializer_sha256", "theorems", "post_state"}
 AUTHORIZATION_KEYS = {
     "schema", "kind", "issued_utc", "authority", "reports",
@@ -409,6 +417,20 @@ def executable_route_record(path: Path, label: str) -> dict[str, Any]:
             "path": str(resolved), "sha256": identity.sha256,
             "mode": stat.S_IMODE(resolved_metadata.st_mode),
         },
+    }
+
+
+def runtime_file_record(path: Path, label: str) -> dict[str, Any]:
+    """Reproduce the collection controller's argument/resolved file record."""
+    argument = lexical_absolute(path)
+    try:
+        resolved = argument.resolve(strict=True)
+    except (FileNotFoundError, RuntimeError, OSError) as error:
+        raise ValidationError(f"could not resolve {label}: {argument}") from error
+    identity = stable_file_identity(resolved, f"resolved {label}")
+    return {
+        "argument_path": str(argument), "path": str(resolved),
+        **identity.as_json(),
     }
 
 
@@ -695,6 +717,28 @@ def validate_git_checkout(root: Path, expected_head: str, label: str) -> None:
         root, "status", "--porcelain=v1", "-z", "--untracked-files=all",
     )
     require(status == b"", f"{label} worktree is not clean")
+
+
+def committed_file_at(
+    root: Path, head: str, relative: str, expected_mode: str, label: str,
+) -> tuple[dict[str, Any], bytes]:
+    """Authenticate one ordinary blob directly from a named Git commit."""
+    root = ordinary_directory(root, f"{label} repository")
+    head = require_commit(head, f"{label} commit")
+    relative = safe_relative(relative, f"{label} committed path")
+    top = git_bytes(root, "rev-parse", "--show-toplevel").decode().strip()
+    require(Path(top) == root, f"{label} repository is not an exact Git top level")
+    require(git_bytes(
+        root, "for-each-ref", "--format=%(refname)", "refs/replace",
+    ) == b"", f"{label} repository has Git replacement objects")
+    line = git_bytes(root, "ls-tree", head, "--", relative).decode().rstrip("\n")
+    fields = line.split(maxsplit=3)
+    require(len(fields) == 4 and fields[0] == expected_mode and
+            fields[1] == "blob" and fields[3] == relative and
+            re.fullmatch(r"[0-9a-f]{40,64}", fields[2]) is not None,
+            f"{label} is not one exact committed ordinary file")
+    source = git_bytes(root, "cat-file", "blob", f"{head}:{relative}")
+    return {"path": relative, **bytes_identity(source).as_json()}, source
 
 
 def validate_committed_snapshot(
@@ -2239,18 +2283,214 @@ def run_captured_reference_replay(
     }
 
 
+def authenticate_collection_contract(
+    contract: dict[str, Any], reference_policy: dict[str, Any],
+    stage: Path, stager: Stager,
+) -> dict[str, Any]:
+    """Authenticate the controller, repositories, and launch-time runtimes."""
+    def retain_live(path: Path, archive_path: str, label: str) -> dict[str, Any]:
+        source = ordinary_file(path, label)
+        metadata = source.lstat()
+        key = (metadata.st_dev, metadata.st_ino)
+        if key in stager.source_keys:
+            identity = stable_file_identity(source, label)
+            return {
+                "source_path": str(source),
+                "retained_by": stager.source_keys[key],
+                **identity.as_json(),
+            }
+        snapshot = stager.capture(source, archive_path, label)
+        return {
+            "source_path": str(snapshot.source_path),
+            "archive_path": snapshot.archive_path,
+            **snapshot.identity.as_json(),
+        }
+
+    project = contract["project"]
+    require(isinstance(project, dict) and set(project) == {
+        "root", "git_head", "controller",
+    } and isinstance(project["root"], str) and
+            Path(project["root"]).is_absolute(),
+            "malformed collection project contract")
+    project_root = Path(project["root"])
+    controller_record, controller_source = committed_file_at(
+        project_root, project["git_head"], COLLECTION_CONTROLLER_PATH,
+        "100755", "collection controller",
+    )
+    require(project["controller"] == controller_record,
+            "collection controller does not match its committed project")
+    controller = contract["controller"]
+    require(isinstance(controller, dict) and set(controller) == {
+        "path", "sha256", "bytes", "python", "git",
+    } and controller["path"] ==
+            str(project_root / COLLECTION_CONTROLLER_PATH) and
+            {key: controller[key] for key in ("path", "bytes", "sha256")} == {
+                "path": str(project_root / COLLECTION_CONTROLLER_PATH),
+                "bytes": controller_record["bytes"],
+                "sha256": controller_record["sha256"],
+            }, "collection controller projection is not exact")
+    controller_identity = stager.write(
+        "approval/reference-collection/controller.py", controller_source,
+    )
+    require(controller_identity.as_json() == {
+        key: controller_record[key] for key in ("bytes", "sha256")
+    }, "retained collection controller differs")
+
+    python = controller["python"]
+    git_tool = controller["git"]
+    require(isinstance(python, dict) and set(python) == {
+        "argument_path", "path", "bytes", "sha256",
+    } and python == runtime_file_record(
+        Path(python["argument_path"]), "collection Python",
+    ), "collection Python runtime changed or is malformed")
+    require(isinstance(git_tool, dict) and set(git_tool) == {
+        "path", "bytes", "sha256",
+    } and git_tool["path"] == str(GIT_REQUESTED_PATH) and
+            {"path": str(GIT_REQUESTED_PATH), **stable_file_identity(
+                GIT_REQUESTED_PATH, "collection Git",
+            ).as_json()} == git_tool,
+            "collection Git runtime changed or is malformed")
+    python_retained = retain_live(
+        Path(python["path"]), "approval/reference-collection/runtime/python",
+        "collection Python",
+    )
+    git_retained = retain_live(
+        GIT_REQUESTED_PATH, "approval/reference-collection/runtime/git",
+        "collection Git",
+    )
+    require({key: python_retained[key] for key in ("bytes", "sha256")} == {
+        key: python[key] for key in ("bytes", "sha256")
+    } and {key: git_retained[key] for key in ("bytes", "sha256")} == {
+        key: git_tool[key] for key in ("bytes", "sha256")
+    }, "retained collection controller runtime differs")
+
+    candle = contract["candle"]
+    require(isinstance(candle, dict) and set(candle) == {
+        "root", "git_head", *COLLECTION_CANDLE_PATHS,
+    } and isinstance(candle["root"], str) and
+            Path(candle["root"]).is_absolute(),
+            "malformed collection Candle contract")
+    candle_root = Path(candle["root"])
+    retained_candle = {}
+    for key, (relative, mode) in COLLECTION_CANDLE_PATHS.items():
+        record, source = committed_file_at(
+            candle_root, candle["git_head"], relative, mode,
+            f"collection Candle {key}",
+        )
+        require(candle[key] == record,
+                f"collection Candle {key} does not match its commit")
+        identity = stager.write(
+            f"approval/reference-collection/candle/{relative}", source,
+        )
+        require(identity.as_json() == {
+            field: record[field] for field in ("bytes", "sha256")
+        }, f"retained collection Candle {key} differs")
+        retained_candle[key] = {
+            "archive_path": f"approval/reference-collection/candle/{relative}",
+            **identity.as_json(),
+        }
+
+    reference = contract["reference"]
+    require(isinstance(reference, dict) and set(reference) == {
+        "root", "git_head", "source_policy",
+    } and isinstance(reference["root"], str) and
+            Path(reference["root"]).is_absolute() and
+            COMMIT_RE.fullmatch(reference["git_head"]) is not None and
+            reference["source_policy"] == reference_policy,
+            "malformed or unauthorized collection reference contract")
+
+    deadlines = contract["deadlines"]
+    require(isinstance(deadlines, dict) and set(deadlines) == {
+        "collection_wall_seconds", "target_wall_seconds",
+        "validation_wall_seconds",
+    } and is_int(deadlines["collection_wall_seconds"]) and
+            deadlines["collection_wall_seconds"] > 0 and
+            is_int(deadlines["target_wall_seconds"]) and
+            deadlines["target_wall_seconds"] >=
+            deadlines["collection_wall_seconds"] + 30 and
+            is_int(deadlines["validation_wall_seconds"]) and
+            deadlines["validation_wall_seconds"] > 0,
+            "malformed collection deadlines")
+
+    runtimes = contract["runtime"]
+    require(isinstance(runtimes, dict) and set(runtimes) == {
+        "runtime", "runtime_stublib", "ocamlc", "ocamlfind",
+    }, "malformed collection core-runtime contract")
+    retained_runtimes = {}
+    for key, record in sorted(runtimes.items()):
+        require(isinstance(record, dict) and set(record) == {
+            "argument_path", "path", "bytes", "sha256",
+        } and record == runtime_file_record(
+            Path(record["argument_path"]), f"collection {key}",
+        ), f"collection {key} changed or is malformed")
+        retained = retain_live(
+            Path(record["path"]),
+            f"approval/reference-collection/runtime/{key}",
+            f"collection {key}",
+        )
+        require({field: retained[field] for field in ("bytes", "sha256")} == {
+            field: record[field] for field in ("bytes", "sha256")
+        }, f"retained collection {key} differs")
+        retained_runtimes[key] = retained
+
+    external = contract["external_runtime"]
+    require(isinstance(external, dict) and set(external) == {
+        "policy", "command_shell", "pari_gp", "package_archive",
+        "package_tree", "configuration", "data_tree", "runtime_environment",
+    } and external["policy"] ==
+            "single_private_path_gp_with_pinned_shell_v1",
+            "malformed collection external-runtime contract")
+    for key in ("command_shell", "pari_gp", "package_archive", "configuration"):
+        record = external[key]
+        require(isinstance(record, dict) and set(record) == {
+            "argument_path", "path", "bytes", "sha256",
+        } and record == runtime_file_record(
+            Path(record["argument_path"]), f"collection external {key}",
+        ), f"collection external {key} changed or is malformed")
+    for key, label in (
+        ("package_tree", "collection PARI/GP package tree"),
+        ("data_tree", "collection PARI/GP optional-data tree"),
+    ):
+        pin, _ = tree_inventory(Path(external[key]["root"]), label)
+        require(external[key] == pin,
+                f"{label} changed or is malformed")
+    require(external["data_tree"]["root_mode"] == 0o555 and
+            external["data_tree"]["entry_count"] == 0 and
+            external["runtime_environment"] == {
+                "PATH": str(Path(external["pari_gp"]["argument_path"]).parent),
+                "GPRC": external["configuration"]["path"],
+                "GP_DATA_DIR": external["data_tree"]["root"],
+            }, "collection external-runtime environment is not exact")
+    return {
+        "controller": {
+            "archive_path": "approval/reference-collection/controller.py",
+            **controller_identity.as_json(),
+        },
+        "controller_runtime": {
+            "python": python_retained,
+            "git": git_retained,
+        },
+        "candle": retained_candle,
+        "runtime": retained_runtimes,
+    }
+
+
 def capture_collection_evidence(
     approval: dict[str, Any], root: Path, manifest: dict[str, Any],
     stage: Path, stager: Stager,
-) -> tuple[dict[str, Any], dict[tuple[int, int], dict[str, Any]], dict[str, Any]]:
+) -> tuple[
+    dict[str, Any], dict[tuple[int, int], dict[str, Any]], dict[str, Any], Path,
+]:
     evidence = approval["collection_evidence"]
     require(isinstance(evidence, dict) and set(evidence) ==
             COLLECTION_EVIDENCE_KEYS,
             "malformed reference collection evidence")
     captured: dict[str, Snapshot] = {}
+    source_paths: dict[str, Path] = {}
     for name in sorted(COLLECTION_EVIDENCE_KEYS):
         _, path, expected = validate_root_file_reference(
             evidence[name], root, f"reference collection {name}")
+        source_paths[name] = path
         snapshot = stager.capture(
             path, f"approval/reference-collection/{name}.json",
             f"reference collection {name}",
@@ -2258,6 +2498,11 @@ def capture_collection_evidence(
         require(snapshot.identity == expected,
                 f"reference collection {name} bytes differ")
         captured[name] = snapshot
+    require(source_paths["contract"].name == "collection-contract.json" and
+            source_paths["receipt"].name == "receipt.json" and
+            source_paths["contract"].parent == source_paths["receipt"].parent,
+            "reference collection evidence is not one exact controller root")
+    collection_root = source_paths["contract"].parent
     contract = snapshot_json(
         stage, captured["contract"], "reference collection contract")
     receipt = snapshot_json(
@@ -2279,15 +2524,37 @@ def capture_collection_evidence(
             "malformed reference collection contract")
     inventory = contract["inventory"]
     targets = manifest["targets"]
-    require(isinstance(inventory, dict) and
-            inventory.get("target_count") == 65 and
-            inventory.get("source_count") == 66 and
-            inventory.get("request_count") == 97 and
-            isinstance(inventory.get("targets"), list) and
-            [value.get("name") for value in inventory["targets"]
-             if isinstance(value, dict)] ==
-            [target["name"] for target in targets],
+    inventory_targets = []
+    inventory_sources: set[str] = set()
+    inventory_requests = 0
+    for index, target in enumerate(targets, 1):
+        load_files = target["load_files"]
+        theorem_names = [
+            theorem["name"]
+            for theorem in target["fingerprint_request"]["theorems"]
+        ]
+        inventory_sources.update(load_files)
+        inventory_requests += len(theorem_names)
+        inventory_targets.append({
+            "index": index, "name": target["name"],
+            "load_files": load_files,
+            "load_file_sha256": {
+                relative: target["load_file_sha256"][relative]
+                for relative in load_files
+            },
+            "theorem_names": theorem_names,
+        })
+    expected_inventory = {
+        "target_count": 65, "source_count": len(inventory_sources),
+        "request_count": inventory_requests, "targets": inventory_targets,
+    }
+    require(expected_inventory["source_count"] == 66 and
+            expected_inventory["request_count"] == 97 and
+            inventory == expected_inventory,
             "reference collection inventory differs from manifest")
+    authenticated_contract = authenticate_collection_contract(
+        contract, approval["reference_policy"], stage, stager,
+    )
     require(isinstance(receipt, dict) and set(receipt) == {
         "schema", "kind", "contract_sha256", "contract", "sweep_count",
         "target_count", "total_target_runs", "completed_target_runs",
@@ -2310,11 +2577,9 @@ def capture_collection_evidence(
             receipt["outcome"] == "complete" and receipt["closed"] is True and
             receipt["approval_status"] == "candidates_unapproved" and
             receipt["promotion_allowed"] is False and
-            isinstance(receipt["failure_attempt_count"], int) and
-            receipt["failure_attempt_count"] >= 0 and
-            isinstance(receipt["failures"], list) and
-            len(receipt["failures"]) == receipt["failure_attempt_count"] and
-            isinstance(receipt["publication_interruptions"], list),
+            receipt["failure_attempt_count"] == 0 and
+            receipt["failures"] == [] and
+            receipt["publication_interruptions"] == [],
             "reference collection receipt is not closed and exact")
     sweeps = receipt["sweeps"]
     require(isinstance(sweeps, list) and len(sweeps) == 2,
@@ -2339,17 +2604,17 @@ def capture_collection_evidence(
             } and row["index"] == target_index and
                     row["name"] == target["name"] and
                     row["state"] == "complete" and
-                    is_int(row["attempt_count"]) and row["attempt_count"] >= 1 and
-                    isinstance(row["attempts"], list) and
-                    len(row["attempts"]) == row["attempt_count"] and
+                    row["attempt_count"] == 1 and
+                    row["attempts"] == [{
+                        "attempt": "attempt-0001", "state": "complete",
+                    }] and
                     isinstance(row["success"], dict),
                     "malformed reference collection target success")
             success = row["success"]
             require(set(success) == {
                 "attempt", "receipt_path", "receipt", "session_nonce",
                 "artifacts",
-            } and isinstance(success["attempt"], str) and
-                    re.fullmatch(r"attempt-[0-9]{4}", success["attempt"]) and
+            } and success["attempt"] == "attempt-0001" and
                     success["receipt_path"] ==
                     (f"sweep-{sweep_index}/target-{target_index:03d}/"
                      f"{success['attempt']}/success.json") and
@@ -2360,12 +2625,14 @@ def capture_collection_evidence(
                     isinstance(success["artifacts"], dict),
                     "malformed aggregate collection success")
             successes[(sweep_index, target_index)] = success
-    return contract, successes, {
+    collection_capture = {
         name: {
             "archive_path": snapshot.archive_path,
             **snapshot.identity.as_json(),
         } for name, snapshot in captured.items()
     }
+    collection_capture["authenticated_contract"] = authenticated_contract
+    return contract, successes, collection_capture, collection_root
 
 
 def validate_approval_and_capture(
@@ -2425,7 +2692,8 @@ def validate_approval_and_capture(
     validate_datetime(review["approved_utc"], "independent approval review time")
     require_commit(review["review_commit"], "independent approval review commit")
 
-    collection_contract, collection_successes, collection_capture = \
+    (collection_contract, collection_successes, collection_capture,
+     collection_root) = \
         capture_collection_evidence(approval, root, manifest, stage, stager)
 
     targets = approval["targets"]
@@ -2541,10 +2809,15 @@ def validate_approval_and_capture(
             aggregate_success = collection_successes[(run_index, target_index)]
             aggregate_receipt = aggregate_success["receipt"]
             require(isinstance(aggregate_receipt, dict) and
+                    set(aggregate_receipt) == {"path", "bytes", "sha256"} and
+                    aggregate_receipt["path"] ==
+                    aggregate_success["receipt_path"] and
                     aggregate_receipt.get("bytes") ==
                     captured_artifacts["controller_success"].identity.bytes and
                     aggregate_receipt.get("sha256") ==
                     captured_artifacts["controller_success"].identity.sha256 and
+                    root / artifacts["controller_success"]["path"] ==
+                    collection_root / aggregate_success["receipt_path"] and
                     aggregate_success["session_nonce"] == run["session_nonce"],
                     f"aggregate receipt does not bind {name} run {run_index}")
             require(isinstance(success_receipt, dict) and set(success_receipt) == {
@@ -2574,6 +2847,8 @@ def validate_approval_and_capture(
                 snapshot = captured_artifacts[artifact_name]
                 require(isinstance(record, dict) and set(record) == {
                     "path", "bytes", "sha256"} and
+                        collection_root / record["path"] ==
+                        root / artifacts[artifact_name]["path"] and
                         record.get("bytes") == snapshot.identity.bytes and
                         record.get("sha256") == snapshot.identity.sha256 and
                         aggregate_record == record,
@@ -2585,9 +2860,30 @@ def validate_approval_and_capture(
                 snapshot = captured_artifacts[artifact_name]
                 require(isinstance(record, dict) and set(record) == {
                     "path", "bytes", "sha256"} and
+                        collection_root / record["path"] ==
+                        root / artifacts[artifact_name]["path"] and
                         record.get("bytes") == snapshot.identity.bytes and
                         record.get("sha256") == snapshot.identity.sha256,
                         f"controller receipt does not bind {name} {artifact_name}")
+            candidate_path = collection_root / success_receipt["artifacts"][
+                "candidate"]["path"]
+            expected_outputs = {
+                "collector_stdout": (
+                    f"unapproved reference candidate: {candidate_path}\n"
+                ).encode(),
+                "collector_stderr": b"",
+                "validator_stdout": (
+                    "candidate and linked artifacts valid but unapproved: "
+                    f"{candidate_path}\n"
+                ).encode(),
+                "validator_stderr": b"",
+            }
+            for artifact_name, expected_output in expected_outputs.items():
+                require(snapshot_bytes(
+                    stage, captured_artifacts[artifact_name],
+                ) == expected_output,
+                        f"unexpected controller output for {name} "
+                        f"{artifact_name}")
             validate_reference_plan_bindings(
                 plan, candidate, target, run, policy,
                 captured_artifacts["source_contract"], root, validator, protocol,
@@ -2635,6 +2931,21 @@ def validate_approval_and_capture(
                         key) == value for key, value in
                         external_contract["runtime_environment"].items()),
                     f"collection contract does not bind {name} external runtime")
+            runtime_contract = collection_contract["runtime"]
+            runtime_plan = {
+                "runtime": plan["reference"]["runtime_executable"],
+                "runtime_stublib": plan["reference"]["runtime_stublib"],
+                "ocamlc": {
+                    key: plan["reference"]["ocamlc"][key]
+                    for key in ("path", "sha256")
+                },
+                "ocamlfind": plan["reference"]["findlib"]["executable"],
+            }
+            require(all({
+                "path": runtime_contract[key]["path"],
+                "sha256": runtime_contract[key]["sha256"],
+            } == runtime_plan[key] for key in runtime_plan),
+                    f"collection contract does not bind {name} core runtime")
             observed_external = plan["reference"]["external_runtime"]
             if external_runtime is None:
                 external_runtime = observed_external
