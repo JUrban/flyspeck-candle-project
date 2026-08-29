@@ -236,8 +236,26 @@ class Fixture:
         git(self.project_root, "config", "user.email", "fixture@example.invalid")
         git(self.project_root, "config", "user.name", "fixture")
         git(self.project_root, "add", ".")
-        git(self.project_root, "commit", "-qm", "fixture finalizer")
+        git(self.project_root, "commit", "-qm", "fixture collection launch")
+        self.collection_project_head = git(
+            self.project_root, "rev-parse", "HEAD",
+        )
+        controller_record = record(controller_path)
+        MODULE.COLLECTION_PROJECT_HEAD = self.collection_project_head
+        MODULE.COLLECTION_CONTROLLER_BYTES = controller_record["bytes"]
+        MODULE.COLLECTION_CONTROLLER_SHA256 = controller_record["sha256"]
+        self._write(
+            self.project_root, "docs/finalizer-revision.md",
+            b"later finalizer authority fixture\n",
+        )
+        git(self.project_root, "add", ".")
+        git(self.project_root, "commit", "-qm", "later fixture finalizer")
         self.project_head = git(self.project_root, "rev-parse", "HEAD")
+        self.collection_project_root = self.root / "collection-launch-project"
+        git(
+            self.project_root, "worktree", "add", "--detach",
+            str(self.collection_project_root), self.collection_project_head,
+        )
 
     @staticmethod
     def _wire_record(name: str, index: int, theorem_index: int) -> tuple[str, dict]:
@@ -1418,11 +1436,11 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             "sweep_count": 2, "target_count": 65,
             "total_target_runs": 130, "source_mode": "manifest-exact",
             "project": {
-                "root": str(self.project_root),
-                "git_head": self.project_head,
+                "root": str(self.collection_project_root),
+                "git_head": self.collection_project_head,
                 "controller": {
                     "path": "scripts/run-top100-reference-sweeps.py",
-                    **record(self.project_root /
+                    **record(self.collection_project_root /
                               "scripts/run-top100-reference-sweeps.py"),
                 },
             },
@@ -1512,9 +1530,9 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 )],
             },
             "controller": {
-                "path": str(self.project_root /
+                "path": str(self.collection_project_root /
                             "scripts/run-top100-reference-sweeps.py"),
-                **record(self.project_root /
+                **record(self.collection_project_root /
                           "scripts/run-top100-reference-sweeps.py"),
                 "python": MODULE.runtime_file_record(
                     Path("/usr/bin/python3"), "fixture collection Python"),
@@ -1681,6 +1699,48 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         receipt_artifact.update(record(receipt_path))
         self._refresh_approval_bindings("adversarial all-plan rewrite fixture")
 
+    def rewrite_all_reference_candidates(self, mutate) -> None:
+        """Rebind collection receipts after an adversarial candidate rewrite."""
+        receipt_artifact = self.approval["collection_evidence"]["receipt"]
+        receipt_path = self.candle_root / receipt_artifact["path"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        for target_index, approved in enumerate(self.approval["targets"]):
+            for run_index, run in enumerate(approved["reference_runs"]):
+                artifacts = run["artifacts"]
+                candidate_path = self.candle_root / artifacts["candidate"]["path"]
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+                mutate(candidate)
+                candidate_bytes = (json.dumps(candidate, indent=2) + "\n").encode()
+                candidate_path.write_bytes(candidate_bytes)
+                artifacts["candidate"].update(record(candidate_path))
+
+                success_path = self.candle_root / artifacts[
+                    "controller_success"]["path"]
+                success = json.loads(success_path.read_text(encoding="utf-8"))
+                success["artifacts"]["candidate"] = {
+                    "path": candidate_path.relative_to(
+                        self.approval_root).as_posix(),
+                    **record(candidate_path),
+                }
+                success_path.write_bytes(MODULE.canonical_json_bytes(success))
+                artifacts["controller_success"].update(record(success_path))
+
+                aggregate = receipt["sweeps"][run_index]["targets"][
+                    target_index]["success"]
+                aggregate["receipt"] = {
+                    "path": success_path.relative_to(
+                        self.approval_root).as_posix(),
+                    **record(success_path),
+                }
+                aggregate["artifacts"]["candidate"] = deepcopy(
+                    success["artifacts"]["candidate"],
+                )
+        receipt_path.write_bytes(MODULE.canonical_json_bytes(receipt))
+        receipt_artifact.update(record(receipt_path))
+        self._refresh_approval_bindings(
+            "adversarial all-candidate rewrite fixture",
+        )
+
     def replace_collection_artifact(self, name: str, value: bytes) -> None:
         artifact = self.approval["collection_evidence"][name]
         path = self.candle_root / artifact["path"]
@@ -1704,6 +1764,15 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         receipt_path.write_bytes(MODULE.canonical_json_bytes(receipt))
         receipt_artifact.update(record(receipt_path))
         self._refresh_approval_bindings("mutated collection documents fixture")
+
+    def collection_documents(self) -> tuple[dict, dict]:
+        evidence = self.approval["collection_evidence"]
+        return tuple(
+            json.loads((self.candle_root / evidence[name]["path"]).read_text(
+                encoding="utf-8",
+            ))
+            for name in ("contract", "receipt")
+        )
 
     def _refresh_approval_bindings(self, commit_message: str) -> None:
         self.write_approval(update_reports=False)
@@ -1951,6 +2020,11 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         )
         self.original_program = MODULE.PROGRAM_PATH
         self.original_hook = MODULE._TEST_AFTER_CONTRACT_CAPTURE
+        self.original_collection_project_head = MODULE.COLLECTION_PROJECT_HEAD
+        self.original_collection_controller_bytes = \
+            MODULE.COLLECTION_CONTROLLER_BYTES
+        self.original_collection_controller_sha256 = \
+            MODULE.COLLECTION_CONTROLLER_SHA256
         self.fixture = Fixture(Path(self.temporary.name))
         MODULE.PROGRAM_PATH = self.fixture.program_path
         MODULE._TEST_AFTER_CONTRACT_CAPTURE = None
@@ -1958,6 +2032,11 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
     def tearDown(self) -> None:
         MODULE.PROGRAM_PATH = self.original_program
         MODULE._TEST_AFTER_CONTRACT_CAPTURE = self.original_hook
+        MODULE.COLLECTION_PROJECT_HEAD = self.original_collection_project_head
+        MODULE.COLLECTION_CONTROLLER_BYTES = \
+            self.original_collection_controller_bytes
+        MODULE.COLLECTION_CONTROLLER_SHA256 = \
+            self.original_collection_controller_sha256
         self.temporary.cleanup()
 
     def assert_rejected(self, pattern: str | None = None) -> None:
@@ -1992,6 +2071,12 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             MODULE.parse_wire_record("\t".join(fields), "EGCD")
 
     def test_archives_two_complete_schema4_runs_and_exact_inventory(self) -> None:
+        self.assertNotEqual(
+            self.fixture.collection_project_head, self.fixture.project_head,
+        )
+        self.assertNotEqual(
+            self.fixture.collection_project_root, self.fixture.project_root,
+        )
         self.fixture.finalize()
         bundle_path = self.fixture.destination / "bundle.json"
         bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
@@ -2031,6 +2116,10 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
                 (self.fixture.destination /
                  external[key]["archive_path"]).is_file(),
             )
+        for artifact in external["csdp_probe_artifacts"].values():
+            retained = self.fixture.destination / artifact["archive_path"]
+            self.assertTrue(retained.is_file())
+            self.assertEqual(digest(retained.read_bytes()), artifact["sha256"])
         self.assertEqual(
             external["thread_policy"]["environment"],
             MODULE.THREAD_CAP_ENVIRONMENT,
@@ -2433,6 +2522,30 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.rewrite_all_reference_plans(confuse_boolean)
         self.assert_rejected("CSDP build statement")
 
+    def test_reference_probe_return_code_type_confusion_rejects(self) -> None:
+        def confuse_return_codes(plan: dict) -> None:
+            external = plan["reference"]["external_runtime"]
+            external["probe"]["return_code"] = False
+            external["csdp_probe"]["return_code"] = 0.0
+
+        self.fixture.rewrite_all_reference_plans(confuse_return_codes)
+        self.assert_rejected("PARI/GP probe|CSDP probe")
+
+    def test_reference_thread_policy_type_confusion_rejects(self) -> None:
+        def confuse_thread_policy(plan: dict) -> None:
+            policy = plan["reference"]["external_runtime"]["thread_policy"]
+            policy["single_process_solver"] = 1
+            policy["openmp_enabled"] = 0
+
+        self.fixture.rewrite_all_reference_plans(confuse_thread_policy)
+        self.assert_rejected("CSDP thread policy")
+
+    def test_candidate_exit_code_type_confusion_rejects(self) -> None:
+        self.fixture.rewrite_all_reference_candidates(
+            lambda candidate: candidate.update(process_exit_code=False),
+        )
+        self.assert_rejected("malformed candidate process exit code")
+
     def test_omitted_elf_dependency_is_rejected_after_complete_rehash(self) -> None:
         def omit_dependency(plan: dict) -> None:
             closure = plan["reference"]["external_runtime"]["elf_runtime"][
@@ -2504,6 +2617,61 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             "receipt", MODULE.canonical_json_bytes(receipt))
         self.assert_rejected("not closed and exact")
 
+    def test_collection_contract_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        for field in (
+                "schema", "sweep_count", "target_count",
+                "total_target_runs"):
+            contract[field] = float(contract[field])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("malformed reference collection contract")
+
+    def test_collection_inventory_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        inventory = contract["inventory"]
+        for field in ("target_count", "source_count", "request_count"):
+            inventory[field] = float(inventory[field])
+        inventory["targets"][0]["index"] = \
+            float(inventory["targets"][0]["index"])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("inventory differs from manifest")
+
+    def test_collection_receipt_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        for field in (
+                "schema", "sweep_count", "target_count", "total_target_runs",
+                "completed_target_runs", "pending_target_runs",
+                "failure_attempt_count"):
+            receipt[field] = float(receipt[field])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("not closed and exact")
+
+    def test_collection_sweep_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        sweep = receipt["sweeps"][0]
+        for field in (
+                "sweep", "target_count", "completed_count", "pending_count"):
+            sweep[field] = float(sweep[field])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("malformed closed reference sweep")
+
+    def test_collection_target_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        row = receipt["sweeps"][0]["targets"][0]
+        row["index"] = float(row["index"])
+        row["attempt_count"] = float(row["attempt_count"])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("malformed reference collection target success")
+
+    def test_collection_runtime_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        external = contract["external_runtime"]
+        external["csdp_probe"]["return_code"] = False
+        external["thread_policy"]["single_process_solver"] = 1
+        external["thread_policy"]["openmp_enabled"] = 0
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("external-runtime environment|CSDP probe")
+
     def test_fabricated_collection_contract_is_rejected_after_rehash(self) -> None:
         contract_path = self.fixture.candle_root / self.fixture.approval[
             "collection_evidence"]["contract"]["path"]
@@ -2519,7 +2687,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         contract["runtime"] = {"fabricated": True}
         contract["controller"] = {"fabricated": True}
         self.fixture.replace_collection_documents(contract, receipt)
-        self.assert_rejected("committed project")
+        self.assert_rejected("authorized launch commit")
 
     def test_alternate_committed_controller_is_rejected_after_rehash(self) -> None:
         alternate = self.fixture.root / "alternate-controller-project"
@@ -2555,7 +2723,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             "path": str(controller_path), **record(controller_path),
         })
         self.fixture.replace_collection_documents(contract, receipt)
-        self.assert_rejected("authorized finalizer project")
+        self.assert_rejected("authorized launch commit")
 
     def test_reference_checkout_and_sources_are_live_authenticated(self) -> None:
         source = self.fixture.reference_root / self.fixture.manifest[

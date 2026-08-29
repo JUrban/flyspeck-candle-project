@@ -149,6 +149,10 @@ APPROVAL_REVIEW_KEYS = {"reviewer", "approved_utc", "review_commit", "decision"}
 APPROVAL_TARGET_KEYS = {"name", "reference_runs", "expected_identity"}
 COLLECTION_EVIDENCE_KEYS = {"contract", "receipt"}
 COLLECTION_CONTROLLER_PATH = "scripts/run-top100-reference-sweeps.py"
+COLLECTION_PROJECT_HEAD = "95bb84fffade845406af92305baea0a9686ef21f"
+COLLECTION_CONTROLLER_BYTES = 109742
+COLLECTION_CONTROLLER_SHA256 = \
+    "a703c01f1153bd8774f2f1ab4342950469011cbfee6d7f605485cc71d87f6301"
 COLLECTION_CANDLE_PATHS = {
     "collector": ("candle/reference_fingerprints.py", "100644"),
     "protocol": ("candle/reference_protocol.py", "100644"),
@@ -1881,6 +1885,7 @@ def validate_elf_runtime_structure(
             "stdout_sha256", "normalized_stdout", "normalized_stdout_sha256",
             "stderr", "stderr_sha256", "resolved_files", "virtual_objects",
         } and observation["environment"] == evidence["environment"] and
+                is_int(observation["return_code"]) and
                 observation["return_code"] == 0 and
                 isinstance(observation["stdout"], str) and
                 hashlib.sha256(observation["stdout"].encode()).hexdigest() ==
@@ -2173,7 +2178,7 @@ def validate_reference_plan_bindings(
                 }, probe_input,
             ), f"malformed reference CSDP build for {name}")
     thread_policy = external["thread_policy"]
-    require(thread_policy == {
+    expected_thread_policy = {
         "single_process_solver": True,
         "single_thread_build": True,
         "openmp_enabled": False,
@@ -2181,14 +2186,19 @@ def validate_reference_plan_bindings(
         "environment": THREAD_CAP_ENVIRONMENT,
         "forbidden_elf_dependency_name_fragments":
             list(CSDP_FORBIDDEN_ELF_FRAGMENTS),
-    }, f"malformed reference CSDP thread policy for {name}")
+    }
+    require(thread_policy == expected_thread_policy and
+            canonical_json_bytes(thread_policy) ==
+            canonical_json_bytes(expected_thread_policy),
+            f"malformed reference CSDP thread policy for {name}")
     probe = external["probe"]
     probe_source = \
         "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp"
     require(isinstance(probe, dict) and set(probe) == {
         "shell_argv", "environment", "return_code", "stdout",
         "stdout_sha256", "stderr", "stderr_sha256",
-    } and probe["return_code"] == 0 and isinstance(probe["stdout"], str) and
+    } and is_int(probe["return_code"]) and probe["return_code"] == 0 and
+            isinstance(probe["stdout"], str) and
             re.search(r"(?:^|\n)1\n", probe["stdout"]) is not None and
             "[3, 1; 5, 1]" in probe["stdout"] and
             hashlib.sha256(probe["stdout"].encode()).hexdigest() ==
@@ -2223,6 +2233,7 @@ def validate_reference_plan_bindings(
         external["csdp"]["argument_path"], probe_input["path"],
         "<private-temporary-output>",
     ] and csdp_probe["environment"] == probe["environment"] and
+            is_int(csdp_probe["return_code"]) and
             csdp_probe["return_code"] == 0 and
             isinstance(csdp_probe["normalized_stdout"], str) and
             f"{CSDP_PROBE_SUCCESS}\n" in csdp_probe["normalized_stdout"] and
@@ -2539,7 +2550,22 @@ def capture_reference_external_runtime(
         solution_identity = stable_file_identity(
             solution, "CSDP probe solution",
         )
+        solution_snapshot = stager.capture(
+            solution,
+            "approval/reference-runtime/csdp-live-probe/solution",
+            "CSDP live-probe solution",
+        )
+        require(solution_snapshot.identity == solution_identity,
+                "CSDP live-probe solution changed during capture")
     normalized_csdp = normalize_csdp_probe_stdout(completed_csdp.stdout)
+    csdp_stdout_identity = stager.write(
+        "approval/reference-runtime/csdp-live-probe/stdout",
+        completed_csdp.stdout.encode(),
+    )
+    csdp_stderr_identity = stager.write(
+        "approval/reference-runtime/csdp-live-probe/stderr",
+        completed_csdp.stderr.encode(),
+    )
     observed_csdp_probe = {
         "argv_template": [
             external["csdp"]["argument_path"],
@@ -2728,6 +2754,22 @@ def capture_reference_external_runtime(
         "csdp_build_statement": build_statement,
         "thread_policy": external["thread_policy"],
         "csdp_probe": observed_csdp_probe,
+        "csdp_probe_artifacts": {
+            "solution": {
+                "archive_path": solution_snapshot.archive_path,
+                **solution_snapshot.identity.as_json(),
+            },
+            "stdout": {
+                "archive_path":
+                    "approval/reference-runtime/csdp-live-probe/stdout",
+                **csdp_stdout_identity.as_json(),
+            },
+            "stderr": {
+                "archive_path":
+                    "approval/reference-runtime/csdp-live-probe/stderr",
+                **csdp_stderr_identity.as_json(),
+            },
+        },
     }
 
 
@@ -2999,14 +3041,35 @@ def authenticate_collection_contract(
             Path(project["root"]).is_absolute(),
             "malformed collection project contract")
     project_root = Path(project["root"])
-    require(project_root == trusted_project_root and
-            project["git_head"] == trusted_project_head,
-            "collection controller is not from the authorized finalizer project")
+    require(project["git_head"] == COLLECTION_PROJECT_HEAD,
+            "collection controller is not the authorized launch commit")
+    validate_git_checkout(
+        project_root, COLLECTION_PROJECT_HEAD,
+        "collection controller checkout",
+    )
+    try:
+        ancestry = subprocess.run(
+            git_command(
+                trusted_project_root, "merge-base", "--is-ancestor",
+                COLLECTION_PROJECT_HEAD, trusted_project_head,
+            ),
+            env=git_environment(), stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=120, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValidationError(
+            "collection/finalizer ancestry check could not run",
+        ) from error
+    require(ancestry.returncode == 0 and ancestry.stdout == b"" and
+            ancestry.stderr == b"",
+            "collection launch commit is not an ancestor of the finalizer")
     controller_record, controller_source = committed_file_at(
         project_root, project["git_head"], COLLECTION_CONTROLLER_PATH,
         "100755", "collection controller",
     )
-    require(project["controller"] == controller_record,
+    require(project["controller"] == controller_record and
+            controller_record["bytes"] == COLLECTION_CONTROLLER_BYTES and
+            controller_record["sha256"] == COLLECTION_CONTROLLER_SHA256,
             "collection controller does not match its committed project")
     controller = contract["controller"]
     require(isinstance(controller, dict) and set(controller) == {
@@ -3264,6 +3327,15 @@ def authenticate_collection_contract(
                 external["csdp"], external["csdp_probe_input"],
             ), "collection CSDP build contract changed or is malformed")
     package_root = Path(external["package_tree"]["root"])
+    expected_thread_policy = {
+        "single_process_solver": True,
+        "single_thread_build": True,
+        "openmp_enabled": False,
+        "native_cpu_flags": False,
+        "environment": THREAD_CAP_ENVIRONMENT,
+        "forbidden_elf_dependency_name_fragments":
+            list(CSDP_FORBIDDEN_ELF_FRAGMENTS),
+    }
     require(external["data_tree"]["root_mode"] == 0o555 and
             external["data_tree"]["entry_count"] == 0 and
             external["command_shell"]["argument_path"] == "/bin/sh" and
@@ -3281,15 +3353,9 @@ def authenticate_collection_contract(
             str(package_root / "candle-csdp-build.json") and
             external["csdp_probe_input"]["argument_path"] ==
             str(package_root / "candle-csdp-theta1.dat-s") and
-            external["thread_policy"] == {
-                "single_process_solver": True,
-                "single_thread_build": True,
-                "openmp_enabled": False,
-                "native_cpu_flags": False,
-                "environment": THREAD_CAP_ENVIRONMENT,
-                "forbidden_elf_dependency_name_fragments":
-                    list(CSDP_FORBIDDEN_ELF_FRAGMENTS),
-            } and
+            external["thread_policy"] == expected_thread_policy and
+            canonical_json_bytes(external["thread_policy"]) ==
+            canonical_json_bytes(expected_thread_policy) and
             external["runtime_environment"] == {
                 "PATH": str(Path(external["pari_gp"]["argument_path"]).parent),
                 "GPRC": external["configuration"]["path"],
@@ -3307,7 +3373,8 @@ def authenticate_collection_contract(
     ] and csdp_probe["environment"] == {
         "HOME": reference["root"], "LC_ALL": "C",
         **external["runtime_environment"],
-    } and csdp_probe["return_code"] == 0 and
+    } and is_int(csdp_probe["return_code"]) and
+            csdp_probe["return_code"] == 0 and
             isinstance(csdp_probe["normalized_stdout"], str) and
             hashlib.sha256(csdp_probe["normalized_stdout"].encode()).hexdigest() ==
             csdp_probe["normalized_stdout_sha256"] and
@@ -3434,7 +3501,9 @@ def capture_collection_evidence(
             "project", "candle", "reference", "runtime", "external_runtime",
             "elf_oracle",
             "deadlines", "inventory", "controller",
-    } and contract["schema"] == 4 and
+    } and all(is_int(contract[field]) for field in (
+        "schema", "sweep_count", "target_count", "total_target_runs",
+    )) and contract["schema"] == 4 and
             contract["kind"] ==
             "candle-great100-two-sweep-reference-collection" and
             contract["approval_status"] ==
@@ -3472,7 +3541,9 @@ def capture_collection_evidence(
     }
     require(expected_inventory["source_count"] == 66 and
             expected_inventory["request_count"] == 97 and
-            inventory == expected_inventory,
+            inventory == expected_inventory and
+            canonical_json_bytes(inventory) ==
+            canonical_json_bytes(expected_inventory),
             "reference collection inventory differs from manifest")
     authenticated_contract = authenticate_collection_contract(
         contract, approval["reference_policy"], inventory,
@@ -3484,12 +3555,17 @@ def capture_collection_evidence(
         "pending_target_runs", "failure_attempt_count", "failures",
         "publication_interruptions", "outcome", "closed", "approval_status",
         "promotion_allowed", "sweeps",
-    } and receipt["schema"] == 1 and
+    } and all(is_int(receipt[field]) for field in (
+        "schema", "sweep_count", "target_count", "total_target_runs",
+        "completed_target_runs", "pending_target_runs",
+        "failure_attempt_count",
+    )) and receipt["schema"] == 1 and
             receipt["kind"] ==
             "candle-great100-two-sweep-reference-receipt" and
             receipt["contract_sha256"] == compact_json_sha256(contract) and
             isinstance(receipt["contract"], dict) and
             receipt["contract"].get("path") == "collection-contract.json" and
+            is_int(receipt["contract"].get("bytes")) and
             receipt["contract"].get("bytes") == captured["contract"].identity.bytes and
             receipt["contract"].get("sha256") ==
             captured["contract"].identity.sha256 and
@@ -3512,7 +3588,9 @@ def capture_collection_evidence(
         require(isinstance(sweep, dict) and set(sweep) == {
             "sweep", "target_count", "completed_count", "pending_count",
             "targets",
-        } and sweep["sweep"] == sweep_index and
+        } and all(is_int(sweep[field]) for field in (
+            "sweep", "target_count", "completed_count", "pending_count",
+        )) and sweep["sweep"] == sweep_index and
                 sweep["target_count"] == 65 and
                 sweep["completed_count"] == 65 and
                 sweep["pending_count"] == 0 and
@@ -3524,7 +3602,8 @@ def capture_collection_evidence(
             require(isinstance(row, dict) and set(row) == {
                 "index", "name", "state", "attempt_count", "success",
                 "attempts",
-            } and row["index"] == target_index and
+            } and is_int(row["index"]) and is_int(row["attempt_count"]) and
+                    row["index"] == target_index and
                     row["name"] == target["name"] and
                     row["state"] == "complete" and
                     row["attempt_count"] == 1 and
@@ -3659,7 +3738,7 @@ def validate_approval_and_capture(
                 "artifacts", "reference_git_head", "session_nonce",
                 "identity_sha256", "sweep",
             }, f"malformed reference run for {name}")
-            require(run["sweep"] == run_index,
+            require(is_int(run["sweep"]) and run["sweep"] == run_index,
                     f"reference run sweep mismatch for {name}")
             require(run["reference_git_head"] == exact_reference,
                     f"reference run head mismatch for {name}")
@@ -3719,6 +3798,10 @@ def validate_approval_and_capture(
                 stage, captured_artifacts["candidate"],
                 f"{name} reference candidate run {run_index}",
             )
+            require(isinstance(candidate, dict) and
+                    is_int(candidate.get("process_exit_code")) and
+                    candidate["process_exit_code"] == 0,
+                    f"malformed candidate process exit code for {name}")
             plan = snapshot_json(
                 stage, captured_artifacts["plan"],
                 f"{name} reference plan run {run_index}",
@@ -3741,6 +3824,7 @@ def validate_approval_and_capture(
                     set(aggregate_receipt) == {"path", "bytes", "sha256"} and
                     aggregate_receipt["path"] ==
                     aggregate_success["receipt_path"] and
+                    is_int(aggregate_receipt.get("bytes")) and
                     aggregate_receipt.get("bytes") ==
                     captured_artifacts["controller_success"].identity.bytes and
                     aggregate_receipt.get("sha256") ==
@@ -3754,7 +3838,9 @@ def validate_approval_and_capture(
                 "session_nonce", "artifacts", "collector_stdout",
                 "collector_stderr", "validator_stdout", "validator_stderr",
                 "deadlines", "approval_status", "promotion_allowed",
-            } and success_receipt["schema"] == 1 and
+            } and all(is_int(success_receipt[field]) for field in (
+                "schema", "sweep", "target_index",
+            )) and success_receipt["schema"] == 1 and
                     success_receipt["kind"] ==
                     "candle-reference-attempt-success" and
                     success_receipt["sweep"] == run_index and
@@ -3778,6 +3864,7 @@ def validate_approval_and_capture(
                     "path", "bytes", "sha256"} and
                         collection_root / record["path"] ==
                         root / artifacts[artifact_name]["path"] and
+                        is_int(record.get("bytes")) and
                         record.get("bytes") == snapshot.identity.bytes and
                         record.get("sha256") == snapshot.identity.sha256 and
                         aggregate_record == record,
@@ -3791,6 +3878,7 @@ def validate_approval_and_capture(
                     "path", "bytes", "sha256"} and
                         collection_root / record["path"] ==
                         root / artifacts[artifact_name]["path"] and
+                        is_int(record.get("bytes")) and
                         record.get("bytes") == snapshot.identity.bytes and
                         record.get("sha256") == snapshot.identity.sha256,
                         f"controller receipt does not bind {name} {artifact_name}")
