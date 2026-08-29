@@ -50,7 +50,7 @@ def git(root: Path, *arguments: str) -> str:
 
 
 def elf_evidence(roots: list[Path]) -> dict:
-    """Build real host-backed v8 ELF evidence for finalizer fixtures."""
+    """Build real host-backed ELF evidence for finalizer fixtures."""
     bash = MODULE.executable_route_record(Path("/bin/bash"), "fixture ELF bash")
     ldd = MODULE.executable_route_record(Path("/usr/bin/ldd"), "fixture ELF ldd")
     loaders = []
@@ -190,6 +190,19 @@ class Fixture:
         self._commit_candle_repository()
         self.collection_candle_head = self.candle_head
         self._create_approval()
+        reviewer_validator = self.candle / "reference_fingerprints.py"
+        reviewer_validator.write_bytes(
+            reviewer_validator.read_bytes() +
+            b"\n# compatible descendant reviewer hardening fixture\n"
+        )
+        reviewer_identity = record(reviewer_validator)
+        MODULE.REVIEWER_VALIDATOR_BYTES = reviewer_identity["bytes"]
+        MODULE.REVIEWER_VALIDATOR_SHA256 = reviewer_identity["sha256"]
+        reviewer_protocol_identity = record(
+            self.candle / "reference_protocol.py",
+        )
+        MODULE.REVIEWER_PROTOCOL_BYTES = reviewer_protocol_identity["bytes"]
+        MODULE.REVIEWER_PROTOCOL_SHA256 = reviewer_protocol_identity["sha256"]
         for target in self.manifest["targets"]:
             target["fingerprint_request"]["expected_identities"][
                 "approval_sha256"
@@ -236,8 +249,26 @@ class Fixture:
         git(self.project_root, "config", "user.email", "fixture@example.invalid")
         git(self.project_root, "config", "user.name", "fixture")
         git(self.project_root, "add", ".")
-        git(self.project_root, "commit", "-qm", "fixture finalizer")
+        git(self.project_root, "commit", "-qm", "fixture collection launch")
+        self.collection_project_head = git(
+            self.project_root, "rev-parse", "HEAD",
+        )
+        controller_record = record(controller_path)
+        MODULE.COLLECTION_PROJECT_HEAD = self.collection_project_head
+        MODULE.COLLECTION_CONTROLLER_BYTES = controller_record["bytes"]
+        MODULE.COLLECTION_CONTROLLER_SHA256 = controller_record["sha256"]
+        self._write(
+            self.project_root, "docs/finalizer-revision.md",
+            b"later finalizer authority fixture\n",
+        )
+        git(self.project_root, "add", ".")
+        git(self.project_root, "commit", "-qm", "later fixture finalizer")
         self.project_head = git(self.project_root, "rev-parse", "HEAD")
+        self.collection_project_root = self.root / "collection-launch-project"
+        git(
+            self.project_root, "worktree", "add", "--detach",
+            str(self.collection_project_root), self.collection_project_head,
+        )
 
     @staticmethod
     def _wire_record(name: str, index: int, theorem_index: int) -> tuple[str, dict]:
@@ -468,8 +499,8 @@ import regression
 
 SESSION_MARKER = "CANDLE_REFERENCE_SESSION_V1"
 COMPLETE_MARKER = "CANDLE_REFERENCE_COMPLETE_V1"
-PLAN_SCHEMA = "candle-s1-reference-plan-v8"
-CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v8"
+PLAN_SCHEMA = "candle-s1-reference-plan-v9"
+CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v9"
 
 
 class CollectionError(Exception):
@@ -872,11 +903,21 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         self.collection_candle_head = git(
             self.candle_root, "rev-parse", "HEAD",
         )
-        collector = self.candle / "reference_fingerprints.py"
+        MODULE.COLLECTION_CANDLE_HEAD = self.collection_candle_head
+        self.collection_candle_root = self.root / "collection-candle-producer"
+        git(
+            self.candle_root, "worktree", "add", "--detach",
+            str(self.collection_candle_root), self.collection_candle_head,
+        )
+        collection_candle = self.collection_candle_root / "candle"
+        collector = collection_candle / "reference_fingerprints.py"
         collector_sha256 = digest(collector.read_bytes())
-        protocol = self.candle / "reference_protocol.py"
+        protocol = collection_candle / "reference_protocol.py"
         protocol_sha256 = digest(protocol.read_bytes())
-        manifest_pin = self.candle / "top100_manifest.json"
+        manifest_pin = collection_candle / "top100_manifest.json"
+        producer_serializer = collection_candle / "fingerprint.ml"
+        producer_source_contract = collection_candle / \
+            "reference_source_contracts.json"
         runtime = self._write(
             reference_root, "ocaml-hol", b"#!/bin/sh\nexit 0\n")
         runtime.chmod(0o755)
@@ -920,6 +961,90 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         (gp_bin / "gp").symlink_to("gp-2.15")
+        csdp_source = self._write(
+            gp_root, "candle-csdp-source.tar.gz", b"fixture CSDP source\n",
+        )
+        csdp_source.chmod(0o444)
+        csdp_probe_input = self._write(
+            gp_root, "candle-csdp-theta1.dat-s", b"fixture theta1 input\n",
+        )
+        csdp_probe_input.chmod(0o444)
+        csdp_program = self._write(
+            gp_root, "usr/bin/csdp-fixture.c",
+            (b'#include <stdio.h>\n'
+             b'int main(int argc, char **argv) {\n'
+             b'  if (argc != 3) return 2;\n'
+             b'  FILE *out = fopen(argv[2], "wb");\n'
+             b'  if (!out) return 3;\n'
+             b'  fputs("fixture csdp solution\\n", out); fclose(out);\n'
+             b'  puts("CSDP 6.2.0");\n'
+             b'  puts("Success: SDP solved");\n'
+             b'  puts("Primal objective value: 2.3000000e+01 ");\n'
+             b'  puts("Dual objective value: 2.3000000e+01 ");\n'
+             b'  puts("Elements time: 0.01 ");\n'
+             b'  puts("Factor time: 0.02 ");\n'
+             b'  puts("Other time: 0.03 ");\n'
+             b'  puts("Total time: 0.06 ");\n'
+             b'  return 0;\n}\n'),
+        )
+        csdp_executable = gp_root / "usr/bin/csdp"
+        subprocess.run(
+            ["/usr/bin/cc", "-O0", "-o", str(csdp_executable),
+             str(csdp_program)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        csdp_executable.chmod(0o555)
+        csdp_solution = b"fixture csdp solution\n"
+        csdp_normalized_stdout = (
+            "CSDP 6.2.0\n"
+            "Success: SDP solved\n"
+            "Primal objective value: 2.3000000e+01 \n"
+            "Dual objective value: 2.3000000e+01 \n"
+            "Elements time: <measured>\n"
+            "Factor time: <measured>\n"
+            "Other time: <measured>\n"
+            "Total time: <measured>\n"
+        )
+        csdp_build_statement = {
+            "schema": 1,
+            "kind": MODULE.CSDP_BUILD_KIND,
+            "source": {
+                "archive": csdp_source.name,
+                "bytes": csdp_source.stat().st_size,
+                "sha256": digest(csdp_source.read_bytes()),
+                "ubuntu_source_package":
+                    "coinor-csdp 6.2.0-5build1 (Noble)",
+                "upstream_tree": "Csdp-6.2.0",
+            },
+            "toolchain": deepcopy(MODULE.CSDP_TOOLCHAIN),
+            "recipe": deepcopy(MODULE.CSDP_RECIPE),
+            "outputs": {
+                "csdp_path": "usr/bin/csdp",
+                "csdp_bytes": csdp_executable.stat().st_size,
+                "csdp_sha256": digest(csdp_executable.read_bytes()),
+                "static_libsdp_sha256": MODULE.CSDP_STATIC_LIBSDP_SHA256,
+            },
+            "unit_probe": {
+                "input_path": csdp_probe_input.name,
+                "input_bytes": csdp_probe_input.stat().st_size,
+                "input_sha256": digest(csdp_probe_input.read_bytes()),
+                "exit_code": 0,
+                "success_line": MODULE.CSDP_PROBE_SUCCESS,
+                "primal_objective": MODULE.CSDP_PROBE_PRIMAL,
+                "dual_objective": MODULE.CSDP_PROBE_DUAL,
+                "maximum_allowed_dimacs_error": "1.0e-6",
+            },
+            "runtime_policy": {
+                "single_process_solver": True,
+                "single_thread_build": True,
+                "external_shared_libraries_closed_separately": True,
+            },
+        }
+        csdp_build_receipt = self._write(
+            gp_root, "candle-csdp-build.json",
+            MODULE.canonical_json_bytes(csdp_build_statement),
+        )
+        csdp_build_receipt.chmod(0o444)
         gprc = self._write(
             gp_root, "candle-gprc", b"\\\\ pinned fixture configuration\n",
         )
@@ -945,6 +1070,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             "LC_ALL": "C",
             "GPRC": str(gprc),
             "GP_DATA_DIR": str(data_root),
+            **MODULE.THREAD_CAP_ENVIRONMENT,
         }
         probe_source = (
             "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp")
@@ -952,10 +1078,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             shell.resolve(), runtime_stub, runtime_stublib,
         ])
         external_elf_runtime = elf_evidence([
-            shell.resolve(), gp_executable.resolve(),
+            shell.resolve(), gp_executable.resolve(), csdp_executable,
         ])
         external_runtime = {
-            "policy": "single_private_path_gp_with_pinned_shell_v2",
+            "policy": MODULE.EXTERNAL_RUNTIME_POLICY,
             "command_shell": MODULE.executable_route_record(shell, "fixture shell"),
             "pari_gp": MODULE.executable_route_record(
                 gp_bin / "gp", "fixture PARI/GP",
@@ -963,6 +1089,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             "pari_gp_version": {
                 "stdout": "2.15.4\n", "sha256": digest(b"2.15.4\n"),
             },
+            "csdp": MODULE.executable_route_record(
+                csdp_executable, "fixture CSDP",
+            ),
+            "csdp_bytes": csdp_executable.stat().st_size,
             "package_archive": {
                 "path": str(package_archive),
                 "sha256": digest(package_archive.read_bytes()),
@@ -972,6 +1102,32 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "path": str(gprc), "sha256": digest(gprc.read_bytes()),
             },
             "data_tree": data_tree,
+            "csdp_source_archive": {
+                "path": str(csdp_source),
+                "sha256": digest(csdp_source.read_bytes()),
+                "bytes": csdp_source.stat().st_size,
+            },
+            "csdp_build": {
+                "receipt": {
+                    "path": str(csdp_build_receipt),
+                    "sha256": digest(csdp_build_receipt.read_bytes()),
+                },
+                "statement": csdp_build_statement,
+            },
+            "csdp_probe_input": {
+                "path": str(csdp_probe_input),
+                "sha256": digest(csdp_probe_input.read_bytes()),
+                "bytes": csdp_probe_input.stat().st_size,
+            },
+            "thread_policy": {
+                "single_process_solver": True,
+                "single_thread_build": True,
+                "openmp_enabled": False,
+                "native_cpu_flags": False,
+                "environment": deepcopy(MODULE.THREAD_CAP_ENVIRONMENT),
+                "forbidden_elf_dependency_name_fragments":
+                    list(MODULE.CSDP_FORBIDDEN_ELF_FRAGMENTS),
+            },
             "elf_runtime": external_elf_runtime,
             "probe": {
                 "shell_argv": [str(shell), "-c", probe_source],
@@ -979,6 +1135,22 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "return_code": 0, "stdout": gp_stdout,
                 "stdout_sha256": digest(gp_stdout.encode()),
                 "stderr": "", "stderr_sha256": digest(b""),
+            },
+            "csdp_probe": {
+                "argv_template": [
+                    str(csdp_executable), str(csdp_probe_input),
+                    "<private-temporary-output>",
+                ],
+                "environment": deepcopy(external_environment),
+                "return_code": 0,
+                "normalized_stdout": csdp_normalized_stdout,
+                "normalized_stdout_sha256": digest(
+                    csdp_normalized_stdout.encode()),
+                "stderr": "", "stderr_sha256": digest(b""),
+                "solution": {
+                    "bytes": len(csdp_solution),
+                    "sha256": digest(csdp_solution),
+                },
             },
         }
         collection_deadlines = {
@@ -997,7 +1169,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 nonce = f"{5000 + target_index * 2 + run_index:064x}"
                 request_source = "\n".join([
                     f"CANDLE_REFERENCE_SESSION_V1\t{nonce}",
-                    f"SERIALIZER {self.serializer_path.resolve()}",
+                    f"SERIALIZER {producer_serializer.resolve()}",
                     *(f"LOAD {path}" for path in target["load_files"]),
                     "THEOREMS " + ",".join(
                         theorem["name"]
@@ -1007,7 +1179,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "",
                 ])
                 plan = {
-                    "schema": "candle-s1-reference-plan-v8",
+                    "schema": "candle-s1-reference-plan-v9",
                     "status": "planned_not_executed",
                     "session_nonce": nonce,
                     "fresh_process_contract": {
@@ -1077,7 +1249,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                             "path": str(collector), "sha256": collector_sha256,
                         },
                         "collector_repository": {
-                            "root": str(self.candle_root),
+                            "root": str(self.collection_candle_root),
                             "git_head": self.collection_candle_head,
                             "git_status": [],
                             "collector_relative_path":
@@ -1107,13 +1279,12 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                         ],
                         "mapping_status": "audited",
                         "serializer": {
-                            "path": str(self.serializer_path),
+                            "path": str(producer_serializer),
                             "sha256": self.serializer_sha256,
                         },
                         "source_mode": "manifest-exact",
                         "source_contract": {
-                            "path": str(
-                                self.candle / "reference_source_contracts.json"),
+                            "path": str(producer_source_contract),
                             "sha256": digest(shared_source_contract.read_bytes()),
                             **reference_policy,
                         },
@@ -1145,7 +1316,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "approval_sha256": None,
                 }
                 candidate = {
-                    "schema": "candle-s1-reference-candidate-v8",
+                    "schema": "candle-s1-reference-candidate-v9",
                     "artifact_kind": "reference_identity_candidate",
                     "approval_status": "candidate_unapproved",
                     "promotion_allowed": False,
@@ -1280,23 +1451,23 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "expected_identity": expected_identity,
             })
         collection_contract = {
-            "schema": 3,
+            "schema": 4,
             "kind": "candle-great100-two-sweep-reference-collection",
             "approval_status": "candidate_collection_only_unapproved",
             "promotion_allowed": False,
             "sweep_count": 2, "target_count": 65,
             "total_target_runs": 130, "source_mode": "manifest-exact",
             "project": {
-                "root": str(self.project_root),
-                "git_head": self.project_head,
+                "root": str(self.collection_project_root),
+                "git_head": self.collection_project_head,
                 "controller": {
                     "path": "scripts/run-top100-reference-sweeps.py",
-                    **record(self.project_root /
+                    **record(self.collection_project_root /
                               "scripts/run-top100-reference-sweeps.py"),
                 },
             },
             "candle": {
-                "root": str(self.candle_root),
+                "root": str(self.collection_candle_root),
                 "git_head": self.collection_candle_head,
                 "collector": {"path": "candle/reference_fingerprints.py",
                               **record(collector)},
@@ -1305,10 +1476,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "manifest": {"path": "candle/top100_manifest.json",
                              **record(manifest_pin)},
                 "serializer": {"path": "candle/fingerprint.ml",
-                               **record(self.serializer_path)},
+                               **record(collection_candle / "fingerprint.ml")},
                 "source_contract": {
                     "path": "candle/reference_source_contracts.json",
-                    **record(self.candle /
+                    **record(collection_candle /
                               "reference_source_contracts.json")},
             },
             "reference": {"root": str(reference_root),
@@ -1330,15 +1501,33 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     shell, "fixture contract shell"),
                 "pari_gp": MODULE.runtime_file_record(
                     gp_bin / "gp", "fixture contract PARI/GP"),
+                "csdp": MODULE.runtime_file_record(
+                    csdp_executable, "fixture contract CSDP"),
                 "package_archive": MODULE.runtime_file_record(
                     package_archive, "fixture contract package archive"),
                 "package_tree": external_runtime["package_tree"],
                 "configuration": MODULE.runtime_file_record(
                     gprc, "fixture contract configuration"),
                 "data_tree": external_runtime["data_tree"],
+                "csdp_source_archive": MODULE.runtime_file_record(
+                    csdp_source, "fixture contract CSDP source"),
+                "csdp_build": {
+                    "receipt": MODULE.runtime_file_record(
+                        csdp_build_receipt,
+                        "fixture contract CSDP build receipt",
+                    ),
+                    "statement": deepcopy(csdp_build_statement),
+                },
+                "csdp_probe_input": MODULE.runtime_file_record(
+                    csdp_probe_input, "fixture contract CSDP probe input"),
+                "thread_policy": deepcopy(external_runtime["thread_policy"]),
+                "csdp_probe": deepcopy(external_runtime["csdp_probe"]),
                 "runtime_environment": {
                     key: external_environment[key]
-                    for key in ("PATH", "GPRC", "GP_DATA_DIR")},
+                    for key in (
+                        "PATH", "GPRC", "GP_DATA_DIR",
+                        *MODULE.THREAD_CAP_ENVIRONMENT,
+                    )},
             },
             "elf_oracle": MODULE.elf_oracle_projection(
                 external_elf_runtime,
@@ -1363,9 +1552,9 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 )],
             },
             "controller": {
-                "path": str(self.project_root /
+                "path": str(self.collection_project_root /
                             "scripts/run-top100-reference-sweeps.py"),
-                **record(self.project_root /
+                **record(self.collection_project_root /
                           "scripts/run-top100-reference-sweeps.py"),
                 "python": MODULE.runtime_file_record(
                     Path("/usr/bin/python3"), "fixture collection Python"),
@@ -1532,6 +1721,48 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         receipt_artifact.update(record(receipt_path))
         self._refresh_approval_bindings("adversarial all-plan rewrite fixture")
 
+    def rewrite_all_reference_candidates(self, mutate) -> None:
+        """Rebind collection receipts after an adversarial candidate rewrite."""
+        receipt_artifact = self.approval["collection_evidence"]["receipt"]
+        receipt_path = self.candle_root / receipt_artifact["path"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        for target_index, approved in enumerate(self.approval["targets"]):
+            for run_index, run in enumerate(approved["reference_runs"]):
+                artifacts = run["artifacts"]
+                candidate_path = self.candle_root / artifacts["candidate"]["path"]
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+                mutate(candidate)
+                candidate_bytes = (json.dumps(candidate, indent=2) + "\n").encode()
+                candidate_path.write_bytes(candidate_bytes)
+                artifacts["candidate"].update(record(candidate_path))
+
+                success_path = self.candle_root / artifacts[
+                    "controller_success"]["path"]
+                success = json.loads(success_path.read_text(encoding="utf-8"))
+                success["artifacts"]["candidate"] = {
+                    "path": candidate_path.relative_to(
+                        self.approval_root).as_posix(),
+                    **record(candidate_path),
+                }
+                success_path.write_bytes(MODULE.canonical_json_bytes(success))
+                artifacts["controller_success"].update(record(success_path))
+
+                aggregate = receipt["sweeps"][run_index]["targets"][
+                    target_index]["success"]
+                aggregate["receipt"] = {
+                    "path": success_path.relative_to(
+                        self.approval_root).as_posix(),
+                    **record(success_path),
+                }
+                aggregate["artifacts"]["candidate"] = deepcopy(
+                    success["artifacts"]["candidate"],
+                )
+        receipt_path.write_bytes(MODULE.canonical_json_bytes(receipt))
+        receipt_artifact.update(record(receipt_path))
+        self._refresh_approval_bindings(
+            "adversarial all-candidate rewrite fixture",
+        )
+
     def replace_collection_artifact(self, name: str, value: bytes) -> None:
         artifact = self.approval["collection_evidence"][name]
         path = self.candle_root / artifact["path"]
@@ -1555,6 +1786,15 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         receipt_path.write_bytes(MODULE.canonical_json_bytes(receipt))
         receipt_artifact.update(record(receipt_path))
         self._refresh_approval_bindings("mutated collection documents fixture")
+
+    def collection_documents(self) -> tuple[dict, dict]:
+        evidence = self.approval["collection_evidence"]
+        return tuple(
+            json.loads((self.candle_root / evidence[name]["path"]).read_text(
+                encoding="utf-8",
+            ))
+            for name in ("contract", "receipt")
+        )
 
     def _refresh_approval_bindings(self, commit_message: str) -> None:
         self.write_approval(update_reports=False)
@@ -1802,6 +2042,16 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         )
         self.original_program = MODULE.PROGRAM_PATH
         self.original_hook = MODULE._TEST_AFTER_CONTRACT_CAPTURE
+        self.original_collection_project_head = MODULE.COLLECTION_PROJECT_HEAD
+        self.original_collection_controller_bytes = \
+            MODULE.COLLECTION_CONTROLLER_BYTES
+        self.original_collection_controller_sha256 = \
+            MODULE.COLLECTION_CONTROLLER_SHA256
+        self.original_collection_candle_head = MODULE.COLLECTION_CANDLE_HEAD
+        self.original_reviewer_validator_bytes = MODULE.REVIEWER_VALIDATOR_BYTES
+        self.original_reviewer_validator_sha256 = MODULE.REVIEWER_VALIDATOR_SHA256
+        self.original_reviewer_protocol_bytes = MODULE.REVIEWER_PROTOCOL_BYTES
+        self.original_reviewer_protocol_sha256 = MODULE.REVIEWER_PROTOCOL_SHA256
         self.fixture = Fixture(Path(self.temporary.name))
         MODULE.PROGRAM_PATH = self.fixture.program_path
         MODULE._TEST_AFTER_CONTRACT_CAPTURE = None
@@ -1809,6 +2059,16 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
     def tearDown(self) -> None:
         MODULE.PROGRAM_PATH = self.original_program
         MODULE._TEST_AFTER_CONTRACT_CAPTURE = self.original_hook
+        MODULE.COLLECTION_PROJECT_HEAD = self.original_collection_project_head
+        MODULE.COLLECTION_CONTROLLER_BYTES = \
+            self.original_collection_controller_bytes
+        MODULE.COLLECTION_CONTROLLER_SHA256 = \
+            self.original_collection_controller_sha256
+        MODULE.COLLECTION_CANDLE_HEAD = self.original_collection_candle_head
+        MODULE.REVIEWER_VALIDATOR_BYTES = self.original_reviewer_validator_bytes
+        MODULE.REVIEWER_VALIDATOR_SHA256 = self.original_reviewer_validator_sha256
+        MODULE.REVIEWER_PROTOCOL_BYTES = self.original_reviewer_protocol_bytes
+        MODULE.REVIEWER_PROTOCOL_SHA256 = self.original_reviewer_protocol_sha256
         self.temporary.cleanup()
 
     def assert_rejected(self, pattern: str | None = None) -> None:
@@ -1816,6 +2076,18 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
                    if pattern else self.assertRaises(MODULE.ValidationError))
         with context:
             self.fixture.finalize()
+
+    def replace_reviewer_validator(self, value: bytes, message: str) -> None:
+        validator = self.fixture.candle / "reference_fingerprints.py"
+        validator.write_bytes(value)
+        git(self.fixture.candle_root, "add", "candle/reference_fingerprints.py")
+        git(self.fixture.candle_root, "commit", "-qm", message)
+        self.fixture.candle_head = git(
+            self.fixture.candle_root, "rev-parse", "HEAD",
+        )
+        for report in self.fixture.reports:
+            report["candle_git_head"] = self.fixture.candle_head
+        self.fixture.write_reports()
 
     def test_git_checkout_accepts_clean_linked_worktree(self) -> None:
         linked = self.fixture.root / "linked-finalizer-project"
@@ -1843,6 +2115,12 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             MODULE.parse_wire_record("\t".join(fields), "EGCD")
 
     def test_archives_two_complete_schema4_runs_and_exact_inventory(self) -> None:
+        self.assertNotEqual(
+            self.fixture.collection_project_head, self.fixture.project_head,
+        )
+        self.assertNotEqual(
+            self.fixture.collection_project_root, self.fixture.project_root,
+        )
         self.fixture.finalize()
         bundle_path = self.fixture.destination / "bundle.json"
         bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
@@ -1858,17 +2136,37 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.assertEqual(bundle["source_closure"]["closure_sha256"],
                          self.fixture.closure["sha256"])
         self.assertEqual(bundle["approval_replay"]["candidate_count"], 130)
+        authority = bundle["approval_replay"]["candle_authority"]
+        self.assertNotEqual(authority["producer"]["root"],
+                            authority["reviewer"]["root"])
+        self.assertNotEqual(authority["producer"]["git_head"],
+                            authority["reviewer"]["git_head"])
+        self.assertEqual(
+            authority["relation"],
+            "producer_commit_is_ancestor_of_reviewer_commit",
+        )
+        self.assertNotEqual(
+            bundle["approval_replay"]["validator"]["sha256"],
+            bundle["approval_replay"]["reviewer"]["validator"]["sha256"],
+        )
         for component in ("validator", "protocol", "regression"):
             replay = bundle["approval_replay"][component]
             self.assertEqual(
                 (self.fixture.destination /
                  replay["committed_archive_path"]).read_bytes(),
                 (self.fixture.destination /
-                 replay["executed_archive_path"]).read_bytes(),
+                replay["executed_archive_path"]).read_bytes(),
+            )
+            reviewer = bundle["approval_replay"]["reviewer"][component]
+            self.assertEqual(
+                (self.fixture.destination /
+                 reviewer["committed_archive_path"]).read_bytes(),
+                (self.fixture.destination /
+                 reviewer["executed_archive_path"]).read_bytes(),
             )
         external = bundle["approval_replay"]["external_runtime"]
         self.assertEqual(external["policy"],
-                         "single_private_path_gp_with_pinned_shell_v2")
+                         MODULE.EXTERNAL_RUNTIME_POLICY)
         self.assertEqual(
             (self.fixture.destination /
              external["package_archive"]["archive_path"]).read_bytes(),
@@ -1876,6 +2174,20 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         )
         self.assertTrue(external["package_tree"]["pin"]["entry_count"] > 0)
         self.assertEqual(external["data_tree"]["entry_count"], 0)
+        for key in ("csdp", "csdp_source_archive", "csdp_build_receipt",
+                    "csdp_probe_input"):
+            self.assertTrue(
+                (self.fixture.destination /
+                 external[key]["archive_path"]).is_file(),
+            )
+        for artifact in external["csdp_probe_artifacts"].values():
+            retained = self.fixture.destination / artifact["archive_path"]
+            self.assertTrue(retained.is_file())
+            self.assertEqual(digest(retained.read_bytes()), artifact["sha256"])
+        self.assertEqual(
+            external["thread_policy"]["environment"],
+            MODULE.THREAD_CAP_ENVIRONMENT,
+        )
         executable = self.fixture.destination / \
             bundle["candle"]["executable"]["archive_path"]
         self.assertEqual(executable.read_bytes(), (self.fixture.build / "cake").read_bytes())
@@ -1899,6 +2211,31 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.reports[0]["schema"] = 3
         self.fixture.write_reports()
         self.assert_rejected("schema-3.*non-promotable")
+
+    def test_report_envelope_numeric_type_confusion_rejects(self) -> None:
+        for report in self.fixture.reports:
+            report["schema"] = 4.0
+            report["test_count"] = 65.0
+        self.fixture.write_reports()
+        self.assert_rejected("schema-4|non-promotable")
+
+    def test_report_counts_numeric_type_confusion_rejects(self) -> None:
+        for report in self.fixture.reports:
+            report["counts"] = {"PASS": 65.0, "FAIL": False, "TIMEOUT": 0.0}
+        self.fixture.write_reports()
+        self.assert_rejected("did not pass completely")
+
+    def test_process_exit_boolean_type_confusion_rejects(self) -> None:
+        for report in self.fixture.reports:
+            for result in report["results"]:
+                result["process_evidence"]["exit_code"] = False
+        self.fixture.write_reports()
+        self.assert_rejected("invalid process identity or exit status")
+
+    def test_authorization_schema_float_type_confusion_rejects(self) -> None:
+        self.fixture.authorization["schema"] = 1.0
+        self.fixture.write_authorization()
+        self.assert_rejected("malformed external authorization receipt")
 
     def test_copied_run_cannot_satisfy_two_distinct_runs(self) -> None:
         clone = deepcopy(self.fixture.reports[0])
@@ -2251,6 +2588,59 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         )
         self.assert_rejected("controller receipt does not bind")
 
+    def test_schema_v8_reference_plans_are_nonpromotable(self) -> None:
+        def downgrade(plan: dict) -> None:
+            plan["schema"] = "candle-s1-reference-plan-v8"
+
+        self.fixture.rewrite_all_reference_plans(downgrade)
+        self.assert_rejected("malformed v9 reference plan")
+
+    def test_forged_csdp_build_statement_rejects_after_full_rehash(self) -> None:
+        def forge_recipe(plan: dict) -> None:
+            plan["reference"]["external_runtime"]["csdp_build"]["statement"][
+                "recipe"]["openmp_enabled"] = True
+
+        self.fixture.rewrite_all_reference_plans(forge_recipe)
+        self.assert_rejected("CSDP build statement")
+
+    def test_csdp_build_boolean_type_confusion_rejects(self) -> None:
+        def confuse_boolean(plan: dict) -> None:
+            plan["reference"]["external_runtime"]["csdp_build"]["statement"][
+                "recipe"]["openmp_enabled"] = 0
+
+        self.fixture.rewrite_all_reference_plans(confuse_boolean)
+        self.assert_rejected("CSDP build statement")
+
+    def test_reference_probe_return_code_type_confusion_rejects(self) -> None:
+        def confuse_return_codes(plan: dict) -> None:
+            external = plan["reference"]["external_runtime"]
+            external["probe"]["return_code"] = False
+            external["csdp_probe"]["return_code"] = 0.0
+
+        self.fixture.rewrite_all_reference_plans(confuse_return_codes)
+        self.assert_rejected("PARI/GP probe|CSDP probe")
+
+    def test_reference_thread_policy_type_confusion_rejects(self) -> None:
+        def confuse_thread_policy(plan: dict) -> None:
+            policy = plan["reference"]["external_runtime"]["thread_policy"]
+            policy["single_process_solver"] = 1
+            policy["openmp_enabled"] = 0
+
+        self.fixture.rewrite_all_reference_plans(confuse_thread_policy)
+        self.assert_rejected("CSDP thread policy")
+
+    def test_reference_manifest_schema_type_confusion_rejects(self) -> None:
+        self.fixture.rewrite_all_reference_plans(
+            lambda plan: plan["input"].update(manifest_schema_version=True),
+        )
+        self.assert_rejected("reference plan target/mode mismatch")
+
+    def test_candidate_exit_code_type_confusion_rejects(self) -> None:
+        self.fixture.rewrite_all_reference_candidates(
+            lambda candidate: candidate.update(process_exit_code=False),
+        )
+        self.assert_rejected("malformed candidate process exit code")
+
     def test_omitted_elf_dependency_is_rejected_after_complete_rehash(self) -> None:
         def omit_dependency(plan: dict) -> None:
             closure = plan["reference"]["external_runtime"]["elf_runtime"][
@@ -2259,7 +2649,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             closure.pop(0)
 
         self.fixture.rewrite_all_reference_plans(omit_dependency)
-        self.assert_rejected("captured v8 reference candidate replay failed")
+        self.assert_rejected("captured v9 reference candidate replay failed")
 
     def test_omitted_runtime_stub_is_rejected_after_complete_rehash(self) -> None:
         def omit_stub_and_rebuild_elf(plan: dict) -> None:
@@ -2273,7 +2663,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             ])
 
         self.fixture.rewrite_all_reference_plans(omit_stub_and_rebuild_elf)
-        self.assert_rejected("captured v8 reference candidate replay failed")
+        self.assert_rejected("captured v9 reference candidate replay failed")
 
     def test_rebound_runtime_interpreter_is_rejected_after_rehash(self) -> None:
         def rebind_interpreter(plan: dict) -> None:
@@ -2290,7 +2680,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             ])
 
         self.fixture.rewrite_all_reference_plans(rebind_interpreter)
-        self.assert_rejected("captured v8 reference candidate replay failed")
+        self.assert_rejected("captured v9 reference candidate replay failed")
 
     def test_rebound_hol_init_script_is_rejected_after_rehash(self) -> None:
         alternate = self.fixture.root / "alternate-hol.ml"
@@ -2304,7 +2694,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             plan["fresh_process_contract"]["runtime_argv"][2] = str(alternate)
 
         self.fixture.rewrite_all_reference_plans(rebind_hol_ml)
-        self.assert_rejected("captured v8 reference candidate replay failed")
+        self.assert_rejected("captured v9 reference candidate replay failed")
 
     def test_reference_external_package_is_live_rechecked(self) -> None:
         package = self.fixture.root / "reference-tools/pari.deb"
@@ -2322,6 +2712,61 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             "receipt", MODULE.canonical_json_bytes(receipt))
         self.assert_rejected("not closed and exact")
 
+    def test_collection_contract_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        for field in (
+                "schema", "sweep_count", "target_count",
+                "total_target_runs"):
+            contract[field] = float(contract[field])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("malformed reference collection contract")
+
+    def test_collection_inventory_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        inventory = contract["inventory"]
+        for field in ("target_count", "source_count", "request_count"):
+            inventory[field] = float(inventory[field])
+        inventory["targets"][0]["index"] = \
+            float(inventory["targets"][0]["index"])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("inventory differs from manifest")
+
+    def test_collection_receipt_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        for field in (
+                "schema", "sweep_count", "target_count", "total_target_runs",
+                "completed_target_runs", "pending_target_runs",
+                "failure_attempt_count"):
+            receipt[field] = float(receipt[field])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("not closed and exact")
+
+    def test_collection_sweep_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        sweep = receipt["sweeps"][0]
+        for field in (
+                "sweep", "target_count", "completed_count", "pending_count"):
+            sweep[field] = float(sweep[field])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("malformed closed reference sweep")
+
+    def test_collection_target_integer_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        row = receipt["sweeps"][0]["targets"][0]
+        row["index"] = float(row["index"])
+        row["attempt_count"] = float(row["attempt_count"])
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("malformed reference collection target success")
+
+    def test_collection_runtime_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        external = contract["external_runtime"]
+        external["csdp_probe"]["return_code"] = False
+        external["thread_policy"]["single_process_solver"] = 1
+        external["thread_policy"]["openmp_enabled"] = 0
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("external-runtime environment|CSDP probe")
+
     def test_fabricated_collection_contract_is_rejected_after_rehash(self) -> None:
         contract_path = self.fixture.candle_root / self.fixture.approval[
             "collection_evidence"]["contract"]["path"]
@@ -2337,7 +2782,37 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         contract["runtime"] = {"fabricated": True}
         contract["controller"] = {"fabricated": True}
         self.fixture.replace_collection_documents(contract, receipt)
-        self.assert_rejected("committed project")
+        self.assert_rejected("authorized launch commit")
+
+    def test_descendant_candle_cannot_replace_exact_producer(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        contract["candle"]["root"] = str(self.fixture.candle_root)
+        contract["candle"]["git_head"] = self.fixture.candle_head
+        for key, (relative, _) in MODULE.COLLECTION_CANDLE_PATHS.items():
+            contract["candle"][key] = {
+                "path": relative,
+                **record(self.fixture.candle_root / relative),
+            }
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("authorized producer commit")
+
+    def test_arbitrary_descendant_cannot_replace_reviewed_validator(self) -> None:
+        self.replace_reviewer_validator(
+            b"# arbitrary descendant reviewer fixture\n",
+            "arbitrary descendant validator",
+        )
+        self.assert_rejected("not the reviewed validator/protocol")
+
+    def test_producer_validator_cannot_masquerade_as_reviewer(self) -> None:
+        producer = self.fixture.collection_candle_root / \
+            "candle/reference_fingerprints.py"
+        identity = record(producer)
+        MODULE.REVIEWER_VALIDATOR_BYTES = identity["bytes"]
+        MODULE.REVIEWER_VALIDATOR_SHA256 = identity["sha256"]
+        self.replace_reviewer_validator(
+            producer.read_bytes(), "reuse producer as reviewer",
+        )
+        self.assert_rejected("not independent of the producer validator")
 
     def test_alternate_committed_controller_is_rejected_after_rehash(self) -> None:
         alternate = self.fixture.root / "alternate-controller-project"
@@ -2373,7 +2848,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             "path": str(controller_path), **record(controller_path),
         })
         self.fixture.replace_collection_documents(contract, receipt)
-        self.assert_rejected("authorized finalizer project")
+        self.assert_rejected("authorized launch commit")
 
     def test_reference_checkout_and_sources_are_live_authenticated(self) -> None:
         source = self.fixture.reference_root / self.fixture.manifest[
