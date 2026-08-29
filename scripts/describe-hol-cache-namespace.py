@@ -38,6 +38,11 @@ CONTROLLED_ENVIRONMENT = {
     "LC_ALL": "C",
     "LANG": "C",
 }
+EXPECTED_ISOLATED_SYS_PATH = [
+    "/usr/lib/python312.zip",
+    "/usr/lib/python3.12",
+    "/usr/lib/python3.12/lib-dynload",
+]
 COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 TARGET_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+/-]*")
 ADDRESS_RE = re.compile(r"0x[0-9a-fA-F]+")
@@ -529,9 +534,8 @@ def require_isolated_runtime() -> None:
     require(sys.flags.safe_path, "Python safe-path mode is required")
     require(Path(sys.executable).resolve(strict=True) == PYTHON,
             "unexpected Python executable")
-    require(all(
-        path.startswith("/usr/lib/python3.12") for path in sys.path
-    ), f"unexpected isolated Python search path: {sys.path!r}")
+    require(sys.path == EXPECTED_ISOLATED_SYS_PATH,
+            f"unexpected isolated Python search path: {sys.path!r}")
 
 
 def python_module_inventory() -> dict[str, Any]:
