@@ -4,18 +4,23 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
+import time
 import tempfile
 import unittest
 
 
 SCRIPT = Path(__file__).with_name("run-top100-reference-sweeps.py")
+SYSTEM_PYTHON = Path("/usr/bin/python3")
+SYSTEM_GIT = Path("/usr/bin/git")
 SPEC = importlib.util.spec_from_file_location("top100_reference_sweeps", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
@@ -35,18 +40,61 @@ def git(root: Path, *arguments: str) -> str:
     return completed.stdout.strip()
 
 
+def wait_for(path: Path, timeout: float = 15.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file():
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"timed out waiting for {path}")
+
+
+def process_is_live(pid: int) -> bool:
+    try:
+        fields = Path(f"/proc/{pid}/stat").read_text().split()
+    except FileNotFoundError:
+        return False
+    return len(fields) > 2 and fields[2] != "Z"
+
+
+def wait_not_live(pid: int, timeout: float = 10.0) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not process_is_live(pid):
+            return
+        time.sleep(0.02)
+    raise AssertionError(f"process {pid} remained live")
+
+
+def lock_is_available(path: Path) -> bool:
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        return True
+    finally:
+        os.close(descriptor)
+
+
 FAKE_COLLECTOR = r'''#!/usr/bin/env python3
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import sys
+import time
 
 ROOT = Path(__file__).resolve().parent.parent
 MANIFEST = ROOT / "candle/top100_manifest.json"
 FAIL_FIRST_TARGET = __FAIL_TARGET__
+HANG_FIRST_SECONDS = __HANG_SECONDS__
 
 
 def digest(value):
@@ -67,6 +115,15 @@ def json_sha(value):
 
 
 def main():
+    lock_value = os.environ.get("CANDLE_REFERENCE_CONTROLLER_LOCK_FD", "")
+    if not re.fullmatch(r"[1-9][0-9]*", lock_value):
+        raise SystemExit(12)
+    try:
+        lock_metadata = os.fstat(int(lock_value))
+    except OSError:
+        raise SystemExit(13)
+    if not stat.S_ISREG(lock_metadata.st_mode):
+        raise SystemExit(14)
     parser = argparse.ArgumentParser()
     sub = parser.add_subparsers(dest="command", required=True)
     collect = sub.add_parser("collect")
@@ -134,6 +191,10 @@ def main():
                 "collector_relative_path": "candle/reference_fingerprints.py",
                 "collector_at_head_sha256": collector_sha,
                 "collector_matches_head": True,
+                "support_relative_path": "candle/reference_protocol.py",
+                "support_at_head_sha256": file_sha(
+                    ROOT / "candle/reference_protocol.py"),
+                "support_matches_head": True,
             },
         },
         "request": {"source": request.decode(), "sha256": digest(request)},
@@ -141,6 +202,17 @@ def main():
     }
     plan_path.write_text(json.dumps(plan, indent=2) + "\n")
     Path(args.request).write_bytes(request)
+    if HANG_FIRST_SECONDS and args.target == "100/test-00" and \
+            plan_path.parent.name == "attempt-0001" and \
+            plan_path.parent.parent.parent.name == "sweep-1":
+        runtime_process = subprocess.Popen(
+            [sys.executable, "-I", "-S", "-c",
+             f"import time; time.sleep({HANG_FIRST_SECONDS + 2})"],
+            pass_fds=(int(lock_value),),
+        )
+        Path(args.transcript).write_text(
+            f"HANGING {os.getpid()} {runtime_process.pid}\n")
+        time.sleep(HANG_FIRST_SECONDS)
     if FAIL_FIRST_TARGET and args.target == FAIL_FIRST_TARGET and \
             plan_path.parent.name == "attempt-0001" and \
             plan_path.parent.parent.parent.name == "sweep-1":
@@ -179,15 +251,26 @@ if __name__ == "__main__":
 
 
 class Fixture:
-    def __init__(self, root: Path, fail_target: str | None = None):
+    def __init__(
+        self, root: Path, fail_target: str | None = None,
+        hang_first_seconds: int = 0,
+    ):
         self.root = root.resolve()
         self.candle = self.root / "candle-repo"
         self.reference = self.root / "reference-repo"
+        self.project = self.root / "project-repo"
         self.artifacts = self.root / "artifacts"
         self.tools = self.root / "tools"
         for directory in (self.candle / "candle", self.reference,
+                          self.project / "scripts",
                           self.artifacts, self.tools):
             directory.mkdir(parents=True, exist_ok=True)
+        self.artifacts.chmod(0o700)
+        self.controller = self.project / \
+            "scripts/run-top100-reference-sweeps.py"
+        self.controller.write_bytes(SCRIPT.read_bytes())
+        self.controller.chmod(0o755)
+        self.project_head = self._commit(self.project, "fixture project")
         self._create_sources()
         self.historical_head = self._commit(
             self.reference, "fixture historical reference",
@@ -215,10 +298,12 @@ class Fixture:
         )
         collector = FAKE_COLLECTOR.replace(
             "__FAIL_TARGET__", repr(fail_target),
-        ).encode()
+        ).replace("__HANG_SECONDS__", str(hang_first_seconds)).encode()
         self.collector = self.candle / "candle/reference_fingerprints.py"
         self.collector.write_bytes(collector)
         self.collector.chmod(0o644)
+        self.protocol = self.candle / "candle/reference_protocol.py"
+        self.protocol.write_text("fixture protocol\n")
         (self.candle / "candle/fingerprint.ml").write_text("serializer\n")
         (self.candle / "candle/reference_source_contracts.json").write_text(
             json.dumps({
@@ -291,13 +376,20 @@ class Fixture:
         return git(root, "rev-parse", "HEAD")
 
     def arguments(self) -> argparse.Namespace:
+        MODULE.PROGRAM_PATH = self.controller.resolve()
         runtime = self.runtime_paths
         return argparse.Namespace(
             artifact_root=self.artifacts,
+            project_root=self.project,
+            project_head=self.project_head,
+            controller_sha256=sha256(self.controller.read_bytes()),
+            python_sha256=sha256(SYSTEM_PYTHON.read_bytes()),
+            git_sha256=sha256(SYSTEM_GIT.read_bytes()),
             candle_root=self.candle,
             candle_head=self.candle_head,
             manifest_sha256=sha256(self.manifest_path.read_bytes()),
             collector_sha256=sha256(self.collector.read_bytes()),
+            protocol_sha256=sha256(self.protocol.read_bytes()),
             reference_root=self.reference,
             reference_head=self.reference_head,
             runtime=runtime["runtime"],
@@ -314,6 +406,42 @@ class Fixture:
             validation_wall_seconds=10,
         )
 
+    def command(self) -> list[str]:
+        arguments = self.arguments()
+        values = (
+            ("artifact-root", arguments.artifact_root),
+            ("project-root", arguments.project_root),
+            ("project-head", arguments.project_head),
+            ("controller-sha256", arguments.controller_sha256),
+            ("python-sha256", arguments.python_sha256),
+            ("git-sha256", arguments.git_sha256),
+            ("candle-root", arguments.candle_root),
+            ("candle-head", arguments.candle_head),
+            ("manifest-sha256", arguments.manifest_sha256),
+            ("collector-sha256", arguments.collector_sha256),
+            ("protocol-sha256", arguments.protocol_sha256),
+            ("reference-root", arguments.reference_root),
+            ("reference-head", arguments.reference_head),
+            ("runtime", arguments.runtime),
+            ("runtime-sha256", arguments.runtime_sha256),
+            ("runtime-stublib", arguments.runtime_stublib),
+            ("runtime-stublib-sha256", arguments.runtime_stublib_sha256),
+            ("ocamlc", arguments.ocamlc),
+            ("ocamlc-sha256", arguments.ocamlc_sha256),
+            ("ocamlfind", arguments.ocamlfind),
+            ("ocamlfind-sha256", arguments.ocamlfind_sha256),
+            ("collection-wall-seconds", arguments.collection_wall_seconds),
+            ("target-wall-seconds", arguments.target_wall_seconds),
+            ("validation-wall-seconds", arguments.validation_wall_seconds),
+        )
+        command = [
+            "/usr/bin/env", "-i", "PATH=/usr/bin:/bin", "LC_ALL=C", "LANG=C",
+            "/usr/bin/python3", "-I", "-S", str(self.controller.resolve()),
+        ]
+        for name, value in values:
+            command.extend((f"--{name}", str(value)))
+        return command
+
 
 class ReferenceSweepControllerTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -323,8 +451,12 @@ class ReferenceSweepControllerTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
-    def fixture(self, fail_target: str | None = None) -> Fixture:
-        return Fixture(Path(self.temporary.name), fail_target)
+    def fixture(
+        self, fail_target: str | None = None, hang_first_seconds: int = 0,
+    ) -> Fixture:
+        return Fixture(
+            Path(self.temporary.name), fail_target, hang_first_seconds,
+        )
 
     def test_two_sweeps_close_in_manifest_order_and_remain_unapproved(self) -> None:
         fixture = self.fixture()
@@ -404,6 +536,223 @@ class ReferenceSweepControllerTests(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.CollectionFailure,
                                     "worktree is not clean"):
             MODULE.run(fixture.arguments())
+
+    def test_private_root_git_flags_replacements_and_grafts_reject(self) -> None:
+        fixture = self.fixture()
+        arguments = fixture.arguments()
+        fixture.artifacts.chmod(0o750)
+        with self.assertRaisesRegex(MODULE.CollectionFailure, "exactly 0700"):
+            MODULE.run(arguments)
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-index.")
+        fixture = self.fixture()
+        git(fixture.reference, "update-index", "--assume-unchanged",
+            "100/test-03.ml")
+        with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                    "assume-unchanged or skip-worktree"):
+            MODULE.run(fixture.arguments())
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-skip.")
+        fixture = self.fixture()
+        git(fixture.reference, "update-index", "--skip-worktree",
+            "100/test-03.ml")
+        with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                    "assume-unchanged or skip-worktree"):
+            MODULE.run(fixture.arguments())
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-replace.")
+        fixture = self.fixture()
+        git(fixture.reference, "replace", fixture.reference_head,
+            fixture.historical_head)
+        with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                    "replacement objects"):
+            MODULE.run(fixture.arguments())
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-graft.")
+        fixture = self.fixture()
+        grafts = fixture.reference / ".git/info/grafts"
+        grafts.write_text(
+            f"{fixture.reference_head} {fixture.historical_head}\n")
+        with self.assertRaisesRegex(MODULE.CollectionFailure, "grafts file"):
+            MODULE.run(fixture.arguments())
+
+    def test_outer_startup_flags_environment_and_cli_are_exact(self) -> None:
+        fixture = self.fixture()
+        command = fixture.command()
+        hostile = fixture.tools / "hostile-python"
+        hostile.mkdir()
+        shadow_marker = hostile / "shadow-ran"
+        shadow = hostile / "python3"
+        shadow.write_text(
+            f"#!/bin/sh\n: > {shadow_marker}\nexit 99\n",
+        )
+        shadow.chmod(0o755)
+        hostile_path = list(command)
+        hostile_path[2] = f"PATH={hostile}:/usr/bin:/bin"
+        completed = subprocess.run(
+            hostile_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertFalse(shadow_marker.exists())
+        self.assertIn(b"environment is not the exact allowlist", completed.stderr)
+        self.assertFalse((fixture.artifacts / "collection-contract.json").exists())
+
+        site_directory = fixture.tools / "hostile-site"
+        site_directory.mkdir()
+        site_marker = site_directory / "sitecustomize-ran"
+        (site_directory / "sitecustomize.py").write_text(
+            f"from pathlib import Path\nPath({str(site_marker)!r}).touch()\n",
+        )
+        hostile_site = command[:5] + [f"PYTHONPATH={site_directory}"] + command[5:]
+        completed = subprocess.run(
+            hostile_site, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertFalse(site_marker.exists())
+        self.assertIn(b"environment is not the exact allowlist", completed.stderr)
+        self.assertFalse((fixture.artifacts / "collection-contract.json").exists())
+
+        without_no_site = [item for item in command if item != "-S"]
+        completed = subprocess.run(
+            without_no_site, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(b"isolated/no-site", completed.stderr)
+
+        with_extra_environment = command[:5] + ["EXTRA=hostile"] + command[5:]
+        completed = subprocess.run(
+            with_extra_environment, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(b"environment is not the exact allowlist", completed.stderr)
+
+        duplicated = command + ["--git-sha256", "0" * 64]
+        completed = subprocess.run(
+            duplicated, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(b"each CLI option exactly once", completed.stderr)
+
+        wrong_controller = list(command)
+        controller_index = wrong_controller.index("--controller-sha256") + 1
+        wrong_controller[controller_index] = "0" * 64
+        completed = subprocess.run(
+            wrong_controller, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(b"controller differs from command-line pin", completed.stderr)
+
+        wrong_python = list(command)
+        python_index = wrong_python.index("--python-sha256") + 1
+        wrong_python[python_index] = "0" * 64
+        completed = subprocess.run(
+            wrong_python, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(b"Python executable differs", completed.stderr)
+
+        with fixture.controller.open("a") as output:
+            output.write("\n# hostile post-commit mutation\n")
+        completed = subprocess.run(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(b"project repository worktree is not clean", completed.stderr)
+        self.assertFalse((fixture.artifacts / "collection-contract.json").exists())
+
+    def test_term_and_hup_kill_active_group_and_allow_resume(self) -> None:
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            with self.subTest(signal=signum), tempfile.TemporaryDirectory(
+                prefix=f"candle-reference-signal-{signum}.",
+            ) as root:
+                fixture = Fixture(Path(root), hang_first_seconds=30)
+                command = fixture.command()
+                controller = subprocess.Popen(
+                    command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                )
+                transcript = fixture.artifacts / \
+                    "sweep-1/target-001/attempt-0001/transcript.log"
+                wait_for(transcript)
+                words = transcript.read_text().split()
+                collector_pid, runtime_pid = map(int, words[1:])
+                controller.send_signal(signum)
+                _stdout, stderr = controller.communicate(timeout=15)
+                self.assertEqual(controller.returncode, 128 + signum)
+                self.assertIn(
+                    f"interrupted by signal {signum}".encode(), stderr,
+                )
+                wait_not_live(collector_pid)
+                wait_not_live(runtime_pid)
+                self.assertTrue(lock_is_available(
+                    fixture.artifacts / ".controller.lock"))
+
+                resumed = subprocess.Popen(
+                    command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                )
+                success = fixture.artifacts / \
+                    "sweep-1/target-001/attempt-0002/success.json"
+                try:
+                    wait_for(success)
+                finally:
+                    if resumed.poll() is None:
+                        resumed.send_signal(signal.SIGTERM)
+                resumed.communicate(timeout=15)
+                self.assertEqual(resumed.returncode, 128 + signal.SIGTERM)
+
+    def test_sigkill_orphans_keep_lock_until_exit_then_resume(self) -> None:
+        fixture = self.fixture(hang_first_seconds=3)
+        command = fixture.command()
+        controller = subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        transcript = fixture.artifacts / \
+            "sweep-1/target-001/attempt-0001/transcript.log"
+        wait_for(transcript)
+        words = transcript.read_text().split()
+        collector_pid, runtime_pid = map(int, words[1:])
+        controller.kill()
+        self.assertEqual(controller.wait(timeout=5), -signal.SIGKILL)
+        self.assertTrue(process_is_live(collector_pid))
+        self.assertTrue(process_is_live(runtime_pid))
+
+        probe = subprocess.run(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10,
+        )
+        self.assertEqual(probe.returncode, 1)
+        self.assertIn(b"another collection controller owns", probe.stderr)
+        self.assertFalse(lock_is_available(fixture.artifacts / ".controller.lock"))
+        wait_not_live(collector_pid, timeout=10)
+        wait_not_live(runtime_pid, timeout=10)
+        controller.communicate(timeout=2)
+        self.assertTrue(lock_is_available(fixture.artifacts / ".controller.lock"))
+
+        resumed = subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        success = fixture.artifacts / \
+            "sweep-1/target-001/attempt-0002/success.json"
+        try:
+            wait_for(success)
+        finally:
+            if resumed.poll() is None:
+                resumed.send_signal(signal.SIGTERM)
+        resumed.communicate(timeout=15)
+        self.assertEqual(resumed.returncode, 128 + signal.SIGTERM)
 
 
 if __name__ == "__main__":

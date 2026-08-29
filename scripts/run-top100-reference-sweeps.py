@@ -23,12 +23,16 @@ from typing import Any
 
 
 PROGRAM_PATH = Path(__file__).resolve()
-PYTHON_PATH = Path(sys.executable).resolve()
+PYTHON_ARGUMENT_PATH = Path("/usr/bin/python3")
+PYTHON_PATH = PYTHON_ARGUMENT_PATH.resolve(strict=True)
 GIT_PATH = Path("/usr/bin/git")
 COLLECTOR_RELATIVE = "candle/reference_fingerprints.py"
+PROTOCOL_RELATIVE = "candle/reference_protocol.py"
 MANIFEST_RELATIVE = "candle/top100_manifest.json"
 SERIALIZER_RELATIVE = "candle/fingerprint.ml"
 SOURCE_CONTRACT_RELATIVE = "candle/reference_source_contracts.json"
+CONTROLLER_RELATIVE = "scripts/run-top100-reference-sweeps.py"
+LOCK_FD_ENV = "CANDLE_REFERENCE_CONTROLLER_LOCK_FD"
 EXPECTED_TARGETS = 65
 EXPECTED_SOURCES = 66
 EXPECTED_REQUESTS = 97
@@ -49,10 +53,22 @@ ATTEMPT_FILES = {
     "collect.stdout", "collect.stderr", "validate.stdout", "validate.stderr",
     "success.json", "failure.json",
 }
+HANDLED_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
+ACTIVE_PROCESS: subprocess.Popen[bytes] | None = None
+PENDING_SIGNAL: int | None = None
+STARTUP_ENVIRONMENT = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"}
 
 
 class CollectionFailure(RuntimeError):
     """The collection contract, evidence, or environment failed closed."""
+
+
+class ControllerInterrupted(BaseException):
+    """A handled termination signal interrupted the controller."""
+
+    def __init__(self, signum: int):
+        super().__init__(signum)
+        self.signum = signum
 
 
 def require(condition: bool, message: str) -> None:
@@ -109,6 +125,16 @@ def ordinary_directory(path: Path, label: str) -> Path:
             f"{label} is not an ordinary directory: {path}")
     require(path.resolve(strict=True) == path,
             f"{label} path is not canonical: {path}")
+    return path
+
+
+def private_directory(path: Path, label: str) -> Path:
+    path = ordinary_directory(path, label)
+    metadata = path.lstat()
+    require(metadata.st_uid == os.geteuid(),
+            f"{label} is not owned by the current effective user: {path}")
+    require(stat.S_IMODE(metadata.st_mode) == 0o700,
+            f"{label} mode is not exactly 0700: {path}")
     return path
 
 
@@ -239,7 +265,7 @@ def atomic_write(path: Path, value: bytes, label: str) -> None:
 def ensure_new_directory(path: Path, label: str) -> Path:
     require(not os.path.lexists(path), f"{label} already exists: {path}")
     path.mkdir(mode=0o700)
-    return ordinary_directory(path, label)
+    return private_directory(path, label)
 
 
 def git_environment() -> dict[str, str]:
@@ -247,6 +273,7 @@ def git_environment() -> dict[str, str]:
         "PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
         "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_SYSTEM": "/dev/null",
         "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0",
+        "GIT_NO_REPLACE_OBJECTS": "1",
     }
 
 
@@ -268,8 +295,58 @@ def git_bytes(root: Path, *arguments: str) -> bytes:
     return completed.stdout
 
 
+def git_common_directory(root: Path, label: str) -> Path:
+    dot_git = root / ".git"
+    try:
+        metadata = dot_git.lstat()
+    except OSError as error:
+        raise CollectionFailure(f"{label} has no readable .git metadata") from error
+    if stat.S_ISDIR(metadata.st_mode) and not dot_git.is_symlink():
+        git_directory = ordinary_directory(dot_git, f"{label} Git directory")
+    else:
+        require(stat.S_ISREG(metadata.st_mode) and not dot_git.is_symlink(),
+                f"{label} has unsupported .git metadata")
+        try:
+            line = stable_bytes(dot_git, f"{label} .git file").decode(
+                "utf-8", errors="strict",
+            )
+        except UnicodeDecodeError as error:
+            raise CollectionFailure(f"{label} has malformed .git metadata") from error
+        require(line.startswith("gitdir: ") and line.endswith("\n") and
+                line.count("\n") == 1,
+                f"{label} has malformed .git metadata")
+        git_value = Path(line[len("gitdir: "):-1])
+        if not git_value.is_absolute():
+            git_value = root / git_value
+        git_directory = ordinary_directory(
+            git_value.resolve(strict=True), f"{label} Git directory",
+        )
+    common_file = git_directory / "commondir"
+    if not os.path.lexists(common_file):
+        return git_directory
+    try:
+        common_value = stable_bytes(
+            common_file, f"{label} Git common-directory file",
+        ).decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise CollectionFailure(
+            f"{label} has malformed Git common-directory metadata",
+        ) from error
+    require(common_value.endswith("\n") and common_value.count("\n") == 1,
+            f"{label} has malformed Git common-directory metadata")
+    common_path = Path(common_value[:-1])
+    if not common_path.is_absolute():
+        common_path = git_directory / common_path
+    return ordinary_directory(
+        common_path.resolve(strict=True), f"{label} Git common directory",
+    )
+
+
 def validate_git_repository(root: Path, head: str, label: str) -> None:
     root = ordinary_directory(root, label)
+    common_path = git_common_directory(root, label)
+    grafts = common_path / "info/grafts"
+    require(not os.path.lexists(grafts), f"{label} has a Git grafts file")
     top = git_bytes(root, "rev-parse", "--show-toplevel").decode().strip()
     require(Path(top) == root, f"{label} is not the exact Git top level")
     observed = git_bytes(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
@@ -278,6 +355,15 @@ def validate_git_repository(root: Path, head: str, label: str) -> None:
         root, "status", "--porcelain=v1", "-z", "--untracked-files=all",
     )
     require(status == b"", f"{label} worktree is not clean")
+    replace_refs = git_bytes(
+        root, "for-each-ref", "--format=%(refname)", "refs/replace",
+    )
+    require(replace_refs == b"", f"{label} has Git replacement objects")
+    tracked = git_bytes(root, "ls-files", "-v", "-z")
+    for record in tracked.split(b"\0"):
+        if record:
+            require(record.startswith(b"H "),
+                    f"{label} has assume-unchanged or skip-worktree index flags")
 
 
 def validate_committed_file(root: Path, relative: str, expected_mode: str) -> dict[str, object]:
@@ -418,13 +504,23 @@ def validate_source_policy(
 
 
 def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    project_root = ordinary_directory(arguments.project_root, "project repository")
     candle_root = ordinary_directory(arguments.candle_root, "Candle collector repository")
     reference_root = ordinary_directory(arguments.reference_root, "reference repository")
+    project_head = require_commit(arguments.project_head, "project head")
     candle_head = require_commit(arguments.candle_head, "Candle collector head")
     reference_head = require_commit(arguments.reference_head, "reference head")
+    validate_git_repository(project_root, project_head, "project repository")
     validate_git_repository(candle_root, candle_head, "Candle collector repository")
     validate_git_repository(reference_root, reference_head, "reference repository")
+    require(PROGRAM_PATH == project_root / CONTROLLER_RELATIVE,
+            "running controller is not the committed project controller path")
+    controller = validate_committed_file(project_root, CONTROLLER_RELATIVE, "100755")
+    require(controller["sha256"] == require_sha256(
+        arguments.controller_sha256, "pinned controller"),
+        "committed controller differs from command-line pin")
     collector = validate_committed_file(candle_root, COLLECTOR_RELATIVE, "100644")
+    protocol = validate_committed_file(candle_root, PROTOCOL_RELATIVE, "100644")
     manifest_record = validate_committed_file(candle_root, MANIFEST_RELATIVE, "100644")
     serializer = validate_committed_file(candle_root, SERIALIZER_RELATIVE, "100644")
     source_contract = validate_committed_file(
@@ -433,6 +529,9 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
     require(collector["sha256"] == require_sha256(
         arguments.collector_sha256, "pinned collector"),
         "committed collector differs from command-line pin")
+    require(protocol["sha256"] == require_sha256(
+        arguments.protocol_sha256, "pinned reference protocol"),
+        "committed reference protocol differs from command-line pin")
     require(manifest_record["sha256"] == require_sha256(
         arguments.manifest_sha256, "pinned manifest"),
         "committed manifest differs from command-line pin")
@@ -461,9 +560,14 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
             is_int(arguments.validation_wall_seconds) and
             arguments.validation_wall_seconds > 0,
             "deadlines must be positive and target deadline needs 30 seconds grace")
-    controller = file_record(PROGRAM_PATH, "collection controller")
-    python = file_record(PYTHON_PATH, "Python executable")
+    python = runtime_file_record(PYTHON_ARGUMENT_PATH, "Python executable")
     git_tool = file_record(GIT_PATH, "Git executable")
+    require(python["sha256"] == require_sha256(
+        arguments.python_sha256, "pinned Python"),
+        "Python executable differs from command-line pin")
+    require(git_tool["sha256"] == require_sha256(
+        arguments.git_sha256, "pinned Git"),
+        "Git executable differs from command-line pin")
     contract = {
         "schema": 1,
         "kind": "candle-great100-two-sweep-reference-collection",
@@ -473,9 +577,14 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         "target_count": EXPECTED_TARGETS,
         "total_target_runs": SWEEP_COUNT * EXPECTED_TARGETS,
         "source_mode": "manifest-exact",
+        "project": {
+            "root": str(project_root), "git_head": project_head,
+            "controller": controller,
+        },
         "candle": {
             "root": str(candle_root), "git_head": candle_head,
-            "collector": collector, "manifest": manifest_record,
+            "collector": collector, "protocol": protocol,
+            "manifest": manifest_record,
             "serializer": serializer, "source_contract": source_contract,
         },
         "reference": {
@@ -490,8 +599,9 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         },
         "inventory": inventory,
         "controller": {
-            "path": str(PROGRAM_PATH), **controller,
-            "python": {"path": str(PYTHON_PATH), **python},
+            "path": str(PROGRAM_PATH),
+            "sha256": controller["sha256"], "bytes": controller["bytes"],
+            "python": python,
             "git": {"path": str(GIT_PATH), **git_tool},
         },
     }
@@ -499,14 +609,18 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
 
 
 def validate_environment(contract: dict[str, Any]) -> None:
+    project = contract["project"]
     candle = contract["candle"]
     reference = contract["reference"]
+    project_root = Path(project["root"])
     candle_root = Path(candle["root"])
     reference_root = Path(reference["root"])
+    validate_git_repository(project_root, project["git_head"], "project repository")
     validate_git_repository(candle_root, candle["git_head"], "Candle collector repository")
     validate_git_repository(reference_root, reference["git_head"], "reference repository")
     for relative, key in (
-        (COLLECTOR_RELATIVE, "collector"), (MANIFEST_RELATIVE, "manifest"),
+        (COLLECTOR_RELATIVE, "collector"), (PROTOCOL_RELATIVE, "protocol"),
+        (MANIFEST_RELATIVE, "manifest"),
         (SERIALIZER_RELATIVE, "serializer"),
         (SOURCE_CONTRACT_RELATIVE, "source_contract"),
     ):
@@ -518,10 +632,18 @@ def validate_environment(contract: dict[str, Any]) -> None:
         require(runtime_file_record(
             Path(expected["argument_path"]), f"current {name}",
         ) == expected, f"pinned runtime input changed: {name}")
+    observed_controller = validate_committed_file(
+        project_root, CONTROLLER_RELATIVE, "100755",
+    )
+    require(observed_controller == project["controller"] and
+            PROGRAM_PATH == project_root / CONTROLLER_RELATIVE,
+            "pinned committed controller changed")
     controller = contract["controller"]
+    require(runtime_file_record(
+        PYTHON_ARGUMENT_PATH, "current Python",
+    ) == controller["python"], "pinned Python changed")
     for path, expected, label in (
         (PROGRAM_PATH, controller, "controller"),
-        (PYTHON_PATH, controller["python"], "Python"),
         (GIT_PATH, controller["git"], "Git"),
     ):
         require(file_record(path, f"current {label}") == {
@@ -529,35 +651,85 @@ def validate_environment(contract: dict[str, Any]) -> None:
         }, f"pinned {label} changed")
 
 
-def subprocess_environment() -> dict[str, str]:
-    return {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"}
+def subprocess_environment(lock_fd: int) -> dict[str, str]:
+    return {
+        "PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
+        LOCK_FD_ENV: str(lock_fd),
+    }
 
 
-def run_process(command: list[str], timeout: int) -> tuple[int | None, bytes, bytes, bool]:
+def signal_process_group(process: subprocess.Popen[bytes], signum: int) -> None:
+    if process.poll() is None:
+        try:
+            os.killpg(process.pid, signum)
+        except ProcessLookupError:
+            pass
+
+
+def terminate_and_wait(
+    process: subprocess.Popen[bytes], signum: int,
+) -> tuple[bytes, bytes]:
+    signal_process_group(process, signum)
     try:
-        process = subprocess.Popen(
-            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            env=subprocess_environment(), start_new_session=True,
-        )
-    except OSError as error:
-        raise CollectionFailure(f"could not start process: {command[0]}") from error
+        return process.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        signal_process_group(process, signal.SIGKILL)
+        return process.communicate()
+
+
+def controller_signal_handler(signum: int, _frame: object) -> None:
+    global PENDING_SIGNAL
+    process = ACTIVE_PROCESS
+    if PENDING_SIGNAL is None:
+        PENDING_SIGNAL = signum
+        if process is not None:
+            signal_process_group(process, signum)
+        raise ControllerInterrupted(signum)
+    if process is not None:
+        signal_process_group(process, signal.SIGKILL)
+
+
+def run_process(
+    command: list[str], timeout: int, lock_fd: int,
+) -> tuple[int | None, bytes, bytes, bool]:
+    global ACTIVE_PROCESS
+    process: subprocess.Popen[bytes] | None = None
+    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
     try:
+        try:
+            def restore_child_signal_mask() -> None:
+                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+
+            process = subprocess.Popen(
+                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                env=subprocess_environment(lock_fd), start_new_session=True,
+                pass_fds=(lock_fd,), preexec_fn=restore_child_signal_mask,
+            )
+            ACTIVE_PROCESS = process
+        except OSError as error:
+            raise CollectionFailure(f"could not start process: {command[0]}") from error
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+    except ControllerInterrupted:
+        if process is not None:
+            terminate_and_wait(process, PENDING_SIGNAL or signal.SIGTERM)
+        ACTIVE_PROCESS = None
+        raise
+    try:
+        require(process is not None, "child process was not created")
         stdout, stderr = process.communicate(timeout=timeout)
         return process.returncode, stdout, stderr, False
     except subprocess.TimeoutExpired:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        stdout, stderr = process.communicate()
+        stdout, stderr = terminate_and_wait(process, signal.SIGKILL)
         return None, stdout, stderr, True
-    except BaseException:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        process.communicate()
+    except ControllerInterrupted:
+        terminate_and_wait(process, PENDING_SIGNAL or signal.SIGTERM)
         raise
+    except BaseException:
+        terminate_and_wait(process, signal.SIGKILL)
+        raise
+    finally:
+        ACTIVE_PROCESS = None
 
 
 def artifact_relative(root: Path, path: Path) -> str:
@@ -611,7 +783,8 @@ def collector_command(
     candle = contract["candle"]
     runtime = contract["runtime"]
     return [
-        str(PYTHON_PATH), "-I", str(Path(candle["root"]) / COLLECTOR_RELATIVE),
+        str(PYTHON_ARGUMENT_PATH), "-I", "-S",
+        str(Path(candle["root"]) / COLLECTOR_RELATIVE),
         "collect", "--target", target,
         "--reference-root", contract["reference"]["root"],
         "--runtime", runtime["runtime"]["argument_path"],
@@ -630,7 +803,7 @@ def collector_command(
 def validator_command(contract: dict[str, Any], attempt: Path) -> list[str]:
     collector = Path(contract["candle"]["root"]) / COLLECTOR_RELATIVE
     return [
-        str(PYTHON_PATH), "-I", str(collector), "validate",
+        str(PYTHON_ARGUMENT_PATH), "-I", "-S", str(collector), "validate",
         str(attempt / ARTIFACT_NAMES["candidate"]),
         "--plan", str(attempt / ARTIFACT_NAMES["plan"]),
         "--request", str(attempt / ARTIFACT_NAMES["request"]),
@@ -699,6 +872,11 @@ def validate_artifact_semantics(
             candle["collector"]["sha256"] and
             repository.get("collector_matches_head") is True,
             f"reference plan collector mismatch for {target['name']}")
+    require(repository.get("support_relative_path") == PROTOCOL_RELATIVE and
+            repository.get("support_at_head_sha256") ==
+            candle["protocol"]["sha256"] and
+            repository.get("support_matches_head") is True,
+            f"reference plan protocol mismatch for {target['name']}")
     require(isinstance(reference, dict) and
             reference.get("root") == contract["reference"]["root"] and
             reference.get("git_head") == contract["reference"]["git_head"] and
@@ -736,13 +914,13 @@ def validate_artifact_semantics(
 
 def run_validation(
     root: Path, attempt: Path, target: dict[str, Any], contract: dict[str, Any],
-    *, retain_output: bool,
+    lock_fd: int, *, retain_output: bool,
 ) -> tuple[dict[str, dict[str, object]], str]:
     artifacts, nonce = validate_artifact_semantics(root, attempt, target, contract)
     validate_environment(contract)
     command = validator_command(contract, attempt)
     return_code, stdout, stderr, timed_out = run_process(
-        command, contract["deadlines"]["validation_wall_seconds"],
+        command, contract["deadlines"]["validation_wall_seconds"], lock_fd,
     )
     if retain_output:
         exclusive_write(attempt / "validate.stdout", stdout, "validation stdout")
@@ -785,12 +963,12 @@ def write_failure(
 
 def collect_target(
     root: Path, attempt: Path, sweep: int, target: dict[str, Any],
-    contract: dict[str, Any],
+    contract: dict[str, Any], lock_fd: int,
 ) -> tuple[dict[str, dict[str, object]], str]:
     validate_environment(contract)
     command = collector_command(contract, target["name"], attempt)
     return_code, stdout, stderr, timed_out = run_process(
-        command, contract["deadlines"]["target_wall_seconds"],
+        command, contract["deadlines"]["target_wall_seconds"], lock_fd,
     )
     exclusive_write(attempt / "collect.stdout", stdout, "collection stdout")
     exclusive_write(attempt / "collect.stderr", stderr, "collection stderr")
@@ -806,7 +984,7 @@ def collect_target(
         require(stdout == expected_stdout and stderr == b"",
                 f"unexpected collector transcript for {target['name']}")
         artifacts, nonce = run_validation(
-            root, attempt, target, contract, retain_output=True,
+            root, attempt, target, contract, lock_fd, retain_output=True,
         )
     except CollectionFailure as error:
         write_failure(
@@ -845,7 +1023,7 @@ def target_directory(root: Path, sweep: int, index: int) -> Path:
 
 
 def validate_attempt_entries(attempt: Path) -> None:
-    ordinary_directory(attempt, "attempt directory")
+    private_directory(attempt, "attempt directory")
     for entry in attempt.iterdir():
         require(entry.name in ATTEMPT_FILES,
                 f"unexpected entry in attempt directory: {entry}")
@@ -854,7 +1032,7 @@ def validate_attempt_entries(attempt: Path) -> None:
 
 def validate_success_receipt(
     root: Path, attempt: Path, sweep: int, target: dict[str, Any],
-    contract: dict[str, Any], validation_cache: set[str],
+    contract: dict[str, Any], validation_cache: set[str], lock_fd: int,
 ) -> tuple[dict[str, Any], str]:
     path = attempt / "success.json"
     value = load_json(path, "success receipt", single_link=True)
@@ -890,7 +1068,7 @@ def validate_success_receipt(
     relative = artifact_relative(root, path)
     if relative not in validation_cache:
         observed, nonce = run_validation(
-            root, attempt, target, contract, retain_output=False,
+            root, attempt, target, contract, lock_fd, retain_output=False,
         )
         require(observed == artifacts and nonce == value["session_nonce"],
                 f"resumed candidate differs for {target['name']}")
@@ -938,12 +1116,12 @@ def validate_failure_receipt(
 
 def scan_target(
     root: Path, sweep: int, target: dict[str, Any], contract: dict[str, Any],
-    validation_cache: set[str],
+    validation_cache: set[str], lock_fd: int,
 ) -> dict[str, Any]:
     directory = target_directory(root, sweep, target["index"])
     if not os.path.lexists(directory):
         return {"attempts": [], "success": None, "failures": []}
-    ordinary_directory(directory, f"target directory {target['name']}")
+    private_directory(directory, f"target directory {target['name']}")
     attempts = sorted(directory.iterdir(), key=lambda path: path.name)
     numbers = []
     results = []
@@ -961,7 +1139,7 @@ def scan_target(
         if has_success:
             require(success is None, f"multiple successful attempts for {target['name']}")
             value, relative = validate_success_receipt(
-                root, attempt, sweep, target, contract, validation_cache,
+                root, attempt, sweep, target, contract, validation_cache, lock_fd,
             )
             success = {
                 "attempt": attempt.name, "receipt_path": relative,
@@ -1003,7 +1181,7 @@ def scan_target(
 
 
 def scan_all(
-    root: Path, contract: dict[str, Any], validation_cache: set[str],
+    root: Path, contract: dict[str, Any], validation_cache: set[str], lock_fd: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     inventory = contract["inventory"]["targets"]
     sweeps = []
@@ -1015,7 +1193,9 @@ def scan_all(
         rows = []
         sweep_complete = 0
         for target in inventory:
-            state = scan_target(root, sweep, target, contract, validation_cache)
+            state = scan_target(
+                root, sweep, target, contract, validation_cache, lock_fd,
+            )
             success = state["success"]
             if success is None:
                 open_seen = True
@@ -1093,7 +1273,7 @@ def validate_root_entries(root: Path) -> None:
     for entry in root.iterdir():
         require(entry.name in allowed, f"unexpected artifact-root entry: {entry}")
         if entry.name.startswith("sweep-"):
-            ordinary_directory(entry, entry.name)
+            private_directory(entry, entry.name)
         else:
             ordinary_file(entry, entry.name, single_link=True)
 
@@ -1111,12 +1291,12 @@ def ensure_sweep_directories(root: Path) -> None:
         path = root / f"sweep-{sweep}"
         if not os.path.lexists(path):
             ensure_new_directory(path, f"sweep {sweep} directory")
-        ordinary_directory(path, f"sweep {sweep} directory")
+        private_directory(path, f"sweep {sweep} directory")
         for entry in path.iterdir():
             match = TARGET_RE.fullmatch(entry.name)
             require(match is not None and 1 <= int(match.group(1)) <= EXPECTED_TARGETS,
                     f"unexpected sweep entry: {entry}")
-            ordinary_directory(entry, "target directory")
+            private_directory(entry, "target directory")
 
 
 def next_pending(
@@ -1134,10 +1314,13 @@ def next_pending(
 
 
 def run(arguments: argparse.Namespace) -> int:
-    artifact_root = ordinary_directory(arguments.artifact_root, "artifact root")
+    artifact_root = private_directory(arguments.artifact_root, "artifact root")
+    project_root = ordinary_directory(arguments.project_root, "project repository")
     candle_root = ordinary_directory(arguments.candle_root, "Candle collector repository")
     reference_root = ordinary_directory(arguments.reference_root, "reference repository")
-    require(not artifact_root.is_relative_to(candle_root) and
+    require(not artifact_root.is_relative_to(project_root) and
+            not project_root.is_relative_to(artifact_root) and
+            not artifact_root.is_relative_to(candle_root) and
             not artifact_root.is_relative_to(reference_root) and
             not candle_root.is_relative_to(artifact_root) and
             not reference_root.is_relative_to(artifact_root),
@@ -1170,7 +1353,9 @@ def run(arguments: argparse.Namespace) -> int:
             )
         ensure_sweep_directories(artifact_root)
         validation_cache: set[str] = set()
-        receipt, status = scan_all(artifact_root, contract, validation_cache)
+        receipt, status = scan_all(
+            artifact_root, contract, validation_cache, lock_fd,
+        )
         write_aggregate(artifact_root, receipt, status)
         while not receipt["closed"]:
             pending = next_pending(receipt, contract, artifact_root)
@@ -1186,17 +1371,21 @@ def run(arguments: argparse.Namespace) -> int:
                 f"attempt for {target['name']}",
             )
             try:
-                collect_target(artifact_root, attempt, sweep, target, contract)
+                collect_target(
+                    artifact_root, attempt, sweep, target, contract, lock_fd,
+                )
                 validation_cache.add(artifact_relative(
                     artifact_root, attempt / "success.json",
                 ))
             except CollectionFailure:
                 receipt, status = scan_all(
-                    artifact_root, contract, validation_cache,
+                    artifact_root, contract, validation_cache, lock_fd,
                 )
                 write_aggregate(artifact_root, receipt, status)
                 return 1
-            receipt, status = scan_all(artifact_root, contract, validation_cache)
+            receipt, status = scan_all(
+                artifact_root, contract, validation_cache, lock_fd,
+            )
             write_aggregate(artifact_root, receipt, status)
         validate_environment(contract)
         return 0
@@ -1207,10 +1396,16 @@ def run(arguments: argparse.Namespace) -> int:
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument("--artifact-root", type=Path, required=True)
+    result.add_argument("--project-root", type=Path, required=True)
+    result.add_argument("--project-head", required=True)
+    result.add_argument("--controller-sha256", required=True)
+    result.add_argument("--python-sha256", required=True)
+    result.add_argument("--git-sha256", required=True)
     result.add_argument("--candle-root", type=Path, required=True)
     result.add_argument("--candle-head", required=True)
     result.add_argument("--manifest-sha256", required=True)
     result.add_argument("--collector-sha256", required=True)
+    result.add_argument("--protocol-sha256", required=True)
     result.add_argument("--reference-root", type=Path, required=True)
     result.add_argument("--reference-head", required=True)
     result.add_argument("--runtime", type=Path, required=True)
@@ -1227,15 +1422,71 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
+def validate_startup() -> None:
+    require(lexical_absolute(Path(sys.executable)) == PYTHON_ARGUMENT_PATH,
+            "controller was not launched by exact /usr/bin/python3")
+    require(sys.argv and Path(sys.argv[0]).is_absolute() and
+            lexical_absolute(Path(sys.argv[0])) == PROGRAM_PATH,
+            "controller script argument is not its absolute committed path")
+    flags = sys.flags
+    require(flags.isolated == 1 and flags.ignore_environment == 1 and
+            flags.no_site == 1 and flags.no_user_site == 1 and
+            getattr(flags, "safe_path", False) and flags.optimize == 0 and
+            flags.debug == 0 and flags.inspect == 0 and flags.interactive == 0,
+            "controller requires exact isolated/no-site Python startup")
+    require(dict(os.environ) == STARTUP_ENVIRONMENT,
+            "controller startup environment is not the exact allowlist")
+
+
+def parse_arguments() -> argparse.Namespace:
+    argument_parser = parser()
+    option_names = {
+        option
+        for action in argument_parser._actions
+        if action.required
+        for option in action.option_strings
+    }
+    raw = sys.argv[1:]
+    require(len(raw) == 2 * len(option_names),
+            "controller requires each CLI option exactly once")
+    observed = raw[::2]
+    require(all(option in option_names for option in observed) and
+            len(set(observed)) == len(option_names) and
+            set(observed) == option_names,
+            "controller CLI option set/order is malformed or duplicated")
+    return argument_parser.parse_args(raw)
+
+
 def main() -> int:
+    global ACTIVE_PROCESS, PENDING_SIGNAL
     old_umask = os.umask(0o077)
+    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
+    previous_handlers = {
+        signum: signal.getsignal(signum) for signum in HANDLED_SIGNALS
+    }
+    for signum in HANDLED_SIGNALS:
+        signal.signal(signum, controller_signal_handler)
     try:
         try:
-            return run(parser().parse_args())
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+            validate_startup()
+            return run(parse_arguments())
         except CollectionFailure as error:
             print(f"reference sweep failed: {error}", file=sys.stderr)
             return 1
+        except ControllerInterrupted as error:
+            print(
+                f"reference sweep interrupted by signal {error.signum}",
+                file=sys.stderr,
+            )
+            return 128 + error.signum
     finally:
+        signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
+        for signum, handler in previous_handlers.items():
+            signal.signal(signum, handler)
+        ACTIVE_PROCESS = None
+        PENDING_SIGNAL = None
+        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         os.umask(old_umask)
 
 

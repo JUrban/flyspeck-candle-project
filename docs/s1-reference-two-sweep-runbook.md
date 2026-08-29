@@ -11,13 +11,18 @@ or testing this controller.
 
 The runnable exact-reference configuration reviewed on 2026-08-29 is:
 
+- project repository: a clean, reviewed checkout containing the committed
+  `scripts/run-top100-reference-sweeps.py`; its exact absolute root, full HEAD,
+  and controller SHA-256 are mandatory launch arguments;
 - Candle collector repository:
   `/project/worktrees/candle-s1-reference-policy-v13` at
-  `1e1d4e9b311b4aa52f78c4b9859a775e6eab70a7`;
+  `c2b55b183387be33b6bbe71c5a6b1f1b9b043dbc`;
 - `candle/top100_manifest.json` SHA-256
   `e021a1f11d2307ca65c29eb6ab56fc04e5f4be2dbc4f7702f63ad3e1b7bfdae9`;
 - `candle/reference_fingerprints.py` SHA-256
-  `a15ef4cd61f44140cb35df76e0a2007a51eaa2c64a4866b3adddfb660bde9b59`;
+  `b81c480c6095829d77ab6d36f7b42575a454bd70792d509eca29335c49dd188d`;
+- isolated support module `candle/reference_protocol.py` SHA-256
+  `e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68`;
 - exact HOL Light reference repository:
   `/project/worktrees/hol-light-s1-exact-reference-v13` at
   `1258c129c3ddf0b239b649ba7024eab677cd953b`;
@@ -30,7 +35,11 @@ The runnable exact-reference configuration reviewed on 2026-08-29 is:
 - `/usr/bin/ocamlc`, SHA-256
   `84825ef63ded23b445acd4ef399e1bb0a11081976da4741e1033c8569eaa2bd6`;
 - `/usr/bin/ocamlfind`, SHA-256
-  `c08fd2438693fee0c8544216d11a213c51eff33e2fafc73f80f576430ee52837`.
+  `c08fd2438693fee0c8544216d11a213c51eff33e2fafc73f80f576430ee52837`;
+- `/usr/bin/python3` resolved executable bytes, SHA-256
+  `1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118`;
+- `/usr/bin/git`, SHA-256
+  `2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668`.
 
 The exact reference is a direct child of historical commit
 `3170739521d88d04580f61385c95b497690b7002`. Its Great100 diff must contain
@@ -44,18 +53,34 @@ reason to update an in-progress artifact root.
 
 ## Invocation
 
-Create a new empty ordinary directory on an evidence volume outside both Git
+Create a new empty ordinary directory, owned by the invoking effective user
+with mode exactly `0700`, on an evidence volume outside all three Git
 repositories. Do not reuse a directory from another collection contract.
+Set the three project values below to literals from the independently reviewed,
+clean project checkout; do not derive or change them inside the controller
+invocation.
 
 ```sh
 mkdir -m 700 /external/evidence/great100-reference-v6
 
-python3 scripts/run-top100-reference-sweeps.py \
+PROJECT_ROOT=/absolute/reviewed/flyspeck-candle-project
+PROJECT_HEAD=REVIEWED_FULL_40_HEX_PROJECT_HEAD
+CONTROLLER_SHA256=REVIEWED_64_HEX_CONTROLLER_SHA256
+
+/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LANG=C \
+ /usr/bin/python3 -I -S \
+ "$PROJECT_ROOT/scripts/run-top100-reference-sweeps.py" \
   --artifact-root /external/evidence/great100-reference-v6 \
+  --project-root "$PROJECT_ROOT" \
+  --project-head "$PROJECT_HEAD" \
+  --controller-sha256 "$CONTROLLER_SHA256" \
+  --python-sha256 1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118 \
+  --git-sha256 2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668 \
   --candle-root /project/worktrees/candle-s1-reference-policy-v13 \
-  --candle-head 1e1d4e9b311b4aa52f78c4b9859a775e6eab70a7 \
+  --candle-head c2b55b183387be33b6bbe71c5a6b1f1b9b043dbc \
   --manifest-sha256 e021a1f11d2307ca65c29eb6ab56fc04e5f4be2dbc4f7702f63ad3e1b7bfdae9 \
-  --collector-sha256 a15ef4cd61f44140cb35df76e0a2007a51eaa2c64a4866b3adddfb660bde9b59 \
+  --collector-sha256 b81c480c6095829d77ab6d36f7b42575a454bd70792d509eca29335c49dd188d \
+  --protocol-sha256 e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68 \
   --reference-root /project/worktrees/hol-light-s1-exact-reference-v13 \
   --reference-head 1258c129c3ddf0b239b649ba7024eab677cd953b \
   --runtime /project/worktrees/hol-light-s1-exact-reference-v13/ocaml-hol \
@@ -80,6 +105,20 @@ transcript and unapproved candidate. A second isolated invocation of the same
 collector replays candidate validation. The outer per-target deadline exceeds
 the collector's internal deadline so the controller can terminate the entire
 process group if the inner controller does not return.
+
+The outer `env -i`/Python command is part of the contract. The controller
+rejects any inherited environment entry, missing `-I`/`-S`, non-absolute or
+noncommitted controller path, duplicate/unknown CLI option, changed Python or
+Git executable, dirty or moved project checkout, Git replacement/graft state,
+or assume-unchanged/skip-worktree index flag. The collector and its isolated
+protocol support file must both be exact committed bytes.
+
+The artifact-root flock descriptor is passed unchanged to every collector and
+validator. The collector passes that same descriptor to the HOL process without
+placing it in the HOL environment. Thus an uncatchable controller `SIGKILL`
+does not permit a second controller while an orphaned collector or HOL process
+can still write. Handled `TERM` and `HUP` terminate and wait for the active
+process group before the controller releases its lock.
 
 ## Resume and result interpretation
 
