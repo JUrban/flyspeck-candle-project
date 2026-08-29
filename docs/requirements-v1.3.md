@@ -65,6 +65,27 @@ test or implementation commit.
   positive/negative/relocation/resume matrices, and known deviations proved
   outside the pinned dependency closure.
 
+For Great 100 S1 promotion, archive exactly two completed schema-3 reports with:
+
+```sh
+python3 scripts/finalize-top100-report.py \
+  /path/to/run-1/report.json \
+  /path/to/run-2/report.json \
+  /new/path/to/s1-archive
+```
+
+The destination must not exist. The finalizer requires exact manifest order,
+65 load passes, 65 audited mappings, 65 approved expected identity sets, 65
+exact fingerprint matches, clean and identical Candle/executable identities,
+bounded timeout policy, complete timing/RSS records, distinct transcripts with
+successful linked-provenance startup witnesses, and identical ordered semantic
+projections across both runs. It validates the current schema-6 linked record
+with Candle's provenance checker and archives the reports, logs, source
+contracts, linked record, and durable bootstrap records in a closed SHA-256
+inventory. Schema 3 does not record the linked-record SHA-256 observed by each
+process, so the retained exact startup witness plus current-record validation
+is the strongest retrospective binding and is stated as such in the bundle.
+
 The project is not complete until every S3-required row and promotion gate is
 proved by current artifacts.  PFT replay success, source parsing alone, a
 partial corpus, or one full direct run is insufficient.
