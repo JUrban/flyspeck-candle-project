@@ -91,16 +91,16 @@ clean project checkout; do not derive or change them inside the controller
 invocation.
 
 ```sh
-mkdir -m 700 /project/flyspeck-candle-runs/s1-reference-v8-two-sweep-a0e072f-e931132
+mkdir -m 700 /project/flyspeck-candle-runs/s1-reference-v8-two-sweep-a0e072f-b142b0b
 
-PROJECT_ROOT=/project/worktrees/flyspeck-project-s1-gp-v8-launch-e931132
-PROJECT_HEAD=e931132a3aff5bbbb7a80f0d8f2efcbecac7a415
+PROJECT_ROOT=/project/worktrees/flyspeck-project-s1-gp-v8-launch-b142b0b
+PROJECT_HEAD=b142b0b6191b1af8b93f79275b6a873b63730d87
 CONTROLLER_SHA256=3dd8891eb77ca6636b2d01168a52096518f9de0dda3412fd520cb46bdbaac000
 
 /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LANG=C \
  /usr/bin/python3 -I -S \
  "$PROJECT_ROOT/scripts/run-top100-reference-sweeps.py" \
-  --artifact-root /project/flyspeck-candle-runs/s1-reference-v8-two-sweep-a0e072f-e931132 \
+  --artifact-root /project/flyspeck-candle-runs/s1-reference-v8-two-sweep-a0e072f-b142b0b \
   --project-root "$PROJECT_ROOT" \
   --project-head "$PROJECT_HEAD" \
   --controller-sha256 "$CONTROLLER_SHA256" \
@@ -138,6 +138,15 @@ CONTROLLER_SHA256=3dd8891eb77ca6636b2d01168a52096518f9de0dda3412fd520cb46bdbaac0
   --target-wall-seconds 21660 \
   --validation-wall-seconds 900
 ```
+
+Two isolated read-only reconstructions from these exact inputs produced the
+same 32,994-byte canonical contract. Its canonical-file SHA-256 is
+`5dea7bd7a299509e876b39fff61c9cf6a8bfbca458395848ace0e1d0a40414c8`;
+the compact semantic contract SHA-256 recorded in the aggregate receipt is
+`76d8ab6eecbaf31be3ce926b06759aba30b3cf6f8d35d313699a5b0d958cb7b5`.
+The reconstructed inventory is exactly 65 targets, 66 sources, 97 theorem
+requests, and 130 target runs. A different published contract is a hard
+failure.
 
 Only one controller may own an artifact root. It consumes the exact 65-target,
 66-source, 97-theorem-request manifest order. For each of 130 target runs it
@@ -192,7 +201,15 @@ v8 additionally retains each raw `/bin/bash /usr/bin/ldd` observation, accepts
 only recognized output lines, normalizes only ASLR address tokens, and binds
 the exact sorted dependency union. Finalization replays that closure live with
 the captured committed validator and archives the observer tools, loader,
-cache, requested roots, and every discovered ELF object.
+cache, requested roots, and every discovered ELF object. It also authenticates
+the collection controller against this exact project head, checks the exact
+reference Git parent and three reviewed deltas, archives and compares all 66
+committed source blobs to the live checkout, and uses the captured validator's
+real plan builder to reconstruct the interpreter, `hol.ml`, boot files,
+OCaml/findlib trees, complete stub set, GP runtime, fresh-process contract, and
+both ELF closures. Every one of the 130 plans must have the same stable runtime
+projection while retaining its independently checked target/source/request
+bindings.
 `status.json` is the current concise result; `receipt.json` is the canonical
 complete inventory. Both report exact completed/pending counts and all failed
 or interrupted attempts. A closed receipt must say:
