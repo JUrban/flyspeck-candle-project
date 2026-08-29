@@ -740,6 +740,8 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
     command_shell = runtime_file_record(
         arguments.command_shell, "Sys.command shell",
     )
+    require(command_shell["argument_path"] == "/bin/sh",
+            "Sys.command shell argument must be exactly /bin/sh")
     require(command_shell["sha256"] == require_sha256(
         arguments.command_shell_sha256, "pinned Sys.command shell"),
         "Sys.command shell differs from command-line pin")
@@ -770,6 +772,8 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
     )
     require(data_tree["root_mode"] == 0o555,
             "PARI/GP optional-data root mode must be exactly 0555")
+    require(data_tree["entry_count"] == 0,
+            "PARI/GP optional-data tree must be empty")
     require(data_tree["inventory_sha256"] == require_sha256(
         arguments.pari_gp_data_tree_sha256,
         "pinned PARI/GP optional-data tree"),
@@ -1191,9 +1195,53 @@ def validate_artifact_semantics(
     fresh = plan.get("fresh_process_contract")
     runtime_environment = fresh.get("runtime_environment", {}) \
         if isinstance(fresh, dict) else {}
-    require(all(runtime_environment.get(key) == value for key, value in
-                external_contract["runtime_environment"].items()),
+    require(isinstance(fresh, dict) and set(fresh) == {
+        "required", "preloaded_checkpoint_allowed", "working_directory",
+        "environment_policy", "runtime_argv", "runtime_environment",
+    } and fresh["required"] is True and
+            fresh["preloaded_checkpoint_allowed"] is False and
+            fresh["working_directory"] == reference["root"] and
+            fresh["environment_policy"] ==
+            "sanitized_allowlist_no_inherited_overrides" and
+            isinstance(runtime_environment, dict) and
+            set(runtime_environment) == {
+                "HOME", "PATH", "LC_ALL", "GPRC", "GP_DATA_DIR",
+                "HOLLIGHT_DIR", "HOLLIGHT_USE_MODULE", "OCAMLRUNPARAM",
+                "CAML_LD_LIBRARY_PATH", "OCAML_TOPLEVEL_PATH",
+                "OCAMLFIND_CONF",
+            } and
+            all(runtime_environment.get(key) == value for key, value in
+                external_contract["runtime_environment"].items()) and
+            runtime_environment["HOME"] == reference["root"] and
+            runtime_environment["LC_ALL"] == "C" and
+            runtime_environment["HOLLIGHT_DIR"] == reference["root"] and
+            runtime_environment["HOLLIGHT_USE_MODULE"] == "0" and
+            runtime_environment["OCAMLRUNPARAM"] == "l=2000000000" and
+            all(isinstance(runtime_environment[key], str) and
+                Path(runtime_environment[key]).is_absolute()
+                for key in ("CAML_LD_LIBRARY_PATH", "OCAML_TOPLEVEL_PATH",
+                            "OCAMLFIND_CONF")),
             f"reference external environment mismatch for {target['name']}")
+    probe = external_plan["probe"]
+    require(isinstance(probe, dict) and probe.get("shell_argv") == [
+        "/bin/sh", "-c",
+        "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp",
+    ] and probe.get("environment") == {
+        "HOME": reference["root"],
+        "PATH": external_contract["runtime_environment"]["PATH"],
+        "LC_ALL": "C",
+        "GPRC": external_contract["runtime_environment"]["GPRC"],
+        "GP_DATA_DIR": external_contract["runtime_environment"]["GP_DATA_DIR"],
+    } and probe.get("return_code") == 0 and
+            isinstance(probe.get("stdout"), str) and
+            re.search(r"(?:^|\n)1\n", probe["stdout"]) is not None and
+            "[3, 1; 5, 1]" in probe["stdout"] and
+            hashlib.sha256(probe["stdout"].encode()).hexdigest() ==
+            probe.get("stdout_sha256") and
+            isinstance(probe.get("stderr"), str) and
+            hashlib.sha256(probe["stderr"].encode()).hexdigest() ==
+            probe.get("stderr_sha256"),
+            f"reference PARI/GP probe mismatch for {target['name']}")
     require(plan.get("request") == {
         "source": request_bytes.decode("utf-8", errors="strict"),
         "sha256": hashlib.sha256(request_bytes).hexdigest(),

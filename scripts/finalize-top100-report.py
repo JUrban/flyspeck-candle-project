@@ -136,7 +136,7 @@ LINKED_OUTPUTS = {
 APPROVAL_KEYS = {
     "schema", "artifact_kind", "approval_status", "promotion_allowed",
     "inventory_contract_sha256", "serializer_sha256", "reference_policy",
-    "review", "targets",
+    "review", "collection_evidence", "targets",
 }
 REFERENCE_POLICY_KEYS = {
     "historical_upstream_commit", "exact_source_reference_commit",
@@ -147,6 +147,7 @@ REFERENCE_DELTA_KEYS = {
 }
 APPROVAL_REVIEW_KEYS = {"reviewer", "approved_utc", "review_commit", "decision"}
 APPROVAL_TARGET_KEYS = {"name", "reference_runs", "expected_identity"}
+COLLECTION_EVIDENCE_KEYS = {"contract", "receipt"}
 APPROVAL_IDENTITY_KEYS = {"serializer_sha256", "theorems", "post_state"}
 AUTHORIZATION_KEYS = {
     "schema", "kind", "issued_utc", "authority", "reports",
@@ -365,6 +366,102 @@ def stable_file_identity(path: Path, label: str) -> FileIdentity:
     finally:
         os.close(descriptor)
     return FileIdentity(count, digest.hexdigest())
+
+
+def executable_route_record(path: Path, label: str) -> dict[str, Any]:
+    """Reproduce the collector's lexical and resolved executable route pin."""
+    argument = lexical_absolute(path)
+    try:
+        metadata = argument.lstat()
+        parent_metadata = argument.parent.lstat()
+        resolved = argument.resolve(strict=True)
+        resolved_metadata = resolved.lstat()
+    except (FileNotFoundError, RuntimeError, OSError) as error:
+        raise ValidationError(f"could not resolve {label}: {argument}") from error
+    require(stat.S_ISREG(resolved_metadata.st_mode) and
+            stat.S_IMODE(resolved_metadata.st_mode) & 0o111 != 0,
+            f"resolved {label} is not executable: {resolved}")
+
+    def component(route: Path, route_metadata: os.stat_result) -> dict[str, Any]:
+        if stat.S_ISLNK(route_metadata.st_mode):
+            kind = "symlink"
+            extra = {"target": os.readlink(route)}
+        elif stat.S_ISDIR(route_metadata.st_mode):
+            kind = "directory"
+            extra = {}
+        elif stat.S_ISREG(route_metadata.st_mode):
+            kind = "file"
+            extra = {}
+        else:
+            raise ValidationError(f"unsupported {label} route component: {route}")
+        return {
+            "path": str(route), "kind": kind,
+            "mode": stat.S_IMODE(route_metadata.st_mode),
+            **extra, "resolved_path": str(route.resolve(strict=True)),
+        }
+
+    identity = stable_file_identity(resolved, f"resolved {label}")
+    return {
+        "argument_path": str(argument),
+        "argument_parent": component(argument.parent, parent_metadata),
+        "argument": component(argument, metadata),
+        "resolved_executable": {
+            "path": str(resolved), "sha256": identity.sha256,
+            "mode": stat.S_IMODE(resolved_metadata.st_mode),
+        },
+    }
+
+
+def tree_inventory(
+    path: Path, label: str,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Reproduce the collector's path/kind/mode/link/content tree pin."""
+    root = ordinary_directory(path, label)
+    records: list[dict[str, Any]] = []
+    for entry in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        relative = entry.relative_to(root).as_posix()
+        metadata = entry.lstat()
+        mode = stat.S_IMODE(metadata.st_mode)
+        if stat.S_ISLNK(metadata.st_mode):
+            try:
+                resolved = entry.resolve(strict=True)
+            except (FileNotFoundError, RuntimeError, OSError) as error:
+                raise ValidationError(f"broken symlink in {label}: {entry}") from error
+            record: dict[str, Any] = {
+                "path": relative, "kind": "symlink", "mode": mode,
+                "target": os.readlink(entry), "resolved_path": str(resolved),
+            }
+            if resolved.is_file():
+                record["resolved_sha256"] = stable_file_identity(
+                    resolved, f"{label} resolved symlink",
+                ).sha256
+            else:
+                require(resolved.is_dir(),
+                        f"unsupported symlink target in {label}: {entry}")
+            records.append(record)
+        elif stat.S_ISREG(metadata.st_mode):
+            records.append({
+                "path": relative, "kind": "file", "mode": mode,
+                "sha256": stable_file_identity(entry, f"{label} file").sha256,
+            })
+        elif stat.S_ISDIR(metadata.st_mode):
+            records.append({
+                "path": relative, "kind": "directory", "mode": mode,
+            })
+        else:
+            raise ValidationError(f"unsupported filesystem entry in {label}: {entry}")
+    digest = hashlib.sha256()
+    for record in records:
+        digest.update(json.dumps(
+            record, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8"))
+        digest.update(b"\n")
+    return ({
+        "root": str(root), "root_mode": stat.S_IMODE(root.lstat().st_mode),
+        "entry_count": len(records), "inventory_sha256": digest.hexdigest(),
+        "inventory_policy":
+            "relative_path_kind_mode_link_target_and_content_v1",
+    }, records)
 
 
 class Stager:
@@ -1404,6 +1501,80 @@ def validate_reference_plan_bindings(
             reference["git_status"] == [],
             f"reference plan head/status mismatch for {name}")
 
+    def file_pin(value: Any, label: str) -> None:
+        require(isinstance(value, dict) and set(value) == {"path", "sha256"} and
+                isinstance(value["path"], str) and
+                Path(value["path"]).is_absolute() and
+                SHA256_RE.fullmatch(value["sha256"]) is not None,
+                f"malformed reference {label} for {name}")
+
+    def tree_pin(value: Any, label: str) -> None:
+        require(isinstance(value, dict) and set(value) == {
+            "root", "root_mode", "entry_count", "inventory_sha256",
+            "inventory_policy",
+        } and isinstance(value["root"], str) and
+                Path(value["root"]).is_absolute() and
+                is_int(value["root_mode"]) and is_int(value["entry_count"]) and
+                value["entry_count"] >= 0 and
+                SHA256_RE.fullmatch(value["inventory_sha256"]) is not None and
+                value["inventory_policy"] ==
+                "relative_path_kind_mode_link_target_and_content_v1",
+                f"malformed reference {label} for {name}")
+
+    for key in ("runtime_executable", "runtime_interpreter", "runtime_stublib",
+                "hol_ml"):
+        file_pin(reference[key], key.replace("_", " "))
+    for key in ("runtime_library_tree", "ocaml_library_tree"):
+        tree_pin(reference[key], key.replace("_", " "))
+    for key in ("runtime_stub_files", "dynamic_libraries"):
+        values = reference[key]
+        require(isinstance(values, list) and values,
+                f"empty reference {key.replace('_', ' ')} for {name}")
+        for value in values:
+            file_pin(value, key.replace("_", " "))
+        require([value["path"] for value in values] ==
+                sorted({value["path"] for value in values}),
+                f"unsorted reference {key.replace('_', ' ')} for {name}")
+    require(reference["runtime_library_tree"]["root"] ==
+            str(Path(reference["runtime_stublib"]["path"]).parent),
+            f"runtime library tree mismatch for {name}")
+    ocamlc = reference["ocamlc"]
+    require(isinstance(ocamlc, dict) and set(ocamlc) == {
+        "path", "sha256", "version", "stdlib_directory",
+    }, f"malformed reference OCaml compiler for {name}")
+    file_pin({key: ocamlc[key] for key in ("path", "sha256")},
+             "OCaml compiler")
+    require(isinstance(ocamlc["version"], str) and ocamlc["version"] and
+            isinstance(ocamlc["stdlib_directory"], str) and
+            Path(ocamlc["stdlib_directory"]).is_absolute(),
+            f"malformed reference OCaml compiler metadata for {name}")
+    findlib = reference["findlib"]
+    require(isinstance(findlib, dict) and set(findlib) == {
+        "executable", "version", "configuration", "package_roots",
+    }, f"malformed reference findlib for {name}")
+    file_pin(findlib["executable"], "findlib executable")
+    file_pin(findlib["configuration"], "findlib configuration")
+    require(isinstance(findlib["version"], str) and findlib["version"] and
+            isinstance(findlib["package_roots"], list) and
+            findlib["package_roots"],
+            f"malformed reference findlib metadata for {name}")
+    for root_pin in findlib["package_roots"]:
+        tree_pin(root_pin, "findlib package root")
+    require([value["root"] for value in findlib["package_roots"]] ==
+            sorted({value["root"] for value in findlib["package_roots"]}) and
+            reference["ocaml_library_tree"] in findlib["package_roots"],
+            f"reference findlib tree closure mismatch for {name}")
+    boot_files = reference["generated_boot_files"]
+    require(isinstance(boot_files, list) and len(boot_files) == 3,
+            f"malformed reference boot files for {name}")
+    for value in boot_files:
+        file_pin(value, "generated boot file")
+    require([value["path"] for value in boot_files] == [
+        str(Path(reference["root"]) / "hol_loader.cmo"),
+        str(Path(reference["root"]) / "pa_j.cmo"),
+        str(Path(reference["root"]) / "load_camlp5_topfind.ml"),
+    ], f"reference boot-file set mismatch for {name}")
+
     fresh = plan["fresh_process_contract"]
     require(isinstance(fresh, dict) and set(fresh) == {
         "required", "preloaded_checkpoint_allowed", "working_directory",
@@ -1413,7 +1584,10 @@ def validate_reference_plan_bindings(
             fresh["working_directory"] == reference["root"] and
             fresh["environment_policy"] ==
             "sanitized_allowlist_no_inherited_overrides" and
-            isinstance(fresh["runtime_argv"], list) and
+            fresh["runtime_argv"] == [
+                reference["runtime_executable"]["path"], "-init",
+                reference["hol_ml"]["path"], "-I", reference["root"],
+                "-noprompt"] and
             isinstance(fresh["runtime_environment"], dict),
             f"reference plan fresh-process contract mismatch for {name}")
 
@@ -1441,6 +1615,23 @@ def validate_reference_plan_bindings(
                                f"{name} {key} executable") and
                 isinstance(route["resolved_executable"]["mode"], int),
                 f"malformed reference {key} route for {name}")
+        for component_name in ("argument_parent", "argument"):
+            component = route[component_name]
+            require(isinstance(component, dict) and
+                    component.get("kind") in {"symlink", "directory", "file"} and
+                    set(component) == ({
+                        "path", "kind", "mode", "resolved_path", "target",
+                    } if component.get("kind") == "symlink" else {
+                        "path", "kind", "mode", "resolved_path",
+                    }) and
+                    isinstance(component["path"], str) and
+                    Path(component["path"]).is_absolute() and
+                    is_int(component["mode"]) and
+                    isinstance(component["resolved_path"], str) and
+                    Path(component["resolved_path"]).is_absolute() and
+                    (component.get("kind") != "symlink" or
+                     isinstance(component.get("target"), str)),
+                    f"malformed reference {key} {component_name} for {name}")
     version = external["pari_gp_version"]
     require(isinstance(version, dict) and set(version) == {"stdout", "sha256"} and
             isinstance(version["stdout"], str) and
@@ -1468,6 +1659,16 @@ def validate_reference_plan_bindings(
                 f"malformed reference {key} for {name}")
     require(external["data_tree"]["root_mode"] == 0o555,
             f"reference PARI/GP data root is writable for {name}")
+    package_root = Path(external["package_tree"]["root"])
+    require(external["command_shell"]["argument_path"] == "/bin/sh" and
+            external["pari_gp"]["argument_path"] ==
+            str(package_root / "usr/bin/gp") and
+            external["configuration"]["path"] ==
+            str(package_root / "candle-gprc") and
+            external["data_tree"]["root"] ==
+            str(package_root / "candle-data") and
+            external["data_tree"]["entry_count"] == 0,
+            f"reference PARI/GP package paths are not exact for {name}")
     libraries = external["dynamic_libraries"]
     require(isinstance(libraries, list) and libraries and all(
         isinstance(value, dict) and set(value) == {"path", "sha256"} and
@@ -1475,11 +1676,17 @@ def validate_reference_plan_bindings(
         SHA256_RE.fullmatch(value["sha256"]) is not None
         for value in libraries),
             f"malformed reference external ELF closure for {name}")
+    require([value["path"] for value in libraries] ==
+            sorted({value["path"] for value in libraries}),
+            f"reference external ELF closure is not unique and sorted for {name}")
     probe = external["probe"]
+    probe_source = \
+        "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp"
     require(isinstance(probe, dict) and set(probe) == {
         "shell_argv", "environment", "return_code", "stdout",
         "stdout_sha256", "stderr", "stderr_sha256",
     } and probe["return_code"] == 0 and isinstance(probe["stdout"], str) and
+            re.search(r"(?:^|\n)1\n", probe["stdout"]) is not None and
             "[3, 1; 5, 1]" in probe["stdout"] and
             hashlib.sha256(probe["stdout"].encode()).hexdigest() ==
             probe["stdout_sha256"] and
@@ -1489,16 +1696,41 @@ def validate_reference_plan_bindings(
                 "GPRC Done.\n\n")} and
             hashlib.sha256(probe["stderr"].encode()).hexdigest() ==
             probe["stderr_sha256"] and
+            probe["shell_argv"] == [
+                external["command_shell"]["argument_path"], "-c", probe_source,
+            ] and
             isinstance(probe["environment"], dict) and
+            set(probe["environment"]) == {
+                "HOME", "PATH", "LC_ALL", "GPRC", "GP_DATA_DIR",
+            } and probe["environment"].get("HOME") == reference["root"] and
+            probe["environment"].get("LC_ALL") == "C" and
             probe["environment"].get("PATH") ==
             str(Path(external["pari_gp"]["argument_path"]).parent) and
             probe["environment"].get("GPRC") == external["configuration"]["path"] and
             probe["environment"].get("GP_DATA_DIR") == external["data_tree"]["root"],
             f"malformed reference PARI/GP probe for {name}")
-    require(all(fresh["runtime_environment"].get(key) ==
-                probe["environment"].get(key)
-                for key in ("PATH", "GPRC", "GP_DATA_DIR")),
-            f"reference runtime omits pinned PARI/GP environment for {name}")
+    runtime_environment = fresh["runtime_environment"]
+    require(set(runtime_environment) == {
+        "HOME", "PATH", "LC_ALL", "GPRC", "GP_DATA_DIR", "HOLLIGHT_DIR",
+        "HOLLIGHT_USE_MODULE", "OCAMLRUNPARAM", "CAML_LD_LIBRARY_PATH",
+        "OCAML_TOPLEVEL_PATH", "OCAMLFIND_CONF",
+    } and all(runtime_environment.get(key) == probe["environment"].get(key)
+              for key in ("HOME", "PATH", "LC_ALL", "GPRC", "GP_DATA_DIR")) and
+            runtime_environment["HOLLIGHT_DIR"] == reference["root"] and
+            runtime_environment["HOLLIGHT_USE_MODULE"] == "0" and
+            runtime_environment["OCAMLRUNPARAM"] == "l=2000000000" and
+            all(isinstance(runtime_environment[key], str) and
+                Path(runtime_environment[key]).is_absolute()
+                for key in ("CAML_LD_LIBRARY_PATH", "OCAML_TOPLEVEL_PATH",
+                            "OCAMLFIND_CONF")),
+            f"reference runtime differs from exact environment for {name}")
+    require(runtime_environment["CAML_LD_LIBRARY_PATH"] ==
+            reference["runtime_library_tree"]["root"] and
+            runtime_environment["OCAML_TOPLEVEL_PATH"] ==
+            ocamlc["stdlib_directory"] and
+            runtime_environment["OCAMLFIND_CONF"] ==
+            findlib["configuration"]["path"],
+            f"reference OCaml environment mismatch for {name}")
 
     inputs = plan["input"]
     require(isinstance(inputs, dict) and set(inputs) == {
@@ -1586,6 +1818,327 @@ def validate_reference_plan_bindings(
             isinstance(request["source"], str) and
             hashlib.sha256(request["source"].encode("utf-8")).hexdigest() ==
             request["sha256"], f"malformed generated reference request for {name}")
+
+
+def capture_reference_external_runtime(
+    external: dict[str, Any], stage: Path, stager: Stager,
+) -> dict[str, Any]:
+    """Retain and reauthenticate the complete shell/GP collection closure."""
+    require(external["command_shell"] == executable_route_record(
+        Path(external["command_shell"]["argument_path"]), "Sys.command shell",
+    ), "live Sys.command shell route differs from reference plans")
+    require(external["pari_gp"] == executable_route_record(
+        Path(external["pari_gp"]["argument_path"]), "PARI/GP executable",
+    ), "live PARI/GP route differs from reference plans")
+
+    package_pin, package_entries = tree_inventory(
+        Path(external["package_tree"]["root"]), "PARI/GP package tree",
+    )
+    data_pin, data_entries = tree_inventory(
+        Path(external["data_tree"]["root"]), "PARI/GP optional-data tree",
+    )
+    require(package_pin == external["package_tree"],
+            "live PARI/GP package tree differs from reference plans")
+    require(data_pin == external["data_tree"] and not data_entries and
+            data_pin["entry_count"] == 0 and data_pin["root_mode"] == 0o555,
+            "PARI/GP optional-data tree is not the pinned empty 0555 tree")
+
+    probe_environment = dict(external["probe"]["environment"])
+    version = subprocess.run(
+        [external["pari_gp"]["argument_path"], "--version-short"],
+        env=probe_environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, timeout=30, check=False,
+    )
+    observed_version = {
+        "stdout": version.stdout,
+        "sha256": hashlib.sha256(version.stdout.encode()).hexdigest(),
+    }
+    require(version.returncode == 0 and version.stderr == "" and
+            observed_version == external["pari_gp_version"],
+            "live PARI/GP version differs from reference plans")
+    probe = subprocess.run(
+        external["probe"]["shell_argv"], env=probe_environment,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        timeout=30, check=False,
+    )
+    observed_probe = {
+        "shell_argv": external["probe"]["shell_argv"],
+        "environment": probe_environment,
+        "return_code": probe.returncode,
+        "stdout": probe.stdout,
+        "stdout_sha256": hashlib.sha256(probe.stdout.encode()).hexdigest(),
+        "stderr": probe.stderr,
+        "stderr_sha256": hashlib.sha256(probe.stderr.encode()).hexdigest(),
+    }
+    require(observed_probe == external["probe"],
+            "live PARI/GP shell probe differs from reference plans")
+
+    package_root = Path(package_pin["root"])
+    retained_entries: list[dict[str, Any]] = []
+    package_files: dict[str, Snapshot] = {}
+    for entry in package_entries:
+        retained = dict(entry)
+        if entry["kind"] == "file":
+            relative = safe_relative(entry["path"], "PARI/GP package-tree file")
+            snapshot = stager.capture(
+                package_root / relative,
+                f"approval/reference-runtime/package-tree/files/{relative}",
+                f"PARI/GP package-tree file {relative}",
+            )
+            require(snapshot.identity.sha256 == entry["sha256"],
+                    f"PARI/GP package file changed during capture: {relative}")
+            retained.update({
+                "archive_path": snapshot.archive_path,
+                "bytes": snapshot.identity.bytes,
+            })
+            package_files[relative] = snapshot
+        retained_entries.append(retained)
+    package_post, package_post_entries = tree_inventory(
+        package_root, "PARI/GP package tree postflight",
+    )
+    require(package_post == package_pin and package_post_entries == package_entries,
+            "PARI/GP package tree changed during capture")
+
+    archive_path = ordinary_file(
+        Path(external["package_archive"]["path"]), "PARI/GP package archive",
+    )
+    require(stat.S_IMODE(archive_path.lstat().st_mode) == 0o444,
+            "PARI/GP package archive mode is not 0444")
+    package_archive = stager.capture(
+        archive_path, "approval/reference-runtime/package.deb",
+        "PARI/GP package archive",
+    )
+    require(package_archive.identity.sha256 == external["package_archive"]["sha256"],
+            "PARI/GP package archive differs from reference plans")
+
+    configuration_path = Path(external["configuration"]["path"])
+    require(configuration_path.is_relative_to(package_root),
+            "PARI/GP configuration is outside the package tree")
+    configuration_relative = configuration_path.relative_to(package_root).as_posix()
+    configuration = package_files.get(configuration_relative)
+    require(configuration is not None and
+            configuration.identity.sha256 == external["configuration"]["sha256"] and
+            stat.S_IMODE(configuration_path.lstat().st_mode) == 0o444,
+            "retained PARI/GP configuration differs from reference plans")
+
+    gp_path = Path(external["pari_gp"]["resolved_executable"]["path"])
+    require(gp_path.is_relative_to(package_root),
+            "resolved PARI/GP executable is outside the package tree")
+    gp_relative = gp_path.relative_to(package_root).as_posix()
+    gp_snapshot = package_files.get(gp_relative)
+    require(gp_snapshot is not None and
+            gp_snapshot.identity.sha256 ==
+            external["pari_gp"]["resolved_executable"]["sha256"],
+            "retained PARI/GP executable differs from reference plans")
+
+    shell_path = Path(external["command_shell"]["resolved_executable"]["path"])
+    shell = stager.capture(
+        shell_path, "approval/reference-runtime/shell/resolved-executable",
+        "Sys.command shell executable",
+    )
+    require(shell.identity.sha256 ==
+            external["command_shell"]["resolved_executable"]["sha256"],
+            "retained Sys.command shell differs from reference plans")
+
+    library_records = []
+    for index, planned in enumerate(external["dynamic_libraries"], 1):
+        source = Path(planned["path"])
+        snapshot = stager.capture(
+            source,
+            ("approval/reference-runtime/elf/"
+             f"{index:02d}-{planned['sha256'][:16]}-{source.name}"),
+            f"reference external ELF dependency {source}",
+        )
+        require(snapshot.identity.sha256 == planned["sha256"],
+                f"reference external ELF dependency changed: {source}")
+        library_records.append({
+            "source_path": str(source), "archive_path": snapshot.archive_path,
+            **snapshot.identity.as_json(),
+        })
+
+    inventory_identity = stager.write(
+        "approval/reference-runtime/package-tree/inventory.json",
+        canonical_json_bytes({
+            "schema": "candle-reference-pari-gp-package-tree-v1",
+            "pin": package_pin, "entries": retained_entries,
+        }),
+    )
+    return {
+        "policy": external["policy"],
+        "plan_projection_sha256": compact_json_sha256(external),
+        "package_archive": {
+            "source_path": str(package_archive.source_path),
+            "archive_path": package_archive.archive_path,
+            **package_archive.identity.as_json(),
+        },
+        "package_tree": {
+            "pin": package_pin,
+            "inventory_archive_path":
+                "approval/reference-runtime/package-tree/inventory.json",
+            **inventory_identity.as_json(),
+        },
+        "configuration": {
+            "source_path": str(configuration.source_path),
+            "archive_path": configuration.archive_path,
+            **configuration.identity.as_json(),
+        },
+        "pari_gp": {
+            "source_path": str(gp_snapshot.source_path),
+            "archive_path": gp_snapshot.archive_path,
+            **gp_snapshot.identity.as_json(),
+        },
+        "command_shell": {
+            "source_path": str(shell.source_path),
+            "archive_path": shell.archive_path,
+            **shell.identity.as_json(),
+        },
+        "dynamic_libraries": library_records,
+        "data_tree": data_pin,
+        "version": observed_version,
+        "probe": observed_probe,
+    }
+
+
+def capture_reference_core_runtime(
+    reference: dict[str, Any], stage: Path, stager: Stager,
+) -> dict[str, Any]:
+    """Retain and reauthenticate the complete HOL/OCaml runtime projection."""
+    def capture_pin(pin: dict[str, Any], archive_path: str,
+                    label: str) -> dict[str, Any]:
+        source = ordinary_file(Path(pin["path"]), label)
+        metadata = source.lstat()
+        key = (metadata.st_dev, metadata.st_ino)
+        if key in stager.source_keys:
+            identity = stable_file_identity(source, label)
+            require(identity.sha256 == pin["sha256"],
+                    f"live {label} differs from reference plans")
+            return {
+                "source_path": str(source),
+                "retained_by": stager.source_keys[key],
+                **identity.as_json(),
+            }
+        snapshot = stager.capture(source, archive_path, label)
+        require(snapshot.identity.sha256 == pin["sha256"],
+                f"live {label} differs from reference plans")
+        return {
+            "source_path": str(snapshot.source_path),
+            "archive_path": snapshot.archive_path,
+            **snapshot.identity.as_json(),
+        }
+
+    tree_cache: dict[str, dict[str, Any]] = {}
+    def capture_tree(pin: dict[str, Any], index: int,
+                     label: str) -> dict[str, Any]:
+        root = Path(pin["root"])
+        if str(root) in tree_cache:
+            require(tree_cache[str(root)]["pin"] == pin,
+                    f"conflicting duplicate {label} tree pin")
+            return tree_cache[str(root)]
+        observed, entries = tree_inventory(root, label)
+        require(observed == pin, f"live {label} differs from reference plans")
+        retained = []
+        for entry_index, entry in enumerate(entries, 1):
+            value = dict(entry)
+            if entry["kind"] == "file":
+                relative = safe_relative(entry["path"], f"{label} file")
+                retained_file = capture_pin(
+                    {"path": str(root / relative), "sha256": entry["sha256"]},
+                    ("approval/reference-runtime/core/trees/"
+                     f"{index:02d}/files/{relative}"),
+                    f"{label} file {relative}",
+                )
+                value["retention"] = retained_file
+            elif entry["kind"] == "symlink" and "resolved_sha256" in entry:
+                resolved = Path(entry["resolved_path"])
+                retained_file = capture_pin(
+                    {"path": str(resolved),
+                     "sha256": entry["resolved_sha256"]},
+                    ("approval/reference-runtime/core/trees/"
+                     f"{index:02d}/resolved/{entry_index:06d}-{resolved.name}"),
+                    f"{label} resolved symlink {entry['path']}",
+                )
+                value["resolved_retention"] = retained_file
+            retained.append(value)
+        post, post_entries = tree_inventory(root, f"{label} postflight")
+        require(post == observed and post_entries == entries,
+                f"{label} changed during capture")
+        inventory_path = (
+            f"approval/reference-runtime/core/trees/{index:02d}/inventory.json")
+        inventory = stager.write(
+            inventory_path,
+            canonical_json_bytes({
+                "schema": "candle-reference-runtime-tree-v1",
+                "pin": pin, "entries": retained,
+            }),
+        )
+        result = {
+            "pin": pin, "inventory_archive_path": inventory_path,
+            **inventory.as_json(),
+        }
+        tree_cache[str(root)] = result
+        return result
+
+    files = {}
+    for index, key in enumerate((
+            "runtime_executable", "runtime_interpreter", "runtime_stublib",
+            "hol_ml"), 1):
+        files[key] = capture_pin(
+            reference[key],
+            f"approval/reference-runtime/core/files/{index:02d}-{key}",
+            key.replace("_", " "),
+        )
+    ocamlc = dict(reference["ocamlc"])
+    files["ocamlc"] = capture_pin(
+        {key: ocamlc[key] for key in ("path", "sha256")},
+        "approval/reference-runtime/core/files/05-ocamlc", "OCaml compiler",
+    )
+    findlib = reference["findlib"]
+    files["findlib_executable"] = capture_pin(
+        findlib["executable"],
+        "approval/reference-runtime/core/files/06-ocamlfind", "findlib executable",
+    )
+    files["findlib_configuration"] = capture_pin(
+        findlib["configuration"],
+        "approval/reference-runtime/core/files/07-ocamlfind-conf",
+        "findlib configuration",
+    )
+    files["generated_boot_files"] = [
+        capture_pin(
+            pin,
+            f"approval/reference-runtime/core/boot/{index:02d}-{Path(pin['path']).name}",
+            f"generated boot file {Path(pin['path']).name}",
+        ) for index, pin in enumerate(reference["generated_boot_files"], 1)
+    ]
+    files["runtime_stub_files"] = [
+        capture_pin(
+            pin,
+            f"approval/reference-runtime/core/stubs/{index:02d}-{Path(pin['path']).name}",
+            f"runtime stub {Path(pin['path']).name}",
+        ) for index, pin in enumerate(reference["runtime_stub_files"], 1)
+    ]
+    files["dynamic_libraries"] = [
+        capture_pin(
+            pin,
+            f"approval/reference-runtime/core/elf/{index:02d}-{Path(pin['path']).name}",
+            f"runtime ELF dependency {Path(pin['path']).name}",
+        ) for index, pin in enumerate(reference["dynamic_libraries"], 1)
+    ]
+    tree_pins = [reference["runtime_library_tree"],
+                 reference["ocaml_library_tree"],
+                 *findlib["package_roots"]]
+    trees = [capture_tree(pin, index, f"reference runtime tree {index}")
+             for index, pin in enumerate(tree_pins, 1)]
+    projection = {
+        key: reference[key] for key in (
+            "runtime_executable", "runtime_interpreter", "runtime_stublib",
+            "runtime_library_tree", "runtime_stub_files", "dynamic_libraries",
+            "ocamlc", "findlib", "hol_ml", "generated_boot_files",
+            "ocaml_library_tree")
+    }
+    return {
+        "plan_projection_sha256": compact_json_sha256(projection),
+        "files": files, "trees": trees,
+    }
 
 
 def validate_candidate_identity_projection(
@@ -1686,6 +2239,135 @@ def run_captured_reference_replay(
     }
 
 
+def capture_collection_evidence(
+    approval: dict[str, Any], root: Path, manifest: dict[str, Any],
+    stage: Path, stager: Stager,
+) -> tuple[dict[str, Any], dict[tuple[int, int], dict[str, Any]], dict[str, Any]]:
+    evidence = approval["collection_evidence"]
+    require(isinstance(evidence, dict) and set(evidence) ==
+            COLLECTION_EVIDENCE_KEYS,
+            "malformed reference collection evidence")
+    captured: dict[str, Snapshot] = {}
+    for name in sorted(COLLECTION_EVIDENCE_KEYS):
+        _, path, expected = validate_root_file_reference(
+            evidence[name], root, f"reference collection {name}")
+        snapshot = stager.capture(
+            path, f"approval/reference-collection/{name}.json",
+            f"reference collection {name}",
+        )
+        require(snapshot.identity == expected,
+                f"reference collection {name} bytes differ")
+        captured[name] = snapshot
+    contract = snapshot_json(
+        stage, captured["contract"], "reference collection contract")
+    receipt = snapshot_json(
+        stage, captured["receipt"], "reference collection receipt")
+    require(isinstance(contract, dict) and set(contract) == {
+        "schema", "kind", "approval_status", "promotion_allowed",
+        "sweep_count", "target_count", "total_target_runs", "source_mode",
+        "project", "candle", "reference", "runtime", "external_runtime",
+        "deadlines", "inventory", "controller",
+    } and contract["schema"] == 2 and
+            contract["kind"] ==
+            "candle-great100-two-sweep-reference-collection" and
+            contract["approval_status"] ==
+            "candidate_collection_only_unapproved" and
+            contract["promotion_allowed"] is False and
+            contract["sweep_count"] == 2 and contract["target_count"] == 65 and
+            contract["total_target_runs"] == 130 and
+            contract["source_mode"] == "manifest-exact",
+            "malformed reference collection contract")
+    inventory = contract["inventory"]
+    targets = manifest["targets"]
+    require(isinstance(inventory, dict) and
+            inventory.get("target_count") == 65 and
+            inventory.get("source_count") == 66 and
+            inventory.get("request_count") == 97 and
+            isinstance(inventory.get("targets"), list) and
+            [value.get("name") for value in inventory["targets"]
+             if isinstance(value, dict)] ==
+            [target["name"] for target in targets],
+            "reference collection inventory differs from manifest")
+    require(isinstance(receipt, dict) and set(receipt) == {
+        "schema", "kind", "contract_sha256", "contract", "sweep_count",
+        "target_count", "total_target_runs", "completed_target_runs",
+        "pending_target_runs", "failure_attempt_count", "failures",
+        "publication_interruptions", "outcome", "closed", "approval_status",
+        "promotion_allowed", "sweeps",
+    } and receipt["schema"] == 1 and
+            receipt["kind"] ==
+            "candle-great100-two-sweep-reference-receipt" and
+            receipt["contract_sha256"] == compact_json_sha256(contract) and
+            isinstance(receipt["contract"], dict) and
+            receipt["contract"].get("path") == "collection-contract.json" and
+            receipt["contract"].get("bytes") == captured["contract"].identity.bytes and
+            receipt["contract"].get("sha256") ==
+            captured["contract"].identity.sha256 and
+            receipt["sweep_count"] == 2 and receipt["target_count"] == 65 and
+            receipt["total_target_runs"] == 130 and
+            receipt["completed_target_runs"] == 130 and
+            receipt["pending_target_runs"] == 0 and
+            receipt["outcome"] == "complete" and receipt["closed"] is True and
+            receipt["approval_status"] == "candidates_unapproved" and
+            receipt["promotion_allowed"] is False and
+            isinstance(receipt["failure_attempt_count"], int) and
+            receipt["failure_attempt_count"] >= 0 and
+            isinstance(receipt["failures"], list) and
+            len(receipt["failures"]) == receipt["failure_attempt_count"] and
+            isinstance(receipt["publication_interruptions"], list),
+            "reference collection receipt is not closed and exact")
+    sweeps = receipt["sweeps"]
+    require(isinstance(sweeps, list) and len(sweeps) == 2,
+            "reference collection receipt lacks two sweeps")
+    successes: dict[tuple[int, int], dict[str, Any]] = {}
+    for sweep_index, sweep in enumerate(sweeps, 1):
+        require(isinstance(sweep, dict) and set(sweep) == {
+            "sweep", "target_count", "completed_count", "pending_count",
+            "targets",
+        } and sweep["sweep"] == sweep_index and
+                sweep["target_count"] == 65 and
+                sweep["completed_count"] == 65 and
+                sweep["pending_count"] == 0 and
+                isinstance(sweep["targets"], list) and
+                len(sweep["targets"]) == 65,
+                "malformed closed reference sweep")
+        for target_index, (target, row) in enumerate(
+                zip(targets, sweep["targets"]), 1):
+            require(isinstance(row, dict) and set(row) == {
+                "index", "name", "state", "attempt_count", "success",
+                "attempts",
+            } and row["index"] == target_index and
+                    row["name"] == target["name"] and
+                    row["state"] == "complete" and
+                    is_int(row["attempt_count"]) and row["attempt_count"] >= 1 and
+                    isinstance(row["attempts"], list) and
+                    len(row["attempts"]) == row["attempt_count"] and
+                    isinstance(row["success"], dict),
+                    "malformed reference collection target success")
+            success = row["success"]
+            require(set(success) == {
+                "attempt", "receipt_path", "receipt", "session_nonce",
+                "artifacts",
+            } and isinstance(success["attempt"], str) and
+                    re.fullmatch(r"attempt-[0-9]{4}", success["attempt"]) and
+                    success["receipt_path"] ==
+                    (f"sweep-{sweep_index}/target-{target_index:03d}/"
+                     f"{success['attempt']}/success.json") and
+                    require_nonce(success["session_nonce"],
+                                  "collection success nonce") ==
+                    success["session_nonce"] and
+                    isinstance(success["receipt"], dict) and
+                    isinstance(success["artifacts"], dict),
+                    "malformed aggregate collection success")
+            successes[(sweep_index, target_index)] = success
+    return contract, successes, {
+        name: {
+            "archive_path": snapshot.archive_path,
+            **snapshot.identity.as_json(),
+        } for name, snapshot in captured.items()
+    }
+
+
 def validate_approval_and_capture(
     approval: dict[str, Any], approval_snapshot: Snapshot,
     root: Path, manifest: dict[str, Any], expected_semantics: list[dict[str, Any]],
@@ -1694,7 +2376,7 @@ def validate_approval_and_capture(
     replay_runtime: dict[str, str], stage: Path, stager: Stager,
 ) -> dict[str, Any]:
     require(set(approval) == APPROVAL_KEYS and
-            approval["schema"] == "candle-s1-identity-approval-v1" and
+            approval["schema"] == "candle-s1-identity-approval-v2" and
             approval["artifact_kind"] ==
             "independently-reviewed-ocaml-reference-identities" and
             approval["approval_status"] == "approved" and
@@ -1743,11 +2425,16 @@ def validate_approval_and_capture(
     validate_datetime(review["approved_utc"], "independent approval review time")
     require_commit(review["review_commit"], "independent approval review commit")
 
+    collection_contract, collection_successes, collection_capture = \
+        capture_collection_evidence(approval, root, manifest, stage, stager)
+
     targets = approval["targets"]
     require(isinstance(targets, list) and len(targets) == 65,
             "independent approval does not cover 65 targets")
     artifact_cache: dict[str, tuple[str, Snapshot]] = {}
     replays: list[dict[str, Any]] = []
+    external_runtime: dict[str, Any] | None = None
+    core_runtime: dict[str, Any] | None = None
     for target_index, (target, approved, semantic) in enumerate(zip(
             manifest["targets"], targets, expected_semantics), 1):
         name = target["name"]
@@ -1765,13 +2452,18 @@ def validate_approval_and_capture(
                 f"independent approval lacks two reference runs for {name}")
         nonces: set[str] = set()
         distinct_run_artifacts = {
-            name: set() for name in ("candidate", "plan", "request", "transcript")
+            name: set() for name in (
+                "candidate", "plan", "request", "transcript",
+                "controller_success", "collector_stdout", "collector_stderr",
+                "validator_stdout", "validator_stderr")
         }
         for run_index, run in enumerate(runs, 1):
             require(isinstance(run, dict) and set(run) == {
                 "artifacts", "reference_git_head", "session_nonce",
-                "identity_sha256",
+                "identity_sha256", "sweep",
             }, f"malformed reference run for {name}")
+            require(run["sweep"] == run_index,
+                    f"reference run sweep mismatch for {name}")
             require(run["reference_git_head"] == exact_reference,
                     f"reference run head mismatch for {name}")
             nonce = require_nonce(run["session_nonce"], f"reference run {name}")
@@ -1781,6 +2473,8 @@ def validate_approval_and_capture(
             artifacts = run["artifacts"]
             require(isinstance(artifacts, dict) and set(artifacts) == {
                 "candidate", "plan", "request", "transcript", "source_contract",
+                "controller_success", "collector_stdout", "collector_stderr",
+                "validator_stdout", "validator_stderr",
             }, f"incomplete reference artifacts for {name}")
             captured_artifacts: dict[str, Snapshot] = {}
             for artifact_name, artifact in sorted(artifacts.items()):
@@ -1840,11 +2534,101 @@ def validate_approval_and_capture(
                 stage, captured_artifacts["transcript"],
                 f"{name} reference transcript run {run_index}",
             )
+            success_receipt = snapshot_json(
+                stage, captured_artifacts["controller_success"],
+                f"{name} controller success run {run_index}",
+            )
+            aggregate_success = collection_successes[(run_index, target_index)]
+            aggregate_receipt = aggregate_success["receipt"]
+            require(isinstance(aggregate_receipt, dict) and
+                    aggregate_receipt.get("bytes") ==
+                    captured_artifacts["controller_success"].identity.bytes and
+                    aggregate_receipt.get("sha256") ==
+                    captured_artifacts["controller_success"].identity.sha256 and
+                    aggregate_success["session_nonce"] == run["session_nonce"],
+                    f"aggregate receipt does not bind {name} run {run_index}")
+            require(isinstance(success_receipt, dict) and set(success_receipt) == {
+                "schema", "kind", "sweep", "target_index", "target",
+                "session_nonce", "artifacts", "collector_stdout",
+                "collector_stderr", "validator_stdout", "validator_stderr",
+                "deadlines", "approval_status", "promotion_allowed",
+            } and success_receipt["schema"] == 1 and
+                    success_receipt["kind"] ==
+                    "candle-reference-attempt-success" and
+                    success_receipt["sweep"] == run_index and
+                    success_receipt["target_index"] == target_index and
+                    success_receipt["target"] == name and
+                    success_receipt["session_nonce"] == run["session_nonce"] and
+                    success_receipt["deadlines"] ==
+                    collection_contract["deadlines"] and
+                    success_receipt["approval_status"] ==
+                    "candidate_unapproved" and
+                    success_receipt["promotion_allowed"] is False and
+                    isinstance(success_receipt["artifacts"], dict) and
+                    set(success_receipt["artifacts"]) == {
+                        "candidate", "plan", "request", "transcript"},
+                    f"malformed controller success for {name} run {run_index}")
+            for artifact_name in ("candidate", "plan", "request", "transcript"):
+                record = success_receipt["artifacts"][artifact_name]
+                aggregate_record = aggregate_success["artifacts"].get(artifact_name)
+                snapshot = captured_artifacts[artifact_name]
+                require(isinstance(record, dict) and set(record) == {
+                    "path", "bytes", "sha256"} and
+                        record.get("bytes") == snapshot.identity.bytes and
+                        record.get("sha256") == snapshot.identity.sha256 and
+                        aggregate_record == record,
+                        f"controller receipt does not bind {name} {artifact_name}")
+            for artifact_name in (
+                    "collector_stdout", "collector_stderr", "validator_stdout",
+                    "validator_stderr"):
+                record = success_receipt[artifact_name]
+                snapshot = captured_artifacts[artifact_name]
+                require(isinstance(record, dict) and set(record) == {
+                    "path", "bytes", "sha256"} and
+                        record.get("bytes") == snapshot.identity.bytes and
+                        record.get("sha256") == snapshot.identity.sha256,
+                        f"controller receipt does not bind {name} {artifact_name}")
             validate_reference_plan_bindings(
                 plan, candidate, target, run, policy,
                 captured_artifacts["source_contract"], root, validator, protocol,
                 serializer_sha256,
             )
+            candle_contract = collection_contract["candle"]
+            reference_contract = collection_contract["reference"]
+            require(plan["input"]["collector"]["sha256"] ==
+                    candle_contract["collector"]["sha256"] and
+                    plan["input"]["collector_repository"]["git_head"] ==
+                    candle_contract["git_head"] and
+                    plan["input"]["collector_repository"][
+                        "support_at_head_sha256"] ==
+                    candle_contract["protocol"]["sha256"] and
+                    plan["input"]["manifest"]["sha256"] ==
+                    candle_contract["manifest"]["sha256"] and
+                    plan["input"]["serializer"]["sha256"] ==
+                    candle_contract["serializer"]["sha256"] and
+                    plan["reference"]["root"] == reference_contract["root"] and
+                    plan["reference"]["git_head"] ==
+                    reference_contract["git_head"],
+                    f"collection contract does not bind {name} plan")
+            observed_external = plan["reference"]["external_runtime"]
+            if external_runtime is None:
+                external_runtime = observed_external
+            else:
+                require(observed_external == external_runtime,
+                        "reference runs use different external-runtime closures")
+            observed_core = {
+                key: plan["reference"][key] for key in (
+                    "runtime_executable", "runtime_interpreter",
+                    "runtime_stublib", "runtime_library_tree",
+                    "runtime_stub_files", "dynamic_libraries", "ocamlc",
+                    "findlib", "hol_ml", "generated_boot_files",
+                    "ocaml_library_tree")
+            }
+            if core_runtime is None:
+                core_runtime = observed_core
+            else:
+                require(observed_core == core_runtime,
+                        "reference runs use different HOL/OCaml runtime closures")
             require(plan["request"]["source"] == request_source,
                     f"staged reference request differs from plan for {name}")
             validate_candidate_identity_projection(
@@ -1868,9 +2652,25 @@ def validate_approval_and_capture(
                 f"reference runs do not use distinct session nonces for {name}")
         require(all(len(values) == 2 for values in distinct_run_artifacts.values()),
                 f"reference run artifacts are not distinct for {name}")
-    return run_captured_reference_replay(
+    require(external_runtime is not None,
+            "reference approval has no external-runtime closure")
+    require(core_runtime is not None,
+            "reference approval has no HOL/OCaml runtime closure")
+    replay = run_captured_reference_replay(
         stage, validator, protocol, regression, replay_runtime, replays, stager,
     )
+    replay["external_runtime"] = capture_reference_external_runtime(
+        external_runtime, stage, stager,
+    )
+    reference_projection = {
+        **core_runtime,
+        "external_runtime": external_runtime,
+    }
+    replay["core_runtime"] = capture_reference_core_runtime(
+        reference_projection, stage, stager,
+    )
+    replay["collection_evidence"] = collection_capture
+    return replay
 
 
 def preflight_finalizer() -> dict[str, Any]:
@@ -2080,7 +2880,7 @@ def archive(
         require(manifest.get("identity_approval") == {
             "path": approval_relative,
             "sha256": approval_snapshot.identity.sha256,
-            "schema": "candle-s1-identity-approval-v1",
+            "schema": "candle-s1-identity-approval-v2",
             "approval_status": "approved",
             "promotion_allowed": True,
         }, "manifest identity-approval metadata mismatch")

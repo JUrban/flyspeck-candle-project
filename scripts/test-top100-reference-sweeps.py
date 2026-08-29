@@ -188,7 +188,25 @@ def main():
             "sha256": external_contract["configuration"]["sha256"],
         },
         "data_tree": external_contract["data_tree"],
-        "dynamic_libraries": [], "probe": {},
+        "dynamic_libraries": [],
+        "probe": {
+            "shell_argv": [
+                "/bin/sh", "-c",
+                "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp",
+            ],
+            "environment": {
+                "HOME": str(reference_root),
+                "PATH": external_contract["runtime_environment"]["PATH"],
+                "LC_ALL": "C",
+                "GPRC": external_contract["runtime_environment"]["GPRC"],
+                "GP_DATA_DIR":
+                    external_contract["runtime_environment"]["GP_DATA_DIR"],
+            },
+            "return_code": 0,
+            "stdout": "1\n[3, 1; 5, 1]\n",
+            "stdout_sha256": digest(b"1\n[3, 1; 5, 1]\n"),
+            "stderr": "", "stderr_sha256": digest(b""),
+        },
     }
     plan = {
         "schema": "candle-s1-reference-plan-v7",
@@ -232,7 +250,24 @@ def main():
         "request": {"source": request.decode(), "sha256": digest(request)},
         "fresh_process_contract": {
             "required": True,
-            "runtime_environment": external_contract["runtime_environment"],
+            "preloaded_checkpoint_allowed": False,
+            "working_directory": str(reference_root),
+            "environment_policy": "sanitized_allowlist_no_inherited_overrides",
+            "runtime_argv": [str(Path(args.runtime).resolve()), "-noprompt"],
+            "runtime_environment": {
+                "HOME": str(reference_root),
+                "PATH": external_contract["runtime_environment"]["PATH"],
+                "LC_ALL": "C",
+                "GPRC": external_contract["runtime_environment"]["GPRC"],
+                "GP_DATA_DIR":
+                    external_contract["runtime_environment"]["GP_DATA_DIR"],
+                "HOLLIGHT_DIR": str(reference_root),
+                "HOLLIGHT_USE_MODULE": "0",
+                "OCAMLRUNPARAM": "l=2000000000",
+                "CAML_LD_LIBRARY_PATH": str(Path(args.runtime_stublib).parent),
+                "OCAML_TOPLEVEL_PATH": str(reference_root),
+                "OCAMLFIND_CONF": str(reference_root / "ocamlfind.conf"),
+            },
         },
     }
     plan_path.write_text(json.dumps(plan, indent=2) + "\n")
@@ -376,7 +411,7 @@ class Fixture:
         self.pari_gp_data.mkdir()
         self.pari_gp_data.chmod(0o555)
         self.pari_gp_package = self.tools / "pari-gp.deb"
-        self.pari_gp_package.write_text("fixture signed package archive\n")
+        self.pari_gp_package.write_text("fixture hash-pinned package archive\n")
         self.pari_gp_package.chmod(0o444)
 
     def _create_sources(self) -> None:
@@ -615,6 +650,17 @@ class ReferenceSweepControllerTests(unittest.TestCase):
         (fixture.reference / "dirty.txt").write_text("dirty\n")
         with self.assertRaisesRegex(MODULE.CollectionFailure,
                                     "worktree is not clean"):
+            MODULE.run(fixture.arguments())
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-gp-data.")
+        fixture = self.fixture()
+        fixture.pari_gp_data.chmod(0o755)
+        (fixture.pari_gp_data / "unreviewed-table").write_text("unexpected\n")
+        fixture.pari_gp_data.chmod(0o555)
+        with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                    "optional-data tree must be empty"):
             MODULE.run(fixture.arguments())
 
     def test_private_root_git_flags_replacements_and_grafts_reject(self) -> None:
