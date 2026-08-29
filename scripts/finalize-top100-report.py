@@ -983,7 +983,8 @@ def validate_transcript(
     start = indices["start_line"]
     linked = indices["linked_line"]
     complete = indices["complete_line"]
-    require(suite < start < linked < complete,
+    linked_pass = lines.index(LINKED_PASS_WITNESS)
+    require(suite < start < linked_pass < linked < complete,
             f"transcript marker order mismatch for {name}")
     wire_indices = [
         index for index, line in enumerate(lines)

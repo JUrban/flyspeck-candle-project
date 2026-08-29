@@ -1273,6 +1273,27 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
                         process["markers"],
                     )
 
+    def test_linked_pass_witness_order_is_closed(self) -> None:
+        target = self.fixture.manifest["targets"][0]
+        result = self.fixture.reports[0]["results"][0]
+        process = result["process_evidence"]
+        witness = (MODULE.LINKED_PASS_WITNESS + "\n").encode()
+        transcript = Path(result["log_path"]).read_bytes()
+        self.assertEqual(transcript.count(witness), 1)
+        transcript = transcript.replace(
+            witness, b"ordinary non-protocol output\n",
+        ) + witness
+        with self.assertRaisesRegex(MODULE.ValidationError, "marker order"):
+            MODULE.validate_transcript(
+                transcript, result["name"], process["suite_nonce"],
+                process["process_nonce"], self.fixture.linked_sha256,
+                target["fingerprint_request"]["expected_identities"][
+                    "theorems"],
+                target["fingerprint_request"]["expected_identities"][
+                    "post_state"],
+                process["markers"],
+            )
+
     def test_source_closure_is_live_hashed_and_committed(self) -> None:
         source = self.fixture.candle_root / "100/test-00.ml"
         source.write_bytes(source.read_bytes() + b"tamper\n")
