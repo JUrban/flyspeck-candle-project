@@ -62,6 +62,15 @@ This cannot replace the bootstrap currently in flight: that bootstrap is what
 provides the new proved parser-diagnostic entrypoint.  It can prevent repeated
 bootstraps after the first corpus-wide failures are observed.
 
+Implementation has begun with a separate exact 392-plus-8 selection
+descriptor.  A measured dry preparation also showed why this cannot be a
+count-only expansion: existing pilot handling prepares only 381 of 400 nodes.
+The runtime profile must authenticate 18 normalized effective inputs and the
+effective post-normalization loader-action projection, as well as require and
+retain exactly 400 ordered parser attempts.  The existing pilot receipt has
+already been hardened to exact attempt/transcript cardinality so that the
+larger profile cannot inherit a zero-attempt or partial-attempt pass.
+
 ### Batch frontend repairs — accept
 
 Parser, normalization, and inference failures found by the 400-node gate
