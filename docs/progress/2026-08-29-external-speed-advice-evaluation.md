@@ -10,8 +10,8 @@ proof-architecture work.  The recommended order for this project is:
 
 1. add an explicit parser-only gate over all 400 authenticated source nodes;
 2. batch frontend repairs before another bootstrap;
-3. use HOL4's native content-addressed cache for development after validating
-   its exact cache keys and relocation behavior;
+3. harden HOL4's native fetch path, then test its content-addressed cache in a
+   disposable, identity-namespaced checkout;
 4. benchmark `Holmake -j2 --mt=1` against the current clean `-j1 --mt=1`
    baseline under the existing memory/swap monitor;
 5. defer `-j4`, x64 specialization of the shared translation heap, and theory
@@ -83,14 +83,23 @@ This cannot replace the bootstrap currently in flight: that bootstrap is what
 provides the new proved parser-diagnostic entrypoint.  It can prevent repeated
 bootstraps after the first corpus-wide failures are observed.
 
-Implementation has begun with a separate exact 392-plus-8 selection
-descriptor.  A measured dry preparation also showed why this cannot be a
-count-only expansion: existing pilot handling prepares only 381 of 400 nodes.
-The runtime profile must authenticate 18 normalized effective inputs and the
-effective post-normalization loader-action projection, as well as require and
-retain exactly 400 ordered parser attempts.  The existing pilot receipt has
-already been hardened to exact attempt/transcript cardinality so that the
-larger profile cannot inherit a zero-attempt or partial-attempt pass.
+The source-only foundation is complete at Candle commits
+`f4a21d0310e552c7660721b25c8679ab89a2bda4` and
+`228984c841a3ed8bd96e1d1849dc6a5195ee5083`.  It authenticates the exact
+392-plus-8 descriptor, all 400 original source identities, the 18 exact
+normalizations, and the effective post-normalization loader projection.  A
+Latin-1 one-byte scan includes the non-UTF-8 `collect_geom.hl` source.  The
+result is exactly 382 original plus 18 normalized inputs, 727 recognized
+loader sites, 721 complete-line masks, six retained embedded expressions, and
+400 unique prepared identities.  A post-mask rescan finds exactly those six
+embedded expressions and no standalone action.  The focused suite passes 16
+tests and full lightweight Candle discovery passes 318 tests.
+
+This remains source-only and categorically nonpromotable.  The next runtime
+profile must materialize these exact bytes and require and retain exactly 400
+ordered parser attempts.  The existing pilot receipt is already hardened to
+exact attempt/transcript cardinality so the larger profile cannot inherit a
+zero-attempt or partial-attempt pass.
 
 ### Batch frontend repairs — accept
 
@@ -133,6 +142,25 @@ or overwrite a namespace under a different identity.  Give `--cache-dir` and
 rebuild-strategy effects are measured independently.  Both modes remain
 development acceleration only.  Final release qualification still requires
 an empty-tree, cache-disabled replay.
+
+The non-building preflight is implemented at project commit
+`30888d71aae76ffeb71e6eabdc7a792d4b78f6eb` and passed hostile review with no
+P0 or P1 findings.  It is deliberately restricted to
+`compiler/bootstrap/translation/compiler64ProgTheory.uo`, requires exact
+project/HOL4/CakeML top levels and commits, rejects any ignored or extra
+CakeML build path, binds every tracked source byte and POSIX mode, normalizes
+relocated in-root HOL `sigobj` links while binding their target contents, and
+uses two matching isolated-Python/toolchain snapshots.  The exact disposable
+checkout produced namespace
+`c09067fd011e6e4d572249331a62fc0de3514cfb84ab04ee985635f7e9d7e1f7`.
+It describes a namespace only; it neither creates a cache nor invokes
+`Holmake`.
+
+Fetch hardening is being developed separately from the live proof at HOL4
+branch `codex/hol-cache-hardening-v13`.  Cache execution remains prohibited
+until its exact-product, URL, staged-content, parent, and commit checks compile
+and pass adversarial tests after the serial replay releases the sole-Holmake
+lock.
 
 ### `Holmake -j2` — benchmark after the serial baseline
 
