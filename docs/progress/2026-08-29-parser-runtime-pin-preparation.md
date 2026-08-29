@@ -60,11 +60,35 @@ Holmake was launched.  The existing cold proof replay remained the sole
 Holmake and advanced through `to_flatProg` successfully before entering
 `to_closProg`, with no live swap traffic or resource alert.
 
+## Exact current materializations
+
+Fresh source-only plan trees were published from clean Candle head
+`6f4345057185214016dd7f051a0f3b503950480e` after all authority updates:
+
+- `/project/flyspeck-candle-runs/parser-pilot-materialization-6f43450`
+  contains 22 files, 20 ready inputs, and zero unsupported inputs.  Its plan
+  SHA-256 is
+  `599f1bad0bd69e6dce39608d7a8ff90fda9ae5e02e3cf739e04ad8fffa1ed5b3`;
+  its host-materialization SHA-256 is
+  `518e3d4f93df4ebd636e7c92bfc3d19477a623faa80b61c08096ca77eeff895c`.
+- `/project/flyspeck-candle-runs/all-inventory-materialization-6f43450`
+  contains 402 files, 400 ready inputs, and zero unsupported inputs.  Its plan
+  SHA-256 is
+  `816f847dd52331f0c93c9d0ffae6e2c53ebaf25a8757498277f187c0454962fd`;
+  its host-materialization SHA-256 is
+  `b3eee598a7a820654062638d516880577808886022944c6145aacfc548836242`.
+
+The all-inventory materialization retains 382 exact-original and 18
+exact-normalized sources plus 727 authenticated loader sites.  Both trees use
+mode 0555 directories and mode 0444 ordinary files.  They are parser plans,
+not parser results, and remain categorically nonpromotable.
+
 ## Next gate
 
 The branch is preparation only until the cold replay completes all four
 stages.  On success, the critical path is the exact cache-disabled canonical
 x64 bootstrap from this committed Candle authority, native link and provenance
-validation, a fresh 20-input parser pilot, and then a newly materialized
-400-input parser run.  Parser failures will then be repaired in batches before
-starting direct S1/S2/S3 source execution.
+validation, a fresh 20-input parser run from exact current authority, and then
+the 400-input parser run.  Either plan must be rematerialized if the committed
+Candle authority changes.  Parser failures will then be repaired in batches
+before starting direct S1/S2/S3 source execution.
