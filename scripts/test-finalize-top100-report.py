@@ -1896,7 +1896,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         package.chmod(0o644)
         package.write_bytes(b"mutated package archive\n")
         package.chmod(0o444)
-        self.assert_rejected("package archive differs")
+        self.assert_rejected("package_archive changed|package archive differs")
 
     def test_reference_collection_receipt_must_be_closed(self) -> None:
         artifact = self.fixture.approval["collection_evidence"]["receipt"]
