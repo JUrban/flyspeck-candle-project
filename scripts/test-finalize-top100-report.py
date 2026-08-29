@@ -347,8 +347,8 @@ import regression
 
 SESSION_MARKER = "CANDLE_REFERENCE_SESSION_V1"
 COMPLETE_MARKER = "CANDLE_REFERENCE_COMPLETE_V1"
-PLAN_SCHEMA = "candle-s1-reference-plan-v6"
-CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v6"
+PLAN_SCHEMA = "candle-s1-reference-plan-v7"
+CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v7"
 
 
 class CollectionError(Exception):
@@ -464,6 +464,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             self.candle_root, "candle/reference_fingerprints.py",
             reference_validator,
         )
+        self._write(
+            self.candle_root, "candle/reference_protocol.py",
+            b'"""Pinned reference protocol fixture."""\n',
+        )
         launcher = self._write(
             self.candle_root, "candle.sh", b"#!/bin/sh\nexit 0\n",
         )
@@ -569,6 +573,8 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         )
         collector = self.candle / "reference_fingerprints.py"
         collector_sha256 = digest(collector.read_bytes())
+        protocol = self.candle / "reference_protocol.py"
+        protocol_sha256 = digest(protocol.read_bytes())
         manifest_pin = self.candle / "top100_manifest.json"
         targets = []
         for target_index, semantic in enumerate(self.semantics):
@@ -590,8 +596,67 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     f"CANDLE_REFERENCE_COMPLETE_V1\t{nonce}",
                     "",
                 ])
+                gp_stdout = "[3, 1; 5, 1]\n"
+                external_environment = {
+                    "HOME": str(reference_root),
+                    "PATH": "/reference-tools/pari/usr/bin",
+                    "LC_ALL": "C",
+                    "GPRC": "/reference-tools/pari/candle-gprc",
+                    "GP_DATA_DIR": "/reference-tools/pari/candle-data",
+                }
+                def route(argument, resolved):
+                    return {
+                        "argument_path": argument,
+                        "argument_parent": {}, "argument": {},
+                        "resolved_executable": {
+                            "path": resolved, "sha256": "a" * 64,
+                            "mode": 0o555,
+                        },
+                    }
+                external_runtime = {
+                    "policy": "single_private_path_gp_with_pinned_shell_v1",
+                    "command_shell": route("/bin/sh", "/usr/bin/dash"),
+                    "pari_gp": route(
+                        "/reference-tools/pari/usr/bin/gp",
+                        "/reference-tools/pari/usr/bin/gp-2.15"),
+                    "pari_gp_version": {
+                        "stdout": "2.15.4\n",
+                        "sha256": digest(b"2.15.4\n"),
+                    },
+                    "package_archive": {
+                        "path": "/reference-tools/pari.deb",
+                        "sha256": "b" * 64,
+                    },
+                    "package_tree": {
+                        "root": "/reference-tools/pari", "root_mode": 0o755,
+                        "entry_count": 5, "inventory_sha256": "c" * 64,
+                        "inventory_policy":
+                            "relative_path_kind_mode_link_target_and_content_v1",
+                    },
+                    "configuration": {
+                        "path": "/reference-tools/pari/candle-gprc",
+                        "sha256": "d" * 64,
+                    },
+                    "data_tree": {
+                        "root": "/reference-tools/pari/candle-data",
+                        "root_mode": 0o555, "entry_count": 0,
+                        "inventory_sha256": "e" * 64,
+                        "inventory_policy":
+                            "relative_path_kind_mode_link_target_and_content_v1",
+                    },
+                    "dynamic_libraries": [{
+                        "path": "/usr/lib/libc.so.6", "sha256": "f" * 64,
+                    }],
+                    "probe": {
+                        "shell_argv": ["/bin/sh", "-c", "factor probe"],
+                        "environment": external_environment,
+                        "return_code": 0, "stdout": gp_stdout,
+                        "stdout_sha256": digest(gp_stdout.encode()),
+                        "stderr_sha256": digest(b""),
+                    },
+                }
                 plan = {
-                    "schema": "candle-s1-reference-plan-v6",
+                    "schema": "candle-s1-reference-plan-v7",
                     "status": "planned_not_executed",
                     "session_nonce": nonce,
                     "fresh_process_contract": {
@@ -602,7 +667,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                             "sanitized_allowlist_no_inherited_overrides",
                         "runtime_argv": ["/reference/ocaml", "-noprompt"],
                         "runtime_environment": {
-                            "PATH": "/usr/bin:/bin", "LC_ALL": "C",
+                            **external_environment,
                         },
                     },
                     "reference": {
@@ -620,6 +685,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                         "hol_ml": {"fixture": True},
                         "generated_boot_files": [],
                         "ocaml_library_tree": {"fixture": True},
+                        "external_runtime": external_runtime,
                     },
                     "input": {
                         "collector": {
@@ -633,6 +699,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                                 "candle/reference_fingerprints.py",
                             "collector_at_head_sha256": collector_sha256,
                             "collector_matches_head": True,
+                            "support_relative_path":
+                                "candle/reference_protocol.py",
+                            "support_at_head_sha256": protocol_sha256,
+                            "support_matches_head": True,
                         },
                         "manifest": {
                             "path": str(manifest_pin),
@@ -690,7 +760,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "approval_sha256": None,
                 }
                 candidate = {
-                    "schema": "candle-s1-reference-candidate-v6",
+                    "schema": "candle-s1-reference-candidate-v7",
                     "artifact_kind": "reference_identity_candidate",
                     "approval_status": "candidate_unapproved",
                     "promotion_allowed": False,
@@ -1084,7 +1154,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.assertEqual(bundle["source_closure"]["closure_sha256"],
                          self.fixture.closure["sha256"])
         self.assertEqual(bundle["approval_replay"]["candidate_count"], 130)
-        for component in ("validator", "regression"):
+        for component in ("validator", "protocol", "regression"):
             replay = bundle["approval_replay"][component]
             self.assertEqual(
                 (self.fixture.destination /
@@ -1399,7 +1469,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "transcript", ("\n".join(lines) + "\n").encode(),
         )
-        self.assert_rejected("captured v6 reference candidate replay failed")
+        self.assert_rejected("captured v7 reference candidate replay failed")
 
     def test_reference_request_must_regenerate_from_target_and_nonce(self) -> None:
         run = self.fixture.approval["targets"][0]["reference_runs"][0]
@@ -1416,7 +1486,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
-        self.assert_rejected("captured v6 reference candidate replay failed")
+        self.assert_rejected("captured v7 reference candidate replay failed")
 
     def test_reference_plan_target_is_bound(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -1439,6 +1509,18 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
         self.assert_rejected("reference plan head/status mismatch")
+
+    def test_reference_plan_protocol_support_is_bound(self) -> None:
+        artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
+            "artifacts"]["plan"]
+        plan_path = self.fixture.candle_root / artifact["path"]
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["input"]["collector_repository"][
+            "support_at_head_sha256"] = "a" * 64
+        self.fixture.replace_reference_artifact(
+            0, 0, "plan", MODULE.canonical_json_bytes(plan),
+        )
+        self.assert_rejected("reference plan collector binding mismatch")
 
     def test_reference_plan_nonce_is_bound(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][

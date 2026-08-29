@@ -101,6 +101,7 @@ EXECUTION_CONTRACT_PATHS = {
     "candle.sh": "100755",
 }
 REFERENCE_VALIDATOR_PATH = "candle/reference_fingerprints.py"
+REFERENCE_PROTOCOL_PATH = "candle/reference_protocol.py"
 FINGERPRINT_CONTRACT = {
     "serializer": "candle/fingerprint.ml structural v2",
     "load_pass_is_fingerprint_match": False,
@@ -188,9 +189,9 @@ sys.modules["pexpect"] = types.ModuleType("pexpect")
 load_exact("regression", stage / instructions["regression"])
 reference = load_exact(
     "reference_fingerprints", stage / instructions["validator"])
-if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v6" or
-        reference.CANDIDATE_SCHEMA != "candle-s1-reference-candidate-v6"):
-    raise RuntimeError("captured reference validator is not v6 compatible")
+if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v7" or
+        reference.CANDIDATE_SCHEMA != "candle-s1-reference-candidate-v7"):
+    raise RuntimeError("captured reference validator is not v7 compatible")
 for replay in instructions["replays"]:
     candidate = json.loads(
         (stage / replay["candidate"]).read_text(encoding="utf-8"))
@@ -1339,12 +1340,13 @@ def snapshot_utf8(stage: Path, snapshot: Snapshot, label: str) -> str:
 
 
 def prepare_reference_replay_root(
-    stage: Path, stager: Stager, validator: Snapshot,
+    stage: Path, stager: Stager, validator: Snapshot, protocol: Snapshot,
     contracts: dict[str, Snapshot], closure: dict[str, Any],
 ) -> dict[str, str]:
     runtime_root = "approval/replay/runtime-root"
     inputs = {
         REFERENCE_VALIDATOR_PATH: validator,
+        REFERENCE_PROTOCOL_PATH: protocol,
         "candle/regression.py": contracts["candle/regression.py"],
         "candle/fingerprint.ml": contracts["candle/fingerprint.ml"],
         "candle/top100_manifest.json": contracts["candle/top100_manifest.json"],
@@ -1366,6 +1368,7 @@ def prepare_reference_replay_root(
     return {
         "root": runtime_root,
         "validator": f"{runtime_root}/{REFERENCE_VALIDATOR_PATH}",
+        "protocol": f"{runtime_root}/{REFERENCE_PROTOCOL_PATH}",
         "regression": f"{runtime_root}/candle/regression.py",
     }
 
@@ -1373,15 +1376,15 @@ def prepare_reference_replay_root(
 def validate_reference_plan_bindings(
     plan: dict[str, Any], candidate: dict[str, Any], target: dict[str, Any],
     run: dict[str, Any], policy: dict[str, Any], source_contract: Snapshot,
-    validator: Snapshot, serializer_sha256: str,
+    root: Path, validator: Snapshot, protocol: Snapshot, serializer_sha256: str,
 ) -> None:
     name = target["name"]
     require(set(plan) == {
         "schema", "status", "session_nonce", "fresh_process_contract",
         "reference", "input", "request",
-    } and plan["schema"] == "candle-s1-reference-plan-v6" and
+    } and plan["schema"] == "candle-s1-reference-plan-v7" and
             plan["status"] == "planned_not_executed",
-            f"malformed v6 reference plan for {name}")
+            f"malformed v7 reference plan for {name}")
     nonce = run["session_nonce"]
     require(plan["session_nonce"] == candidate.get("session_nonce") == nonce,
             f"reference plan/candidate nonce mismatch for {name}")
@@ -1392,7 +1395,8 @@ def validate_reference_plan_bindings(
         "runtime_interpreter", "runtime_stublib", "runtime_library_tree",
         "runtime_stub_files", "dynamic_libraries", "ocamlc", "findlib",
         "hol_ml", "generated_boot_files", "ocaml_library_tree",
-    }, f"malformed v6 reference provenance for {name}")
+        "external_runtime",
+    }, f"malformed v7 reference provenance for {name}")
     require(isinstance(reference["root"], str) and
             Path(reference["root"]).is_absolute() and
             reference["git_head"] == run["reference_git_head"] ==
@@ -1413,12 +1417,90 @@ def validate_reference_plan_bindings(
             isinstance(fresh["runtime_environment"], dict),
             f"reference plan fresh-process contract mismatch for {name}")
 
+    external = reference["external_runtime"]
+    require(isinstance(external, dict) and set(external) == {
+        "policy", "command_shell", "pari_gp", "pari_gp_version",
+        "package_archive", "package_tree", "configuration", "data_tree",
+        "dynamic_libraries", "probe",
+    } and external["policy"] ==
+            "single_private_path_gp_with_pinned_shell_v1",
+            f"malformed reference external-runtime provenance for {name}")
+    for key in ("command_shell", "pari_gp"):
+        route = external[key]
+        require(isinstance(route, dict) and set(route) == {
+            "argument_path", "argument_parent", "argument",
+            "resolved_executable",
+        } and isinstance(route["argument_path"], str) and
+                Path(route["argument_path"]).is_absolute() and
+                isinstance(route["argument_parent"], dict) and
+                isinstance(route["argument"], dict) and
+                isinstance(route["resolved_executable"], dict) and
+                set(route["resolved_executable"]) == {"path", "sha256", "mode"} and
+                Path(route["resolved_executable"]["path"]).is_absolute() and
+                require_sha256(route["resolved_executable"]["sha256"],
+                               f"{name} {key} executable") and
+                isinstance(route["resolved_executable"]["mode"], int),
+                f"malformed reference {key} route for {name}")
+    version = external["pari_gp_version"]
+    require(isinstance(version, dict) and set(version) == {"stdout", "sha256"} and
+            isinstance(version["stdout"], str) and
+            re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+\n", version["stdout"]) and
+            hashlib.sha256(version["stdout"].encode()).hexdigest() ==
+            version["sha256"], f"malformed PARI/GP version for {name}")
+    for key in ("package_archive", "configuration"):
+        value = external[key]
+        require(isinstance(value, dict) and set(value) == {"path", "sha256"} and
+                isinstance(value["path"], str) and Path(value["path"]).is_absolute() and
+                require_sha256(value["sha256"], f"{name} {key}"),
+                f"malformed reference {key} for {name}")
+    for key in ("package_tree", "data_tree"):
+        value = external[key]
+        require(isinstance(value, dict) and set(value) == {
+            "root", "root_mode", "entry_count", "inventory_sha256",
+            "inventory_policy",
+        } and isinstance(value["root"], str) and Path(value["root"]).is_absolute() and
+                isinstance(value["root_mode"], int) and
+                isinstance(value["entry_count"], int) and
+                value["entry_count"] >= 0 and
+                require_sha256(value["inventory_sha256"], f"{name} {key}") and
+                value["inventory_policy"] ==
+                "relative_path_kind_mode_link_target_and_content_v1",
+                f"malformed reference {key} for {name}")
+    require(external["data_tree"]["root_mode"] == 0o555,
+            f"reference PARI/GP data root is writable for {name}")
+    libraries = external["dynamic_libraries"]
+    require(isinstance(libraries, list) and libraries and all(
+        isinstance(value, dict) and set(value) == {"path", "sha256"} and
+        isinstance(value["path"], str) and Path(value["path"]).is_absolute() and
+        SHA256_RE.fullmatch(value["sha256"]) is not None
+        for value in libraries),
+            f"malformed reference external ELF closure for {name}")
+    probe = external["probe"]
+    require(isinstance(probe, dict) and set(probe) == {
+        "shell_argv", "environment", "return_code", "stdout",
+        "stdout_sha256", "stderr_sha256",
+    } and probe["return_code"] == 0 and isinstance(probe["stdout"], str) and
+            "[3, 1; 5, 1]" in probe["stdout"] and
+            hashlib.sha256(probe["stdout"].encode()).hexdigest() ==
+            probe["stdout_sha256"] and
+            probe["stderr_sha256"] == hashlib.sha256(b"").hexdigest() and
+            isinstance(probe["environment"], dict) and
+            probe["environment"].get("PATH") ==
+            str(Path(external["pari_gp"]["argument_path"]).parent) and
+            probe["environment"].get("GPRC") == external["configuration"]["path"] and
+            probe["environment"].get("GP_DATA_DIR") == external["data_tree"]["root"],
+            f"malformed reference PARI/GP probe for {name}")
+    require(all(fresh["runtime_environment"].get(key) ==
+                probe["environment"].get(key)
+                for key in ("PATH", "GPRC", "GP_DATA_DIR")),
+            f"reference runtime omits pinned PARI/GP environment for {name}")
+
     inputs = plan["input"]
     require(isinstance(inputs, dict) and set(inputs) == {
         "collector", "collector_repository", "manifest",
         "manifest_schema_version", "target", "load_files", "theorem_names",
         "mapping_status", "serializer", "source_mode", "source_contract",
-    }, f"malformed v6 reference input contract for {name}")
+    }, f"malformed v7 reference input contract for {name}")
     require(inputs["target"] == name and inputs["manifest_schema_version"] == 1 and
             inputs["mapping_status"] == "audited" and
             inputs["source_mode"] == "manifest-exact",
@@ -1437,13 +1519,17 @@ def validate_reference_plan_bindings(
             isinstance(repository, dict) and set(repository) == {
                 "root", "git_head", "git_status", "collector_relative_path",
                 "collector_at_head_sha256", "collector_matches_head",
-            } and isinstance(repository["root"], str) and
-            Path(repository["root"]).is_absolute() and
+                "support_relative_path", "support_at_head_sha256",
+                "support_matches_head",
+            } and repository["root"] == str(root) and
             repository["collector_relative_path"] == REFERENCE_VALIDATOR_PATH and
+            repository["support_relative_path"] == REFERENCE_PROTOCOL_PATH and
             require_commit(repository["git_head"], f"{name} collector head") and
             repository["git_status"] == [] and
             repository["collector_at_head_sha256"] == validator.identity.sha256 and
             repository["collector_matches_head"] is True and
+            repository["support_at_head_sha256"] == protocol.identity.sha256 and
+            repository["support_matches_head"] is True and
             collector["path"] == str(
                 Path(repository["root"]) / REFERENCE_VALIDATOR_PATH),
             f"reference plan collector binding mismatch for {name}")
@@ -1502,7 +1588,7 @@ def validate_candidate_identity_projection(
     expected_identity: dict[str, Any], serializer_sha256: str,
 ) -> None:
     name = target["name"]
-    require(candidate.get("schema") == "candle-s1-reference-candidate-v6",
+    require(candidate.get("schema") == "candle-s1-reference-candidate-v7",
             f"legacy or unsupported reference candidate for {name}")
     identities = candidate.get("candidate_identities")
     require(isinstance(identities, dict) and set(identities) == FINGERPRINT_KEYS and
@@ -1534,7 +1620,7 @@ def validate_candidate_identity_projection(
 
 
 def run_captured_reference_replay(
-    stage: Path, validator: Snapshot, regression: Snapshot,
+    stage: Path, validator: Snapshot, protocol: Snapshot, regression: Snapshot,
     replay_runtime: dict[str, str], replays: list[dict[str, Any]], stager: Stager,
 ) -> dict[str, Any]:
     require(len(replays) == 130, "reference replay set must contain 130 runs")
@@ -1561,16 +1647,21 @@ def run_captured_reference_replay(
             timeout=300,
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise ValidationError("captured v6 reference replay could not run") from error
+        raise ValidationError("captured v7 reference replay could not run") from error
     expected_stdout = f"reference candidate replay PASS: {len(replays)}\n".encode()
     require(completed.returncode == 0 and completed.stdout == expected_stdout and
             completed.stderr == b"",
-            "captured v6 reference candidate replay failed")
+            "captured v7 reference candidate replay failed")
     return {
         "validator": {
             "committed_archive_path": validator.archive_path,
             "executed_archive_path": replay_runtime["validator"],
             **validator.identity.as_json(),
+        },
+        "protocol": {
+            "committed_archive_path": protocol.archive_path,
+            "executed_archive_path": replay_runtime["protocol"],
+            **protocol.identity.as_json(),
         },
         "regression": {
             "committed_archive_path": regression.archive_path,
@@ -1593,7 +1684,8 @@ def run_captured_reference_replay(
 def validate_approval_and_capture(
     approval: dict[str, Any], approval_snapshot: Snapshot,
     root: Path, manifest: dict[str, Any], expected_semantics: list[dict[str, Any]],
-    serializer_sha256: str, validator: Snapshot, regression: Snapshot,
+    serializer_sha256: str, validator: Snapshot, protocol: Snapshot,
+    regression: Snapshot,
     replay_runtime: dict[str, str], stage: Path, stager: Stager,
 ) -> dict[str, Any]:
     require(set(approval) == APPROVAL_KEYS and
@@ -1745,7 +1837,7 @@ def validate_approval_and_capture(
             )
             validate_reference_plan_bindings(
                 plan, candidate, target, run, policy,
-                captured_artifacts["source_contract"], validator,
+                captured_artifacts["source_contract"], root, validator, protocol,
                 serializer_sha256,
             )
             require(plan["request"]["source"] == request_source,
@@ -1772,7 +1864,7 @@ def validate_approval_and_capture(
         require(all(len(values) == 2 for values in distinct_run_artifacts.values()),
                 f"reference run artifacts are not distinct for {name}")
     return run_captured_reference_replay(
-        stage, validator, regression, replay_runtime, replays, stager,
+        stage, validator, protocol, regression, replay_runtime, replays, stager,
     )
 
 
@@ -1933,6 +2025,14 @@ def archive(
         validate_committed_snapshot(
             root, REFERENCE_VALIDATOR_PATH, reference_validator, stage, "100644",
         )
+        reference_protocol = stager.capture(
+            root / REFERENCE_PROTOCOL_PATH,
+            f"execution-contract/{REFERENCE_PROTOCOL_PATH}",
+            "reference fingerprint protocol",
+        )
+        validate_committed_snapshot(
+            root, REFERENCE_PROTOCOL_PATH, reference_protocol, stage, "100644",
+        )
         if _TEST_AFTER_CONTRACT_CAPTURE is not None:
             _TEST_AFTER_CONTRACT_CAPTURE()
         execution_contract = {
@@ -1949,7 +2049,8 @@ def archive(
             contract_snapshots["candle/fingerprint.ml"], stage, stager,
         )
         replay_runtime = prepare_reference_replay_root(
-            stage, stager, reference_validator, contract_snapshots, closure,
+            stage, stager, reference_validator, reference_protocol,
+            contract_snapshots, closure,
         )
 
         approval_references = [report.get("independent_approval") for report in reports]
@@ -1981,7 +2082,8 @@ def archive(
         approval_replay = validate_approval_and_capture(
             approval, approval_snapshot, root, manifest, approved_semantics,
             contract_snapshots["candle/fingerprint.ml"].identity.sha256,
-            reference_validator, contract_snapshots["candle/regression.py"],
+            reference_validator, reference_protocol,
+            contract_snapshots["candle/regression.py"],
             replay_runtime, stage, stager,
         )
 
