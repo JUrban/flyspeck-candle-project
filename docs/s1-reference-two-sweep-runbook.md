@@ -1,6 +1,6 @@
-# Great100 schema-v6 reference two-sweep runbook
+# Great100 schema-v7 reference two-sweep runbook
 
-This runbook controls collection of two independent, sequential schema-v6
+This runbook controls collection of two independent, sequential schema-v7
 reference candidates for every Great100 target. Collection is not approval:
 every candidate remains `candidate_unapproved`, every aggregate sets
 `promotion_allowed` to `false`, and the controller neither creates nor edits an
@@ -18,12 +18,12 @@ The runnable exact-reference configuration reviewed on 2026-08-29 is:
   `scripts/run-top100-reference-sweeps.py`; its exact absolute root, full HEAD,
   and controller SHA-256 are mandatory launch arguments;
 - Candle collector repository:
-  `/project/worktrees/candle-s1-scalable-fingerprint-v13` at
-  `30996f4015988270e028842e9d0ab9e29b262697`;
+  `/project/worktrees/candle-s1-gp-provenance-v13` at
+  `fdc7f33cfaf393908545516c4d860d4561af6fd9`;
 - `candle/top100_manifest.json` SHA-256
   `e021a1f11d2307ca65c29eb6ab56fc04e5f4be2dbc4f7702f63ad3e1b7bfdae9`;
 - `candle/reference_fingerprints.py` SHA-256
-  `b81c480c6095829d77ab6d36f7b42575a454bd70792d509eca29335c49dd188d`;
+  `3048857c23d798be6b365f58bca7b2566b95fe03b9be710de25c24565fba72af`;
 - isolated support module `candle/reference_protocol.py` SHA-256
   `e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68`;
 - iterative structural serializer `candle/fingerprint.ml` SHA-256
@@ -41,6 +41,21 @@ The runnable exact-reference configuration reviewed on 2026-08-29 is:
   `84825ef63ded23b445acd4ef399e1bb0a11081976da4741e1033c8569eaa2bd6`;
 - `/usr/bin/ocamlfind`, SHA-256
   `c08fd2438693fee0c8544216d11a213c51eff33e2fafc73f80f576430ee52837`;
+- project-local PARI/GP package tree
+  `/project/deps/pari-gp-2.15.4-2.1build1`, inventory SHA-256
+  `fb703986a8bcb2653742020214193a9b802fc0111caf2a26d2d7607e9cc0d810`;
+- resolved GP executable SHA-256
+  `c9673623cad2eaa7cfe402e7b7d833f1f703689a09837026b6386aaafba6deec`;
+- hash-pinned local package archive SHA-256
+  `55a95d51afe87688fe0fcfe1bca74bf8c5474533e2a42d3af45c87c1ae0d86fa`;
+- read-only GPRC SHA-256
+  `473ec0c27f514013b7a1ae2442fbe8e46046df58e6a0be590ea17a03873fc6b1`;
+  it sets `nbthreads = 1`, which the exact shell probe verifies before every
+  collection plan is accepted;
+- empty mode-0555 GP data-tree inventory SHA-256
+  `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`;
+- `/bin/sh` resolves to `/usr/bin/dash`, SHA-256
+  `86d31f6fb799e91fa21bad341484564510ca287703a16e9e46c53338776f4f42`;
 - `/usr/bin/python3` resolved executable bytes, SHA-256
   `1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118`;
 - `/usr/bin/git`, SHA-256
@@ -66,7 +81,7 @@ clean project checkout; do not derive or change them inside the controller
 invocation.
 
 ```sh
-mkdir -m 700 /external/evidence/great100-reference-v6
+mkdir -m 700 /external/evidence/great100-reference-v7
 
 PROJECT_ROOT=/absolute/reviewed/flyspeck-candle-project
 PROJECT_HEAD=REVIEWED_FULL_40_HEX_PROJECT_HEAD
@@ -75,16 +90,16 @@ CONTROLLER_SHA256=REVIEWED_64_HEX_CONTROLLER_SHA256
 /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LANG=C \
  /usr/bin/python3 -I -S \
  "$PROJECT_ROOT/scripts/run-top100-reference-sweeps.py" \
-  --artifact-root /external/evidence/great100-reference-v6 \
+  --artifact-root /external/evidence/great100-reference-v7 \
   --project-root "$PROJECT_ROOT" \
   --project-head "$PROJECT_HEAD" \
   --controller-sha256 "$CONTROLLER_SHA256" \
   --python-sha256 1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118 \
   --git-sha256 2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668 \
-  --candle-root /project/worktrees/candle-s1-scalable-fingerprint-v13 \
-  --candle-head 30996f4015988270e028842e9d0ab9e29b262697 \
+  --candle-root /project/worktrees/candle-s1-gp-provenance-v13 \
+  --candle-head fdc7f33cfaf393908545516c4d860d4561af6fd9 \
   --manifest-sha256 e021a1f11d2307ca65c29eb6ab56fc04e5f4be2dbc4f7702f63ad3e1b7bfdae9 \
-  --collector-sha256 b81c480c6095829d77ab6d36f7b42575a454bd70792d509eca29335c49dd188d \
+  --collector-sha256 3048857c23d798be6b365f58bca7b2566b95fe03b9be710de25c24565fba72af \
   --protocol-sha256 e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68 \
   --reference-root /project/worktrees/hol-light-s1-exact-reference-v13 \
   --reference-head 1258c129c3ddf0b239b649ba7024eab677cd953b \
@@ -96,6 +111,15 @@ CONTROLLER_SHA256=REVIEWED_64_HEX_CONTROLLER_SHA256
   --ocamlc-sha256 84825ef63ded23b445acd4ef399e1bb0a11081976da4741e1033c8569eaa2bd6 \
   --ocamlfind /usr/bin/ocamlfind \
   --ocamlfind-sha256 c08fd2438693fee0c8544216d11a213c51eff33e2fafc73f80f576430ee52837 \
+  --pari-gp-root /project/deps/pari-gp-2.15.4-2.1build1 \
+  --pari-gp-sha256 c9673623cad2eaa7cfe402e7b7d833f1f703689a09837026b6386aaafba6deec \
+  --pari-gp-package /project/deps/apt-noble-pari/packages/pari-gp_2.15.4-2.1build1_amd64.deb \
+  --pari-gp-package-sha256 55a95d51afe87688fe0fcfe1bca74bf8c5474533e2a42d3af45c87c1ae0d86fa \
+  --pari-gp-gprc-sha256 473ec0c27f514013b7a1ae2442fbe8e46046df58e6a0be590ea17a03873fc6b1 \
+  --pari-gp-tree-sha256 fb703986a8bcb2653742020214193a9b802fc0111caf2a26d2d7607e9cc0d810 \
+  --pari-gp-data-tree-sha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 \
+  --command-shell /bin/sh \
+  --command-shell-sha256 86d31f6fb799e91fa21bad341484564510ca287703a16e9e46c53338776f4f42 \
   --collection-wall-seconds 21600 \
   --target-wall-seconds 21660 \
   --validation-wall-seconds 900
@@ -165,6 +189,9 @@ approval_status = candidates_unapproved
 promotion_allowed = false
 ```
 
-Subsequent independent review and approval remain separate work. These raw
-candidates must not be copied directly into the Great100 manifest or treated as
-schema-4 Candle acceptance reports.
+Subsequent independent review and approval remain separate work. Approval
+schema v2 must attach this run's exact `collection-contract.json`, closed
+`receipt.json`, all 130 per-attempt `success.json` files, and their bound
+collector/validator outputs in addition to the candidate/plan/request/
+transcript records. These raw candidates must not be copied directly into the
+Great100 manifest or treated as schema-4 Candle acceptance reports.
