@@ -75,7 +75,9 @@ Project commit `504fa8d6c89069d7896b0c95f192ab0c7678b33d` replaces the fixed
 `CANDLE_PFT_GENERATION_TIMEOUT_SECONDS` accepts another positive integer when
 operationally justified.  The value is not a logical input and does not alter
 PFT bytes or evidence status.  Bash syntax and two structural watchdog
-regressions pass; the old one-day DMTCP launch/restart forms are absent.
+regressions pass; the old one-day DMTCP launch/restart forms are absent.  The
+complete direct-execution pass over every `scripts/test-*.py` controller also
+passes 120 tests, including 65 finalizer tests and 14 reference-sweep tests.
 
 When the live producer next exits, a new boundary will be accepted only after
 the finalized checkpoint, restart script, status, stable size/mtime, and lack
