@@ -64,6 +64,27 @@ The bootstrap controller performs its own stronger provenance, Git, path,
 host-tool, ELF-closure, output-preimage, lock-inode, and exact-environment
 checks.  The outer handoff checks do not replace those controls.
 
+The committed read-only prelaunch gate implements the outer checks.  Run it
+immediately before launch and require its JSON result to contain
+`"gate":"canonical-cakeml-bootstrap-ready"`:
+
+```sh
+/usr/bin/python3 -I -S \
+  /project/worktrees/flyspeck-project-s1-gp-v13/scripts/check-canonical-bootstrap-gate.py \
+  --replay-root /project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-964406486 \
+  --candle-root /project/worktrees/candle-runtime-pin-964406486 \
+  --candle-head 6f4345057185214016dd7f051a0f3b503950480e \
+  --cakeml-root /project/worktrees/cakeml-flyspeck-runtime-stack-v13 \
+  --cakeml-head 964406486a52e1a53a94eade4cf86a666dc8055a \
+  --hol4-root /project/worktrees/HOL-cakeml-dopen-v13 \
+  --hol4-head a390cbabd3a4521bab4ee20281e3e42933a8a3ae \
+  --attempt-root /project/flyspeck-candle-runs/cakeml-canonical-bootstrap-6f43450-964406486-attempt-001 \
+  --minimum-mem-available-gib 120
+```
+
+This program is intentionally incapable of launching or repairing a build.  A
+rejection leaves the transition manual and fail-closed.
+
 ## Canonical launch
 
 After satisfying the gate, create only the fresh attempt directory and replace
