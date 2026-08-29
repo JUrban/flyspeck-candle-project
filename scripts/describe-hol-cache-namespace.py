@@ -53,6 +53,7 @@ LDD_DIRECT_RE = re.compile(r"(/[^ ()]+) \((0x[0-9a-fA-F]+)\)")
 LDD_VDSO_RE = re.compile(
     r"linux-vdso[.]so[.][0-9]+ \((0x[0-9a-fA-F]+)\)"
 )
+LDD_STATIC_RE = re.compile(r"[ \t]*statically linked\n")
 SCHEMA = "candle-hol4-native-cache-preflight-v1"
 NAMESPACE_SCHEMA = "candle-hol4-native-cache-namespace-v1"
 POLICY = "development-only-cache-disabled-release-v1"
@@ -503,7 +504,7 @@ def dynamic_closure(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     completed = run([str(LDD), str(binary)])
     require(completed.stderr == "", f"ldd wrote to stderr for {label}")
-    if allow_no_dependencies and completed.stdout == "statically linked\n":
+    if allow_no_dependencies and LDD_STATIC_RE.fullmatch(completed.stdout):
         parsed: list[tuple[str, Path]] = []
     else:
         parsed = parse_ldd(completed.stdout)

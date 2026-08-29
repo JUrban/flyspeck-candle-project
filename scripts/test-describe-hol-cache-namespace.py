@@ -77,7 +77,7 @@ class CacheNamespaceTests(unittest.TestCase):
     def test_dynamic_closure_allows_exact_dependency_free_extension(self) -> None:
         completed = subprocess.CompletedProcess(
             ["ldd", "extension.so"], 0,
-            stdout="statically linked\n", stderr="",
+            stdout="\tstatically linked\n", stderr="",
         )
         with mock.patch.object(MODULE, "run", return_value=completed):
             identity, local = MODULE.dynamic_closure(
