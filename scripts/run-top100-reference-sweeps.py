@@ -71,6 +71,41 @@ THREAD_CAP_ENVIRONMENT = {
     "NUMEXPR_NUM_THREADS": "1",
 }
 CSDP_BUILD_KIND = "candle-hol-light-csdp-single-thread-build"
+CSDP_STATIC_LIBSDP_SHA256 = (
+    "ede58dd5bf3620aa08045aa767fd1280fefe1e76d6ece276e8a674d6156bca25"
+)
+CSDP_TOOLCHAIN = {
+    "archiver_argument": "/usr/bin/ar",
+    "archiver_resolved": "/usr/bin/x86_64-linux-gnu-ar",
+    "archiver_sha256":
+        "534681ac11c18868cfc4fdf98770aa0ba8973eedc90c231e94e6ba96e1a04f27",
+    "binutils_version_first_line": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+    "compiler_argument": "/usr/bin/gcc",
+    "compiler_resolved": "/usr/bin/x86_64-linux-gnu-gcc-13",
+    "compiler_sha256":
+        "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+    "compiler_version_first_line":
+        "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+}
+CSDP_RECIPE = {
+    "cflags": (
+        "-m64 -O2 -fno-ident -ansi -Wall -DBIT64 -DUSESIGTERM "
+        "-DUSEGETTIME -I../include"
+    ),
+    "commands": [
+        "make -C lib clean libsdp.a CC=/usr/bin/gcc CFLAGS=<cflags>",
+        (
+            "make -C solver clean csdp CC=/usr/bin/gcc CFLAGS=<cflags> "
+            "LIBS=<library_flags>"
+        ),
+    ],
+    "library_flags": (
+        "-L../lib -Wl,-Bstatic -lsdp -Wl,-Bdynamic -llapack -lblas "
+        "-lm -lgfortran"
+    ),
+    "native_cpu_flags": False,
+    "openmp_enabled": False,
+}
 CSDP_PROBE_SUCCESS = "Success: SDP solved"
 CSDP_PROBE_PRIMAL = "2.3000000e+01"
 CSDP_PROBE_DUAL = "2.3000000e+01"
@@ -422,46 +457,43 @@ def validate_csdp_build_statement(
     statement: object, source: dict[str, object], csdp: dict[str, object],
     probe_input: dict[str, object],
 ) -> dict[str, Any]:
-    require(isinstance(statement, dict) and set(statement) == {
-        "schema", "kind", "source", "toolchain", "recipe", "outputs",
-        "unit_probe", "runtime_policy",
-    }, "malformed CSDP build statement")
-    source_claim = statement["source"]
-    outputs = statement["outputs"]
-    recipe = statement["recipe"]
-    unit = statement["unit_probe"]
-    require(statement["schema"] == 1 and statement["kind"] == CSDP_BUILD_KIND and
-            isinstance(source_claim, dict) and
-            source_claim.get("archive") == Path(str(source["path"])).name and
-            source_claim.get("bytes") == source["bytes"] and
-            source_claim.get("sha256") == source["sha256"] and
-            source_claim.get("upstream_tree") == "Csdp-6.2.0" and
-            isinstance(outputs, dict) and
-            outputs.get("csdp_path") == "usr/bin/csdp" and
-            outputs.get("csdp_bytes") == csdp["bytes"] and
-            outputs.get("csdp_sha256") == csdp["sha256"],
-            "CSDP build statement does not bind source/executable")
-    cflags = recipe.get("cflags") if isinstance(recipe, dict) else None
-    require(isinstance(cflags, str) and "-fopenmp" not in cflags and
-            "-DUSEOPENMP" not in cflags and "-march=native" not in cflags and
-            "-mtune=native" not in cflags and
-            recipe.get("openmp_enabled") is False and
-            recipe.get("native_cpu_flags") is False and
-            statement["runtime_policy"] == {
-                "single_process_solver": True,
-                "single_thread_build": True,
-                "external_shared_libraries_closed_separately": True,
-            }, "CSDP build is not the portable single-thread recipe")
-    require(isinstance(unit, dict) and
-            unit.get("input_path") == Path(str(probe_input["path"])).name and
-            unit.get("input_bytes") == probe_input["bytes"] and
-            unit.get("input_sha256") == probe_input["sha256"] and
-            unit.get("exit_code") == 0 and
-            unit.get("success_line") == CSDP_PROBE_SUCCESS and
-            unit.get("primal_objective") == CSDP_PROBE_PRIMAL and
-            unit.get("dual_objective") == CSDP_PROBE_DUAL and
-            unit.get("maximum_allowed_dimacs_error") == "1.0e-6",
-            "CSDP build statement has wrong unit-probe policy")
+    expected = {
+        "schema": 1,
+        "kind": CSDP_BUILD_KIND,
+        "source": {
+            "archive": Path(str(source["path"])).name,
+            "bytes": source["bytes"],
+            "sha256": source["sha256"],
+            "ubuntu_source_package": "coinor-csdp 6.2.0-5build1 (Noble)",
+            "upstream_tree": "Csdp-6.2.0",
+        },
+        "toolchain": CSDP_TOOLCHAIN,
+        "recipe": CSDP_RECIPE,
+        "outputs": {
+            "csdp_path": "usr/bin/csdp",
+            "csdp_bytes": csdp["bytes"],
+            "csdp_sha256": csdp["sha256"],
+            "static_libsdp_sha256": CSDP_STATIC_LIBSDP_SHA256,
+        },
+        "unit_probe": {
+            "input_path": Path(str(probe_input["path"])).name,
+            "input_bytes": probe_input["bytes"],
+            "input_sha256": probe_input["sha256"],
+            "exit_code": 0,
+            "success_line": CSDP_PROBE_SUCCESS,
+            "primal_objective": CSDP_PROBE_PRIMAL,
+            "dual_objective": CSDP_PROBE_DUAL,
+            "maximum_allowed_dimacs_error": "1.0e-6",
+        },
+        "runtime_policy": {
+            "single_process_solver": True,
+            "single_thread_build": True,
+            "external_shared_libraries_closed_separately": True,
+        },
+    }
+    require(isinstance(statement, dict) and
+            canonical_json(statement) == canonical_json(expected),
+            "CSDP build statement differs from exact source/toolchain/recipe/output/probe contract")
     return statement
 
 

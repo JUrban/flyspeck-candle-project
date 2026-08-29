@@ -483,18 +483,17 @@ class Fixture:
                 "archive": self.csdp_source.name,
                 "bytes": self.csdp_source.stat().st_size,
                 "sha256": sha256(self.csdp_source.read_bytes()),
+                "ubuntu_source_package":
+                    "coinor-csdp 6.2.0-5build1 (Noble)",
                 "upstream_tree": "Csdp-6.2.0",
             },
-            "toolchain": {"fixture": True},
-            "recipe": {
-                "cflags": "-O2 -ansi -DBIT64",
-                "openmp_enabled": False,
-                "native_cpu_flags": False,
-            },
+            "toolchain": MODULE.CSDP_TOOLCHAIN,
+            "recipe": MODULE.CSDP_RECIPE,
             "outputs": {
                 "csdp_path": "usr/bin/csdp",
                 "csdp_bytes": self.csdp.stat().st_size,
                 "csdp_sha256": sha256(self.csdp.read_bytes()),
+                "static_libsdp_sha256": MODULE.CSDP_STATIC_LIBSDP_SHA256,
             },
             "unit_probe": {
                 "input_path": self.csdp_probe_input.name,
@@ -820,8 +819,74 @@ class ReferenceSweepControllerTests(unittest.TestCase):
         fixture.csdp_build_receipt.write_text(json.dumps(statement) + "\n")
         fixture.csdp_build_receipt.chmod(0o444)
         with self.assertRaisesRegex(
-                MODULE.CollectionFailure, "portable single-thread"):
+                MODULE.CollectionFailure, "exact source/toolchain/recipe"):
             MODULE.build_contract(fixture.arguments())
+
+    def test_csdp_build_statement_rejects_every_forged_provenance_field(self) -> None:
+        fixture = self.fixture()
+        statement = json.loads(fixture.csdp_build_receipt.read_text())
+        source = {
+            "path": str(fixture.csdp_source),
+            "bytes": fixture.csdp_source.stat().st_size,
+            "sha256": sha256(fixture.csdp_source.read_bytes()),
+        }
+        csdp = {
+            "path": str(fixture.csdp),
+            "bytes": fixture.csdp.stat().st_size,
+            "sha256": sha256(fixture.csdp.read_bytes()),
+        }
+        probe = {
+            "path": str(fixture.csdp_probe_input),
+            "bytes": fixture.csdp_probe_input.stat().st_size,
+            "sha256": sha256(fixture.csdp_probe_input.read_bytes()),
+        }
+        self.assertEqual(
+            MODULE.validate_csdp_build_statement(statement, source, csdp, probe),
+            statement,
+        )
+
+        def missing_libsdp(value):
+            del value["outputs"]["static_libsdp_sha256"]
+
+        def boolean_libsdp(value):
+            value["outputs"]["static_libsdp_sha256"] = True
+
+        def empty_toolchain(value):
+            value["toolchain"] = {}
+
+        def forged_commands(value):
+            value["recipe"]["commands"] = [
+                "make -j999 CFLAGS=-fopenmp",
+            ]
+
+        def missing_library_flags(value):
+            del value["recipe"]["library_flags"]
+
+        def arbitrary_cflags(value):
+            value["recipe"]["cflags"] = "-O0"
+
+        def boolean_schema(value):
+            value["schema"] = True
+
+        for label, mutate in (
+            ("missing libsdp", missing_libsdp),
+            ("boolean libsdp", boolean_libsdp),
+            ("empty toolchain", empty_toolchain),
+            ("forged commands", forged_commands),
+            ("missing library flags", missing_library_flags),
+            ("arbitrary cflags", arbitrary_cflags),
+            ("boolean schema", boolean_schema),
+        ):
+            with self.subTest(label=label):
+                forged = json.loads(json.dumps(statement))
+                mutate(forged)
+                with self.assertRaisesRegex(
+                    MODULE.CollectionFailure,
+                    "exact source/toolchain/recipe/output/probe contract",
+                ):
+                    MODULE.validate_csdp_build_statement(
+                        forged, source, csdp, probe,
+                    )
 
         self.temporary.cleanup()
         self.temporary = tempfile.TemporaryDirectory(
