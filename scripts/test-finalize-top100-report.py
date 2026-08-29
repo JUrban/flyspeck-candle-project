@@ -195,6 +195,14 @@ class Fixture:
             reviewer_validator.read_bytes() +
             b"\n# compatible descendant reviewer hardening fixture\n"
         )
+        reviewer_identity = record(reviewer_validator)
+        MODULE.REVIEWER_VALIDATOR_BYTES = reviewer_identity["bytes"]
+        MODULE.REVIEWER_VALIDATOR_SHA256 = reviewer_identity["sha256"]
+        reviewer_protocol_identity = record(
+            self.candle / "reference_protocol.py",
+        )
+        MODULE.REVIEWER_PROTOCOL_BYTES = reviewer_protocol_identity["bytes"]
+        MODULE.REVIEWER_PROTOCOL_SHA256 = reviewer_protocol_identity["sha256"]
         for target in self.manifest["targets"]:
             target["fingerprint_request"]["expected_identities"][
                 "approval_sha256"
@@ -2040,6 +2048,10 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.original_collection_controller_sha256 = \
             MODULE.COLLECTION_CONTROLLER_SHA256
         self.original_collection_candle_head = MODULE.COLLECTION_CANDLE_HEAD
+        self.original_reviewer_validator_bytes = MODULE.REVIEWER_VALIDATOR_BYTES
+        self.original_reviewer_validator_sha256 = MODULE.REVIEWER_VALIDATOR_SHA256
+        self.original_reviewer_protocol_bytes = MODULE.REVIEWER_PROTOCOL_BYTES
+        self.original_reviewer_protocol_sha256 = MODULE.REVIEWER_PROTOCOL_SHA256
         self.fixture = Fixture(Path(self.temporary.name))
         MODULE.PROGRAM_PATH = self.fixture.program_path
         MODULE._TEST_AFTER_CONTRACT_CAPTURE = None
@@ -2053,6 +2065,10 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         MODULE.COLLECTION_CONTROLLER_SHA256 = \
             self.original_collection_controller_sha256
         MODULE.COLLECTION_CANDLE_HEAD = self.original_collection_candle_head
+        MODULE.REVIEWER_VALIDATOR_BYTES = self.original_reviewer_validator_bytes
+        MODULE.REVIEWER_VALIDATOR_SHA256 = self.original_reviewer_validator_sha256
+        MODULE.REVIEWER_PROTOCOL_BYTES = self.original_reviewer_protocol_bytes
+        MODULE.REVIEWER_PROTOCOL_SHA256 = self.original_reviewer_protocol_sha256
         self.temporary.cleanup()
 
     def assert_rejected(self, pattern: str | None = None) -> None:
@@ -2060,6 +2076,18 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
                    if pattern else self.assertRaises(MODULE.ValidationError))
         with context:
             self.fixture.finalize()
+
+    def replace_reviewer_validator(self, value: bytes, message: str) -> None:
+        validator = self.fixture.candle / "reference_fingerprints.py"
+        validator.write_bytes(value)
+        git(self.fixture.candle_root, "add", "candle/reference_fingerprints.py")
+        git(self.fixture.candle_root, "commit", "-qm", message)
+        self.fixture.candle_head = git(
+            self.fixture.candle_root, "rev-parse", "HEAD",
+        )
+        for report in self.fixture.reports:
+            report["candle_git_head"] = self.fixture.candle_head
+        self.fixture.write_reports()
 
     def test_git_checkout_accepts_clean_linked_worktree(self) -> None:
         linked = self.fixture.root / "linked-finalizer-project"
@@ -2767,6 +2795,24 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             }
         self.fixture.replace_collection_documents(contract, receipt)
         self.assert_rejected("authorized producer commit")
+
+    def test_arbitrary_descendant_cannot_replace_reviewed_validator(self) -> None:
+        self.replace_reviewer_validator(
+            b"# arbitrary descendant reviewer fixture\n",
+            "arbitrary descendant validator",
+        )
+        self.assert_rejected("not the reviewed validator/protocol")
+
+    def test_producer_validator_cannot_masquerade_as_reviewer(self) -> None:
+        producer = self.fixture.collection_candle_root / \
+            "candle/reference_fingerprints.py"
+        identity = record(producer)
+        MODULE.REVIEWER_VALIDATOR_BYTES = identity["bytes"]
+        MODULE.REVIEWER_VALIDATOR_SHA256 = identity["sha256"]
+        self.replace_reviewer_validator(
+            producer.read_bytes(), "reuse producer as reviewer",
+        )
+        self.assert_rejected("not independent of the producer validator")
 
     def test_alternate_committed_controller_is_rejected_after_rehash(self) -> None:
         alternate = self.fixture.root / "alternate-controller-project"

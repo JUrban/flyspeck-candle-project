@@ -154,6 +154,12 @@ COLLECTION_CONTROLLER_BYTES = 109742
 COLLECTION_CONTROLLER_SHA256 = \
     "a703c01f1153bd8774f2f1ab4342950469011cbfee6d7f605485cc71d87f6301"
 COLLECTION_CANDLE_HEAD = "652a18a6735be8969462bf25f3233d23b5a4ed6d"
+REVIEWER_VALIDATOR_BYTES = 100912
+REVIEWER_VALIDATOR_SHA256 = \
+    "22af940154068ee89808396c2c17bb333ebc12822f0f4628665e1e8ce2702373"
+REVIEWER_PROTOCOL_BYTES = 8885
+REVIEWER_PROTOCOL_SHA256 = \
+    "e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68"
 COLLECTION_CANDLE_PATHS = {
     "collector": ("candle/reference_fingerprints.py", "100644"),
     "protocol": ("candle/reference_protocol.py", "100644"),
@@ -3779,6 +3785,8 @@ def validate_approval_and_capture(
             "collection/reviewer manifest inventories are incompatible")
     producer_validator = producer_snapshots["collector"]
     producer_protocol = producer_snapshots["protocol"]
+    require(reviewer_validator.identity != producer_validator.identity,
+            "reviewer validator is not independent of the producer validator")
 
     targets = approval["targets"]
     require(isinstance(targets, list) and len(targets) == 65,
@@ -4315,6 +4323,11 @@ def archive(
         validate_committed_snapshot(
             root, REFERENCE_PROTOCOL_PATH, reference_protocol, stage, "100644",
         )
+        require(reference_validator.identity == FileIdentity(
+            REVIEWER_VALIDATOR_BYTES, REVIEWER_VALIDATOR_SHA256,
+        ) and reference_protocol.identity == FileIdentity(
+            REVIEWER_PROTOCOL_BYTES, REVIEWER_PROTOCOL_SHA256,
+        ), "current Candle reviewer is not the reviewed validator/protocol")
         reference_source_contract = stager.capture(
             root / "candle/reference_source_contracts.json",
             "execution-contract/candle/reference_source_contracts.json",
