@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-"""Validate and archive two complete Candle Great 100 S1 runs.
+"""Fail-closed archival of two independently authorized Great100 schema-4 runs.
 
-The Candle runner deliberately distinguishes a load-only PASS from an approved
-semantic match. This finalizer therefore accepts exactly two schema-3 reports
-and requires both reports to close the runner's S1 evidence summary. It also
-validates the current linked CakeML record, retains the small provenance and
-contract files needed to interpret the reports, and binds every retained file
-in a closed archive inventory.
+Schema 3 did not bind a run nonce, exact transcript bytes, the linked-record
+bytes seen by each Candle process, the committed runner/launcher inputs, the
+complete source closure, or an independent approval artifact. It is therefore
+unconditionally non-promotable here. This program accepts exactly two schema-4
+reports and an out-of-band receipt whose SHA-256 is supplied separately.
 
-The schema-3 report does not record the linked-record hash seen by each Candle
-process. The strongest available retrospective check is consequently the exact
-startup witness in every transcript plus validation and archival of the single
-current linked record. The archive records that limitation explicitly.
+Every file used for acceptance is copied once through an O_NOFOLLOW descriptor
+into a private archive staging directory. Validation and helper execution use
+those staged bytes; the named source is never reread to populate the archive.
 """
 
 from __future__ import annotations
@@ -21,39 +19,69 @@ import hashlib
 import json
 import math
 import os
+from pathlib import Path, PurePosixPath
 import re
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any, Iterable
 
 
+PROGRAM_PATH = Path(__file__).resolve()
+GIT_REQUESTED_PATH = Path("/usr/bin/git")
+PYTHON_PATH = Path(sys.executable).resolve()
+
 REPORT_KEYS = {
-    "schema", "generated_utc", "suite", "test_count", "jobs",
+    "schema", "generated_utc", "suite_started_utc", "suite", "test_count", "jobs",
     "timeout_policy", "wall_seconds", "sum_test_seconds", "counts",
     "candle_root", "candle_git_head", "candle_git_status",
-    "candle_executable", "candle_executable_sha256", "log_directory",
-    "fingerprint_contract", "s1_evidence", "results",
+    "candle_executable", "log_directory",
+    "fingerprint_contract", "s1_evidence", "run_evidence",
+    "execution_contract", "source_closure", "independent_approval",
+    "linked_record", "results",
 }
 RESULT_KEYS = {
     "name", "files", "status", "timeout_kind", "boot_elapsed_seconds",
     "hol_elapsed_seconds", "test_elapsed_seconds",
     "fingerprint_elapsed_seconds", "total_elapsed_seconds",
     "peak_process_rss_kib", "peak_tree_rss_kib", "error_message",
-    "log_path", "fingerprints",
+    "log_path", "process_evidence", "fingerprints",
+}
+PROCESS_EVIDENCE_KEYS = {
+    "suite_nonce", "process_nonce", "pid", "started_utc", "completed_utc",
+    "exit_code", "markers", "linked_record_sha256", "transcript",
+    "pre_runtime_state", "post_runtime_state", "resource_sampling",
+}
+RUN_EVIDENCE_KEYS = {
+    "suite_nonce", "marker_contract", "linked_record_sha256",
+    "source_closure_sha256", "independent_approval_sha256",
 }
 FINGERPRINT_KEYS = {
     "status", "mapping_status", "expected_identities_present", "serializer",
-    "theorems",
+    "theorems", "post_state", "approval_sha256",
 }
 THEOREM_KEYS = {
     "name", "theorem_sha256", "hypotheses_sha256", "conclusion_sha256",
     "global_axioms_sha256", "hypothesis_count", "global_axiom_count",
 }
+POST_STATE_KEYS = {
+    "kernel_state_sha256", "type_constants_sha256", "type_constant_count",
+    "term_constants_sha256", "term_constant_count", "definitions_sha256",
+    "definition_count", "global_axioms_sha256", "global_axiom_count",
+}
+RUNTIME_STATE_KEYS = {
+    "candle_git_head", "candle_git_status", "linked_record_sha256",
+    "candle_executable", "execution_contract_sha256", "source_closure_sha256",
+}
+RESOURCE_SAMPLING_KEYS = {
+    "interval_seconds", "sample_count", "root_observed", "sampler_completed",
+    "peak_process_rss_kib", "peak_tree_rss_kib",
+}
+MARKER_KEYS = {"suite_line", "start_line", "linked_line", "complete_line"}
 S1_KEYS = {
     "requested_target_count", "reported_target_count",
     "expected_identity_target_count", "manual_review_mapping_target_count",
@@ -65,10 +93,20 @@ TIMEOUT_KEYS = {
     "total_wall_timeout_seconds", "total_wall_scope",
     "progress_extends_total_wall_deadline",
 }
+EXECUTION_CONTRACT_PATHS = {
+    "candle/cakeml_artifact_provenance.py": "100644",
+    "candle/regression.py": "100644",
+    "candle/top100_manifest.json": "100644",
+    "candle/fingerprint.ml": "100644",
+    "candle.sh": "100755",
+}
 FINGERPRINT_CONTRACT = {
-    "serializer": "candle/fingerprint.ml structural v1",
+    "serializer": "candle/fingerprint.ml structural v2",
     "load_pass_is_fingerprint_match": False,
-    "expected_identity_source": "top100_manifest.json",
+    "expected_identity_source": (
+        "separate independently reviewed approval artifact, "
+        "fail-closed through top100_manifest.json"
+    ),
     "expected_mismatch_result": "FAIL",
 }
 S1_CLOSED = {
@@ -93,14 +131,41 @@ LINKED_OUTPUTS = {
     "candle_boot.ml", "basis_ffi.c", "Makefile", "types.txt", "insulate.ml",
     "bootstrap-preflight.json", "bootstrap-provenance.json", "bootstrap.log",
 }
+APPROVAL_KEYS = {
+    "schema", "artifact_kind", "approval_status", "promotion_allowed",
+    "inventory_contract_sha256", "serializer_sha256", "reference_policy",
+    "review", "targets",
+}
+REFERENCE_POLICY_KEYS = {
+    "historical_upstream_commit", "exact_source_reference_commit",
+    "compatibility_deltas",
+}
+REFERENCE_DELTA_KEYS = {
+    "path", "historical_sha256", "selected_sha256", "reason",
+}
+APPROVAL_REVIEW_KEYS = {"reviewer", "approved_utc", "review_commit", "decision"}
+APPROVAL_TARGET_KEYS = {"name", "reference_runs", "expected_identity"}
+APPROVAL_IDENTITY_KEYS = {"serializer_sha256", "theorems", "post_state"}
+AUTHORIZATION_KEYS = {
+    "schema", "kind", "issued_utc", "authority", "reports",
+    "suite_nonces", "linked_record_sha256", "source_closure_sha256",
+    "semantic_projection_sha256", "independent_approval", "project", "tools",
+}
+MARKER_CONTRACT = "candle-great100-process-markers-v1"
 LINKED_PASS_WITNESS = "linked CakeML provenance PASS"
-FINGERPRINT_MARKER = "CANDLE_FINGERPRINT_V1\t"
+FINGERPRINT_MARKER = "CANDLE_FINGERPRINT_V2"
+STATE_FINGERPRINT_MARKER = "CANDLE_STATE_FINGERPRINT_V2"
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+NONCE_RE = re.compile(r"[0-9a-f]{64}")
+DECIMAL_RE = re.compile(r"(?:0|[1-9][0-9]*)")
+
+# Test-only hook. Production callers cannot select it through the CLI.
+_TEST_AFTER_CONTRACT_CAPTURE = None
 
 
 class ValidationError(ValueError):
-    """The proposed S1 bundle is incomplete, inconsistent, or unauthenticated."""
+    """The proposed archive is incomplete, inconsistent, or unauthenticated."""
 
 
 @dataclass(frozen=True)
@@ -112,25 +177,21 @@ class FileIdentity:
         return {"bytes": self.bytes, "sha256": self.sha256}
 
 
+@dataclass(frozen=True)
+class Snapshot:
+    source_path: Path
+    archive_path: str
+    identity: FileIdentity
+    file_key: tuple[int, int]
+
+
 @dataclass
 class ValidatedRun:
-    source_path: Path
-    source_identity: FileIdentity
+    report_snapshot: Snapshot
     report: dict[str, Any]
     results: list[dict[str, Any]]
-    log_paths: list[Path]
-    log_identities: list[FileIdentity]
-
-
-@dataclass
-class ValidatedBundle:
-    runs: tuple[ValidatedRun, ValidatedRun]
-    candle_root: Path
-    executable: Path
-    executable_identity: FileIdentity
-    linked_record: dict[str, Any]
-    retained_sources: dict[str, tuple[Path, FileIdentity]]
-    semantics: list[dict[str, Any]]
+    log_snapshots: list[Snapshot]
+    suite_nonce: str
 
 
 def require(condition: bool, message: str) -> None:
@@ -159,6 +220,12 @@ def require_commit(value: object, label: str) -> str:
     return value
 
 
+def require_nonce(value: object, label: str) -> str:
+    require(isinstance(value, str) and NONCE_RE.fullmatch(value) is not None,
+            f"malformed nonce for {label}")
+    return value
+
+
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -168,8 +235,27 @@ def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
+def canonical_json_bytes(value: object) -> bytes:
+    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
+
+
+def compact_json_sha256(value: object) -> str:
+    payload = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def bytes_identity(value: bytes) -> FileIdentity:
+    return FileIdentity(len(value), hashlib.sha256(value).hexdigest())
+
+
+def lexical_absolute(path: Path) -> Path:
+    return Path(os.path.abspath(path))
+
+
 def ordinary_file(path: Path, label: str) -> Path:
-    require(path.is_absolute(), f"{label} path is not absolute: {path}")
+    path = lexical_absolute(path)
     try:
         metadata = path.lstat()
     except FileNotFoundError as error:
@@ -181,7 +267,7 @@ def ordinary_file(path: Path, label: str) -> Path:
 
 
 def ordinary_directory(path: Path, label: str) -> Path:
-    require(path.is_absolute(), f"{label} path is not absolute: {path}")
+    path = lexical_absolute(path)
     try:
         metadata = path.lstat()
     except FileNotFoundError as error:
@@ -192,42 +278,159 @@ def ordinary_directory(path: Path, label: str) -> Path:
     return path
 
 
-def file_key(path: Path, label: str) -> tuple[int, int]:
-    path = ordinary_file(path, label)
-    metadata = path.stat()
-    return metadata.st_dev, metadata.st_ino
+def safe_relative(value: str, label: str) -> str:
+    require(isinstance(value, str) and value, f"empty {label}")
+    path = PurePosixPath(value)
+    require(not path.is_absolute() and value == path.as_posix() and
+            all(part not in {"", ".", ".."} for part in path.parts),
+            f"unsafe {label}: {value!r}")
+    return value
 
 
-def file_identity(path: Path, label: str) -> FileIdentity:
-    path = ordinary_file(path, label)
-    digest = hashlib.sha256()
-    byte_count = 0
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            byte_count += len(block)
-            digest.update(block)
-    return FileIdentity(byte_count, digest.hexdigest())
-
-
-def lexical_absolute(path: Path) -> Path:
-    """Make a path absolute without resolving away a symlink component."""
-    return Path(os.path.abspath(path))
-
-
-def load_json(path: Path, label: str) -> tuple[dict[str, Any], FileIdentity]:
+def stable_file_identity(path: Path, label: str) -> FileIdentity:
     path = ordinary_file(path, label)
     try:
-        source_bytes = path.read_bytes()
-        source_text = source_bytes.decode("utf-8", errors="strict")
-        value = json.loads(
-            source_text,
-            object_pairs_hook=_reject_duplicate_keys,
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as error:
+        raise ValidationError(f"cannot open {label}: {path}") from error
+    digest = hashlib.sha256()
+    count = 0
+    try:
+        before = os.fstat(descriptor)
+        require(stat.S_ISREG(before.st_mode), f"{label} is not ordinary: {path}")
+        while True:
+            block = os.read(descriptor, 1024 * 1024)
+            if not block:
+                break
+            digest.update(block)
+            count += len(block)
+        after = os.fstat(descriptor)
+        named = path.stat(follow_symlinks=False)
+        require(
+            (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+             before.st_ctime_ns) ==
+            (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns,
+             after.st_ctime_ns) and
+            (named.st_dev, named.st_ino) == (after.st_dev, after.st_ino) and
+            count == after.st_size,
+            f"{label} changed while being read: {path}",
         )
+    finally:
+        os.close(descriptor)
+    return FileIdentity(count, digest.hexdigest())
+
+
+class Stager:
+    """Copy each source once, then expose only the immutable staged bytes."""
+
+    def __init__(self, root: Path):
+        self.root = root
+        self.records: dict[str, FileIdentity] = {}
+        self.source_keys: dict[tuple[int, int], str] = {}
+
+    def capture(self, source: Path, archive_path: str, label: str) -> Snapshot:
+        source = ordinary_file(source, label)
+        archive_path = safe_relative(archive_path, "archive path")
+        destination = self.root / archive_path
+        require(archive_path not in self.records and not os.path.lexists(destination),
+                f"duplicate archive path: {archive_path}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            source_fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
+        except OSError as error:
+            raise ValidationError(f"cannot capture {label}: {source}") from error
+        destination_fd = None
+        digest = hashlib.sha256()
+        count = 0
+        try:
+            before = os.fstat(source_fd)
+            require(stat.S_ISREG(before.st_mode), f"{label} is not ordinary: {source}")
+            key = (before.st_dev, before.st_ino)
+            require(key not in self.source_keys,
+                    f"evidence source hard-link reused by {label} and "
+                    f"{self.source_keys.get(key)}")
+            destination_fd = os.open(
+                destination,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                0o600,
+            )
+            while True:
+                block = os.read(source_fd, 1024 * 1024)
+                if not block:
+                    break
+                view = memoryview(block)
+                while view:
+                    written = os.write(destination_fd, view)
+                    view = view[written:]
+                digest.update(block)
+                count += len(block)
+            os.fsync(destination_fd)
+            os.fchmod(destination_fd, 0o444)
+            after = os.fstat(source_fd)
+            named = source.stat(follow_symlinks=False)
+            require(
+                (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+                 before.st_ctime_ns) ==
+                (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns,
+                 after.st_ctime_ns) and
+                (named.st_dev, named.st_ino) == (after.st_dev, after.st_ino) and
+                count == after.st_size,
+                f"{label} changed while being captured: {source}",
+            )
+            identity = FileIdentity(count, digest.hexdigest())
+            require(stable_file_identity(destination, f"staged {label}") == identity,
+                    f"staged bytes changed for {label}")
+            self.source_keys[key] = label
+            self.records[archive_path] = identity
+            return Snapshot(source, archive_path, identity, key)
+        finally:
+            if destination_fd is not None:
+                os.close(destination_fd)
+            os.close(source_fd)
+
+    def write(self, archive_path: str, value: bytes) -> FileIdentity:
+        archive_path = safe_relative(archive_path, "generated archive path")
+        destination = self.root / archive_path
+        require(archive_path not in self.records and not os.path.lexists(destination),
+                f"duplicate generated archive path: {archive_path}")
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+            0o600,
+        )
+        try:
+            view = memoryview(value)
+            while view:
+                written = os.write(descriptor, view)
+                view = view[written:]
+            os.fsync(descriptor)
+            os.fchmod(descriptor, 0o444)
+        finally:
+            os.close(descriptor)
+        identity = bytes_identity(value)
+        require(stable_file_identity(destination, "generated archive file") == identity,
+                f"generated archive write mismatch: {archive_path}")
+        self.records[archive_path] = identity
+        return identity
+
+
+def snapshot_bytes(stage: Path, snapshot: Snapshot) -> bytes:
+    return (stage / snapshot.archive_path).read_bytes()
+
+
+def parse_json_bytes(value: bytes, label: str) -> dict[str, Any]:
+    try:
+        decoded = value.decode("utf-8", errors="strict")
+        result = json.loads(decoded, object_pairs_hook=_reject_duplicate_keys)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValidationError(f"malformed JSON in {label}: {path}") from error
-    require(isinstance(value, dict), f"{label} is not a JSON object: {path}")
-    identity = FileIdentity(len(source_bytes), hashlib.sha256(source_bytes).hexdigest())
-    return value, identity
+        raise ValidationError(f"malformed JSON in {label}") from error
+    require(isinstance(result, dict), f"{label} is not a JSON object")
+    return result
+
+
+def snapshot_json(stage: Path, snapshot: Snapshot, label: str) -> dict[str, Any]:
+    return parse_json_bytes(snapshot_bytes(stage, snapshot), label)
 
 
 def validate_file_record(value: object, label: str) -> dict[str, object]:
@@ -237,6 +440,32 @@ def validate_file_record(value: object, label: str) -> dict[str, object]:
             f"malformed byte count for {label}")
     require_sha256(value["sha256"], label)
     return value
+
+
+def validate_file_reference(value: object, label: str) -> tuple[Path, FileIdentity]:
+    require(isinstance(value, dict) and set(value) == {"path", "bytes", "sha256"},
+            f"malformed file reference for {label}")
+    record = validate_file_record(
+        {"bytes": value["bytes"], "sha256": value["sha256"]}, label,
+    )
+    require(isinstance(value["path"], str), f"malformed path for {label}")
+    return ordinary_file(Path(value["path"]), label), FileIdentity(
+        record["bytes"], record["sha256"],
+    )
+
+
+def validate_root_file_reference(
+    value: object, root: Path, label: str,
+) -> tuple[str, Path, FileIdentity]:
+    require(isinstance(value, dict) and set(value) == {"path", "bytes", "sha256"},
+            f"malformed file reference for {label}")
+    relative = safe_relative(value["path"], f"{label} repository path")
+    record = validate_file_record(
+        {"bytes": value["bytes"], "sha256": value["sha256"]}, label,
+    )
+    return relative, ordinary_file(root / relative, label), FileIdentity(
+        record["bytes"], record["sha256"],
+    )
 
 
 def validate_theorem_record(value: object, label: str) -> dict[str, Any]:
@@ -255,72 +484,100 @@ def validate_theorem_record(value: object, label: str) -> dict[str, Any]:
     return value
 
 
-def validate_manifest(root: Path) -> tuple[dict[str, Any], FileIdentity, Path]:
-    path = root / "candle/top100_manifest.json"
-    manifest, identity = load_json(path, "Great 100 manifest")
-    require(manifest.get("schema_version") == 1,
-            "unsupported Great 100 manifest schema")
-    targets = manifest.get("targets")
-    require(manifest.get("target_count") == 65 and
-            isinstance(targets, list) and len(targets) == 65,
-            "Great 100 manifest does not contain exactly 65 targets")
-    names: list[str] = []
-    serializer_hashes: set[str] = set()
-    global_axiom_identities: set[tuple[str, int]] = set()
-    for index, target in enumerate(targets, 1):
-        require(isinstance(target, dict), f"malformed manifest target {index}")
-        name = target.get("name")
-        require(isinstance(name, str) and name.startswith("100/"),
-                f"malformed manifest target name at {index}")
-        names.append(name)
-        files = target.get("load_files")
-        require(isinstance(files, list) and files and
-                all(isinstance(item, str) and item for item in files),
-                f"malformed load files for {name}")
-        require(target.get("skip") is None, f"hidden Great 100 skip for {name}")
-        load_hashes = target.get("load_file_sha256")
-        require(isinstance(load_hashes, dict) and set(load_hashes) == set(files),
-                f"load-file identity mismatch for {name}")
-        for file_name, digest in load_hashes.items():
-            require_sha256(digest, f"{name}:{file_name}")
-        request = target.get("fingerprint_request")
-        require(isinstance(request, dict) and request.get("mapping_status") == "audited",
-                f"unaudited fingerprint mapping for {name}")
-        requested = request.get("theorems")
-        require(isinstance(requested, list) and requested,
-                f"missing theorem request for {name}")
-        requested_names: list[str] = []
-        for theorem in requested:
-            require(isinstance(theorem, dict) and
-                    isinstance(theorem.get("name"), str),
-                    f"malformed theorem request for {name}")
-            requested_names.append(theorem["name"])
-        expected = request.get("expected_identities")
-        require(isinstance(expected, dict) and
-                set(expected) == {"serializer_sha256", "theorems"},
-                f"missing approved expected identities for {name}")
-        require_sha256(expected["serializer_sha256"], f"{name} serializer")
-        serializer_hashes.add(expected["serializer_sha256"])
-        expected_theorems = expected.get("theorems")
-        require(isinstance(expected_theorems, list) and
-                len(expected_theorems) == len(requested_names),
-                f"expected theorem count mismatch for {name}")
-        for theorem_index, theorem in enumerate(expected_theorems):
-            record = validate_theorem_record(theorem, f"{name} theorem {theorem_index + 1}")
-            require(record["name"] == requested_names[theorem_index],
-                    f"expected theorem order mismatch for {name}")
-            global_axiom_identities.add((
-                record["global_axioms_sha256"], record["global_axiom_count"]))
-    require(len(set(names)) == 65, "duplicate Great 100 target in manifest")
-    require(len(serializer_hashes) == 1,
-            "Great 100 targets do not use one serializer identity")
-    require(len(global_axiom_identities) == 1 and
-            next(iter(global_axiom_identities))[1] == 3,
-            "Great 100 expected identities do not use one three-axiom set")
-    serializer = file_identity(root / "candle/fingerprint.ml", "fingerprint serializer")
-    require(serializer.sha256 == next(iter(serializer_hashes)),
-            "approved serializer does not match candle/fingerprint.ml")
-    return manifest, identity, path
+def validate_post_state(value: object, label: str) -> dict[str, Any]:
+    require(isinstance(value, dict) and set(value) == POST_STATE_KEYS,
+            f"malformed post-state record for {label}")
+    for field in (
+        "kernel_state_sha256", "type_constants_sha256",
+        "term_constants_sha256", "definitions_sha256",
+        "global_axioms_sha256",
+    ):
+        require_sha256(value[field], f"{label}.{field}")
+    for field in (
+        "type_constant_count", "term_constant_count", "definition_count",
+        "global_axiom_count",
+    ):
+        require(is_int(value[field]) and value[field] >= 0,
+                f"malformed {field} for {label}")
+    require(value["global_axiom_count"] == 3,
+            f"post-state global axiom count is not three for {label}")
+    return value
+
+
+def git_environment() -> dict[str, str]:
+    return {
+        "PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
+        "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_SYSTEM": "/dev/null",
+        "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_OPTIONAL_LOCKS": "0",
+    }
+
+
+def git_command(root: Path, *arguments: str) -> list[str]:
+    return [
+        str(GIT_REQUESTED_PATH),
+        "-c", "core.fsmonitor=false", "-c", "core.untrackedCache=false",
+        "-c", "core.preloadIndex=false", "-c", "core.fileMode=true",
+        "-C", str(root), *arguments,
+    ]
+
+
+def git_bytes(root: Path, *arguments: str) -> bytes:
+    try:
+        completed = subprocess.run(
+            git_command(root, *arguments), check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env=git_environment(), timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValidationError(f"Git command failed for {root}") from error
+    require(completed.returncode == 0 and completed.stderr == b"",
+            f"Git command failed for {root}: {arguments!r}")
+    return completed.stdout
+
+
+def validate_git_checkout(root: Path, expected_head: str, label: str) -> None:
+    root = ordinary_directory(root, label)
+    require_commit(expected_head, f"{label} head")
+    top = git_bytes(root, "rev-parse", "--show-toplevel").decode().strip()
+    require(Path(top) == root, f"{label} is not the exact Git top level")
+    head = git_bytes(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
+    require(head == expected_head, f"{label} revision mismatch")
+    status = git_bytes(
+        root, "status", "--porcelain=v1", "-z", "--untracked-files=all",
+    )
+    require(status == b"", f"{label} worktree is not clean")
+
+
+def validate_committed_snapshot(
+    root: Path, relative: str, snapshot: Snapshot, stage: Path,
+    expected_mode: str | None = None,
+) -> None:
+    relative = safe_relative(relative, "committed repository path")
+    staged_line = git_bytes(
+        root, "ls-files", "--stage", "--", relative,
+    ).decode("utf-8", errors="strict").rstrip("\n")
+    fields = staged_line.split(maxsplit=3)
+    require(len(fields) == 4 and fields[2] == "0" and fields[3] == relative and
+            fields[0] in {"100644", "100755"} and
+            re.fullmatch(r"[0-9a-f]{40,64}", fields[1]) is not None,
+            f"not one ordinary stage-0 committed file: {relative}")
+    if expected_mode is not None:
+        require(fields[0] == expected_mode,
+                f"unexpected committed mode for {relative}")
+    committed = git_bytes(root, "cat-file", "blob", f"HEAD:{relative}")
+    observed = snapshot_bytes(stage, snapshot)
+    require(committed == observed and bytes_identity(committed) == snapshot.identity,
+            f"live bytes differ from HEAD for {relative}")
+
+
+def validate_datetime(value: object, label: str) -> datetime:
+    require(isinstance(value, str), f"malformed {label}")
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError as error:
+        raise ValidationError(f"malformed {label}") from error
+    require(parsed.tzinfo is not None, f"{label} lacks timezone")
+    return parsed
 
 
 def validate_timeout_policy(value: object) -> dict[str, Any]:
@@ -331,7 +588,7 @@ def validate_timeout_policy(value: object) -> dict[str, Any]:
     require(is_number(inactivity) and inactivity > 0,
             "inactivity timeout must be positive")
     require(is_number(wall) and wall > 0,
-            "Great 100 promotion requires a positive total wall timeout")
+            "Great100 promotion requires a positive total wall timeout")
     require(value["inactivity_resets_on"] == "each complete REPL output line",
             "unexpected inactivity reset policy")
     require(value["inactivity_scope"] ==
@@ -345,72 +602,463 @@ def validate_timeout_policy(value: object) -> dict[str, Any]:
     return value
 
 
-def validate_report(
-    report: dict[str, Any], manifest: dict[str, Any], source_path: Path,
-    source_identity: FileIdentity,
-) -> ValidatedRun:
-    require(set(report) == REPORT_KEYS, "malformed schema-3 Great 100 report")
-    require(report["schema"] == 3 and report["suite"] == "top100",
-            "not a schema-3 Great 100 report")
-    require(isinstance(report["generated_utc"], str),
-            "Great 100 report has malformed generation time")
+def manifest_semantics(target: dict[str, Any]) -> dict[str, Any]:
+    expected = target["fingerprint_request"]["expected_identities"]
+    return {
+        "name": target["name"],
+        "expected_identity": {
+            "serializer_sha256": expected["serializer_sha256"],
+            "theorems": expected["theorems"],
+            "post_state": expected["post_state"],
+        },
+    }
+
+
+def approval_inventory_contract(manifest: dict[str, Any]) -> dict[str, Any]:
+    targets = []
+    covered_sources: set[str] = set()
+    theorem_request_count = 0
+    for target in manifest["targets"]:
+        request = target["fingerprint_request"]
+        theorem_names = [item["name"] for item in request["theorems"]]
+        theorem_request_count += len(theorem_names)
+        covered_sources.update(target["load_files"])
+        targets.append({
+            "name": target["name"],
+            "load_files": target["load_files"],
+            "load_file_sha256": target["load_file_sha256"],
+            "mapping_status": request["mapping_status"],
+            "theorem_names": theorem_names,
+        })
+    return {
+        "schema": "candle-great100-inventory-contract-v1",
+        "target_count": len(targets),
+        "covered_source_count": len(covered_sources),
+        "theorem_request_count": theorem_request_count,
+        "targets": targets,
+    }
+
+
+def validate_manifest_and_capture_closure(
+    root: Path, manifest: dict[str, Any], manifest_snapshot: Snapshot,
+    serializer_snapshot: Snapshot, stage: Path, stager: Stager,
+) -> tuple[dict[str, Any], list[dict[str, Any]], str]:
+    require(manifest.get("schema_version") == 1,
+            "unsupported Great100 manifest schema")
+    targets = manifest.get("targets")
+    require(manifest.get("target_count") == 65 and isinstance(targets, list) and
+            len(targets) == 65, "Great100 manifest must contain 65 targets")
+    validate_committed_snapshot(
+        root, "candle/top100_manifest.json", manifest_snapshot, stage, "100644",
+    )
+    validate_committed_snapshot(
+        root, "candle/fingerprint.ml", serializer_snapshot, stage, "100644",
+    )
+
+    names: list[str] = []
+    ordered_files: list[str] = []
+    file_hashes: dict[str, str] = {}
+    ordered_targets: list[dict[str, Any]] = []
+    semantics: list[dict[str, Any]] = []
+    request_count = 0
+    serializer_hashes: set[str] = set()
+    approval_hashes: set[str] = set()
+    global_axioms: set[tuple[str, int]] = set()
+    for index, target in enumerate(targets, 1):
+        require(isinstance(target, dict), f"malformed manifest target {index}")
+        name = target.get("name")
+        require(isinstance(name, str) and name.startswith("100/"),
+                f"malformed target name at {index}")
+        names.append(name)
+        files = target.get("load_files")
+        require(isinstance(files, list) and files and
+                all(isinstance(item, str) for item in files),
+                f"malformed load files for {name}")
+        files = [safe_relative(item, f"load file for {name}") for item in files]
+        require(target.get("skip") is None, f"hidden Great100 skip for {name}")
+        hashes = target.get("load_file_sha256")
+        require(isinstance(hashes, dict) and set(hashes) == set(files),
+                f"load-file identity mismatch for {name}")
+        for relative in files:
+            digest = require_sha256(hashes[relative], f"{name}:{relative}")
+            if relative not in file_hashes:
+                file_hashes[relative] = digest
+                ordered_files.append(relative)
+            else:
+                require(file_hashes[relative] == digest,
+                        f"inconsistent repeated source hash for {relative}")
+        request = target.get("fingerprint_request")
+        require(isinstance(request, dict) and request.get("mapping_status") == "audited",
+                f"unaudited fingerprint mapping for {name}")
+        requested = request.get("theorems")
+        require(isinstance(requested, list) and requested,
+                f"missing theorem request for {name}")
+        theorem_names = []
+        for theorem in requested:
+            require(isinstance(theorem, dict) and set(theorem) in ({
+                "name", "resolved_declaration", "shadowed_declarations",
+            }, {
+                "name", "resolved_declaration", "shadowed_declarations",
+                "qualified_references",
+            }), f"malformed theorem request for {name}")
+            require(isinstance(theorem["name"], str) and theorem["name"],
+                    f"malformed theorem name for {name}")
+            for location_key in (
+                "resolved_declaration", "shadowed_declarations",
+                "qualified_references",
+            ):
+                if location_key not in theorem:
+                    continue
+                locations = theorem[location_key]
+                if location_key == "resolved_declaration":
+                    locations = [locations]
+                require(isinstance(locations, list),
+                        f"malformed {location_key} for {name}")
+                for location in locations:
+                    require(isinstance(location, dict) and
+                            set(location) == {"path", "line"},
+                            f"malformed {location_key} location for {name}")
+                    location_path = safe_relative(
+                        location["path"], f"{location_key} path for {name}",
+                    )
+                    require(location_path in files and
+                            isinstance(location["line"], int) and
+                            not isinstance(location["line"], bool) and
+                            location["line"] > 0,
+                            f"invalid {location_key} location for {name}")
+            theorem_names.append(theorem["name"])
+        request_count += len(theorem_names)
+        expected = request.get("expected_identities")
+        require(isinstance(expected, dict) and set(expected) == {
+            "approval_sha256", "serializer_sha256", "theorems", "post_state",
+        },
+                f"missing independent approved identities for {name}")
+        approval_hashes.add(require_sha256(
+            expected["approval_sha256"], f"{name} approval",
+        ))
+        serializer_hashes.add(require_sha256(
+            expected["serializer_sha256"], f"{name} serializer",
+        ))
+        expected_theorems = expected["theorems"]
+        require(isinstance(expected_theorems, list) and
+                len(expected_theorems) == len(theorem_names),
+                f"expected theorem count mismatch for {name}")
+        for theorem_index, theorem in enumerate(expected_theorems):
+            record = validate_theorem_record(
+                theorem, f"{name} theorem {theorem_index + 1}",
+            )
+            require(record["name"] == theorem_names[theorem_index],
+                    f"expected theorem order mismatch for {name}")
+            global_axioms.add((
+                record["global_axioms_sha256"], record["global_axiom_count"],
+            ))
+        post_state = validate_post_state(expected["post_state"], f"{name} post-state")
+        global_axioms.add((
+            post_state["global_axioms_sha256"],
+            post_state["global_axiom_count"],
+        ))
+        ordered_targets.append({
+            "name": name, "load_files": files, "theorem_names": theorem_names,
+        })
+        semantics.append(manifest_semantics(target))
+
+    require(len(set(names)) == 65, "duplicate Great100 target")
+    require(len(ordered_files) == 66, "Great100 closure must contain 66 files")
+    require(request_count == 97, "Great100 closure must contain 97 requests")
+    require(len(serializer_hashes) == 1 and
+            serializer_snapshot.identity.sha256 == next(iter(serializer_hashes)),
+            "serializer does not match all approved identities")
+    require(len(approval_hashes) == 1,
+            "Great100 targets do not use one independent approval artifact")
+    require(len(global_axioms) == 1 and next(iter(global_axioms))[1] == 3,
+            "approved identities do not use one three-axiom set")
+
+    file_records = []
+    for index, relative in enumerate(ordered_files, 1):
+        snapshot = stager.capture(
+            root / relative, f"source-closure/files/{index:02d}/{relative}",
+            f"Great100 source {relative}",
+        )
+        require(snapshot.identity.sha256 == file_hashes[relative],
+                f"live source hash differs from manifest: {relative}")
+        validate_committed_snapshot(root, relative, snapshot, stage)
+        file_records.append({"path": relative, **snapshot.identity.as_json()})
+
+    projection = {
+        "target_count": 65,
+        "source_file_count": 66,
+        "fingerprint_request_count": 97,
+        "ordered_targets": ordered_targets,
+        "files": file_records,
+    }
+    return ({**projection, "sha256": compact_json_sha256(projection)}, semantics,
+            next(iter(approval_hashes)))
+
+
+def decode_wire_hex(value: str, label: str) -> bytes:
+    require(re.fullmatch(r"(?:[0-9a-f]{2})*", value) is not None,
+            f"malformed lowercase hexadecimal wire field: {label}")
+    return bytes.fromhex(value)
+
+
+def parse_wire_record(line: str, label: str) -> dict[str, Any]:
+    fields = line.split("\t")
+    require(len(fields) == 8 and fields[0] == FINGERPRINT_MARKER,
+            f"malformed 8-field fingerprint wire record for {label}")
+    name_bytes = decode_wire_hex(fields[1], f"{label}.name")
     try:
-        generated = datetime.fromisoformat(report["generated_utc"])
-    except ValueError as error:
-        raise ValidationError("Great 100 report has malformed generation time") from error
-    require(generated.tzinfo is not None,
-            "Great 100 report generation time lacks a timezone")
-    require(report["test_count"] == 65,
-            "Great 100 report must contain 65 test entries")
+        name = name_bytes.decode("ascii", errors="strict")
+    except UnicodeDecodeError as error:
+        raise ValidationError(f"non-ASCII theorem name in {label}") from error
+    require(name, f"empty theorem name in {label}")
+    serialized = [
+        decode_wire_hex(fields[index], f"{label}.{field}")
+        for index, field in enumerate(
+            ("theorem", "hypotheses", "conclusion", "global_axioms"), 2,
+        )
+    ]
+    require(all(DECIMAL_RE.fullmatch(fields[index]) is not None
+                for index in (6, 7)),
+            f"non-canonical fingerprint count in {label}")
+    return {
+        "name": name,
+        "theorem_sha256": hashlib.sha256(serialized[0]).hexdigest(),
+        "hypotheses_sha256": hashlib.sha256(serialized[1]).hexdigest(),
+        "conclusion_sha256": hashlib.sha256(serialized[2]).hexdigest(),
+        "global_axioms_sha256": hashlib.sha256(serialized[3]).hexdigest(),
+        "hypothesis_count": int(fields[6]),
+        "global_axiom_count": int(fields[7]),
+    }
+
+
+def parse_state_wire_record(line: str, label: str) -> dict[str, Any]:
+    fields = line.split("\t")
+    require(len(fields) == 10 and fields[0] == STATE_FINGERPRINT_MARKER,
+            f"malformed 10-field state fingerprint wire record for {label}")
+    serialized = [
+        decode_wire_hex(fields[index], f"{label}.{field}")
+        for index, field in enumerate((
+            "kernel_state", "type_constants", "term_constants", "definitions",
+            "global_axioms",
+        ), 1)
+    ]
+    require(all(DECIMAL_RE.fullmatch(fields[index]) is not None
+                for index in (6, 7, 8, 9)),
+            f"non-canonical state fingerprint count in {label}")
+    result = {
+        "kernel_state_sha256": hashlib.sha256(serialized[0]).hexdigest(),
+        "type_constants_sha256": hashlib.sha256(serialized[1]).hexdigest(),
+        "term_constants_sha256": hashlib.sha256(serialized[2]).hexdigest(),
+        "definitions_sha256": hashlib.sha256(serialized[3]).hexdigest(),
+        "global_axioms_sha256": hashlib.sha256(serialized[4]).hexdigest(),
+        "type_constant_count": int(fields[6]),
+        "term_constant_count": int(fields[7]),
+        "definition_count": int(fields[8]),
+        "global_axiom_count": int(fields[9]),
+    }
+    return validate_post_state(result, label)
+
+
+def validate_runtime_state(
+    value: object, label: str, root: Path, head: str, linked_sha256: str,
+    executable_identity: FileIdentity, execution_contract_sha256: str,
+    closure_sha256: str,
+) -> dict[str, Any]:
+    require(isinstance(value, dict) and set(value) == RUNTIME_STATE_KEYS,
+            f"malformed runtime state for {label}")
+    require(value["candle_git_head"] == head and
+            value["candle_git_status"] == [] and
+            value["linked_record_sha256"] == linked_sha256 and
+            value["execution_contract_sha256"] == execution_contract_sha256 and
+            value["source_closure_sha256"] == closure_sha256,
+            f"runtime state contract mismatch for {label}")
+    require(value["candle_executable"] == {
+        "path": str(root / "candle/build/cake"), **executable_identity.as_json(),
+    }, f"runtime executable identity mismatch for {label}")
+    return value
+
+
+def validate_transcript(
+    value: bytes, name: str, suite_nonce: str, process_nonce: str,
+    linked_sha256: str, expected_theorems: list[dict[str, Any]],
+    expected_post_state: dict[str, Any], expected_markers: dict[str, int],
+) -> None:
+    try:
+        text = value.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise ValidationError(f"transcript for {name} is not strict UTF-8") from error
+    lines = text.splitlines()
+    suite_marker = f"CANDLE_GREAT100_SUITE_V1\t{suite_nonce}"
+    start_marker = (
+        f"CANDLE_GREAT100_PROCESS_V1\t{suite_nonce}\t{process_nonce}\tSTART"
+    )
+    complete_marker = (
+        f"CANDLE_GREAT100_PROCESS_V1\t{suite_nonce}\t{process_nonce}\tCOMPLETE"
+    )
+    linked_marker = f"CANDLE_LINKED_PROVENANCE_V1\t{linked_sha256}"
+    for marker, marker_label in (
+        (suite_marker, "suite"), (start_marker, "process-start"),
+        (complete_marker, "process-complete"), (linked_marker, "linked-record"),
+        (LINKED_PASS_WITNESS, "linked PASS"),
+    ):
+        require(lines.count(marker) == 1,
+                f"transcript for {name} lacks one exact {marker_label} marker")
+    indices = {
+        "suite_line": lines.index(suite_marker),
+        "start_line": lines.index(start_marker),
+        "linked_line": lines.index(linked_marker),
+        "complete_line": lines.index(complete_marker),
+    }
+    require(indices == expected_markers,
+            f"reported transcript marker offsets differ for {name}")
+    suite = indices["suite_line"]
+    start = indices["start_line"]
+    linked = indices["linked_line"]
+    complete = indices["complete_line"]
+    require(suite < start < linked < complete,
+            f"transcript marker order mismatch for {name}")
+    wire_indices = [
+        index for index, line in enumerate(lines)
+        if line.startswith(FINGERPRINT_MARKER)
+    ]
+    require(len(wire_indices) == len(expected_theorems),
+            f"fingerprint wire-record count mismatch for {name}")
+    require(all(start < index < complete for index in wire_indices),
+            f"fingerprint wire record outside process markers for {name}")
+    parsed = [
+        parse_wire_record(lines[index], f"{name} record {offset}")
+        for offset, index in enumerate(wire_indices, 1)
+    ]
+    require(parsed == expected_theorems,
+            f"parsed fingerprint wire records differ from report for {name}")
+    state_indices = [
+        index for index, line in enumerate(lines)
+        if line.startswith(STATE_FINGERPRINT_MARKER)
+    ]
+    require(len(state_indices) == 1,
+            f"state fingerprint wire-record count mismatch for {name}")
+    require(linked < state_indices[0] < complete and
+            all(linked < index < complete for index in wire_indices),
+            f"fingerprint wire record precedes linked marker for {name}")
+    parsed_state = parse_state_wire_record(
+        lines[state_indices[0]], f"{name} post-state",
+    )
+    require(parsed_state == expected_post_state,
+            f"parsed state fingerprint differs from report for {name}")
+    require(not any(
+        (line.startswith("CANDLE_FINGERPRINT_V") and
+         not line.startswith(FINGERPRINT_MARKER)) or
+        (line.startswith("CANDLE_STATE_FINGERPRINT_V") and
+         not line.startswith(STATE_FINGERPRINT_MARKER))
+        for line in lines
+    ), f"unexpected fingerprint wire version in transcript for {name}")
+
+
+def safe_name(name: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_.]+", "_", name)
+
+
+def execution_semantics(run: ValidatedRun) -> list[dict[str, Any]]:
+    return [{
+        "name": result["name"],
+        "expected_identity": {
+            "serializer_sha256": result["fingerprints"]["serializer"]["sha256"],
+            "theorems": result["fingerprints"]["theorems"],
+            "post_state": result["fingerprints"]["post_state"],
+        },
+    } for result in run.results]
+
+
+def validate_report_and_capture_logs(
+    report: dict[str, Any], report_snapshot: Snapshot, run_index: int,
+    root: Path, manifest: dict[str, Any], closure: dict[str, Any],
+    approval_relative: str, approval_identity: FileIdentity, linked_sha256: str,
+    execution_contract: dict[str, dict[str, object]], stage: Path,
+    stager: Stager,
+) -> ValidatedRun:
+    require(set(report) == REPORT_KEYS, "malformed schema-4 Great100 report")
+    require(report["schema"] == 4 and report["suite"] == "top100",
+            "only a schema-4 Great100 report is promotable")
+    generated = validate_datetime(report["generated_utc"], "report generation time")
+    suite_started = validate_datetime(
+        report["suite_started_utc"], "suite start time",
+    )
+    require(generated > suite_started, "report generation does not follow suite start")
+    require(report["test_count"] == 65, "Great100 report must contain 65 targets")
     require(is_int(report["jobs"]) and report["jobs"] > 0,
-            "Great 100 report has invalid worker count")
+            "invalid Great100 worker count")
     validate_timeout_policy(report["timeout_policy"])
     for field in ("wall_seconds", "sum_test_seconds"):
         require(is_number(report[field]) and report[field] > 0,
-                f"Great 100 report has invalid {field}")
+                f"invalid report {field}")
     require(report["counts"] == {"PASS": 65, "FAIL": 0, "TIMEOUT": 0},
-            "Great 100 suite did not pass completely")
+            "Great100 suite did not pass completely")
+    require(report["candle_root"] == str(root), "report Candle root mismatch")
     require(report["candle_git_status"] == [],
-            "Candle worktree was not clean during the suite")
-    require_commit(report["candle_git_head"], "Candle report head")
-    require_sha256(report["candle_executable_sha256"], "Candle executable")
+            "Candle worktree was not clean during the run")
+    require_commit(report["candle_git_head"], "report Candle head")
     require(report["fingerprint_contract"] == FINGERPRINT_CONTRACT,
-            "unexpected Great 100 fingerprint contract")
+            "unexpected fingerprint contract")
     require(isinstance(report["s1_evidence"], dict) and
             set(report["s1_evidence"]) == S1_KEYS and
             report["s1_evidence"] == S1_CLOSED,
-            "Great 100 S1 evidence summary is not closed")
+            "Great100 S1 evidence is not closed")
+    require(report["execution_contract"] == execution_contract,
+            "report execution-contract bytes differ from committed bytes")
+    require(report["source_closure"] == closure,
+            "report source closure differs from live canonical closure")
+    require(report["independent_approval"] == {
+        "path": approval_relative, **approval_identity.as_json(),
+    }, "report independent-approval binding mismatch")
 
-    require(isinstance(report["candle_root"], str), "malformed Candle root")
-    require(isinstance(report["candle_executable"], str),
-            "malformed Candle executable path")
-    require(isinstance(report["log_directory"], str),
-            "malformed Great 100 log directory")
-    candle_root = ordinary_directory(Path(report["candle_root"]), "Candle root")
-    executable = ordinary_file(
-        Path(report["candle_executable"]), "Candle executable")
-    require(executable == candle_root / "candle/build/cake",
-            "Candle executable is outside the canonical build path")
+    evidence = report["run_evidence"]
+    require(isinstance(evidence, dict) and set(evidence) == RUN_EVIDENCE_KEYS,
+            "malformed schema-4 run evidence")
+    suite_nonce = require_nonce(evidence["suite_nonce"], "suite")
+    require(evidence["marker_contract"] == MARKER_CONTRACT,
+            "unexpected process-marker contract")
+    require(evidence["linked_record_sha256"] == linked_sha256 and
+            evidence["source_closure_sha256"] == closure["sha256"] and
+            evidence["independent_approval_sha256"] == approval_identity.sha256,
+            "run evidence does not bind linked/source/approval bytes")
+
+    require(isinstance(report["log_directory"], str), "malformed log directory")
     log_directory = ordinary_directory(
-        Path(report["log_directory"]), "Great 100 log directory")
-
+        Path(report["log_directory"]), f"run {run_index} log directory",
+    )
+    executable_path, reported_executable = validate_file_reference(
+        report["candle_executable"], "Candle executable",
+    )
+    executable = ordinary_file(executable_path, "Candle executable")
+    require(executable == root / "candle/build/cake",
+            "Candle executable is outside canonical build path")
+    executable_identity = stable_file_identity(executable, "Candle executable")
+    require(executable_identity == reported_executable,
+            "live Candle executable differs from report")
+    linked_relative, linked_path, linked_identity = validate_root_file_reference(
+        report["linked_record"], root, "report linked record",
+    )
+    require(linked_relative == "candle/build/cakeml-build-provenance.json" and
+            linked_path == root / linked_relative and
+            linked_identity.sha256 == linked_sha256,
+            "report linked-record file binding mismatch")
+    execution_contract_sha256 = compact_json_sha256(execution_contract)
     results = report["results"]
     require(isinstance(results, list) and len(results) == 65,
-            "malformed Great 100 result table")
-    manifest_targets = manifest["targets"]
-    require([result.get("name") for result in results] ==
-            [target["name"] for target in manifest_targets],
-            "Great 100 results are not in exact manifest order")
+            "malformed Great100 result table")
+    targets = manifest["targets"]
+    require([row.get("name") for row in results] ==
+            [target["name"] for target in targets],
+            "Great100 results are not in manifest order")
 
-    log_paths: list[Path] = []
-    log_identities: list[FileIdentity] = []
-    for result, target in zip(results, manifest_targets):
+    process_nonces: list[str] = []
+    logs: list[Snapshot] = []
+    for result_index, (result, target) in enumerate(zip(results, targets), 1):
         name = target["name"]
         require(isinstance(result, dict) and set(result) == RESULT_KEYS,
-                f"malformed result record for {name}")
+                f"malformed result for {name}")
         require(result["status"] == "PASS" and result["timeout_kind"] is None and
-                result["error_message"] == "",
-                f"non-passing result for {name}")
+                result["error_message"] == "", f"non-passing result for {name}")
         require(result["files"] == target["load_files"],
                 f"load-file order mismatch for {name}")
         for field in (
@@ -419,382 +1067,741 @@ def validate_report(
         ):
             require(is_number(result[field]) and result[field] >= 0,
                     f"invalid {field} for {name}")
-        require(result["total_elapsed_seconds"] > 0,
-                f"missing elapsed time for {name}")
-        require(math.isclose(
+        require(result["total_elapsed_seconds"] > 0 and math.isclose(
             result["total_elapsed_seconds"],
             sum(result[field] for field in (
                 "boot_elapsed_seconds", "hol_elapsed_seconds",
-                "test_elapsed_seconds", "fingerprint_elapsed_seconds")),
-            rel_tol=1e-12, abs_tol=1e-9,
+                "test_elapsed_seconds", "fingerprint_elapsed_seconds",
+            )), rel_tol=1e-12, abs_tol=1e-9,
         ), f"elapsed phase accounting mismatch for {name}")
         for field in ("peak_process_rss_kib", "peak_tree_rss_kib"):
             require(is_int(result[field]) and result[field] > 0,
                     f"missing {field} for {name}")
         require(result["peak_tree_rss_kib"] >= result["peak_process_rss_kib"],
-                f"tree RSS is smaller than process RSS for {name}")
+                f"tree RSS smaller than process RSS for {name}")
 
-        observed = result["fingerprints"]
-        require(isinstance(observed, dict) and set(observed) == FINGERPRINT_KEYS,
-                f"malformed fingerprint result for {name}")
-        require(observed["status"] == "matched" and
-                observed["mapping_status"] == "audited" and
-                observed["expected_identities_present"] is True,
+        fingerprints = result["fingerprints"]
+        require(isinstance(fingerprints, dict) and
+                set(fingerprints) == FINGERPRINT_KEYS,
+                f"malformed fingerprints for {name}")
+        require(fingerprints["status"] == "matched" and
+                fingerprints["mapping_status"] == "audited" and
+                fingerprints["expected_identities_present"] is True,
                 f"unapproved fingerprint result for {name}")
         expected = target["fingerprint_request"]["expected_identities"]
-        require(observed["serializer"] == {
+        require(fingerprints["serializer"] == {
             "path": "candle/fingerprint.ml",
             "sha256": expected["serializer_sha256"],
-        }, f"serializer mismatch for {name}")
-        observed_theorems = observed["theorems"]
-        require(isinstance(observed_theorems, list) and
-                observed_theorems == expected["theorems"],
+        } and fingerprints["theorems"] == expected["theorems"] and
+                fingerprints["post_state"] == expected["post_state"] and
+                fingerprints["approval_sha256"] == expected["approval_sha256"] ==
+                approval_identity.sha256,
                 f"semantic fingerprint mismatch for {name}")
-        for theorem_index, theorem in enumerate(observed_theorems):
-            validate_theorem_record(theorem, f"{name} observed theorem {theorem_index + 1}")
+        for theorem_index, theorem in enumerate(fingerprints["theorems"], 1):
+            validate_theorem_record(theorem, f"{name} theorem {theorem_index}")
 
+        process = result["process_evidence"]
+        require(isinstance(process, dict) and
+                set(process) == PROCESS_EVIDENCE_KEYS,
+                f"malformed process evidence for {name}")
+        require(process["suite_nonce"] == suite_nonce,
+                f"process for {name} uses wrong suite nonce")
+        process_nonce = require_nonce(process["process_nonce"], f"process {name}")
+        process_nonces.append(process_nonce)
+        require(is_int(process["pid"]) and process["pid"] > 0 and
+                process["exit_code"] == 0,
+                f"invalid process identity or exit status for {name}")
+        started = validate_datetime(process["started_utc"], f"{name} process start")
+        completed = validate_datetime(
+            process["completed_utc"], f"{name} process completion",
+        )
+        require(suite_started <= started < completed <= generated,
+                f"process interval is outside suite/report bounds for {name}")
+        require(process["linked_record_sha256"] == linked_sha256,
+                f"process for {name} does not bind the linked record")
+        markers = process["markers"]
+        require(isinstance(markers, dict) and set(markers) == MARKER_KEYS and
+                all(is_int(value) and value >= 0 for value in markers.values()),
+                f"malformed marker offsets for {name}")
+        transcript_path, transcript_identity = validate_file_reference(
+            process["transcript"], f"transcript for {name}",
+        )
+        require(isinstance(result["log_path"], str), f"malformed log path for {name}")
         log_path = ordinary_file(Path(result["log_path"]), f"log for {name}")
+        require(transcript_path == log_path and
+                process["transcript"]["path"] == result["log_path"],
+                f"process transcript path differs from log_path for {name}")
         require(log_path.parent == log_directory,
-                f"log for {name} is outside the reported log directory")
-        log_paths.append(log_path)
-        try:
-            log_bytes = log_path.read_bytes()
-            lines = log_bytes.decode("utf-8", errors="strict").splitlines()
-        except UnicodeDecodeError as error:
-            raise ValidationError(f"log for {name} is not strict UTF-8") from error
-        log_identities.append(FileIdentity(
-            len(log_bytes), hashlib.sha256(log_bytes).hexdigest()))
-        require(lines.count(LINKED_PASS_WITNESS) == 1,
-                f"log for {name} lacks one exact linked-provenance witness")
-        require(sum(line.startswith(FINGERPRINT_MARKER) for line in lines) ==
-                len(observed_theorems),
-                f"log for {name} has the wrong fingerprint-record count")
+                f"log for {name} is outside reported log directory")
+        pre_runtime = validate_runtime_state(
+            process["pre_runtime_state"], f"{name} pre-runtime", root,
+            report["candle_git_head"], linked_sha256, executable_identity,
+            execution_contract_sha256, closure["sha256"],
+        )
+        post_runtime = validate_runtime_state(
+            process["post_runtime_state"], f"{name} post-runtime", root,
+            report["candle_git_head"], linked_sha256, executable_identity,
+            execution_contract_sha256, closure["sha256"],
+        )
+        require(pre_runtime == post_runtime,
+                f"runtime contract changed during process for {name}")
+        resource = process["resource_sampling"]
+        require(isinstance(resource, dict) and
+                set(resource) == RESOURCE_SAMPLING_KEYS and
+                is_number(resource["interval_seconds"]) and
+                resource["interval_seconds"] > 0 and
+                is_int(resource["sample_count"]) and resource["sample_count"] > 0 and
+                resource["root_observed"] is True and
+                resource["sampler_completed"] is True and
+                resource["peak_process_rss_kib"] == result["peak_process_rss_kib"] and
+                resource["peak_tree_rss_kib"] == result["peak_tree_rss_kib"],
+                f"incomplete or inconsistent resource sampling for {name}")
+        log = stager.capture(
+            log_path,
+            f"run-{run_index}/logs/{result_index:02d}-{safe_name(name)}.log",
+            f"run {run_index} transcript for {name}",
+        )
+        require(log.identity == transcript_identity,
+                f"report-bound transcript bytes differ for {name}")
+        validate_transcript(
+            snapshot_bytes(stage, log), name, suite_nonce, process_nonce,
+            linked_sha256, fingerprints["theorems"], fingerprints["post_state"],
+            markers,
+        )
+        logs.append(log)
 
-    require(len(set(log_paths)) == 65, "duplicate Great 100 log path")
-    require(len({file_key(path, "Great 100 log") for path in log_paths}) == 65,
-            "Great 100 logs contain hard-link aliases")
+    require(len(set(process_nonces)) == 65,
+            f"duplicate process nonce within run {run_index}")
     require(math.isclose(
         report["sum_test_seconds"],
         sum(result["total_elapsed_seconds"] for result in results),
         rel_tol=1e-12, abs_tol=1e-6,
-    ), "Great 100 aggregate test time mismatch")
-    return ValidatedRun(
-        source_path, source_identity, report, results, log_paths, log_identities)
+    ), "aggregate test time mismatch")
+    return ValidatedRun(report_snapshot, report, results, logs, suite_nonce)
 
 
-def validate_linked_runtime(
-    root: Path, executable: Path, head: str, executable_sha256: str,
-) -> tuple[dict[str, Any], dict[str, tuple[Path, FileIdentity]], FileIdentity]:
-    build = ordinary_directory(root / "candle/build", "Candle build directory")
-    helper = ordinary_file(
-        root / "candle/cakeml_artifact_provenance.py", "provenance helper")
-    completed = subprocess.run(
-        ["/usr/bin/python3", "-I", str(helper), "check-linked",
-         "--candle-root", str(root)],
-        check=False,
-        capture_output=True,
-        text=True,
-        env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
-    )
+def run_captured_provenance_helper(
+    stage: Path, helper: Snapshot, root: Path,
+) -> None:
+    helper_path = stage / helper.archive_path
+    try:
+        completed = subprocess.run(
+            [str(PYTHON_PATH), "-I", "-S", str(helper_path), "check-linked",
+             "--candle-root", str(root)],
+            check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+            timeout=1800,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValidationError("captured provenance helper could not run") from error
     require(completed.returncode == 0 and
-            completed.stdout == LINKED_PASS_WITNESS + "\n" and
-            completed.stderr == "",
-            "authoritative linked-provenance validation failed")
+            completed.stdout == (LINKED_PASS_WITNESS + "\n").encode() and
+            completed.stderr == b"",
+            "authoritative captured linked-provenance validation failed")
 
-    record_path = build / "cakeml-build-provenance.json"
-    record, _ = load_json(record_path, "linked provenance record")
+
+def validate_linked_and_capture(
+    root: Path, head: str, expected_record: FileIdentity,
+    expected_executable_sha256: str, helper: Snapshot,
+    stage: Path, stager: Stager,
+) -> tuple[dict[str, Any], Snapshot, Snapshot]:
+    run_captured_provenance_helper(stage, helper, root)
+    build = ordinary_directory(root / "candle/build", "Candle build directory")
+    record_snapshot = stager.capture(
+        build / "cakeml-build-provenance.json",
+        "linked/cakeml-build-provenance.json", "linked provenance record",
+    )
+    require(record_snapshot.identity == expected_record,
+            "current linked record differs from per-process binding")
+    record = snapshot_json(stage, record_snapshot, "linked provenance record")
     require(set(record) == LINKED_RECORD_KEYS and record["schema"] == 6 and
             record["kind"] == "candle-linked-pinned-cakeml",
             "unsupported linked provenance record")
     require(record["candle_commit"] == head,
-            "linked record does not bind the reported Candle head")
+            "linked record does not bind reported Candle head")
     require_commit(record["cakeml_commit"], "linked CakeML commit")
     require_commit(record["hol4_commit"], "linked HOL4 commit")
     require_sha256(record["manifest_sha256"], "linked direct manifest")
     require_sha256(record["version_output_sha256"], "linked version output")
-
     outputs = record["outputs"]
     require(isinstance(outputs, dict) and set(outputs) == LINKED_OUTPUTS,
             "linked output set mismatch")
-    observed_outputs: dict[str, FileIdentity] = {}
+    output_snapshots: dict[str, Snapshot] = {}
     for name in sorted(LINKED_OUTPUTS):
         expected = validate_file_record(outputs[name], f"linked output {name}")
-        observed = file_identity(build / name, f"linked output {name}")
-        observed_outputs[name] = observed
-        require(observed.as_json() == expected,
-                f"linked output changed: {name}")
-    executable_identity = observed_outputs["cake"]
-    require(executable_identity.sha256 == executable_sha256 and
-            executable_identity.as_json() == outputs["cake"],
-            "reported executable does not match linked provenance")
-
-    direct_manifest = root / "candle/flyspeck_manifest.json"
-    require(file_identity(direct_manifest, "direct manifest").sha256 ==
-            record["manifest_sha256"],
-            "linked direct-manifest identity mismatch")
+        captured = stager.capture(
+            build / name, f"linked/outputs/{name}", f"linked output {name}",
+        )
+        require(captured.identity.as_json() == expected,
+                f"linked output bytes changed: {name}")
+        output_snapshots[name] = captured
+    executable = output_snapshots["cake"]
+    require(executable.identity.sha256 == expected_executable_sha256,
+            "reported executable differs from archived linked executable")
+    direct = stager.capture(
+        root / "candle/flyspeck_manifest.json",
+        "linked/flyspeck_manifest.json", "linked direct manifest",
+    )
+    require(direct.identity.sha256 == record["manifest_sha256"],
+            "linked direct-manifest bytes changed")
+    patch = stager.capture(
+        root / "candle/cake.S.patch", "linked/cake.S.patch",
+        "linked CakeML patch",
+    )
+    require(patch.identity.as_json() == validate_file_record(
+        record["cake_patch"], "linked CakeML patch",
+    ), "linked CakeML patch bytes changed")
     for field, name in (
         ("bootstrap_record", "bootstrap-provenance.json"),
         ("bootstrap_preflight", "bootstrap-preflight.json"),
         ("bootstrap_log", "bootstrap.log"),
     ):
-        expected = validate_file_record(record[field], field)
-        require(file_identity(build / name, field).as_json() == expected,
-                f"linked {field} changed")
-    require(file_identity(root / "candle/cake.S.patch", "CakeML assembly patch").as_json()
-            == validate_file_record(record["cake_patch"], "CakeML assembly patch"),
-            "linked CakeML assembly patch changed")
+        require(output_snapshots[name].identity.as_json() == validate_file_record(
+            record[field], field,
+        ), f"linked {field} bytes changed")
+    return record, record_snapshot, executable
 
-    retained_paths = {
-        "contracts/top100_manifest.json": root / "candle/top100_manifest.json",
-        "contracts/fingerprint.ml": root / "candle/fingerprint.ml",
-        "contracts/flyspeck_manifest.json": direct_manifest,
-        "controllers/regression.py": root / "candle/regression.py",
-        "controllers/top100_manifest.py": root / "candle/top100_manifest.py",
-        "controllers/cakeml_artifact_provenance.py": helper,
-        "controllers/candle.sh": root / "candle.sh",
-        "provenance/cakeml-build-provenance.json": record_path,
-        "provenance/bootstrap-provenance.json": build / "bootstrap-provenance.json",
-        "provenance/bootstrap-preflight.json": build / "bootstrap-preflight.json",
-        "provenance/bootstrap.log": build / "bootstrap.log",
-        "provenance/cake.S.patch": root / "candle/cake.S.patch",
+
+def validate_approval_and_capture(
+    approval: dict[str, Any], approval_snapshot: Snapshot,
+    root: Path, manifest: dict[str, Any], expected_semantics: list[dict[str, Any]],
+    serializer_sha256: str, stage: Path, stager: Stager,
+) -> list[Snapshot]:
+    require(set(approval) == APPROVAL_KEYS and
+            approval["schema"] == "candle-s1-identity-approval-v1" and
+            approval["artifact_kind"] ==
+            "independently-reviewed-ocaml-reference-identities" and
+            approval["approval_status"] == "approved" and
+            approval["promotion_allowed"] is True,
+            "independent OCaml approval artifact is not approved")
+    inventory = approval_inventory_contract(manifest)
+    require((inventory["target_count"], inventory["covered_source_count"],
+             inventory["theorem_request_count"]) == (65, 66, 97) and
+            approval["inventory_contract_sha256"] == compact_json_sha256(inventory),
+            "independent approval inventory contract mismatch")
+    require(approval["serializer_sha256"] == serializer_sha256,
+            "independent approval serializer mismatch")
+
+    policy = approval["reference_policy"]
+    require(isinstance(policy, dict) and set(policy) == REFERENCE_POLICY_KEYS,
+            "malformed independent approval reference policy")
+    require_commit(policy["historical_upstream_commit"], "historical reference")
+    exact_reference = require_commit(
+        policy["exact_source_reference_commit"], "exact source reference",
+    )
+    deltas = policy["compatibility_deltas"]
+    require(isinstance(deltas, list) and len(deltas) == 3,
+            "reference policy must contain exactly three compatibility deltas")
+    expected_delta_paths = {
+        "100/e_is_transcendental.ml", "100/euler.ml", "100/lagrange.ml",
     }
-    retained = {
-        relative: (path, file_identity(path, f"retained evidence {relative}"))
-        for relative, path in retained_paths.items()
+    observed_delta_paths = set()
+    for delta in deltas:
+        require(isinstance(delta, dict) and set(delta) == REFERENCE_DELTA_KEYS,
+                "malformed independent approval compatibility delta")
+        path = safe_relative(delta["path"], "approval compatibility-delta path")
+        observed_delta_paths.add(path)
+        require_sha256(delta["historical_sha256"], f"historical delta {path}")
+        require_sha256(delta["selected_sha256"], f"selected delta {path}")
+        require(isinstance(delta["reason"], str) and delta["reason"].strip(),
+                f"missing approval compatibility-delta reason for {path}")
+    require(observed_delta_paths == expected_delta_paths,
+            "independent approval compatibility-delta path set mismatch")
+
+    review = approval["review"]
+    require(isinstance(review, dict) and set(review) == APPROVAL_REVIEW_KEYS and
+            isinstance(review["reviewer"], str) and review["reviewer"].strip() and
+            review["decision"] ==
+            "two-reference-runs-identical-and-source-deltas-reviewed",
+            "independent approval lacks an exact review decision")
+    validate_datetime(review["approved_utc"], "independent approval review time")
+    require_commit(review["review_commit"], "independent approval review commit")
+
+    targets = approval["targets"]
+    require(isinstance(targets, list) and len(targets) == 65,
+            "independent approval does not cover 65 targets")
+    snapshots: list[Snapshot] = []
+    artifact_cache: dict[str, tuple[str, Snapshot]] = {}
+    for target_index, (target, approved, semantic) in enumerate(zip(
+            manifest["targets"], targets, expected_semantics), 1):
+        name = target["name"]
+        require(isinstance(approved, dict) and set(approved) == APPROVAL_TARGET_KEYS and
+                approved["name"] == name,
+                f"malformed or reordered independent approval target {name}")
+        expected_identity = approved["expected_identity"]
+        require(isinstance(expected_identity, dict) and
+                set(expected_identity) == APPROVAL_IDENTITY_KEYS and
+                semantic == {"name": name, "expected_identity": expected_identity},
+                f"independent approval identity mismatch for {name}")
+        expected_identity_sha256 = compact_json_sha256(expected_identity)
+        runs = approved["reference_runs"]
+        require(isinstance(runs, list) and len(runs) == 2,
+                f"independent approval lacks two reference runs for {name}")
+        nonces: set[str] = set()
+        distinct_run_artifacts = {
+            name: set() for name in ("candidate", "plan", "request", "transcript")
+        }
+        for run_index, run in enumerate(runs, 1):
+            require(isinstance(run, dict) and set(run) == {
+                "artifacts", "reference_git_head", "session_nonce",
+                "identity_sha256",
+            }, f"malformed reference run for {name}")
+            require(run["reference_git_head"] == exact_reference,
+                    f"reference run head mismatch for {name}")
+            nonce = require_nonce(run["session_nonce"], f"reference run {name}")
+            nonces.add(nonce)
+            require(run["identity_sha256"] == expected_identity_sha256,
+                    f"reference identity digest mismatch for {name}")
+            artifacts = run["artifacts"]
+            require(isinstance(artifacts, dict) and set(artifacts) == {
+                "candidate", "plan", "request", "transcript", "source_contract",
+            }, f"incomplete reference artifacts for {name}")
+            for artifact_name, artifact in sorted(artifacts.items()):
+                relative, path, expected = validate_root_file_reference(
+                    artifact, root, f"{name} reference {artifact_name}",
+                )
+                require(path != approval_snapshot.source_path,
+                        f"approval artifact reused by {name} {artifact_name}")
+                if artifact_name in distinct_run_artifacts:
+                    distinct_run_artifacts[artifact_name].add(
+                        (relative, expected.sha256),
+                    )
+                if relative in artifact_cache:
+                    cached_kind, cached_snapshot = artifact_cache[relative]
+                    require(artifact_name == cached_kind == "source_contract" and
+                            cached_snapshot.identity == expected,
+                            f"reference artifact path is reused for {name} {artifact_name}")
+                    captured = cached_snapshot
+                    require(snapshot_json(
+                        stage, captured, f"{name} reference source contract",
+                    ) == {
+                        "schema": "candle-s1-reference-source-contract-v1",
+                        **policy,
+                    }, f"reference source contract differs from approval policy for {name}")
+                    continue
+                captured = stager.capture(
+                    path,
+                    (f"approval/reference-runs/{target_index:02d}/run-{run_index}/"
+                     f"{artifact_name}-{Path(relative).name}"),
+                    f"{name} reference {artifact_name} run {run_index}",
+                )
+                require(captured.identity == expected,
+                        f"reference artifact bytes differ for {name} {artifact_name}")
+                if artifact_name == "source_contract":
+                    require(snapshot_json(
+                        stage, captured, f"{name} reference source contract",
+                    ) == {
+                        "schema": "candle-s1-reference-source-contract-v1",
+                        **policy,
+                    }, f"reference source contract differs from approval policy for {name}")
+                artifact_cache[relative] = (artifact_name, captured)
+                snapshots.append(captured)
+        require(len(nonces) == 2,
+                f"reference runs do not use distinct session nonces for {name}")
+        require(all(len(values) == 2 for values in distinct_run_artifacts.values()),
+                f"reference run artifacts are not distinct for {name}")
+    return snapshots
+
+
+def preflight_finalizer() -> dict[str, Any]:
+    program = ordinary_file(PROGRAM_PATH, "executing finalizer")
+    project = ordinary_directory(program.parent.parent, "finalizer project root")
+    head = git_bytes(project, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
+    validate_git_checkout(project, head, "finalizer project")
+    program_identity = stable_file_identity(program, "executing finalizer")
+    relative = program.relative_to(project).as_posix()
+    committed = git_bytes(project, "cat-file", "blob", f"HEAD:{relative}")
+    require(bytes_identity(committed) == program_identity,
+            "executing finalizer is not exact committed project bytes")
+    python = ordinary_file(PYTHON_PATH, "Python executable")
+    git = ordinary_file(GIT_REQUESTED_PATH.resolve(strict=True), "Git executable")
+    return {
+        "project_root": project,
+        "project_head": head,
+        "program_path": program,
+        "program_relative": relative,
+        "program_identity": program_identity,
+        "python_path": python,
+        "python_identity": stable_file_identity(python, "Python executable"),
+        "git_path": git,
+        "git_identity": stable_file_identity(git, "Git executable"),
     }
-    return record, retained, executable_identity
 
 
-def validate_reports(report_paths: Iterable[Path]) -> ValidatedBundle:
+def validate_authorization(
+    receipt: dict[str, Any], receipt_digest: str,
+    receipt_snapshot: Snapshot, runs: tuple[ValidatedRun, ValidatedRun],
+    linked_sha256: str, closure_sha256: str, semantics_sha256: str,
+    approval_identity: FileIdentity, finalizer: dict[str, Any],
+) -> None:
+    require(receipt_snapshot.identity.sha256 == receipt_digest,
+            "external authorization receipt digest mismatch")
+    require(set(receipt) == AUTHORIZATION_KEYS and receipt["schema"] == 1 and
+            receipt["kind"] == "candle-great100-finalization-authorization",
+            "malformed external authorization receipt")
+    validate_datetime(receipt["issued_utc"], "authorization issue time")
+    require(isinstance(receipt["authority"], str) and receipt["authority"].strip(),
+            "authorization receipt lacks authority")
+    require(receipt["reports"] == [
+        run.report_snapshot.identity.as_json() for run in runs
+    ], "authorization receipt does not bind exact report bytes")
+    require(receipt["suite_nonces"] == [run.suite_nonce for run in runs],
+            "authorization receipt does not bind suite nonces")
+    require(receipt["linked_record_sha256"] == linked_sha256 and
+            receipt["source_closure_sha256"] == closure_sha256 and
+            receipt["semantic_projection_sha256"] == semantics_sha256 and
+            receipt["independent_approval"] == approval_identity.as_json(),
+            "authorization receipt does not bind accepted evidence")
+    require(receipt["project"] == {
+        "git_head": finalizer["project_head"],
+        "finalizer": {
+            "path": finalizer["program_relative"],
+            **finalizer["program_identity"].as_json(),
+        },
+    }, "authorization receipt does not bind finalizer project/bytes")
+    require(receipt["tools"] == {
+        "python": {
+            "path": str(finalizer["python_path"]),
+            **finalizer["python_identity"].as_json(),
+        },
+        "git": {
+            "path": str(finalizer["git_path"]),
+            **finalizer["git_identity"].as_json(),
+        },
+    }, "authorization receipt does not bind exact finalizer tools")
+
+
+def archive(
+    report_paths: Iterable[Path], destination: Path,
+    external_receipt: Path, external_receipt_sha256: str,
+) -> None:
     paths = tuple(lexical_absolute(Path(path)) for path in report_paths)
-    require(len(paths) == 2, "exactly two Great 100 reports are required")
-    require(paths[0] != paths[1], "the two Great 100 reports must be distinct")
-    require(file_key(paths[0], "Great 100 report 1") !=
-            file_key(paths[1], "Great 100 report 2"),
-            "the two Great 100 reports are hard-link aliases")
-    loaded: list[tuple[dict[str, Any], FileIdentity]] = [
-        load_json(path, f"Great 100 report {index}")
-        for index, path in enumerate(paths, 1)
-    ]
-    roots = []
-    for index, value in enumerate(loaded, 1):
-        root_value = value[0].get("candle_root")
-        require(isinstance(root_value, str),
-                f"malformed Candle root for report {index}")
-        roots.append(ordinary_directory(
-            Path(root_value), f"Candle root for report {index}"))
-    require(roots[0] == roots[1], "Great 100 reports use different Candle roots")
-    manifest, _, _ = validate_manifest(roots[0])
-    runs = tuple(
-        validate_report(report, manifest, path, identity)
-        for path, (report, identity) in zip(paths, loaded)
-    )
-
-    first, second = (run.report for run in runs)
-    require(first["generated_utc"] != second["generated_utc"],
-            "the two Great 100 reports do not identify distinct runs")
-    for field in (
-        "candle_root", "candle_git_head", "candle_executable",
-        "candle_executable_sha256", "jobs", "timeout_policy",
-        "fingerprint_contract",
-    ):
-        require(first[field] == second[field],
-                f"Great 100 reports disagree on {field}")
-    semantics = [
-        {"name": result["name"], "fingerprints": result["fingerprints"]}
-        for result in runs[0].results
-    ]
-    second_semantics = [
-        {"name": result["name"], "fingerprints": result["fingerprints"]}
-        for result in runs[1].results
-    ]
-    require(semantics == second_semantics,
-            "the two Great 100 semantic projections differ")
-    all_logs = runs[0].log_paths + runs[1].log_paths
-    require(len(set(all_logs)) == 130 and
-            len({file_key(path, "Great 100 log") for path in all_logs}) == 130,
-            "the two Great 100 runs reuse transcript files")
-
-    root = roots[0]
-    executable = Path(first["candle_executable"])
-    linked, retained, executable_identity = validate_linked_runtime(
-        root, executable, first["candle_git_head"],
-        first["candle_executable_sha256"],
-    )
-    return ValidatedBundle(
-        runs=(runs[0], runs[1]), candle_root=root, executable=executable,
-        executable_identity=executable_identity, linked_record=linked,
-        retained_sources=retained, semantics=semantics,
-    )
-
-
-def copy_verified(
-    source: Path, destination: Path, label: str,
-    expected: FileIdentity | None = None,
-) -> FileIdentity:
-    before = file_identity(source, label)
-    if expected is not None:
-        require(before == expected, f"source changed before archiving {label}")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    require(not destination.exists() and not destination.is_symlink(),
-            f"archive path already exists: {destination}")
-    digest = hashlib.sha256()
-    byte_count = 0
-    with source.open("rb") as reader, destination.open("xb") as writer:
-        for block in iter(lambda: reader.read(1024 * 1024), b""):
-            writer.write(block)
-            digest.update(block)
-            byte_count += len(block)
-    copied = FileIdentity(byte_count, digest.hexdigest())
-    require(copied == before and file_identity(source, label) == before,
-            f"source changed while archiving {label}")
-    require(file_identity(destination.resolve(), f"archived {label}") == before,
-            f"archived copy mismatch for {label}")
-    return before
-
-
-def canonical_json_bytes(value: object) -> bytes:
-    return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
-
-
-def write_new(path: Path, value: bytes) -> FileIdentity:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("xb") as output:
-        output.write(value)
-    return file_identity(path.resolve(), f"generated archive file {path.name}")
-
-
-def safe_name(name: str) -> str:
-    return name.replace("/", "_").replace("-", "_")
-
-
-def archive(report_paths: Iterable[Path], destination: Path) -> None:
+    require(len(paths) == 2, "exactly two Great100 reports are required")
+    require(paths[0] != paths[1], "the two Great100 reports must be distinct")
+    require_sha256(external_receipt_sha256, "external authorization receipt")
     destination = lexical_absolute(Path(destination))
-    require(not destination.exists() and not destination.is_symlink(),
+    require(not os.path.lexists(destination),
             f"archive destination already exists: {destination}")
     parent = ordinary_directory(destination.parent, "archive parent")
-    bundle = validate_reports(report_paths)
+    finalizer = preflight_finalizer()
+    require(not destination.is_relative_to(finalizer["project_root"]),
+            "archive destination must be outside the finalizer project checkout")
 
     stage = Path(tempfile.mkdtemp(prefix=f".{destination.name}.tmp-", dir=parent))
-    retained: dict[str, dict[str, object]] = {}
-    run_inventory: list[dict[str, object]] = []
+    stager = Stager(stage)
     try:
-        for run_index, run in enumerate(bundle.runs, 1):
-            report_relative = f"run-{run_index}/report.json"
-            identity = copy_verified(
-                run.source_path, stage / report_relative,
-                f"Great 100 source report {run_index}", run.source_identity,
+        program_snapshot = stager.capture(
+            finalizer["program_path"], "finalizer/finalize-top100-report.py",
+            "executing finalizer",
+        )
+        python_snapshot = stager.capture(
+            finalizer["python_path"], "finalizer/tools/python",
+            "Python executable",
+        )
+        git_snapshot = stager.capture(
+            finalizer["git_path"], "finalizer/tools/git", "Git executable",
+        )
+        require(program_snapshot.identity == finalizer["program_identity"] and
+                python_snapshot.identity == finalizer["python_identity"] and
+                git_snapshot.identity == finalizer["git_identity"],
+                "finalizer or tool bytes changed after preflight")
+        receipt_snapshot = stager.capture(
+            lexical_absolute(Path(external_receipt)),
+            "authorization/external-receipt.json", "external authorization receipt",
+        )
+        require(receipt_snapshot.identity.sha256 == external_receipt_sha256,
+                "external authorization receipt digest mismatch")
+        receipt = snapshot_json(stage, receipt_snapshot, "external authorization receipt")
+
+        report_snapshots = tuple(
+            stager.capture(
+                path, f"run-{index}/report.json", f"Great100 report {index}",
             )
-            retained[report_relative] = identity.as_json()
-            logs: list[dict[str, object]] = []
-            for result_index, (result, log_path, log_expected) in enumerate(
-                    zip(run.results, run.log_paths, run.log_identities), 1):
-                log_relative = (
-                    f"run-{run_index}/logs/{result_index:02d}-"
-                    f"{safe_name(result['name'])}.log"
-                )
-                log_identity = copy_verified(
-                    log_path, stage / log_relative,
-                    f"run {run_index} log for {result['name']}", log_expected,
-                )
-                retained[log_relative] = log_identity.as_json()
-                logs.append({
-                    "name": result["name"],
-                    "source_path": str(log_path),
-                    "archive_path": log_relative,
-                    **log_identity.as_json(),
-                })
-            run_inventory.append({
-                "run": run_index,
-                "source_report_path": str(run.source_path),
-                "archive_report_path": report_relative,
-                "source_report": identity.as_json(),
-                "logs": logs,
-            })
+            for index, path in enumerate(paths, 1)
+        )
+        require(report_snapshots[0].file_key != report_snapshots[1].file_key,
+                "the two reports are hard-link aliases")
+        reports = tuple(
+            snapshot_json(stage, snapshot, f"Great100 report {index}")
+            for index, snapshot in enumerate(report_snapshots, 1)
+        )
+        for report in reports:
+            require(report.get("schema") == 4,
+                    "schema-3 and other legacy Great100 reports are non-promotable")
+        roots = []
+        for index, report in enumerate(reports, 1):
+            require(isinstance(report.get("candle_root"), str),
+                    f"malformed Candle root in report {index}")
+            roots.append(ordinary_directory(
+                Path(report["candle_root"]), f"report {index} Candle root",
+            ))
+        require(roots[0] == roots[1], "reports use different Candle roots")
+        root = roots[0]
+        require(not destination.is_relative_to(root),
+                "archive destination must be outside the Candle checkout")
+        heads = [require_commit(report.get("candle_git_head"), "Candle head")
+                 for report in reports]
+        require(heads[0] == heads[1], "reports use different Candle heads")
+        validate_git_checkout(root, heads[0], "Candle checkout")
 
-        for relative, (source, expected) in sorted(bundle.retained_sources.items()):
-            identity = copy_verified(source, stage / relative, relative, expected)
-            retained[relative] = identity.as_json()
-
-        semantics_relative = "semantic-projection.json"
-        semantics_identity = write_new(
-            stage / semantics_relative, canonical_json_bytes(bundle.semantics))
-        retained[semantics_relative] = semantics_identity.as_json()
-
-        metadata = {
-            "schema": 1,
-            "kind": "candle-great100-two-clean-run-archive",
-            "claim": "Great 100 S1 evidence bundle only; not S2 or S3 evidence",
-            "candle_commit": bundle.runs[0].report["candle_git_head"],
-            "candle_executable": {
-                "source_path": str(bundle.executable),
-                **bundle.executable_identity.as_json(),
-            },
-            "linked_provenance": {
-                "schema": bundle.linked_record["schema"],
-                "kind": bundle.linked_record["kind"],
-                "archive_path": "provenance/cakeml-build-provenance.json",
-                **retained["provenance/cakeml-build-provenance.json"],
-                "per_process_binding": (
-                    "schema-3 transcripts contain one exact successful validation "
-                    "witness but do not record the linked-record SHA-256"
-                ),
-            },
-            "comparison": {
-                "runs": 2,
-                "target_count": 65,
-                "projection": "ordered {name,fingerprints}",
-                "identical": True,
-                "archive_path": semantics_relative,
-                "sha256": semantics_identity.sha256,
-            },
-            "contracts": {
-                "top100_manifest": {
-                    "archive_path": "contracts/top100_manifest.json",
-                    **retained["contracts/top100_manifest.json"],
-                },
-                "fingerprint_serializer": {
-                    "archive_path": "contracts/fingerprint.ml",
-                    **retained["contracts/fingerprint.ml"],
-                },
-            },
-            "runs": run_inventory,
-            "retained_files": dict(sorted(retained.items())),
+        contract_snapshots: dict[str, Snapshot] = {}
+        for relative, mode in EXECUTION_CONTRACT_PATHS.items():
+            snapshot = stager.capture(
+                root / relative, f"execution-contract/{relative}",
+                f"execution contract {relative}",
+            )
+            validate_committed_snapshot(root, relative, snapshot, stage, mode)
+            contract_snapshots[relative] = snapshot
+        if _TEST_AFTER_CONTRACT_CAPTURE is not None:
+            _TEST_AFTER_CONTRACT_CAPTURE()
+        execution_contract = {
+            relative: snapshot.identity.as_json()
+            for relative, snapshot in sorted(contract_snapshots.items())
         }
-        bundle_relative = "bundle.json"
-        bundle_identity = write_new(
-            stage / bundle_relative, canonical_json_bytes(metadata))
-        checksum_rows = [
-            (record["sha256"], relative)
-            for relative, record in retained.items()
-        ]
-        checksum_rows.append((bundle_identity.sha256, bundle_relative))
-        checksum_rows.sort(key=lambda row: row[1])
-        write_new(
-            stage / "SHA256SUMS",
-            "".join(f"{digest}  {relative}\n" for digest, relative in checksum_rows).encode(),
+        manifest = snapshot_json(
+            stage, contract_snapshots["candle/top100_manifest.json"],
+            "Great100 manifest",
+        )
+        closure, approved_semantics, manifest_approval_sha256 = \
+            validate_manifest_and_capture_closure(
+            root, manifest, contract_snapshots["candle/top100_manifest.json"],
+            contract_snapshots["candle/fingerprint.ml"], stage, stager,
         )
 
-        require(file_identity(bundle.executable, "Candle executable") ==
-                bundle.executable_identity,
-                "Candle executable changed while creating the archive")
-        require(not destination.exists(),
+        approval_references = [report.get("independent_approval") for report in reports]
+        require(approval_references[0] == approval_references[1] and
+                isinstance(approval_references[0], dict),
+                "reports use different independent approval artifacts")
+        approval_relative, approval_path, approval_expected = \
+            validate_root_file_reference(
+            approval_references[0], root, "independent approval artifact",
+        )
+        approval_snapshot = stager.capture(
+            approval_path, "approval/approval.json", "independent approval artifact",
+        )
+        require(approval_snapshot.identity == approval_expected,
+                "independent approval bytes differ from reports")
+        validate_committed_snapshot(
+            root, approval_relative, approval_snapshot, stage, "100644",
+        )
+        require(approval_snapshot.identity.sha256 == manifest_approval_sha256,
+                "manifest identities do not bind the independent approval artifact")
+        approval = snapshot_json(stage, approval_snapshot, "independent approval artifact")
+        require(manifest.get("identity_approval") == {
+            "path": approval_relative,
+            "sha256": approval_snapshot.identity.sha256,
+            "schema": "candle-s1-identity-approval-v1",
+            "approval_status": "approved",
+            "promotion_allowed": True,
+        }, "manifest identity-approval metadata mismatch")
+        validate_approval_and_capture(
+            approval, approval_snapshot, root, manifest, approved_semantics,
+            contract_snapshots["candle/fingerprint.ml"].identity.sha256,
+            stage, stager,
+        )
+
+        linked_hashes = []
+        for report in reports:
+            evidence = report.get("run_evidence")
+            require(isinstance(evidence, dict), "missing schema-4 run evidence")
+            linked_hashes.append(require_sha256(
+                evidence.get("linked_record_sha256"), "per-run linked record",
+            ))
+        require(linked_hashes[0] == linked_hashes[1],
+                "reports bind different linked records")
+
+        runs = tuple(
+            validate_report_and_capture_logs(
+                report, report_snapshot, run_index, root, manifest, closure,
+                approval_relative, approval_snapshot.identity, linked_hashes[0],
+                execution_contract, stage, stager,
+            )
+            for run_index, (report, report_snapshot) in enumerate(
+                zip(reports, report_snapshots), 1,
+            )
+        )
+        require(runs[0].suite_nonce != runs[1].suite_nonce,
+                "the two reports do not identify distinct suite runs")
+        all_process_nonces = [
+            result["process_evidence"]["process_nonce"]
+            for run in runs for result in run.results
+        ]
+        require(len(set(all_process_nonces)) == 130,
+                "process nonces are reused across Great100 runs")
+        require(reports[0]["generated_utc"] != reports[1]["generated_utc"],
+                "the two reports use the same generation time")
+        for field in (
+            "candle_root", "candle_git_head", "candle_executable",
+            "linked_record", "jobs", "timeout_policy",
+            "fingerprint_contract", "execution_contract", "source_closure",
+            "independent_approval",
+        ):
+            require(reports[0][field] == reports[1][field],
+                    f"reports disagree on {field}")
+        semantics = execution_semantics(runs[0])
+        require(semantics == execution_semantics(runs[1]) == approved_semantics,
+                "two-run or independent semantic projections differ")
+        semantics_sha256 = compact_json_sha256(semantics)
+
+        linked_record, linked_snapshot, executable_snapshot = \
+            validate_linked_and_capture(
+                root, heads[0], FileIdentity(
+                    reports[0]["linked_record"]["bytes"], linked_hashes[0],
+                ),
+                reports[0]["candle_executable"]["sha256"],
+                contract_snapshots["candle/cakeml_artifact_provenance.py"],
+                stage, stager,
+            )
+        require(reports[0]["candle_executable"]["path"] == str(
+            root / "candle/build/cake"), "reported executable path mismatch")
+
+        validate_authorization(
+            receipt, external_receipt_sha256, receipt_snapshot,
+            (runs[0], runs[1]), linked_hashes[0], closure["sha256"],
+            semantics_sha256, approval_snapshot.identity, finalizer,
+        )
+        semantic_identity = stager.write(
+            "semantic-projection.json", canonical_json_bytes(semantics),
+        )
+        closure_identity = stager.write(
+            "source-closure.json", canonical_json_bytes(closure),
+        )
+
+        run_inventory = []
+        for run_index, run in enumerate(runs, 1):
+            run_inventory.append({
+                "run": run_index,
+                "suite_nonce": run.suite_nonce,
+                "source_report_path": str(run.report_snapshot.source_path),
+                "archive_report_path": run.report_snapshot.archive_path,
+                "report": run.report_snapshot.identity.as_json(),
+                "logs": [{
+                    "name": result["name"],
+                    "process_nonce": result["process_evidence"]["process_nonce"],
+                    "source_path": str(snapshot.source_path),
+                    "archive_path": snapshot.archive_path,
+                    **snapshot.identity.as_json(),
+                } for result, snapshot in zip(run.results, run.log_snapshots)],
+            })
+        retained = {
+            relative: identity.as_json()
+            for relative, identity in sorted(stager.records.items())
+        }
+        metadata = {
+            "schema": 2,
+            "kind": "candle-great100-two-schema4-run-archive",
+            "claim": "Great100 S1 evidence only; not S2 or S3 evidence",
+            "authorization": {
+                "archive_path": receipt_snapshot.archive_path,
+                "externally_supplied_sha256": external_receipt_sha256,
+                **receipt_snapshot.identity.as_json(),
+            },
+            "finalizer": {
+                "project_git_head": finalizer["project_head"],
+                "archive_path": program_snapshot.archive_path,
+                **program_snapshot.identity.as_json(),
+                "tools": {
+                    "python": {"archive_path": python_snapshot.archive_path,
+                               **python_snapshot.identity.as_json()},
+                    "git": {"archive_path": git_snapshot.archive_path,
+                            **git_snapshot.identity.as_json()},
+                },
+            },
+            "candle": {
+                "git_head": heads[0],
+                "linked_record": {
+                    "schema": linked_record["schema"],
+                    "archive_path": linked_snapshot.archive_path,
+                    **linked_snapshot.identity.as_json(),
+                },
+                "executable": {
+                    "source_path": str(executable_snapshot.source_path),
+                    "archive_path": executable_snapshot.archive_path,
+                    **executable_snapshot.identity.as_json(),
+                },
+            },
+            "source_closure": {
+                "archive_path": "source-closure.json",
+                "closure_sha256": closure["sha256"],
+                **closure_identity.as_json(),
+            },
+            "independent_approval": {
+                "archive_path": approval_snapshot.archive_path,
+                **approval_snapshot.identity.as_json(),
+            },
+            "comparison": {
+                "runs": 2, "target_count": 65, "source_file_count": 66,
+                "fingerprint_request_count": 97,
+                "projection": "ordered {name,expected_identity}",
+                "identical_and_independently_approved": True,
+                "archive_path": "semantic-projection.json",
+                "semantic_projection_sha256": semantics_sha256,
+                **semantic_identity.as_json(),
+            },
+            "runs": run_inventory,
+            "retained_files": retained,
+            "trust_boundary": [
+                "The externally supplied receipt digest and named authority are "
+                "trusted authorization inputs.",
+                "Kernel/filesystem/process semantics and pre-exec dynamic-loader "
+                "behavior remain trusted.",
+                "The semantics of the exact archived Python, Git, OCaml, HOL Light, "
+                "CakeML, and host-runtime artifacts are not proved by this archive.",
+            ],
+        }
+        bundle_identity = stager.write("bundle.json", canonical_json_bytes(metadata))
+        checksum_rows = [
+            (identity.sha256, relative)
+            for relative, identity in stager.records.items()
+            if relative != "bundle.json"
+        ]
+        checksum_rows.append((bundle_identity.sha256, "bundle.json"))
+        checksum_rows.sort(key=lambda item: item[1])
+        checksum_value = "".join(
+            f"{digest}  {relative}\n" for digest, relative in checksum_rows
+        ).encode("utf-8")
+        # SHA256SUMS is intentionally not self-listed.
+        stager.write("SHA256SUMS", checksum_value)
+
+        validate_git_checkout(root, heads[0], "Candle checkout postflight")
+        validate_git_checkout(
+            finalizer["project_root"], finalizer["project_head"],
+            "finalizer project postflight",
+        )
+        require(stable_file_identity(finalizer["program_path"], "finalizer postflight") ==
+                finalizer["program_identity"] and
+                stable_file_identity(finalizer["python_path"], "Python postflight") ==
+                finalizer["python_identity"] and
+                stable_file_identity(finalizer["git_path"], "Git postflight") ==
+                finalizer["git_identity"],
+                "finalizer or tool bytes changed before publication")
+        require(not os.path.lexists(destination),
                 f"archive destination appeared during creation: {destination}")
-        stage.rename(destination)
+        os.rename(stage, destination)
+        parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
     except BaseException:
-        shutil.rmtree(stage, ignore_errors=True)
+        if stage.exists():
+            shutil.rmtree(stage, ignore_errors=True)
         raise
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="validate and archive exactly two schema-3 Great 100 S1 runs")
+        description="archive exactly two authorized schema-4 Great100 runs",
+    )
     parser.add_argument("report_one", type=Path)
     parser.add_argument("report_two", type=Path)
     parser.add_argument("destination", type=Path)
-    args = parser.parse_args()
+    parser.add_argument("--external-receipt", required=True, type=Path)
+    parser.add_argument("--external-receipt-sha256", required=True)
+    arguments = parser.parse_args()
     archive(
-        (args.report_one, args.report_two), args.destination,
+        (arguments.report_one, arguments.report_two), arguments.destination,
+        arguments.external_receipt, arguments.external_receipt_sha256,
     )
 
 

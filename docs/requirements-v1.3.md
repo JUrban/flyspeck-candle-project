@@ -65,26 +65,63 @@ test or implementation commit.
   positive/negative/relocation/resume matrices, and known deviations proved
   outside the pinned dependency closure.
 
-For Great 100 S1 promotion, archive exactly two completed schema-3 reports with:
+For Great 100 S1 promotion, archive exactly two completed schema-4 reports with:
 
 ```sh
 python3 scripts/finalize-top100-report.py \
   /path/to/run-1/report.json \
   /path/to/run-2/report.json \
-  /new/path/to/s1-archive
+  /new/path/to/s1-archive \
+  --external-receipt /path/to/reviewed-finalization-authorization.json \
+  --external-receipt-sha256 SHA256_FROM_AN_OUT_OF_BAND_CHANNEL
 ```
 
-The destination must not exist. The finalizer requires exact manifest order,
-65 load passes, 65 audited mappings, 65 approved expected identity sets, 65
-exact fingerprint matches, clean and identical Candle/executable identities,
-bounded timeout policy, complete timing/RSS records, distinct transcripts with
-successful linked-provenance startup witnesses, and identical ordered semantic
-projections across both runs. It validates the current schema-6 linked record
-with Candle's provenance checker and archives the reports, logs, source
-contracts, linked record, and durable bootstrap records in a closed SHA-256
-inventory. Schema 3 does not record the linked-record SHA-256 observed by each
-process, so the retained exact startup witness plus current-record validation
-is the strongest retrospective binding and is stated as such in the bundle.
+The destination must be fresh and outside both Git checkouts. Schema 3 is
+unconditionally non-promotable: it cannot retrospectively prove two distinct
+runs or the exact runtime/provenance bytes observed by each process. Schema 4
+must bind distinct suite and process nonces to exact transcript bytes, line
+offsets for suite/start/linked/complete markers, the schema-6 linked-record hash
+seen by every process, and exact V2 theorem and post-state wire records. The
+finalizer reparses those records and requires them to equal the manifest,
+report, second run, and independently reviewed OCaml approval projection.
+
+The report must also bind the exact committed provenance helper, runner,
+Great100 manifest, serializer, and launcher; the canonical 65-target,
+66-source-file, 97-request live source closure; identical clean pre/post runtime
+states; and complete process/timing/RSS sampling. The finalizer executes only a
+captured committed copy of the provenance helper, archives the exact validated
+reports, transcripts, source files, approval/provenance files, executable,
+linked outputs, controllers, finalizer, and Python/Git tool bytes, and emits a
+closed SHA-256 inventory. An externally supplied receipt digest additionally
+binds the two exact report bytes and nonces, semantic/source/approval/link
+identities, finalizer project commit and bytes, and tool identities.
+
+The independent approval must be the committed
+`candle-s1-identity-approval-v1` artifact: 65 manifest-ordered targets, two
+distinct reference-session nonces per target, one identical canonical
+`{serializer_sha256,theorems,post_state}` identity, the reviewed three-file
+reference-source delta policy, and exact candidate/plan/request/transcript/
+source-contract attachment records. The finalizer resolves every attachment as
+an ordinary Candle-root-relative file, rehashes it, enforces distinct run
+artifacts, and retains its exact bytes.
+
+The external authorization JSON has exact top-level keys `schema`, `kind`,
+`issued_utc`, `authority`, `reports`, `suite_nonces`,
+`linked_record_sha256`, `source_closure_sha256`,
+`semantic_projection_sha256`, `independent_approval`, `project`, and `tools`.
+It uses schema 1 and kind `candle-great100-finalization-authorization`;
+`reports` contains the two ordered `{bytes,sha256}` records, `project` binds
+the finalizer Git head and committed script record, and `tools` binds the
+resolved Python and Git paths and records. Its digest must be conveyed outside
+the receipt itself and supplied literally on the command line. The finalizer
+does not generate or self-approve this receipt.
+
+No current report is made promotable by this requirement. Promotion remains
+blocked until Candle emits the complete schema-4 contract and a separately
+reviewed independent OCaml approval artifact and external authorization receipt
+exist. The receipt authority, kernel/filesystem/process semantics, pre-exec
+dynamic-loader behavior, and semantics of the archived tools remain explicit
+trusted boundaries.
 
 The project is not complete until every S3-required row and promotion gate is
 proved by current artifacts.  PFT replay success, source parsing alone, a
