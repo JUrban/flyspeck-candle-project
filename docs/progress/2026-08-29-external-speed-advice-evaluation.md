@@ -41,6 +41,14 @@ and sources instead.
   compares every cached theory's recorded parent hashes with the current
   parent `.dat` files and rejects partial or stale hits, but this does not add
   the missing toolchain identity to the key.
+- The pinned fetch path is not an authenticated content-addressed restore.  It
+  trusts manifest `name` and `url` strings, does not re-hash staged bytes
+  against the SHA-1 in `/data/<sha1>`, and ignores per-file commit/rename
+  failures while still reporting a hit.  An unexpected manifest name can also
+  select a destination outside the intended three theory products.  A private
+  cache produced in the same disposable experiment reduces the threat, but
+  these are hard blockers for reuse in a valuable worktree or for treating a
+  cache hit as evidence.
 - The running clean proof replay deliberately uses `-j1 --mt=1`.  This gives a
   trustworthy serial timing and peak-memory baseline; changing it mid-run
   would destroy that comparison.
@@ -91,14 +99,22 @@ should be triaged as one batch.  Rebuild only after the static inventory and
 cheap translated-frontend gates are quiet.  A clean release bootstrap remains
 mandatory after the final source change.
 
-### Native theory cache — accept for development, conditional
+### Native theory cache — defer execution pending fetch hardening
 
-Test the pinned HOL4 native cache in a disposable exact checkout.  Promotion
-requires evidence that restored artifacts work across worktree paths and that
-all stale/partial-parent cases fail closed.  The native entry key cannot by
-itself satisfy the earlier proposed identity condition: local source and
-theory dependencies are content-bound, but the producing executable, heap,
-kernel, platform, and invocation are not.
+The native machinery remains the right implementation base, but the pinned
+fetcher must not yet be enabled in a valuable checkout.  First patch or wrap it
+so that it accepts only the exact expected theory product names, accepts only
+`/data/<40-lowercase-hex>` URLs, verifies each staged file's SHA-1 before any
+commit, rejects duplicates/extras, and reports success only if every atomic
+commit succeeds.  Retain the existing current-parent `.dat` validation.  Then
+test the hardened path in a disposable exact checkout, including corrupt
+content, traversal names/URLs, duplicates, partial commit failure, stale
+parents, and cross-worktree relocation.
+
+Even after transport hardening, the native entry key cannot by itself satisfy
+the earlier proposed identity condition: local source and theory dependencies
+are content-bound, but the producing executable, heap, kernel, platform, and
+invocation are not.
 
 Therefore each experiment must use a physically separate cache namespace
 derived from a canonical preflight receipt that binds at least:
@@ -112,11 +128,11 @@ derived from a canonical preflight receipt that binds at least:
 
 The receipt and its SHA-256 namespace digest must be retained with timing and
 cache-hit logs.  A mismatch creates a new empty namespace; it must never reuse
-or overwrite a namespace under a different identity.  Start with
-`--cache-dir` only so caching and rebuild-strategy effects are measured
-separately, then test `--use-cache --cache-dir=<same isolated namespace>` as a
-second mode.  Both modes remain development acceleration only.  Final release
-qualification still requires an empty-tree, cache-disabled replay.
+or overwrite a namespace under a different identity.  Give `--cache-dir` and
+`--use-cache --cache-dir=...` separate invocation namespaces so caching and
+rebuild-strategy effects are measured independently.  Both modes remain
+development acceleration only.  Final release qualification still requires
+an empty-tree, cache-disabled replay.
 
 ### `Holmake -j2` — benchmark after the serial baseline
 
