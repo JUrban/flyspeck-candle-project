@@ -951,13 +951,26 @@ def validate_transcript(
         f"CANDLE_GREAT100_PROCESS_V1\t{suite_nonce}\t{process_nonce}\tCOMPLETE"
     )
     linked_marker = f"CANDLE_LINKED_PROVENANCE_V1\t{linked_sha256}"
-    for marker, marker_label in (
-        (suite_marker, "suite"), (start_marker, "process-start"),
-        (complete_marker, "process-complete"), (linked_marker, "linked-record"),
-        (LINKED_PASS_WITNESS, "linked PASS"),
-    ):
-        require(lines.count(marker) == 1,
-                f"transcript for {name} lacks one exact {marker_label} marker")
+    suite_records = [
+        line for line in lines if line.startswith("CANDLE_GREAT100_SUITE_")
+    ]
+    process_records = [
+        line for line in lines if line.startswith("CANDLE_GREAT100_PROCESS_")
+    ]
+    linked_records = [
+        line for line in lines if line.startswith("CANDLE_LINKED_PROVENANCE_")
+    ]
+    linked_witnesses = [
+        line for line in lines if line.startswith("linked CakeML provenance ")
+    ]
+    require(suite_records == [suite_marker],
+            f"unexpected or conflicting suite protocol record for {name}")
+    require(process_records == [start_marker, complete_marker],
+            f"unexpected or conflicting process protocol record for {name}")
+    require(linked_records == [linked_marker],
+            f"unexpected or conflicting linked protocol record for {name}")
+    require(linked_witnesses == [LINKED_PASS_WITNESS],
+            f"unexpected or conflicting linked PASS witness for {name}")
     indices = {
         "suite_line": lines.index(suite_marker),
         "start_line": lines.index(start_marker),
@@ -1002,9 +1015,9 @@ def validate_transcript(
             f"parsed state fingerprint differs from report for {name}")
     require(not any(
         (line.startswith("CANDLE_FINGERPRINT_V") and
-         not line.startswith(FINGERPRINT_MARKER)) or
+         not line.startswith(FINGERPRINT_MARKER + "\t")) or
         (line.startswith("CANDLE_STATE_FINGERPRINT_V") and
-         not line.startswith(STATE_FINGERPRINT_MARKER))
+         not line.startswith(STATE_FINGERPRINT_MARKER + "\t"))
         for line in lines
     ), f"unexpected fingerprint wire version in transcript for {name}")
 

@@ -1222,6 +1222,57 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.write_reports()
         self.assert_rejected("different linked records")
 
+    def test_post_complete_conflicting_protocol_records_fail_closed(self) -> None:
+        result = self.fixture.reports[0]["results"][0]
+        process = result["process_evidence"]
+        log = Path(result["log_path"])
+        conflicting = (
+            f"CANDLE_LINKED_PROVENANCE_V1\t{'f' * 64}\n"
+            f"CANDLE_GREAT100_PROCESS_V1\t{process['suite_nonce']}\t"
+            f"{process['process_nonce']}\tFAIL\n"
+        ).encode()
+        log.write_bytes(log.read_bytes() + conflicting)
+        self.fixture.refresh_transcript_identity(0, 0)
+        self.fixture.write_reports()
+        self.assert_rejected("unexpected or conflicting process protocol record")
+
+    def test_unsupported_fingerprint_protocol_namespace_fails_closed(self) -> None:
+        result = self.fixture.reports[0]["results"][0]
+        log = Path(result["log_path"])
+        log.write_bytes(log.read_bytes() + (
+            b"CANDLE_FINGERPRINT_V3\tunsupported\n"
+            b"CANDLE_STATE_FINGERPRINT_V3\tunsupported\n"
+        ))
+        self.fixture.refresh_transcript_identity(0, 0)
+        self.fixture.write_reports()
+        self.assert_rejected("unexpected fingerprint wire version")
+
+    def test_transcript_protocol_namespace_is_closed(self) -> None:
+        target = self.fixture.manifest["targets"][0]
+        result = self.fixture.reports[0]["results"][0]
+        process = result["process_evidence"]
+        base = Path(result["log_path"]).read_bytes()
+        cases = (
+            (b"CANDLE_GREAT100_SUITE_V2\tunsupported\n", "suite protocol"),
+            (b"CANDLE_GREAT100_PROCESS_V2\tunsupported\n", "process protocol"),
+            (b"CANDLE_LINKED_PROVENANCE_V2\tunsupported\n", "linked protocol"),
+            ((MODULE.LINKED_PASS_WITNESS + "\n").encode(), "linked PASS witness"),
+            (b"CANDLE_FINGERPRINT_V3\tunsupported\n", "wire version"),
+            (b"CANDLE_STATE_FINGERPRINT_V3\tunsupported\n", "wire version"),
+        )
+        for suffix, error_pattern in cases:
+            with self.subTest(suffix=suffix):
+                with self.assertRaisesRegex(MODULE.ValidationError, error_pattern):
+                    MODULE.validate_transcript(
+                        base + suffix, result["name"], process["suite_nonce"],
+                        process["process_nonce"], self.fixture.linked_sha256,
+                        target["fingerprint_request"]["expected_identities"][
+                            "theorems"],
+                        target["fingerprint_request"]["expected_identities"][
+                            "post_state"],
+                        process["markers"],
+                    )
+
     def test_source_closure_is_live_hashed_and_committed(self) -> None:
         source = self.fixture.candle_root / "100/test-00.ml"
         source.write_bytes(source.read_bytes() + b"tamper\n")
