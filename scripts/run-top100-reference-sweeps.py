@@ -61,6 +61,18 @@ HANDLED_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
 ACTIVE_PROCESS: subprocess.Popen[bytes] | None = None
 PENDING_SIGNAL: int | None = None
 STARTUP_ENVIRONMENT = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"}
+ELF_EVIDENCE_POLICY = "authenticated_explicit_bash_ldd_closure_v1"
+ELF_OUTPUT_NORMALIZATION_POLICY = \
+    "strict_recognized_lines_replace_only_aslr_addresses_v1"
+ELF_BASH_PATH = Path("/bin/bash")
+ELF_LDD_PATH = Path("/usr/bin/ldd")
+ELF_CACHE_PATH = Path("/etc/ld.so.cache")
+ELF_PRELOAD_PATH = Path("/etc/ld.so.preload")
+ELF_LOADER_PATHS = (
+    Path("/lib/ld-linux.so.2"),
+    Path("/lib64/ld-linux-x86-64.so.2"),
+    Path("/libx32/ld-linux-x32.so.2"),
+)
 
 
 class CollectionFailure(RuntimeError):
@@ -205,6 +217,99 @@ def runtime_file_record(path: Path, label: str) -> dict[str, object]:
     return {
         "argument_path": str(argument_path), "path": str(resolved),
         **file_record(resolved, label),
+    }
+
+
+def executable_route_record(path: Path, label: str) -> dict[str, object]:
+    """Match the collector's lexical route and resolved executable pin."""
+    argument = lexical_absolute(path)
+    try:
+        metadata = argument.lstat()
+        parent_metadata = argument.parent.lstat()
+        resolved = argument.resolve(strict=True)
+        resolved_metadata = resolved.lstat()
+    except (FileNotFoundError, RuntimeError, OSError) as error:
+        raise CollectionFailure(f"could not resolve {label}: {argument}") from error
+    require(stat.S_ISREG(resolved_metadata.st_mode) and
+            stat.S_IMODE(resolved_metadata.st_mode) & 0o111 != 0,
+            f"resolved {label} is not executable")
+
+    def component(route: Path, route_metadata: os.stat_result) -> dict[str, object]:
+        if stat.S_ISLNK(route_metadata.st_mode):
+            kind = "symlink"
+            extra = {"target": os.readlink(route)}
+        elif stat.S_ISDIR(route_metadata.st_mode):
+            kind = "directory"
+            extra = {}
+        elif stat.S_ISREG(route_metadata.st_mode):
+            kind = "file"
+            extra = {}
+        else:
+            raise CollectionFailure(f"unsupported {label} route component")
+        return {
+            "path": str(route), "kind": kind,
+            "mode": stat.S_IMODE(route_metadata.st_mode),
+            **extra, "resolved_path": str(route.resolve(strict=True)),
+        }
+
+    return {
+        "argument_path": str(argument),
+        "argument_parent": component(argument.parent, parent_metadata),
+        "argument": component(argument, metadata),
+        "resolved_executable": {
+            "path": str(resolved),
+            "sha256": file_record(resolved, label)["sha256"],
+            "mode": stat.S_IMODE(resolved_metadata.st_mode),
+        },
+    }
+
+
+def elf_oracle_contract(arguments: argparse.Namespace) -> dict[str, object]:
+    """Pin the plan-independent schema-v8 ELF observer inputs."""
+    require(not os.path.lexists(ELF_PRELOAD_PATH),
+            "/etc/ld.so.preload must be absent")
+    cache = ordinary_file(ELF_CACHE_PATH, "dynamic-loader cache")
+    require(not cache.is_symlink() and cache.resolve(strict=True) == cache,
+            "dynamic-loader cache must be a canonical regular file")
+    bash = executable_route_record(ELF_BASH_PATH, "ELF observer bash")
+    ldd = executable_route_record(ELF_LDD_PATH, "ELF observer ldd")
+    require(bash["resolved_executable"]["sha256"] == require_sha256(
+        arguments.elf_bash_sha256, "pinned ELF observer bash"),
+        "ELF observer bash differs from command-line pin")
+    require(ldd["resolved_executable"]["sha256"] == require_sha256(
+        arguments.elf_ldd_sha256, "pinned ELF observer ldd"),
+        "ELF observer ldd differs from command-line pin")
+    cache_pin = {"path": str(cache), **file_record(cache, "dynamic-loader cache")}
+    cache_pin.pop("bytes")
+    require(cache_pin["sha256"] == require_sha256(
+        arguments.elf_cache_sha256, "pinned dynamic-loader cache"),
+        "dynamic-loader cache differs from command-line pin")
+    loaders = []
+    present = []
+    for path in ELF_LOADER_PATHS:
+        if not os.path.lexists(path):
+            loaders.append({"argument_path": str(path), "status": "absent"})
+            continue
+        route = executable_route_record(path, f"ELF loader {path}")
+        loaders.append({
+            "argument_path": str(path), "status": "present", "route": route,
+        })
+        present.append(route["resolved_executable"])
+    require(len(present) == 1,
+            "exactly one reviewed ELF loader route must be present")
+    require(present[0]["sha256"] == require_sha256(
+        arguments.elf_loader_sha256, "pinned ELF loader"),
+        "ELF loader differs from command-line pin")
+    return {
+        "policy": ELF_EVIDENCE_POLICY,
+        "output_normalization": ELF_OUTPUT_NORMALIZATION_POLICY,
+        "tools": {"bash": bash, "ldd": ldd},
+        "hardcoded_loader_routes": loaders,
+        "ld_so_cache": cache_pin,
+        "ld_so_preload": {
+            "path": str(ELF_PRELOAD_PATH), "status": "absent",
+        },
+        "environment": dict(STARTUP_ENVIRONMENT),
     }
 
 
@@ -779,7 +884,7 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         "pinned PARI/GP optional-data tree"),
         "PARI/GP optional-data tree differs from command-line pin")
     external_runtime = {
-        "policy": "single_private_path_gp_with_pinned_shell_v1",
+        "policy": "single_private_path_gp_with_pinned_shell_v2",
         "command_shell": command_shell,
         "pari_gp": pari_gp,
         "package_archive": package_archive,
@@ -792,6 +897,7 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
             "GP_DATA_DIR": data_tree["root"],
         },
     }
+    elf_oracle = elf_oracle_contract(arguments)
     require(is_int(arguments.collection_wall_seconds) and
             arguments.collection_wall_seconds > 0 and
             is_int(arguments.target_wall_seconds) and
@@ -808,7 +914,7 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         arguments.git_sha256, "pinned Git"),
         "Git executable differs from command-line pin")
     contract = {
-        "schema": 2,
+        "schema": 3,
         "kind": "candle-great100-two-sweep-reference-collection",
         "approval_status": "candidate_collection_only_unapproved",
         "promotion_allowed": False,
@@ -832,6 +938,7 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         },
         "runtime": runtime,
         "external_runtime": external_runtime,
+        "elf_oracle": elf_oracle,
         "deadlines": {
             "collection_wall_seconds": arguments.collection_wall_seconds,
             "target_wall_seconds": arguments.target_wall_seconds,
@@ -897,6 +1004,20 @@ def validate_environment(contract: dict[str, Any]) -> None:
         Path(external["data_tree"]["root"]),
         "current PARI/GP optional-data tree",
     ) == external["data_tree"], "pinned PARI/GP optional-data tree changed")
+    oracle_arguments = argparse.Namespace(
+        elf_bash_sha256=contract["elf_oracle"]["tools"]["bash"][
+            "resolved_executable"]["sha256"],
+        elf_ldd_sha256=contract["elf_oracle"]["tools"]["ldd"][
+            "resolved_executable"]["sha256"],
+        elf_cache_sha256=contract["elf_oracle"]["ld_so_cache"]["sha256"],
+        elf_loader_sha256=next(
+            item["route"]["resolved_executable"]["sha256"]
+            for item in contract["elf_oracle"]["hardcoded_loader_routes"]
+            if item["status"] == "present"
+        ),
+    )
+    require(elf_oracle_contract(oracle_arguments) == contract["elf_oracle"],
+            "pinned ELF observer inputs changed")
     observed_controller = validate_committed_file(
         project_root, CONTROLLER_RELATIVE, "100755",
     )
@@ -1115,7 +1236,7 @@ def validate_artifact_semantics(
     )
     plan = parse_json_bytes(plan_bytes, "reference plan")
     candidate = parse_json_bytes(candidate_bytes, "reference candidate")
-    require(plan.get("schema") == "candle-s1-reference-plan-v7" and
+    require(plan.get("schema") == "candle-s1-reference-plan-v8" and
             plan.get("status") == "planned_not_executed" and
             plan.get("session_nonce") and
             NONCE_RE.fullmatch(plan["session_nonce"]) is not None,
@@ -1167,7 +1288,7 @@ def validate_artifact_semantics(
     require(isinstance(external_plan, dict) and set(external_plan) == {
         "policy", "command_shell", "pari_gp", "pari_gp_version",
         "package_archive", "package_tree", "configuration", "data_tree",
-        "dynamic_libraries", "probe",
+        "elf_runtime", "probe",
     } and external_plan.get("policy") == external_contract["policy"],
             f"reference external-runtime policy mismatch for {target['name']}")
     for key in ("command_shell", "pari_gp"):
@@ -1192,6 +1313,21 @@ def validate_artifact_semantics(
             } and external_plan.get("data_tree") ==
             external_contract["data_tree"],
             f"reference PARI/GP closure mismatch for {target['name']}")
+    oracle_keys = {
+        "policy", "output_normalization", "tools",
+        "hardcoded_loader_routes", "ld_so_cache", "ld_so_preload",
+        "environment",
+    }
+    core_elf = reference.get("elf_runtime")
+    external_elf = external_plan.get("elf_runtime")
+    require(isinstance(core_elf, dict) and isinstance(external_elf, dict) and
+            oracle_keys.issubset(core_elf) and
+            oracle_keys.issubset(external_elf) and
+            {key: core_elf[key] for key in oracle_keys} ==
+            contract["elf_oracle"] and
+            {key: external_elf[key] for key in oracle_keys} ==
+            contract["elf_oracle"],
+            f"reference ELF observer contract mismatch for {target['name']}")
     fresh = plan.get("fresh_process_contract")
     runtime_environment = fresh.get("runtime_environment", {}) \
         if isinstance(fresh, dict) else {}
@@ -1250,13 +1386,13 @@ def validate_artifact_semantics(
         "schema", "artifact_kind", "approval_status", "promotion_allowed",
         "warning", "plan_pins", "session_nonce", "process_exit_code",
         "artifact_hashes", "candidate_identities",
-    } and candidate["schema"] == "candle-s1-reference-candidate-v7" and
+    } and candidate["schema"] == "candle-s1-reference-candidate-v8" and
             candidate["artifact_kind"] == "reference_identity_candidate" and
             candidate["approval_status"] == "candidate_unapproved" and
             candidate["promotion_allowed"] is False and
             candidate["process_exit_code"] == 0 and
             candidate["session_nonce"] == plan["session_nonce"],
-            f"candidate is not exact unapproved v7 for {target['name']}")
+            f"candidate is not exact unapproved v8 for {target['name']}")
     hashes = candidate["artifact_hashes"]
     require(isinstance(hashes, dict) and hashes == {
         "plan_sha256": reference_json_sha256(plan),
@@ -1966,6 +2102,10 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--pari-gp-data-tree-sha256", required=True)
     result.add_argument("--command-shell", type=Path, required=True)
     result.add_argument("--command-shell-sha256", required=True)
+    result.add_argument("--elf-bash-sha256", required=True)
+    result.add_argument("--elf-ldd-sha256", required=True)
+    result.add_argument("--elf-cache-sha256", required=True)
+    result.add_argument("--elf-loader-sha256", required=True)
     result.add_argument("--collection-wall-seconds", type=int, required=True)
     result.add_argument("--target-wall-seconds", type=int, required=True)
     result.add_argument("--validation-wall-seconds", type=int, required=True)

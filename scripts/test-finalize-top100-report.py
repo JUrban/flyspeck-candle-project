@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,111 @@ def git(root: Path, *arguments: str) -> str:
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
     return completed.stdout.strip()
+
+
+def elf_evidence(roots: list[Path]) -> dict:
+    """Build real host-backed v8 ELF evidence for finalizer fixtures."""
+    bash = MODULE.executable_route_record(Path("/bin/bash"), "fixture ELF bash")
+    ldd = MODULE.executable_route_record(Path("/usr/bin/ldd"), "fixture ELF ldd")
+    loaders = []
+    for path in (
+        Path("/lib/ld-linux.so.2"),
+        Path("/lib64/ld-linux-x86-64.so.2"),
+        Path("/libx32/ld-linux-x32.so.2"),
+    ):
+        if not os.path.lexists(path):
+            loaders.append({"argument_path": str(path), "status": "absent"})
+        else:
+            loaders.append({
+                "argument_path": str(path), "status": "present",
+                "route": MODULE.executable_route_record(
+                    path, f"fixture ELF loader {path}",
+                ),
+            })
+    root_paths = sorted({str(path.resolve()) for path in roots})
+    observations = []
+    closure = {}
+    mapped = re.compile(
+        r"(?P<role>[^\s]+)\s+=>\s+(?P<path>/[^\s(]+)\s+"
+        r"\(0x[0-9a-fA-F]+\)",
+    )
+    direct = re.compile(r"(?P<path>/[^\s(]+)\s+\(0x[0-9a-fA-F]+\)")
+    virtual = re.compile(
+        r"(?P<role>linux-(?:vdso|gate)\.so\.1)\s+"
+        r"\(0x[0-9a-fA-F]+\)",
+    )
+    observation_roots = sorted(set(root_paths) | {
+        bash["resolved_executable"]["path"],
+    })
+    for root in observation_roots:
+        completed = subprocess.run(
+            ["/bin/bash", "/usr/bin/ldd", root],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+        )
+        resolved_files = []
+        virtual_objects = []
+        for raw in completed.stdout.splitlines():
+            line = raw.strip()
+            match = mapped.fullmatch(line)
+            if match is not None:
+                role = match.group("role")
+                reported = match.group("path")
+            else:
+                match = direct.fullmatch(line)
+                if match is not None:
+                    reported = match.group("path")
+                    role = Path(reported).name
+                else:
+                    match = virtual.fullmatch(line)
+                    if match is None:
+                        raise RuntimeError(f"unexpected fixture ldd line: {line}")
+                    virtual_objects.append(match.group("role"))
+                    continue
+            resolved = Path(reported).resolve()
+            pin = {"path": str(resolved), "sha256": digest(resolved.read_bytes())}
+            resolved_files.append({
+                "role": role, "reported_path": reported, **pin,
+            })
+            closure[str(resolved)] = pin
+        resolved_files.sort(
+            key=lambda item: (item["role"], item["reported_path"], item["path"]),
+        )
+        normalized = re.sub(
+            r"\(0x[0-9a-fA-F]+\)", "(0xADDRESS)", completed.stdout,
+        )
+        root_path = Path(root)
+        observations.append({
+            "root": {"path": root, "sha256": digest(root_path.read_bytes())},
+            "argv": ["/bin/bash", "/usr/bin/ldd", root],
+            "environment": {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+            "return_code": 0,
+            "stdout": completed.stdout,
+            "stdout_sha256": digest(completed.stdout.encode()),
+            "normalized_stdout": normalized,
+            "normalized_stdout_sha256": digest(normalized.encode()),
+            "stderr": completed.stderr,
+            "stderr_sha256": digest(completed.stderr.encode()),
+            "resolved_files": resolved_files,
+            "virtual_objects": sorted(virtual_objects),
+        })
+    cache = Path("/etc/ld.so.cache")
+    return {
+        "policy": "authenticated_explicit_bash_ldd_closure_v1",
+        "output_normalization":
+            "strict_recognized_lines_replace_only_aslr_addresses_v1",
+        "tools": {"bash": bash, "ldd": ldd},
+        "hardcoded_loader_routes": loaders,
+        "ld_so_cache": {"path": str(cache), "sha256": digest(cache.read_bytes())},
+        "ld_so_preload": {"path": "/etc/ld.so.preload", "status": "absent"},
+        "environment": {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+        "requested_roots": [
+            {"path": path, "sha256": digest(Path(path).read_bytes())}
+            for path in root_paths
+        ],
+        "observations": observations,
+        "closure": [closure[path] for path in sorted(closure)],
+    }
 
 
 class Fixture:
@@ -352,18 +458,110 @@ def _read_fingerprint_records(path, theorem_names, mapping_status,
 import json
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 
 import regression
 
 SESSION_MARKER = "CANDLE_REFERENCE_SESSION_V1"
 COMPLETE_MARKER = "CANDLE_REFERENCE_COMPLETE_V1"
-PLAN_SCHEMA = "candle-s1-reference-plan-v7"
-CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v7"
+PLAN_SCHEMA = "candle-s1-reference-plan-v8"
+CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v8"
 
 
 class CollectionError(Exception):
     pass
+
+
+def _stable_elf_evidence(evidence):
+    stable = json.loads(json.dumps(evidence))
+    for observation in stable["observations"]:
+        observation.pop("stdout")
+        observation.pop("stdout_sha256")
+    return stable
+
+
+def validate_elf_closure_evidence_live(evidence, expected_roots):
+    expected_roots = sorted(set(expected_roots))
+    if sorted(item["path"] for item in evidence["requested_roots"]) != \
+            expected_roots:
+        raise CollectionError("fixture ELF root mismatch")
+    mapped = re.compile(
+        r"(?P<role>[^\s]+)\s+=>\s+(?P<path>/[^\s(]+)\s+"
+        r"\(0x[0-9a-fA-F]+\)")
+    direct = re.compile(r"(?P<path>/[^\s(]+)\s+\(0x[0-9a-fA-F]+\)")
+    virtual = re.compile(
+        r"(?P<role>linux-(?:vdso|gate)\.so\.1)\s+"
+        r"\(0x[0-9a-fA-F]+\)")
+    observations = []
+    closure = {}
+    observation_roots = sorted(set(expected_roots) | {
+        evidence["tools"]["bash"]["resolved_executable"]["path"],
+    })
+    for root in observation_roots:
+        completed = subprocess.run(
+            ["/bin/bash", "/usr/bin/ldd", root], check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+        )
+        if completed.stderr != "":
+            raise CollectionError("fixture ldd stderr is not empty")
+        resolved_files = []
+        virtual_objects = []
+        for raw in completed.stdout.splitlines():
+            line = raw.strip()
+            match = mapped.fullmatch(line)
+            if match is not None:
+                role, reported = match.group("role"), match.group("path")
+            else:
+                match = direct.fullmatch(line)
+                if match is not None:
+                    reported = match.group("path")
+                    role = Path(reported).name
+                else:
+                    match = virtual.fullmatch(line)
+                    if match is None:
+                        raise CollectionError("fixture ldd output is malformed")
+                    virtual_objects.append(match.group("role"))
+                    continue
+            resolved = Path(reported).resolve(strict=True)
+            pin = {
+                "path": str(resolved),
+                "sha256": hashlib.sha256(resolved.read_bytes()).hexdigest(),
+            }
+            resolved_files.append({
+                "role": role, "reported_path": reported, **pin,
+            })
+            closure[str(resolved)] = pin
+        resolved_files.sort(key=lambda item: (
+            item["role"], item["reported_path"], item["path"]))
+        normalized = re.sub(
+            r"\(0x[0-9a-fA-F]+\)", "(0xADDRESS)", completed.stdout)
+        root_path = Path(root)
+        observations.append({
+            "root": {
+                "path": root,
+                "sha256": hashlib.sha256(root_path.read_bytes()).hexdigest(),
+            },
+            "argv": ["/bin/bash", "/usr/bin/ldd", root],
+            "environment": {
+                "PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
+            },
+            "return_code": 0,
+            "normalized_stdout": normalized,
+            "normalized_stdout_sha256": hashlib.sha256(
+                normalized.encode()).hexdigest(),
+            "stderr": "", "stderr_sha256": hashlib.sha256(b"").hexdigest(),
+            "resolved_files": resolved_files,
+            "virtual_objects": sorted(virtual_objects),
+        })
+    stable = _stable_elf_evidence(evidence)
+    expected_stable = json.loads(json.dumps(stable))
+    expected_stable["observations"] = observations
+    expected_stable["closure"] = [closure[path] for path in sorted(closure)]
+    if stable != expected_stable:
+        raise CollectionError("fixture live ELF evidence differs from plan")
+    return evidence
 
 
 def _json_sha256(value):
@@ -600,9 +798,11 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         runtime.chmod(0o755)
         hol_ml = self._write(reference_root, "hol.ml", b"(* fixture hol *)\n")
         runtime_stublib = self._write(
-            reference_root, "stublibs/dllzarith.so", b"fixture zarith\n")
+            reference_root, "stublibs/dllzarith.so",
+            Path("/lib/x86_64-linux-gnu/libdl.so.2").read_bytes())
         runtime_stub = self._write(
-            reference_root, "stublibs/dllunix.so", b"fixture unix\n")
+            reference_root, "stublibs/dllunix.so",
+            Path("/lib/x86_64-linux-gnu/libpthread.so.0").read_bytes())
         ocamlc_path = self._write(
             reference_root, "bin/ocamlc", b"#!/bin/sh\nexit 0\n")
         ocamlc_path.chmod(0o755)
@@ -621,15 +821,20 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         gp_root = tools_root / "pari"
         gp_bin = gp_root / "usr/bin"
         gp_bin.mkdir(parents=True)
-        gp_executable = self._write(
-            gp_root, "usr/bin/gp-2.15",
-            (b"#!/bin/sh\n"
-             b"if [ \"$1\" = --version-short ]; then "
-             b"printf '2.15.4\\n'; exit 0; fi\n"
-             b"while IFS= read -r ignored; do :; done\n"
-             b"printf '1\\n[3, 1; 5, 1]\\n'\n"),
+        gp_source = self._write(
+            gp_root, "usr/bin/gp-fixture.c",
+            (b"#include <stdio.h>\n#include <string.h>\n"
+             b"int main(int argc, char **argv) {\n"
+             b"  if (argc > 1 && strcmp(argv[1], \"--version-short\") == 0) "
+             b"{ puts(\"2.15.4\"); return 0; }\n"
+             b"  while (getchar() != EOF) {}\n"
+             b"  puts(\"1\"); puts(\"[3, 1; 5, 1]\"); return 0;\n}\n"),
         )
-        gp_executable.chmod(0o755)
+        gp_executable = gp_root / "usr/bin/gp-2.15"
+        subprocess.run(
+            ["/usr/bin/cc", "-O0", "-o", str(gp_executable), str(gp_source)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
         (gp_bin / "gp").symlink_to("gp-2.15")
         gprc = self._write(
             gp_root, "candle-gprc", b"\\\\ pinned fixture configuration\n",
@@ -643,7 +848,6 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         )
         package_archive.chmod(0o444)
         shell = Path("/bin/sh")
-        library = self._write(tools_root, "libc.so.6", b"pinned libc fixture\n")
         runtime_tree, _ = MODULE.tree_inventory(
             runtime_stublib.parent, "fixture runtime-library tree")
         ocaml_tree, _ = MODULE.tree_inventory(
@@ -660,8 +864,14 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         }
         probe_source = (
             "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp")
+        core_elf_runtime = elf_evidence([
+            shell.resolve(), runtime_stub, runtime_stublib,
+        ])
+        external_elf_runtime = elf_evidence([
+            shell.resolve(), gp_executable.resolve(),
+        ])
         external_runtime = {
-            "policy": "single_private_path_gp_with_pinned_shell_v1",
+            "policy": "single_private_path_gp_with_pinned_shell_v2",
             "command_shell": MODULE.executable_route_record(shell, "fixture shell"),
             "pari_gp": MODULE.executable_route_record(
                 gp_bin / "gp", "fixture PARI/GP",
@@ -678,9 +888,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "path": str(gprc), "sha256": digest(gprc.read_bytes()),
             },
             "data_tree": data_tree,
-            "dynamic_libraries": [{
-                "path": str(library), "sha256": digest(library.read_bytes()),
-            }],
+            "elf_runtime": external_elf_runtime,
             "probe": {
                 "shell_argv": [str(shell), "-c", probe_source],
                 "environment": external_environment,
@@ -715,7 +923,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "",
                 ])
                 plan = {
-                    "schema": "candle-s1-reference-plan-v7",
+                    "schema": "candle-s1-reference-plan-v8",
                     "status": "planned_not_executed",
                     "session_nonce": nonce,
                     "fresh_process_contract": {
@@ -757,9 +965,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                             {"path": str(runtime_stublib),
                              "sha256": digest(runtime_stublib.read_bytes())},
                         ], key=lambda value: value["path"]),
-                        "dynamic_libraries": [{
-                            "path": str(library),
-                            "sha256": digest(library.read_bytes())}],
+                        "elf_runtime": core_elf_runtime,
                         "ocamlc": {
                             "path": str(ocamlc_path),
                             "sha256": digest(ocamlc_path.read_bytes()),
@@ -855,7 +1061,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "approval_sha256": None,
                 }
                 candidate = {
-                    "schema": "candle-s1-reference-candidate-v7",
+                    "schema": "candle-s1-reference-candidate-v8",
                     "artifact_kind": "reference_identity_candidate",
                     "approval_status": "candidate_unapproved",
                     "promotion_allowed": False,
@@ -990,7 +1196,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "expected_identity": expected_identity,
             })
         collection_contract = {
-            "schema": 2,
+            "schema": 3,
             "kind": "candle-great100-two-sweep-reference-collection",
             "approval_status": "candidate_collection_only_unapproved",
             "promotion_allowed": False,
@@ -1050,6 +1256,9 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     key: external_environment[key]
                     for key in ("PATH", "GPRC", "GP_DATA_DIR")},
             },
+            "elf_oracle": MODULE.elf_oracle_projection(
+                external_elf_runtime,
+            ),
             "deadlines": collection_deadlines,
             "inventory": {
                 "target_count": 65, "source_count": 66, "request_count": 97,
@@ -1183,6 +1392,61 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             report_value["run_evidence"]["independent_approval_sha256"] = \
                 self.approval_identity["sha256"]
         self.write_reports()
+
+    def rewrite_all_reference_plans(self, mutate) -> None:
+        """Rebind every causal layer after the same adversarial plan rewrite."""
+        receipt_artifact = self.approval["collection_evidence"]["receipt"]
+        receipt_path = self.candle_root / receipt_artifact["path"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        for target_index, approved in enumerate(self.approval["targets"]):
+            for run_index, run in enumerate(approved["reference_runs"]):
+                artifacts = run["artifacts"]
+                plan_path = self.candle_root / artifacts["plan"]["path"]
+                candidate_path = self.candle_root / artifacts["candidate"]["path"]
+                plan = json.loads(plan_path.read_text(encoding="utf-8"))
+                mutate(plan)
+                plan_bytes = (json.dumps(plan, indent=2) + "\n").encode()
+                plan_path.write_bytes(plan_bytes)
+                artifacts["plan"].update(record(plan_path))
+
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+                candidate["plan_pins"] = {
+                    "reference": deepcopy(plan["reference"]),
+                    "input": deepcopy(plan["input"]),
+                    "request_sha256": plan["request"]["sha256"],
+                    "fresh_process_contract": deepcopy(
+                        plan["fresh_process_contract"]),
+                }
+                candidate["artifact_hashes"]["plan_sha256"] = digest(plan_bytes)
+                candidate_bytes = (json.dumps(candidate, indent=2) + "\n").encode()
+                candidate_path.write_bytes(candidate_bytes)
+                artifacts["candidate"].update(record(candidate_path))
+
+                success_path = self.candle_root / artifacts[
+                    "controller_success"]["path"]
+                success = json.loads(success_path.read_text(encoding="utf-8"))
+                for name, path in (("plan", plan_path),
+                                   ("candidate", candidate_path)):
+                    success["artifacts"][name] = {
+                        "path": path.relative_to(self.approval_root).as_posix(),
+                        **record(path),
+                    }
+                success_path.write_bytes(MODULE.canonical_json_bytes(success))
+                artifacts["controller_success"].update(record(success_path))
+
+                aggregate = receipt["sweeps"][run_index]["targets"][target_index][
+                    "success"]
+                aggregate["receipt"] = {
+                    "path": success_path.relative_to(
+                        self.approval_root).as_posix(),
+                    **record(success_path),
+                }
+                for name in ("plan", "candidate"):
+                    aggregate["artifacts"][name] = deepcopy(
+                        success["artifacts"][name])
+        receipt_path.write_bytes(MODULE.canonical_json_bytes(receipt))
+        receipt_artifact.update(record(receipt_path))
+        self._refresh_approval_bindings("adversarial all-plan rewrite fixture")
 
     def replace_collection_artifact(self, name: str, value: bytes) -> None:
         artifact = self.approval["collection_evidence"][name]
@@ -1509,7 +1773,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             )
         external = bundle["approval_replay"]["external_runtime"]
         self.assertEqual(external["policy"],
-                         "single_private_path_gp_with_pinned_shell_v1")
+                         "single_private_path_gp_with_pinned_shell_v2")
         self.assertEqual(
             (self.fixture.destination /
              external["package_archive"]["archive_path"]).read_bytes(),
@@ -1890,6 +2154,16 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
         self.assert_rejected("controller receipt does not bind")
+
+    def test_omitted_elf_dependency_is_rejected_after_complete_rehash(self) -> None:
+        def omit_dependency(plan: dict) -> None:
+            closure = plan["reference"]["external_runtime"]["elf_runtime"][
+                "closure"]
+            self.assertGreater(len(closure), 1)
+            closure.pop(0)
+
+        self.fixture.rewrite_all_reference_plans(omit_dependency)
+        self.assert_rejected("captured v8 reference candidate replay failed")
 
     def test_reference_external_package_is_live_rechecked(self) -> None:
         package = self.fixture.root / "reference-tools/pari.deb"

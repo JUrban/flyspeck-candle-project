@@ -144,7 +144,7 @@ def main():
         request = Path(args.request).read_bytes()
         transcript = Path(args.transcript).read_bytes()
         hashes = candidate["artifact_hashes"]
-        if (candidate["schema"] != "candle-s1-reference-candidate-v7" or
+        if (candidate["schema"] != "candle-s1-reference-candidate-v8" or
                 hashes != {
                     "plan_sha256": json_sha(plan),
                     "request_sha256": digest(request),
@@ -164,6 +164,17 @@ def main():
     contract = json.loads(
         (plan_path.parents[3] / "collection-contract.json").read_text())
     external_contract = contract["external_runtime"]
+    elf_oracle = contract["elf_oracle"]
+    def elf_runtime(roots):
+        return {
+            **elf_oracle,
+            "requested_roots": [
+                {"path": str(Path(path).resolve()), "sha256": file_sha(path)}
+                for path in roots
+            ],
+            "observations": [],
+            "closure": [],
+        }
     def route(value):
         return {
             "argument_path": value["argument_path"],
@@ -188,7 +199,10 @@ def main():
             "sha256": external_contract["configuration"]["sha256"],
         },
         "data_tree": external_contract["data_tree"],
-        "dynamic_libraries": [],
+        "elf_runtime": elf_runtime([
+            external_contract["command_shell"]["path"],
+            external_contract["pari_gp"]["path"],
+        ]),
         "probe": {
             "shell_argv": [
                 "/bin/sh", "-c",
@@ -209,7 +223,7 @@ def main():
         },
     }
     plan = {
-        "schema": "candle-s1-reference-plan-v7",
+        "schema": "candle-s1-reference-plan-v8",
         "status": "planned_not_executed",
         "session_nonce": nonce,
         "reference": {
@@ -218,6 +232,7 @@ def main():
                 "/usr/bin/git", "-C", str(reference_root), "rev-parse", "HEAD"
             ], text=True).strip(),
             "git_status": [],
+            "elf_runtime": elf_runtime([Path(args.runtime).resolve()]),
             "external_runtime": external_runtime,
         },
         "input": {
@@ -291,7 +306,7 @@ def main():
     transcript = f"TRANSCRIPT {args.target} {nonce}\n".encode()
     Path(args.transcript).write_bytes(transcript)
     candidate = {
-        "schema": "candle-s1-reference-candidate-v7",
+        "schema": "candle-s1-reference-candidate-v8",
         "artifact_kind": "reference_identity_candidate",
         "approval_status": "candidate_unapproved",
         "promotion_allowed": False,
@@ -501,6 +516,14 @@ class Fixture:
             pari_gp_data_tree_sha256=pari_data_tree["inventory_sha256"],
             command_shell=Path("/bin/sh"),
             command_shell_sha256=sha256(Path("/bin/sh").resolve().read_bytes()),
+            elf_bash_sha256=sha256(Path("/bin/bash").resolve().read_bytes()),
+            elf_ldd_sha256=sha256(Path("/usr/bin/ldd").resolve().read_bytes()),
+            elf_cache_sha256=sha256(Path("/etc/ld.so.cache").read_bytes()),
+            elf_loader_sha256=sha256(next(
+                path.resolve().read_bytes()
+                for path in MODULE.ELF_LOADER_PATHS
+                if path.exists()
+            )),
             collection_wall_seconds=10,
             target_wall_seconds=40,
             validation_wall_seconds=10,
@@ -540,6 +563,10 @@ class Fixture:
              arguments.pari_gp_data_tree_sha256),
             ("command-shell", arguments.command_shell),
             ("command-shell-sha256", arguments.command_shell_sha256),
+            ("elf-bash-sha256", arguments.elf_bash_sha256),
+            ("elf-ldd-sha256", arguments.elf_ldd_sha256),
+            ("elf-cache-sha256", arguments.elf_cache_sha256),
+            ("elf-loader-sha256", arguments.elf_loader_sha256),
             ("collection-wall-seconds", arguments.collection_wall_seconds),
             ("target-wall-seconds", arguments.target_wall_seconds),
             ("validation-wall-seconds", arguments.validation_wall_seconds),

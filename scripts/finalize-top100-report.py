@@ -173,7 +173,8 @@ DECIMAL_RE = re.compile(r"(?:0|[1-9][0-9]*)")
 EMPTY_HYPOTHESES_WIRE = b"4:list1:0"
 EMPTY_HYPOTHESES_SHA256 = hashlib.sha256(EMPTY_HYPOTHESES_WIRE).hexdigest()
 
-REFERENCE_REPLAY_CONTROLLER = r'''import json
+REFERENCE_REPLAY_CONTROLLER = r'''import hashlib
+import json
 from pathlib import Path
 import sys
 import types
@@ -198,9 +199,10 @@ sys.modules["pexpect"] = types.ModuleType("pexpect")
 load_exact("regression", stage / instructions["regression"])
 reference = load_exact(
     "reference_fingerprints", stage / instructions["validator"])
-if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v7" or
-        reference.CANDIDATE_SCHEMA != "candle-s1-reference-candidate-v7"):
-    raise RuntimeError("captured reference validator is not v7 compatible")
+if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v8" or
+        reference.CANDIDATE_SCHEMA != "candle-s1-reference-candidate-v8"):
+    raise RuntimeError("captured reference validator is not v8 compatible")
+validated_elf = set()
 for replay in instructions["replays"]:
     candidate = json.loads(
         (stage / replay["candidate"]).read_text(encoding="utf-8"))
@@ -212,6 +214,28 @@ for replay in instructions["replays"]:
         candidate["session_nonce"])
     if request != expected_request:
         raise RuntimeError("request does not regenerate from target and nonce")
+    core = plan["reference"]["elf_runtime"]
+    external = plan["reference"]["external_runtime"]["elf_runtime"]
+    for evidence, roots in (
+        (core, [
+            plan["reference"]["runtime_interpreter"]["path"],
+            *(item["path"] for item in
+              plan["reference"]["runtime_stub_files"]),
+        ]),
+        (external, [
+            plan["reference"]["external_runtime"]["command_shell"]
+                ["resolved_executable"]["path"],
+            plan["reference"]["external_runtime"]["pari_gp"]
+                ["resolved_executable"]["path"],
+        ]),
+    ):
+        stable = reference._stable_elf_evidence(evidence)
+        key = hashlib.sha256(json.dumps(
+            stable, sort_keys=True, separators=(",", ":"),
+        ).encode()).hexdigest()
+        if key not in validated_elf:
+            reference.validate_elf_closure_evidence_live(evidence, roots)
+            validated_elf.add(key)
     reference.validate_candidate(candidate, plan, request, transcript)
 print(f"reference candidate replay PASS: {len(instructions['replays'])}")
 '''
@@ -1514,6 +1538,138 @@ def prepare_reference_replay_root(
     }
 
 
+def validate_elf_runtime_structure(
+    evidence: Any, expected_roots: list[str], label: str,
+) -> dict[str, Any]:
+    """Validate the closed schema-v8 ELF evidence envelope and file pins."""
+    require(isinstance(evidence, dict) and set(evidence) == {
+        "policy", "output_normalization", "tools",
+        "hardcoded_loader_routes", "ld_so_cache", "ld_so_preload",
+        "environment", "requested_roots", "observations", "closure",
+    } and evidence["policy"] ==
+            "authenticated_explicit_bash_ldd_closure_v1" and
+            evidence["output_normalization"] ==
+            "strict_recognized_lines_replace_only_aslr_addresses_v1" and
+            evidence["environment"] == {
+                "PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
+            } and evidence["ld_so_preload"] == {
+                "path": "/etc/ld.so.preload", "status": "absent",
+            }, f"malformed {label} ELF evidence")
+
+    def route(value: Any, argument_path: str, route_label: str) -> None:
+        require(isinstance(value, dict) and set(value) == {
+            "argument_path", "argument_parent", "argument",
+            "resolved_executable",
+        } and value["argument_path"] == argument_path and
+                isinstance(value["resolved_executable"], dict) and
+                set(value["resolved_executable"]) == {"path", "sha256", "mode"} and
+                isinstance(value["resolved_executable"]["path"], str) and
+                Path(value["resolved_executable"]["path"]).is_absolute() and
+                SHA256_RE.fullmatch(
+                    value["resolved_executable"]["sha256"],
+                ) is not None and is_int(value["resolved_executable"]["mode"]),
+                f"malformed {label} {route_label} route")
+
+    tools = evidence["tools"]
+    require(isinstance(tools, dict) and set(tools) == {"bash", "ldd"},
+            f"malformed {label} ELF tools")
+    route(tools["bash"], "/bin/bash", "bash")
+    route(tools["ldd"], "/usr/bin/ldd", "ldd")
+    loader_paths = (
+        "/lib/ld-linux.so.2", "/lib64/ld-linux-x86-64.so.2",
+        "/libx32/ld-linux-x32.so.2",
+    )
+    loaders = evidence["hardcoded_loader_routes"]
+    require(isinstance(loaders, list) and len(loaders) == len(loader_paths),
+            f"malformed {label} ELF loader routes")
+    present = 0
+    for expected, loader in zip(loader_paths, loaders):
+        require(isinstance(loader, dict) and
+                loader.get("argument_path") == expected and
+                loader.get("status") in {"absent", "present"},
+                f"malformed {label} ELF loader route")
+        if loader["status"] == "absent":
+            require(set(loader) == {"argument_path", "status"},
+                    f"malformed {label} absent ELF loader")
+        else:
+            require(set(loader) == {"argument_path", "status", "route"},
+                    f"malformed {label} present ELF loader")
+            route(loader["route"], expected, "loader")
+            present += 1
+    require(present >= 1, f"{label} has no present ELF loader")
+    cache = evidence["ld_so_cache"]
+    require(isinstance(cache, dict) and set(cache) == {"path", "sha256"} and
+            cache["path"] == "/etc/ld.so.cache" and
+            SHA256_RE.fullmatch(cache["sha256"]) is not None,
+            f"malformed {label} loader cache")
+
+    roots = evidence["requested_roots"]
+    expected_roots = sorted(set(expected_roots))
+    require(isinstance(roots, list) and
+            [item.get("path") if isinstance(item, dict) else None
+             for item in roots] == expected_roots,
+            f"{label} ELF requested roots differ")
+    for pin in roots:
+        require(set(pin) == {"path", "sha256"} and
+                SHA256_RE.fullmatch(pin["sha256"]) is not None,
+                f"malformed {label} ELF root pin")
+    observations = evidence["observations"]
+    expected_observations = sorted(set(expected_roots) | {
+        tools["bash"]["resolved_executable"]["path"],
+    })
+    require(isinstance(observations, list) and
+            [item.get("root", {}).get("path")
+             if isinstance(item, dict) else None for item in observations] ==
+            expected_observations,
+            f"{label} ELF observation roots differ")
+    for observation in observations:
+        require(set(observation) == {
+            "root", "argv", "environment", "return_code", "stdout",
+            "stdout_sha256", "normalized_stdout", "normalized_stdout_sha256",
+            "stderr", "stderr_sha256", "resolved_files", "virtual_objects",
+        } and observation["environment"] == evidence["environment"] and
+                observation["return_code"] == 0 and
+                isinstance(observation["stdout"], str) and
+                hashlib.sha256(observation["stdout"].encode()).hexdigest() ==
+                observation["stdout_sha256"] and
+                isinstance(observation["normalized_stdout"], str) and
+                hashlib.sha256(
+                    observation["normalized_stdout"].encode(),
+                ).hexdigest() == observation["normalized_stdout_sha256"] and
+                observation["stderr"] == "" and
+                observation["stderr_sha256"] == hashlib.sha256(b"").hexdigest() and
+                isinstance(observation["resolved_files"], list) and
+                isinstance(observation["virtual_objects"], list),
+                f"malformed {label} ELF observation")
+    closure = evidence["closure"]
+    require(isinstance(closure, list) and closure and
+            [item.get("path") if isinstance(item, dict) else None
+             for item in closure] == sorted({
+                 item.get("path") for item in closure if isinstance(item, dict)
+             }), f"malformed {label} ELF closure order")
+    for pin in closure:
+        require(set(pin) == {"path", "sha256"} and
+                isinstance(pin["path"], str) and Path(pin["path"]).is_absolute() and
+                SHA256_RE.fullmatch(pin["sha256"]) is not None,
+                f"malformed {label} ELF closure pin")
+    return evidence
+
+
+def stable_elf_runtime(evidence: dict[str, Any]) -> dict[str, Any]:
+    stable = json.loads(json.dumps(evidence))
+    for observation in stable["observations"]:
+        observation.pop("stdout")
+        observation.pop("stdout_sha256")
+    return stable
+
+
+def elf_oracle_projection(evidence: dict[str, Any]) -> dict[str, Any]:
+    return {key: evidence[key] for key in (
+        "policy", "output_normalization", "tools", "hardcoded_loader_routes",
+        "ld_so_cache", "ld_so_preload", "environment",
+    )}
+
+
 def validate_reference_plan_bindings(
     plan: dict[str, Any], candidate: dict[str, Any], target: dict[str, Any],
     run: dict[str, Any], policy: dict[str, Any], source_contract: Snapshot,
@@ -1523,9 +1679,9 @@ def validate_reference_plan_bindings(
     require(set(plan) == {
         "schema", "status", "session_nonce", "fresh_process_contract",
         "reference", "input", "request",
-    } and plan["schema"] == "candle-s1-reference-plan-v7" and
+    } and plan["schema"] == "candle-s1-reference-plan-v8" and
             plan["status"] == "planned_not_executed",
-            f"malformed v7 reference plan for {name}")
+            f"malformed v8 reference plan for {name}")
     nonce = run["session_nonce"]
     require(plan["session_nonce"] == candidate.get("session_nonce") == nonce,
             f"reference plan/candidate nonce mismatch for {name}")
@@ -1534,10 +1690,10 @@ def validate_reference_plan_bindings(
     require(isinstance(reference, dict) and set(reference) == {
         "root", "git_head", "git_status", "runtime_executable",
         "runtime_interpreter", "runtime_stublib", "runtime_library_tree",
-        "runtime_stub_files", "dynamic_libraries", "ocamlc", "findlib",
+        "runtime_stub_files", "elf_runtime", "ocamlc", "findlib",
         "hol_ml", "generated_boot_files", "ocaml_library_tree",
         "external_runtime",
-    }, f"malformed v7 reference provenance for {name}")
+    }, f"malformed v8 reference provenance for {name}")
     require(isinstance(reference["root"], str) and
             Path(reference["root"]).is_absolute() and
             reference["git_head"] == run["reference_git_head"] ==
@@ -1570,7 +1726,7 @@ def validate_reference_plan_bindings(
         file_pin(reference[key], key.replace("_", " "))
     for key in ("runtime_library_tree", "ocaml_library_tree"):
         tree_pin(reference[key], key.replace("_", " "))
-    for key in ("runtime_stub_files", "dynamic_libraries"):
+    for key in ("runtime_stub_files",):
         values = reference[key]
         require(isinstance(values, list) and values,
                 f"empty reference {key.replace('_', ' ')} for {name}")
@@ -1579,6 +1735,12 @@ def validate_reference_plan_bindings(
         require([value["path"] for value in values] ==
                 sorted({value["path"] for value in values}),
                 f"unsorted reference {key.replace('_', ' ')} for {name}")
+    validate_elf_runtime_structure(
+        reference["elf_runtime"], [
+            reference["runtime_interpreter"]["path"],
+            *(value["path"] for value in reference["runtime_stub_files"]),
+        ], f"{name} core",
+    )
     require(reference["runtime_library_tree"]["root"] ==
             str(Path(reference["runtime_stublib"]["path"]).parent),
             f"runtime library tree mismatch for {name}")
@@ -1639,9 +1801,9 @@ def validate_reference_plan_bindings(
     require(isinstance(external, dict) and set(external) == {
         "policy", "command_shell", "pari_gp", "pari_gp_version",
         "package_archive", "package_tree", "configuration", "data_tree",
-        "dynamic_libraries", "probe",
+        "elf_runtime", "probe",
     } and external["policy"] ==
-            "single_private_path_gp_with_pinned_shell_v1",
+            "single_private_path_gp_with_pinned_shell_v2",
             f"malformed reference external-runtime provenance for {name}")
     for key in ("command_shell", "pari_gp"):
         route = external[key]
@@ -1713,16 +1875,12 @@ def validate_reference_plan_bindings(
             str(package_root / "candle-data") and
             external["data_tree"]["entry_count"] == 0,
             f"reference PARI/GP package paths are not exact for {name}")
-    libraries = external["dynamic_libraries"]
-    require(isinstance(libraries, list) and libraries and all(
-        isinstance(value, dict) and set(value) == {"path", "sha256"} and
-        isinstance(value["path"], str) and Path(value["path"]).is_absolute() and
-        SHA256_RE.fullmatch(value["sha256"]) is not None
-        for value in libraries),
-            f"malformed reference external ELF closure for {name}")
-    require([value["path"] for value in libraries] ==
-            sorted({value["path"] for value in libraries}),
-            f"reference external ELF closure is not unique and sorted for {name}")
+    validate_elf_runtime_structure(
+        external["elf_runtime"], [
+            external["command_shell"]["resolved_executable"]["path"],
+            external["pari_gp"]["resolved_executable"]["path"],
+        ], f"{name} external",
+    )
     probe = external["probe"]
     probe_source = \
         "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp"
@@ -1781,7 +1939,7 @@ def validate_reference_plan_bindings(
         "collector", "collector_repository", "manifest",
         "manifest_schema_version", "target", "load_files", "theorem_names",
         "mapping_status", "serializer", "source_mode", "source_contract",
-    }, f"malformed v7 reference input contract for {name}")
+    }, f"malformed v8 reference input contract for {name}")
     require(inputs["target"] == name and inputs["manifest_schema_version"] == 1 and
             inputs["mapping_status"] == "audited" and
             inputs["source_mode"] == "manifest-exact",
@@ -1862,6 +2020,109 @@ def validate_reference_plan_bindings(
             isinstance(request["source"], str) and
             hashlib.sha256(request["source"].encode("utf-8")).hexdigest() ==
             request["sha256"], f"malformed generated reference request for {name}")
+
+
+def capture_elf_runtime(
+    evidence: dict[str, Any], stage: Path, stager: Stager, label: str,
+) -> dict[str, Any]:
+    """Retain all authenticated observer inputs and discovered ELF objects."""
+    require(not os.path.lexists("/etc/ld.so.preload"),
+            f"{label} live /etc/ld.so.preload is not absent")
+
+    def retain_pin(pin: dict[str, Any], archive_path: str,
+                   item_label: str, *, require_elf: bool = True) -> dict[str, Any]:
+        source = ordinary_file(Path(pin["path"]), item_label)
+        if require_elf:
+            with source.open("rb") as stream:
+                require(stream.read(4) == b"\x7fELF",
+                        f"{item_label} is not ELF")
+        metadata = source.lstat()
+        key = (metadata.st_dev, metadata.st_ino)
+        if key in stager.source_keys:
+            identity = stable_file_identity(source, item_label)
+            retained = {
+                "source_path": str(source),
+                "retained_by": stager.source_keys[key],
+                **identity.as_json(),
+            }
+        else:
+            snapshot = stager.capture(source, archive_path, item_label)
+            retained = {
+                "source_path": str(snapshot.source_path),
+                "archive_path": snapshot.archive_path,
+                **snapshot.identity.as_json(),
+            }
+        require(retained["sha256"] == pin["sha256"],
+                f"{item_label} differs from plan")
+        return retained
+
+    tools = evidence["tools"]
+    for key in ("bash", "ldd"):
+        require(tools[key] == executable_route_record(
+            Path(tools[key]["argument_path"]), f"{label} ELF observer {key}",
+        ), f"live {label} ELF observer {key} route differs")
+    loaders = []
+    for item in evidence["hardcoded_loader_routes"]:
+        path = Path(item["argument_path"])
+        if item["status"] == "absent":
+            require(not os.path.lexists(path),
+                    f"absent {label} ELF loader appeared: {path}")
+            loaders.append(dict(item))
+            continue
+        require(item["route"] == executable_route_record(
+            path, f"{label} ELF loader {path}",
+        ), f"live {label} ELF loader route differs: {path}")
+        loaders.append({
+            **item,
+            "retained": retain_pin(
+                item["route"]["resolved_executable"],
+                f"approval/reference-runtime/{label}/loaders/{path.name}",
+                f"{label} ELF loader {path}",
+            ),
+        })
+    cache = retain_pin(
+        evidence["ld_so_cache"],
+        f"approval/reference-runtime/{label}/ld.so.cache",
+        f"{label} dynamic-loader cache",
+        require_elf=False,
+    )
+    retained_tools = {
+        key: retain_pin(
+            tools[key]["resolved_executable"],
+            f"approval/reference-runtime/{label}/observer/{key}",
+            f"{label} ELF observer {key}",
+            require_elf=(key == "bash"),
+        ) for key in ("bash", "ldd")
+    }
+    roots = [
+        retain_pin(
+            pin,
+            f"approval/reference-runtime/{label}/roots/{index:02d}",
+            f"{label} ELF requested root {pin['path']}",
+        ) for index, pin in enumerate(evidence["requested_roots"], 1)
+    ]
+    closure = [
+        retain_pin(
+            pin,
+            (f"approval/reference-runtime/{label}/closure/"
+             f"{index:02d}-{pin['sha256'][:16]}-{Path(pin['path']).name}"),
+            f"{label} ELF dependency {pin['path']}",
+        ) for index, pin in enumerate(evidence["closure"], 1)
+    ]
+    return {
+        "policy": evidence["policy"],
+        "output_normalization": evidence["output_normalization"],
+        "stable_projection_sha256": compact_json_sha256(
+            stable_elf_runtime(evidence)),
+        "tools": retained_tools,
+        "hardcoded_loader_routes": loaders,
+        "ld_so_cache": cache,
+        "ld_so_preload": evidence["ld_so_preload"],
+        "environment": evidence["environment"],
+        "requested_roots": roots,
+        "closure": closure,
+        "observation_count": len(evidence["observations"]),
+    }
 
 
 def capture_reference_external_runtime(
@@ -1984,21 +2245,9 @@ def capture_reference_external_runtime(
             external["command_shell"]["resolved_executable"]["sha256"],
             "retained Sys.command shell differs from reference plans")
 
-    library_records = []
-    for index, planned in enumerate(external["dynamic_libraries"], 1):
-        source = Path(planned["path"])
-        snapshot = stager.capture(
-            source,
-            ("approval/reference-runtime/elf/"
-             f"{index:02d}-{planned['sha256'][:16]}-{source.name}"),
-            f"reference external ELF dependency {source}",
-        )
-        require(snapshot.identity.sha256 == planned["sha256"],
-                f"reference external ELF dependency changed: {source}")
-        library_records.append({
-            "source_path": str(source), "archive_path": snapshot.archive_path,
-            **snapshot.identity.as_json(),
-        })
+    elf_runtime = capture_elf_runtime(
+        external["elf_runtime"], stage, stager, "external",
+    )
 
     inventory_identity = stager.write(
         "approval/reference-runtime/package-tree/inventory.json",
@@ -2036,7 +2285,7 @@ def capture_reference_external_runtime(
             "archive_path": shell.archive_path,
             **shell.identity.as_json(),
         },
-        "dynamic_libraries": library_records,
+        "elf_runtime": elf_runtime,
         "data_tree": data_pin,
         "version": observed_version,
         "probe": observed_probe,
@@ -2160,13 +2409,9 @@ def capture_reference_core_runtime(
             f"runtime stub {Path(pin['path']).name}",
         ) for index, pin in enumerate(reference["runtime_stub_files"], 1)
     ]
-    files["dynamic_libraries"] = [
-        capture_pin(
-            pin,
-            f"approval/reference-runtime/core/elf/{index:02d}-{Path(pin['path']).name}",
-            f"runtime ELF dependency {Path(pin['path']).name}",
-        ) for index, pin in enumerate(reference["dynamic_libraries"], 1)
-    ]
+    elf_runtime = capture_elf_runtime(
+        reference["elf_runtime"], stage, stager, "core",
+    )
     tree_pins = [reference["runtime_library_tree"],
                  reference["ocaml_library_tree"],
                  *findlib["package_roots"]]
@@ -2175,13 +2420,13 @@ def capture_reference_core_runtime(
     projection = {
         key: reference[key] for key in (
             "runtime_executable", "runtime_interpreter", "runtime_stublib",
-            "runtime_library_tree", "runtime_stub_files", "dynamic_libraries",
+            "runtime_library_tree", "runtime_stub_files", "elf_runtime",
             "ocamlc", "findlib", "hol_ml", "generated_boot_files",
             "ocaml_library_tree")
     }
     return {
         "plan_projection_sha256": compact_json_sha256(projection),
-        "files": files, "trees": trees,
+        "files": files, "trees": trees, "elf_runtime": elf_runtime,
     }
 
 
@@ -2190,7 +2435,7 @@ def validate_candidate_identity_projection(
     expected_identity: dict[str, Any], serializer_sha256: str,
 ) -> None:
     name = target["name"]
-    require(candidate.get("schema") == "candle-s1-reference-candidate-v7",
+    require(candidate.get("schema") == "candle-s1-reference-candidate-v8",
             f"legacy or unsupported reference candidate for {name}")
     identities = candidate.get("candidate_identities")
     require(isinstance(identities, dict) and set(identities) == FINGERPRINT_KEYS and
@@ -2249,11 +2494,11 @@ def run_captured_reference_replay(
             timeout=300,
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise ValidationError("captured v7 reference replay could not run") from error
+        raise ValidationError("captured v8 reference replay could not run") from error
     expected_stdout = f"reference candidate replay PASS: {len(replays)}\n".encode()
     require(completed.returncode == 0 and completed.stdout == expected_stdout and
             completed.stderr == b"",
-            "captured v7 reference candidate replay failed")
+            "captured v8 reference candidate replay failed")
     return {
         "validator": {
             "committed_archive_path": validator.archive_path,
@@ -2438,7 +2683,7 @@ def authenticate_collection_contract(
         "policy", "command_shell", "pari_gp", "package_archive",
         "package_tree", "configuration", "data_tree", "runtime_environment",
     } and external["policy"] ==
-            "single_private_path_gp_with_pinned_shell_v1",
+            "single_private_path_gp_with_pinned_shell_v2",
             "malformed collection external-runtime contract")
     for key in ("command_shell", "pari_gp", "package_archive", "configuration"):
         record = external[key]
@@ -2461,6 +2706,56 @@ def authenticate_collection_contract(
                 "GPRC": external["configuration"]["path"],
                 "GP_DATA_DIR": external["data_tree"]["root"],
             }, "collection external-runtime environment is not exact")
+    oracle = contract["elf_oracle"]
+    require(isinstance(oracle, dict) and set(oracle) == {
+        "policy", "output_normalization", "tools",
+        "hardcoded_loader_routes", "ld_so_cache", "ld_so_preload",
+        "environment",
+    } and oracle["policy"] ==
+            "authenticated_explicit_bash_ldd_closure_v1" and
+            oracle["output_normalization"] ==
+            "strict_recognized_lines_replace_only_aslr_addresses_v1" and
+            oracle["environment"] == {
+                "PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
+            } and oracle["ld_so_preload"] == {
+                "path": "/etc/ld.so.preload", "status": "absent",
+            } and not os.path.lexists("/etc/ld.so.preload"),
+            "malformed collection ELF observer contract")
+    require(isinstance(oracle["tools"], dict) and
+            set(oracle["tools"]) == {"bash", "ldd"},
+            "malformed collection ELF observer tools")
+    for key, path in (("bash", "/bin/bash"), ("ldd", "/usr/bin/ldd")):
+        require(oracle["tools"][key] == executable_route_record(
+            Path(path), f"collection ELF observer {key}",
+        ), f"collection ELF observer {key} changed")
+    loader_paths = (
+        "/lib/ld-linux.so.2", "/lib64/ld-linux-x86-64.so.2",
+        "/libx32/ld-linux-x32.so.2",
+    )
+    require(isinstance(oracle["hardcoded_loader_routes"], list) and
+            len(oracle["hardcoded_loader_routes"]) == len(loader_paths),
+            "malformed collection ELF loader routes")
+    for expected, loader in zip(
+            loader_paths, oracle["hardcoded_loader_routes"]):
+        require(isinstance(loader, dict) and
+                loader.get("argument_path") == expected and
+                loader.get("status") in {"absent", "present"},
+                "malformed collection ELF loader route")
+        if loader["status"] == "absent":
+            require(set(loader) == {"argument_path", "status"} and
+                    not os.path.lexists(expected),
+                    "absent collection ELF loader changed")
+        else:
+            require(set(loader) == {"argument_path", "status", "route"} and
+                    loader["route"] == executable_route_record(
+                        Path(expected), f"collection ELF loader {expected}",
+                    ), "present collection ELF loader changed")
+    cache_identity = stable_file_identity(
+        Path("/etc/ld.so.cache"), "collection dynamic-loader cache",
+    )
+    require(oracle["ld_so_cache"] == {
+        "path": "/etc/ld.so.cache", "sha256": cache_identity.sha256,
+    }, "collection dynamic-loader cache changed")
     return {
         "controller": {
             "archive_path": "approval/reference-collection/controller.py",
@@ -2510,9 +2805,10 @@ def capture_collection_evidence(
     require(isinstance(contract, dict) and set(contract) == {
         "schema", "kind", "approval_status", "promotion_allowed",
         "sweep_count", "target_count", "total_target_runs", "source_mode",
-        "project", "candle", "reference", "runtime", "external_runtime",
-        "deadlines", "inventory", "controller",
-    } and contract["schema"] == 2 and
+            "project", "candle", "reference", "runtime", "external_runtime",
+            "elf_oracle",
+            "deadlines", "inventory", "controller",
+    } and contract["schema"] == 3 and
             contract["kind"] ==
             "candle-great100-two-sweep-reference-collection" and
             contract["approval_status"] ==
@@ -2703,6 +2999,8 @@ def validate_approval_and_capture(
     replays: list[dict[str, Any]] = []
     external_runtime: dict[str, Any] | None = None
     core_runtime: dict[str, Any] | None = None
+    external_runtime_stable: dict[str, Any] | None = None
+    core_runtime_stable: dict[str, Any] | None = None
     for target_index, (target, approved, semantic) in enumerate(zip(
             manifest["targets"], targets, expected_semantics), 1):
         name = target["name"]
@@ -2946,24 +3244,37 @@ def validate_approval_and_capture(
                 "sha256": runtime_contract[key]["sha256"],
             } == runtime_plan[key] for key in runtime_plan),
                     f"collection contract does not bind {name} core runtime")
+            require(elf_oracle_projection(plan["reference"]["elf_runtime"]) ==
+                    collection_contract["elf_oracle"] and
+                    elf_oracle_projection(external_plan["elf_runtime"]) ==
+                    collection_contract["elf_oracle"],
+                    f"collection contract does not bind {name} ELF observer")
             observed_external = plan["reference"]["external_runtime"]
+            observed_external_stable = dict(observed_external)
+            observed_external_stable["elf_runtime"] = stable_elf_runtime(
+                observed_external["elf_runtime"])
             if external_runtime is None:
                 external_runtime = observed_external
+                external_runtime_stable = observed_external_stable
             else:
-                require(observed_external == external_runtime,
+                require(observed_external_stable == external_runtime_stable,
                         "reference runs use different external-runtime closures")
             observed_core = {
                 key: plan["reference"][key] for key in (
                     "runtime_executable", "runtime_interpreter",
                     "runtime_stublib", "runtime_library_tree",
-                    "runtime_stub_files", "dynamic_libraries", "ocamlc",
+                    "runtime_stub_files", "elf_runtime", "ocamlc",
                     "findlib", "hol_ml", "generated_boot_files",
                     "ocaml_library_tree")
             }
+            observed_core_stable = dict(observed_core)
+            observed_core_stable["elf_runtime"] = stable_elf_runtime(
+                observed_core["elf_runtime"])
             if core_runtime is None:
                 core_runtime = observed_core
+                core_runtime_stable = observed_core_stable
             else:
-                require(observed_core == core_runtime,
+                require(observed_core_stable == core_runtime_stable,
                         "reference runs use different HOL/OCaml runtime closures")
             require(plan["request"]["source"] == request_source,
                     f"staged reference request differs from plan for {name}")
