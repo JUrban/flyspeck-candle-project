@@ -188,6 +188,15 @@ agreed ceiling.  The PFT oracle already retains about 23 GiB, so scheduling
 must account for it.  Do not extrapolate the advice's suggested 2–3 hour build
 time until this benchmark exists.
 
+There is a local serial timing baseline, but it is not a receipt.  The
+controller-launched `Holmake -j1 cake.S` subprocess at Candle
+`27617a90dd2aa9662ab549d26b26847139c402dc` and older CakeML
+`36e2245f42d4759063615c97fec51865798ca894` exited successfully after
+7:55:55, at 75,510,344 KiB maximum RSS and zero swaps.  The enclosing run did
+not publish its final provenance record, and the current CakeML source is
+different, so this can guide capacity and rough duration only.  It is enough
+to reject the advice's unmeasured 2--3 hour figure as a planning assumption.
+
 The user has authorized a temporary ceiling of 120 GiB for a measured stage
 when the machine has sufficient headroom.  That is not the normal target and
 does not override the stop conditions.  At the 16:10 UTC checkpoint the host
