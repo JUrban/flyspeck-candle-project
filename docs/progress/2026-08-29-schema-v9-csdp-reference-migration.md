@@ -14,7 +14,12 @@ binary size/hash, source archive, duplicate-key-free parsed build receipt,
 theta1 input, normalized solver probe and deterministic solution, combined
 GP/CSDP package tree, thread-cap environment, and the complete shell/GP/CSDP
 ELF closure.  It rejects OpenMP/native build flags and known threaded ELF
-runtimes.  Schema-v8 validation remains available only with the old v8
+runtimes.  After independent review found that the first schema-v9 validators
+retained but did not validate several receipt fields, both validators were
+hardened to an exact canonical source/toolchain/recipe/output/probe contract.
+They now bind the static `libsdp.a` digest, all eight toolchain fields, ordered
+commands, exact CFLAGS and library flags, and strict JSON types.  Schema-v8
+validation remains available only with the old v8
 shell/GP policy; schema and policy cannot be crossed.
 
 The project controller independently authenticates the same inputs and runs
@@ -31,17 +36,25 @@ had the same solution SHA-256; only the four timing fields varied, so the
 normalizer replaces exactly those four numeric values and rejects a missing,
 duplicate, or reordered timing record.
 
-Verification completed at the selected executable heads:
+Verification completed at the repaired selected executable heads:
 
-- Candle `a6de0957a07ae6276f702659dbbeffd3fa8199aa`:
-  full `candle/test_*.py` discovery 233/233 (including focused
-  `test_reference_fingerprints.py` 24/24 and `test_top100_manifest.py` 14/14).
-- Project `aa496e7fe11dad8e2fc08df353f9ede476685190`:
-  `test-top100-reference-sweeps.py` 13/13, including CSDP
+- Candle `652a18a6735be8969462bf25f3233d23b5a4ed6d`:
+  full `candle/test_*.py` discovery 234/234 and focused CSDP validation 25/25,
+  including missing, forged, and boolean/type-confused receipt fields.
+- Project `95bb84fffade845406af92305baea0a9686ef21f`:
+  `test-top100-reference-sweeps.py` 14/14, including CSDP
   source/build/probe/route and exact-CLI rejection paths and complete fresh
   schema-v9 failure/resume and clean two-sweep fixtures.
-- A real no-launch reconstruction against the exact HOL Light reference and
-  staged external root produced the contract hashes recorded in
-  `docs/s1-reference-v9-csdp-two-sweep-runbook.md`.
+- Two real no-launch reconstructions from the exact detached launch paths,
+  HOL Light reference, and staged external root were byte-identical at 40,231
+  bytes, canonical SHA-256 `8270f75b348fe166bde87804b628e92974cac4bc5e43f8400be958beb699e3d7`,
+  and compact semantic SHA-256
+  `9ce6adff5a24f9634180232351e41fd170a2ed9cdfe3a57d8ea80d9949d2bf66`.
+  The earlier development-path hash anchors were rejected and replaced.
+
+The exact receipt validates the audited historical statement; it does not by
+itself replay the build or re-hash `libsdp.a`, which is not retained in the
+runtime package.  That claim is supported separately by two isolated rebuilds
+whose `libsdp.a` and solver outputs matched byte-for-byte.
 
 No old artifact root was changed and no reference collection was launched.

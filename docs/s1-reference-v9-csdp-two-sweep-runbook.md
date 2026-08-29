@@ -6,17 +6,17 @@ nine successful target runs and its CSDP-missing failure as historical
 evidence.  Schema v9 starts at sweep 1, target 1 in a new mode-0700 root.
 
 The selected executable project commit is
-`aa496e7fe11dad8e2fc08df353f9ede476685190`; the selected Candle commit is
-`a6de0957a07ae6276f702659dbbeffd3fa8199aa`.  Create clean detached worktrees
+`95bb84fffade845406af92305baea0a9686ef21f`; the selected Candle commit is
+`652a18a6735be8969462bf25f3233d23b5a4ed6d`.  Create clean detached worktrees
 at those exact commits before launch, for example:
 
 ```sh
 git -C /project/flyspeck-candle-project worktree add --detach \
-  /project/worktrees/flyspeck-project-reference-v9-launch-aa496e7 \
-  aa496e7fe11dad8e2fc08df353f9ede476685190
+  /project/worktrees/flyspeck-project-reference-v9-launch-95bb84f \
+  95bb84fffade845406af92305baea0a9686ef21f
 git -C /project/repos/candle worktree add --detach \
-  /project/worktrees/candle-reference-v9-launch-a6de095 \
-  a6de0957a07ae6276f702659dbbeffd3fa8199aa
+  /project/worktrees/candle-reference-v9-launch-652a18a \
+  652a18a6735be8969462bf25f3233d23b5a4ed6d
 ```
 
 Do not launch from either development branch.  Recheck both frozen worktrees
@@ -33,28 +33,32 @@ the deterministic solution SHA-256
 `2f1d7f430b48eddbe1279d955a5f11f2aaa9a9aace90338b846aef742ea4487f`.
 The observed ELF closure contains reference BLAS/LAPACK and no OpenMP,
 OpenBLAS, or pthread runtime; the runtime environment also caps the standard
-thread controls at one.
+thread controls at one.  Both the Candle-side collector and project-side
+controller require the receipt's exact source-package claim, eight-field
+toolchain, ordered commands, CFLAGS, library flags, static `libsdp.a` digest,
+solver identity, probe, and runtime policy; missing fields, alternative values,
+and boolean/integer type confusion fail closed.
 
 After independent review, create a new empty root and invoke exactly:
 
 ```sh
-mkdir -m 700 /project/flyspeck-candle-runs/s1-reference-v9-csdp-two-sweep-a6de095-aa496e7
+mkdir -m 700 /project/flyspeck-candle-runs/s1-reference-v9-csdp-two-sweep-652a18a-95bb84f
 
-PROJECT_ROOT=/project/worktrees/flyspeck-project-reference-v9-launch-aa496e7
+PROJECT_ROOT=/project/worktrees/flyspeck-project-reference-v9-launch-95bb84f
 
 /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LANG=C \
  /usr/bin/python3 -I -S \
  "$PROJECT_ROOT/scripts/run-top100-reference-sweeps.py" \
-  --artifact-root /project/flyspeck-candle-runs/s1-reference-v9-csdp-two-sweep-a6de095-aa496e7 \
+  --artifact-root /project/flyspeck-candle-runs/s1-reference-v9-csdp-two-sweep-652a18a-95bb84f \
   --project-root "$PROJECT_ROOT" \
-  --project-head aa496e7fe11dad8e2fc08df353f9ede476685190 \
-  --controller-sha256 9b6b147adfab5b9615632a4c6c1fb3244110d62b744316d50ffc15216cadc1b9 \
+  --project-head 95bb84fffade845406af92305baea0a9686ef21f \
+  --controller-sha256 a703c01f1153bd8774f2f1ab4342950469011cbfee6d7f605485cc71d87f6301 \
   --python-sha256 1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118 \
   --git-sha256 2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668 \
-  --candle-root /project/worktrees/candle-reference-v9-launch-a6de095 \
-  --candle-head a6de0957a07ae6276f702659dbbeffd3fa8199aa \
+  --candle-root /project/worktrees/candle-reference-v9-launch-652a18a \
+  --candle-head 652a18a6735be8969462bf25f3233d23b5a4ed6d \
   --manifest-sha256 e021a1f11d2307ca65c29eb6ab56fc04e5f4be2dbc4f7702f63ad3e1b7bfdae9 \
-  --collector-sha256 0bf90ab86ff709c728dc72a7ff1042b98d895f6678c61198baf2ac0fda620ea2 \
+  --collector-sha256 f91d1fdb6314938b8b9f88a641364059e4a20812acf805ce87d96ef12468355a \
   --protocol-sha256 e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68 \
   --reference-root /project/worktrees/hol-light-s1-exact-reference-v13 \
   --reference-head 1258c129c3ddf0b239b649ba7024eab677cd953b \
@@ -91,14 +95,14 @@ PROJECT_ROOT=/project/worktrees/flyspeck-project-reference-v9-launch-aa496e7
   --validation-wall-seconds 900
 ```
 
-The selected inputs reconstruct a 40,200-byte canonical schema-4 contract,
+The selected inputs reconstruct a 40,231-byte canonical schema-4 contract,
 canonical-file SHA-256
-`43ba9a8b44ba2ed131c7f7e5336993d6aa120306862c559ff58914c991a91710`,
+`8270f75b348fe166bde87804b628e92974cac4bc5e43f8400be958beb699e3d7`,
 and compact semantic SHA-256
-`510ead6bce3e8ef6a8c0651c654cc34006f595f529c94cf452ef1e0a0e72abb6`.
+`9ce6adff5a24f9634180232351e41fd170a2ed9cdfe3a57d8ea80d9949d2bf66`.
 They cover 65 targets, 66 sources, 97 theorem requests, and 130 target runs.
 Reinvocation is permitted only with the byte-identical command and root.  A
 changed pin or contract requires another new root.
 
-This worktree did not create the frozen worktrees, artifact root, or launch a
-sweep.
+The two frozen worktrees named above were created and checked clean.  No v9
+artifact root was created and no sweep was launched.
