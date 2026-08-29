@@ -126,7 +126,7 @@ class Fixture:
     @staticmethod
     def _wire_record(name: str, index: int, theorem_index: int) -> tuple[str, dict]:
         theorem = f"theorem-{index}-{theorem_index}".encode()
-        hypotheses = f"hypotheses-{index}-{theorem_index}".encode()
+        hypotheses = MODULE.EMPTY_HYPOTHESES_WIRE
         conclusion = f"conclusion-{index}-{theorem_index}".encode()
         axioms = b"three-global-axioms"
         line = "\t".join([
@@ -640,6 +640,20 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
                    if pattern else self.assertRaises(MODULE.ValidationError))
         with context:
             self.fixture.finalize()
+
+    def test_positive_hypothesis_theorem_and_wire_are_rejected(self):
+        _, theorem = self.fixture._wire_record("EGCD", 0, 0)
+        theorem["hypothesis_count"] = 1
+        with self.assertRaisesRegex(MODULE.ValidationError,
+                                    "theorem is not closed"):
+            MODULE.validate_theorem_record(theorem, "EGCD")
+        line, _ = self.fixture._wire_record("EGCD", 0, 0)
+        fields = line.split("\t")
+        fields[3] = b"nonempty-hypothesis".hex()
+        fields[6] = "1"
+        with self.assertRaisesRegex(MODULE.ValidationError,
+                                    "wire record is not closed"):
+            MODULE.parse_wire_record("\t".join(fields), "EGCD")
 
     def test_archives_two_complete_schema4_runs_and_exact_inventory(self) -> None:
         self.fixture.finalize()

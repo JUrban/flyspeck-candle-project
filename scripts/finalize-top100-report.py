@@ -159,6 +159,8 @@ SHA256_RE = re.compile(r"[0-9a-f]{64}")
 COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 NONCE_RE = re.compile(r"[0-9a-f]{64}")
 DECIMAL_RE = re.compile(r"(?:0|[1-9][0-9]*)")
+EMPTY_HYPOTHESES_WIRE = b"4:list1:0"
+EMPTY_HYPOTHESES_SHA256 = hashlib.sha256(EMPTY_HYPOTHESES_WIRE).hexdigest()
 
 # Test-only hook. Production callers cannot select it through the CLI.
 _TEST_AFTER_CONTRACT_CAPTURE = None
@@ -481,6 +483,11 @@ def validate_theorem_record(value: object, label: str) -> dict[str, Any]:
     for field in ("hypothesis_count", "global_axiom_count"):
         require(is_int(value[field]) and value[field] >= 0,
                 f"malformed {field} for {label}")
+    require(value["hypothesis_count"] == 0 and
+            value["hypotheses_sha256"] == EMPTY_HYPOTHESES_SHA256,
+            f"theorem is not closed for {label}")
+    require(value["global_axiom_count"] == 3,
+            f"theorem global axiom count is not three for {label}")
     return value
 
 
@@ -820,6 +827,10 @@ def parse_wire_record(line: str, label: str) -> dict[str, Any]:
     require(all(DECIMAL_RE.fullmatch(fields[index]) is not None
                 for index in (6, 7)),
             f"non-canonical fingerprint count in {label}")
+    require(serialized[1] == EMPTY_HYPOTHESES_WIRE and fields[6] == "0",
+            f"theorem wire record is not closed for {label}")
+    require(fields[7] == "3",
+            f"theorem wire global axiom count is not three for {label}")
     return {
         "name": name,
         "theorem_sha256": hashlib.sha256(serialized[0]).hexdigest(),
