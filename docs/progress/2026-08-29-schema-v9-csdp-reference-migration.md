@@ -1,6 +1,14 @@
 # Schema-v9 CSDP reference migration
 
-Status: implemented and not launched.
+Status: implemented and launched from immutable detached inputs.
+
+The fresh controller is running from exact project commit
+`95bb84fffade845406af92305baea0a9686ef21f` and Candle commit
+`652a18a6735be8969462bf25f3233d23b5a4ed6d`.  At the 2026-08-29 13:12 UTC
+checkpoint it had atomically published 9 of 130 target-runs with no failure or
+publication interruption and had started target 10, `ceva`, the former
+schema-v8 CSDP failure boundary.  This live status does not alter the immutable
+schema-v8 root or promote any incomplete schema-v9 artifact.
 
 The stopped schema-v8 Great100 collection exposed a missing `csdp` executable
 at target 10.  Its existing root remains immutable: the nine successes and the
@@ -57,4 +65,6 @@ itself replay the build or re-hash `libsdp.a`, which is not retained in the
 runtime package.  That claim is supported separately by two isolated rebuilds
 whose `libsdp.a` and solver outputs matched byte-for-byte.
 
-No old artifact root was changed and no reference collection was launched.
+No old artifact root was changed.  The new collection uses a fresh artifact
+root and remains nonpromotable until its exact 130/130 aggregate contract is
+complete and independently reviewed.
