@@ -16,6 +16,7 @@ import sys
 import time
 import tempfile
 import unittest
+from unittest import mock
 
 
 SCRIPT = Path(__file__).with_name("run-top100-reference-sweeps.py")
@@ -458,6 +459,11 @@ class ReferenceSweepControllerTests(unittest.TestCase):
             Path(self.temporary.name), fail_target, hang_first_seconds,
         )
 
+    def publication_directory(self, name: str) -> Path:
+        path = Path(self.temporary.name) / name
+        path.mkdir(mode=0o700)
+        return path
+
     def test_two_sweeps_close_in_manifest_order_and_remain_unapproved(self) -> None:
         fixture = self.fixture()
         self.assertEqual(MODULE.run(fixture.arguments()), 0)
@@ -753,6 +759,363 @@ class ReferenceSweepControllerTests(unittest.TestCase):
                 resumed.send_signal(signal.SIGTERM)
         resumed.communicate(timeout=15)
         self.assertEqual(resumed.returncode, 128 + signal.SIGTERM)
+
+    def test_pending_contract_and_truncated_terminals_recover_fail_closed(self) -> None:
+        root = self.publication_directory("contract-publication")
+        expected = b'{"contract":"exact"}\n'
+        partial = root / (".collection-contract.json.pending." + "1" * 64)
+        partial.write_bytes(b'{"contract":')
+        partial.chmod(0o600)
+        MODULE.recover_contract_publication(root, expected)
+        self.assertFalse((root / "collection-contract.json").exists())
+        self.assertEqual(partial.read_bytes(), b'{"contract":')
+        self.assertEqual(partial.stat().st_mode & 0o777, 0o400)
+        MODULE.publish_terminal(
+            root / "collection-contract.json", expected, "collection contract",
+            pending_name=".collection-contract.json.pending." + "2" * 64,
+        )
+        MODULE.recover_contract_publication(root, expected)
+        interruptions = MODULE.contract_publication_interruptions(root)
+        self.assertEqual([item["path"] for item in interruptions], [partial.name])
+
+        complete_root = self.publication_directory("complete-contract")
+        complete = complete_root / (
+            ".collection-contract.json.pending." + "3" * 64
+        )
+        MODULE.exclusive_write(complete, expected, "complete pending contract")
+        MODULE.recover_contract_publication(complete_root, expected)
+        terminal = complete_root / "collection-contract.json"
+        self.assertEqual(terminal.read_bytes(), expected)
+        self.assertFalse(complete.exists())
+        self.assertEqual(terminal.stat().st_nlink, 1)
+
+        duplicate_root = self.publication_directory("duplicate-contract")
+        for digit in ("4", "5"):
+            MODULE.exclusive_write(
+                duplicate_root / (
+                    ".collection-contract.json.pending." + digit * 64
+                ), expected, "duplicate complete pending contract",
+            )
+        with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                    "multiple complete"):
+            MODULE.recover_contract_publication(duplicate_root, expected)
+
+        truncated_contract_root = self.publication_directory("truncated-contract")
+        truncated_contract = truncated_contract_root / "collection-contract.json"
+        MODULE.exclusive_write(truncated_contract, b"{", "truncated contract")
+        with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                    "differs from current inputs"):
+            MODULE.recover_contract_publication(
+                truncated_contract_root, expected,
+            )
+        self.assertEqual(truncated_contract.read_bytes(), b"{")
+
+        for terminal_name in ("success.json", "failure.json"):
+            attempt = self.publication_directory(f"truncated-{terminal_name}")
+            terminal = attempt / terminal_name
+            MODULE.exclusive_write(terminal, b"{", f"truncated {terminal_name}")
+            MODULE.recover_attempt_publication(
+                attempt, terminal_name, terminal_name,
+            )
+            with self.assertRaisesRegex(MODULE.CollectionFailure, "malformed JSON"):
+                MODULE.load_json(terminal, terminal_name, single_link=True)
+            self.assertEqual(terminal.read_bytes(), b"{")
+
+    def test_attempt_pending_is_interrupted_and_never_prelink_promoted(self) -> None:
+        for terminal_name in ("success.json", "failure.json"):
+            attempt = self.publication_directory(f"pending-{terminal_name}")
+            pending = attempt / f".{terminal_name}.pending"
+            MODULE.exclusive_write(pending, b'{"complete":true}\n', "pending")
+            MODULE.recover_attempt_publication(
+                attempt, terminal_name, terminal_name,
+            )
+            self.assertTrue(pending.is_file())
+            self.assertFalse((attempt / terminal_name).exists())
+            self.assertEqual(pending.stat().st_nlink, 1)
+
+            partial_attempt = self.publication_directory(
+                f"partial-{terminal_name}",
+            )
+            partial = partial_attempt / f".{terminal_name}.pending"
+            partial.write_bytes(b"partial")
+            partial.chmod(0o600)
+            MODULE.recover_attempt_publication(
+                partial_attempt, terminal_name, terminal_name,
+            )
+            self.assertEqual(partial.stat().st_mode & 0o777, 0o400)
+            self.assertFalse((partial_attempt / terminal_name).exists())
+
+        for terminal_name, pending_name in (
+            ("success.json", ".failure.json.pending"),
+            ("failure.json", ".success.json.pending"),
+        ):
+            conflict = self.publication_directory(
+                f"cross-{terminal_name}",
+            )
+            MODULE.exclusive_write(
+                conflict / terminal_name, b"{}\n", "cross terminal",
+            )
+            MODULE.exclusive_write(
+                conflict / pending_name, b"{}\n", "cross pending",
+            )
+            with self.assertRaisesRegex(MODULE.CollectionFailure, "conflicts"):
+                MODULE.reject_cross_type_publications(conflict)
+
+        double_pending = self.publication_directory("double-pending")
+        for name in (".success.json.pending", ".failure.json.pending"):
+            MODULE.exclusive_write(
+                double_pending / name, b"{}\n", "double pending",
+            )
+        with self.assertRaisesRegex(MODULE.CollectionFailure, "both success and failure"):
+            MODULE.reject_cross_type_publications(double_pending)
+
+    def test_publication_crash_windows_and_link_invariants(self) -> None:
+        class SimulatedCrash(BaseException):
+            pass
+
+        phases = (
+            ("post-file-fsync", 1, False, False),
+            ("post-link", 2, False, True),
+            ("post-link-dir-fsync", 2, True, True),
+            ("post-unlink", 3, False, True),
+        )
+        value = b'{"receipt":"exact"}\n'
+        for phase, target_call, after_fsync, terminal_expected in phases:
+            with self.subTest(phase=phase):
+                attempt = self.publication_directory(phase)
+                terminal = attempt / "success.json"
+                pending = attempt / ".success.json.pending"
+                original = MODULE.fsync_directory
+                calls = 0
+
+                def injected_fsync(descriptor: int) -> None:
+                    nonlocal calls
+                    calls += 1
+                    if calls == target_call and not after_fsync:
+                        raise SimulatedCrash()
+                    original(descriptor)
+                    if calls == target_call and after_fsync:
+                        raise SimulatedCrash()
+
+                with mock.patch.object(MODULE, "fsync_directory", injected_fsync):
+                    with self.assertRaises(SimulatedCrash):
+                        MODULE.publish_terminal(
+                            terminal, value, "success receipt",
+                            pending_name=pending.name,
+                        )
+                self.assertEqual(terminal.exists(), terminal_expected)
+                MODULE.recover_attempt_publication(
+                    attempt, "success.json", "success receipt",
+                )
+                if terminal_expected:
+                    self.assertEqual(terminal.read_bytes(), value)
+                    self.assertFalse(pending.exists())
+                    self.assertEqual(terminal.stat().st_nlink, 1)
+                else:
+                    self.assertFalse(terminal.exists())
+                    self.assertTrue(pending.exists())
+                    self.assertEqual(pending.stat().st_nlink, 1)
+
+        collision = self.publication_directory("collision")
+        terminal = collision / "success.json"
+        pending = collision / ".success.json.pending"
+        MODULE.exclusive_write(terminal, b"original\n", "existing terminal")
+        with self.assertRaisesRegex(MODULE.CollectionFailure, "already exists"):
+            MODULE.publish_terminal(
+                terminal, value, "success receipt", pending_name=pending.name,
+            )
+        self.assertEqual(terminal.read_bytes(), b"original\n")
+        self.assertFalse(pending.exists())
+
+        raced = self.publication_directory("link-race")
+        raced_terminal = raced / "success.json"
+        raced_pending = raced / ".success.json.pending"
+        original_link = MODULE.os.link
+
+        def create_conflicting_terminal(*args, **kwargs):
+            MODULE.exclusive_write(
+                raced_terminal, b"racing terminal\n", "racing terminal",
+            )
+            return original_link(*args, **kwargs)
+
+        with mock.patch.object(MODULE.os, "link", create_conflicting_terminal):
+            with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                        "appeared during no-overwrite"):
+                MODULE.publish_terminal(
+                    raced_terminal, value, "success receipt",
+                    pending_name=raced_pending.name,
+                )
+        self.assertEqual(raced_terminal.read_bytes(), b"racing terminal\n")
+        self.assertEqual(raced_pending.read_bytes(), value)
+        self.assertEqual(raced_terminal.stat().st_nlink, 1)
+        self.assertEqual(raced_pending.stat().st_nlink, 1)
+        with self.assertRaisesRegex(MODULE.CollectionFailure, "conflicting"):
+            MODULE.recover_attempt_publication(
+                raced, "success.json", "success receipt",
+            )
+
+        wrong_mode = self.publication_directory("wrong-mode")
+        wrong_pending = wrong_mode / ".success.json.pending"
+        wrong_pending.write_bytes(value)
+        wrong_pending.chmod(0o644)
+        with self.assertRaisesRegex(MODULE.CollectionFailure, "unexpected interrupted mode"):
+            MODULE.recover_attempt_publication(
+                wrong_mode, "success.json", "success receipt",
+            )
+
+        symlink_dir = self.publication_directory("symlink")
+        symlink = symlink_dir / ".success.json.pending"
+        symlink.symlink_to("elsewhere")
+        with self.assertRaisesRegex(MODULE.CollectionFailure, "ordinary file"):
+            MODULE.recover_attempt_publication(
+                symlink_dir, "success.json", "success receipt",
+            )
+
+        third_link = self.publication_directory("third-link")
+        third_terminal = third_link / "success.json"
+        third_pending = third_link / ".success.json.pending"
+        extra = third_link / "extra-hardlink"
+        original_link = MODULE.os.link
+
+        def add_third_link(*args, **kwargs):
+            result = original_link(*args, **kwargs)
+            original_link(third_pending, extra, follow_symlinks=False)
+            return result
+
+        with mock.patch.object(MODULE.os, "link", add_third_link):
+            with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                        "unexpected link count 3"):
+                MODULE.publish_terminal(
+                    third_terminal, value, "success receipt",
+                    pending_name=third_pending.name,
+                )
+        self.assertEqual(third_pending.stat().st_nlink, 3)
+        with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                    "unexpected link count"):
+            MODULE.recover_attempt_publication(
+                third_link, "success.json", "success receipt",
+            )
+
+    def test_actual_sigkill_and_async_signals_during_publication(self) -> None:
+        value = b'{"receipt":"exact"}\n'
+        for phase in ("partial-write", "post-link"):
+            directory = self.publication_directory(f"kill-{phase}")
+            terminal = directory / "success.json"
+            pending = directory / ".success.json.pending"
+            read_fd, write_fd = os.pipe()
+            child = os.fork()
+            if child == 0:
+                try:
+                    os.close(read_fd)
+                    if phase == "partial-write":
+                        original_write = MODULE.os.write
+                        notified = False
+
+                        def slow_write(descriptor, data):
+                            nonlocal notified
+                            written = original_write(descriptor, data[:1])
+                            if not notified:
+                                notified = True
+                                original_write(write_fd, b"R")
+                                time.sleep(30)
+                            return written
+
+                        MODULE.os.write = slow_write
+                    else:
+                        original_fsync = MODULE.fsync_directory
+                        calls = 0
+
+                        def slow_fsync(descriptor):
+                            nonlocal calls
+                            calls += 1
+                            original_fsync(descriptor)
+                            if calls == 2:
+                                os.write(write_fd, b"R")
+                                time.sleep(30)
+
+                        MODULE.fsync_directory = slow_fsync
+                    MODULE.publish_terminal(
+                        terminal, value, "success receipt",
+                        pending_name=pending.name,
+                    )
+                    os._exit(0)
+                except BaseException:
+                    os._exit(90)
+            os.close(write_fd)
+            try:
+                self.assertEqual(os.read(read_fd, 1), b"R")
+                os.kill(child, signal.SIGKILL)
+                waited, status = os.waitpid(child, 0)
+                self.assertEqual(waited, child)
+                self.assertTrue(os.WIFSIGNALED(status))
+                self.assertEqual(os.WTERMSIG(status), signal.SIGKILL)
+            finally:
+                os.close(read_fd)
+            MODULE.recover_attempt_publication(
+                directory, "success.json", "success receipt",
+            )
+            if phase == "partial-write":
+                self.assertFalse(terminal.exists())
+                self.assertTrue(pending.exists())
+                self.assertEqual(pending.stat().st_mode & 0o777, 0o400)
+            else:
+                self.assertEqual(terminal.read_bytes(), value)
+                self.assertFalse(pending.exists())
+                self.assertEqual(terminal.stat().st_nlink, 1)
+
+        original_link = MODULE.os.link
+        for signum in (signal.SIGTERM, signal.SIGHUP):
+            for terminal_name in (
+                "collection-contract.json", "success.json", "failure.json",
+            ):
+                with self.subTest(signal=signum, terminal=terminal_name):
+                    directory = self.publication_directory(
+                        f"signal-{signum}-{terminal_name}",
+                    )
+                    terminal = directory / terminal_name
+                    pending_name = (
+                        ".collection-contract.json.pending." + "a" * 64
+                        if terminal_name == "collection-contract.json" else
+                        f".{terminal_name}.pending"
+                    )
+                    old_handlers = {
+                        item: signal.getsignal(item)
+                        for item in MODULE.HANDLED_SIGNALS
+                    }
+                    previous_mask = signal.pthread_sigmask(
+                        signal.SIG_BLOCK, MODULE.HANDLED_SIGNALS,
+                    )
+                    for item in MODULE.HANDLED_SIGNALS:
+                        signal.signal(item, MODULE.controller_signal_handler)
+                    MODULE.PENDING_SIGNAL = None
+                    MODULE.ACTIVE_PROCESS = None
+
+                    def signal_then_link(*args, **kwargs):
+                        os.kill(os.getpid(), signum)
+                        return original_link(*args, **kwargs)
+
+                    try:
+                        signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
+                        with mock.patch.object(MODULE.os, "link", signal_then_link):
+                            with self.assertRaises(MODULE.ControllerInterrupted):
+                                MODULE.publish_terminal(
+                                    terminal, value, terminal_name,
+                                    pending_name=pending_name,
+                                )
+                    finally:
+                        signal.pthread_sigmask(
+                            signal.SIG_BLOCK, MODULE.HANDLED_SIGNALS,
+                        )
+                        for item, handler in old_handlers.items():
+                            signal.signal(item, handler)
+                        MODULE.PENDING_SIGNAL = None
+                        MODULE.ACTIVE_PROCESS = None
+                        signal.pthread_sigmask(
+                            signal.SIG_SETMASK, previous_mask,
+                        )
+                    self.assertEqual(terminal.read_bytes(), value)
+                    self.assertEqual(terminal.stat().st_nlink, 1)
+                    self.assertFalse((directory / pending_name).exists())
 
 
 if __name__ == "__main__":

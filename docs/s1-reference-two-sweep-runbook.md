@@ -131,6 +131,19 @@ resume, it rehashes all linked files and reruns the committed candidate
 validator. A success after any unresolved manifest-order gap, a reused session
 nonce, a missing target, an unexpected file, or changed evidence fails closed.
 
+Terminal contract, success, and failure JSON is published crash-consistently.
+The controller first writes and fsyncs a private pending inode, seals it
+read-only, and then uses a no-overwrite hard link plus directory fsyncs to
+publish the terminal name before removing the pending alias. A success or
+failure pending without its terminal is retained as interrupted evidence and
+is never promoted; a later run uses a new attempt. A complete pending contract
+may be promoted only when its bytes exactly equal the freshly recomputed
+contract. Partial contract pendings are retained and inventoried. Conflicting
+terminal/pending pairs, extra hard links, symlinks, unexpected modes, duplicate
+pendings, or an existing malformed terminal fail closed without overwriting
+evidence. The aggregate `.receipt.json.new` and `.status.json.new` files remain
+separate, regenerable snapshots rather than terminal attempt evidence.
+
 `collection-contract.json` records the input identities and deadlines.
 `status.json` is the current concise result; `receipt.json` is the canonical
 complete inventory. Both report exact completed/pending counts and all failed
