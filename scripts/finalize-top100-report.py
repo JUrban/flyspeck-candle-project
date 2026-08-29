@@ -2595,6 +2595,8 @@ def validate_approval_and_capture(
             )
             candle_contract = collection_contract["candle"]
             reference_contract = collection_contract["reference"]
+            external_contract = collection_contract["external_runtime"]
+            external_plan = plan["reference"]["external_runtime"]
             require(plan["input"]["collector"]["sha256"] ==
                     candle_contract["collector"]["sha256"] and
                     plan["input"]["collector_repository"]["git_head"] ==
@@ -2610,6 +2612,29 @@ def validate_approval_and_capture(
                     plan["reference"]["git_head"] ==
                     reference_contract["git_head"],
                     f"collection contract does not bind {name} plan")
+            require(external_plan["policy"] == external_contract["policy"] and
+                    all(external_plan[key]["argument_path"] ==
+                        external_contract[key]["argument_path"] and
+                        external_plan[key]["resolved_executable"]["path"] ==
+                        external_contract[key]["path"] and
+                        external_plan[key]["resolved_executable"]["sha256"] ==
+                        external_contract[key]["sha256"]
+                        for key in ("command_shell", "pari_gp")) and
+                    external_plan["package_archive"] == {
+                        "path": external_contract["package_archive"]["path"],
+                        "sha256":
+                            external_contract["package_archive"]["sha256"]} and
+                    external_plan["package_tree"] ==
+                    external_contract["package_tree"] and
+                    external_plan["configuration"] == {
+                        "path": external_contract["configuration"]["path"],
+                        "sha256": external_contract["configuration"]["sha256"]} and
+                    external_plan["data_tree"] ==
+                    external_contract["data_tree"] and
+                    all(plan["fresh_process_contract"]["runtime_environment"].get(
+                        key) == value for key, value in
+                        external_contract["runtime_environment"].items()),
+                    f"collection contract does not bind {name} external runtime")
             observed_external = plan["reference"]["external_runtime"]
             if external_runtime is None:
                 external_runtime = observed_external
