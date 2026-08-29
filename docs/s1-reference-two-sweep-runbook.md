@@ -5,7 +5,10 @@ reference candidates for every Great100 target. Collection is not approval:
 every candidate remains `candidate_unapproved`, every aggregate sets
 `promotion_allowed` to `false`, and the controller neither creates nor edits an
 identity-approval artifact. No real reference sweep was run while implementing
-or testing this controller.
+or testing this controller. The first reviewed real launch at Candle `c2b55b1`
+later stopped, as required, on sweep 1 target 1: its old list-based serializer
+overflowed while hex-encoding the 2,183,544-byte kernel state. That failed root
+pins the old serializer and must never be resumed under the repaired contract.
 
 ## Pinned inputs
 
@@ -15,14 +18,16 @@ The runnable exact-reference configuration reviewed on 2026-08-29 is:
   `scripts/run-top100-reference-sweeps.py`; its exact absolute root, full HEAD,
   and controller SHA-256 are mandatory launch arguments;
 - Candle collector repository:
-  `/project/worktrees/candle-s1-reference-policy-v13` at
-  `c2b55b183387be33b6bbe71c5a6b1f1b9b043dbc`;
+  `/project/worktrees/candle-s1-scalable-fingerprint-v13` at
+  `30996f4015988270e028842e9d0ab9e29b262697`;
 - `candle/top100_manifest.json` SHA-256
   `e021a1f11d2307ca65c29eb6ab56fc04e5f4be2dbc4f7702f63ad3e1b7bfdae9`;
 - `candle/reference_fingerprints.py` SHA-256
   `b81c480c6095829d77ab6d36f7b42575a454bd70792d509eca29335c49dd188d`;
 - isolated support module `candle/reference_protocol.py` SHA-256
   `e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68`;
+- iterative structural serializer `candle/fingerprint.ml` SHA-256
+  `ec150fcb1af48c5554cf535b0b076b0607e44e67d12367b7a0fb8a565e5639ff`;
 - exact HOL Light reference repository:
   `/project/worktrees/hol-light-s1-exact-reference-v13` at
   `1258c129c3ddf0b239b649ba7024eab677cd953b`;
@@ -76,8 +81,8 @@ CONTROLLER_SHA256=REVIEWED_64_HEX_CONTROLLER_SHA256
   --controller-sha256 "$CONTROLLER_SHA256" \
   --python-sha256 1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118 \
   --git-sha256 2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668 \
-  --candle-root /project/worktrees/candle-s1-reference-policy-v13 \
-  --candle-head c2b55b183387be33b6bbe71c5a6b1f1b9b043dbc \
+  --candle-root /project/worktrees/candle-s1-scalable-fingerprint-v13 \
+  --candle-head 30996f4015988270e028842e9d0ab9e29b262697 \
   --manifest-sha256 e021a1f11d2307ca65c29eb6ab56fc04e5f4be2dbc4f7702f63ad3e1b7bfdae9 \
   --collector-sha256 b81c480c6095829d77ab6d36f7b42575a454bd70792d509eca29335c49dd188d \
   --protocol-sha256 e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68 \
