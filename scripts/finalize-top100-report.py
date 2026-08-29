@@ -1478,12 +1478,17 @@ def validate_reference_plan_bindings(
     probe = external["probe"]
     require(isinstance(probe, dict) and set(probe) == {
         "shell_argv", "environment", "return_code", "stdout",
-        "stdout_sha256", "stderr_sha256",
+        "stdout_sha256", "stderr", "stderr_sha256",
     } and probe["return_code"] == 0 and isinstance(probe["stdout"], str) and
             "[3, 1; 5, 1]" in probe["stdout"] and
             hashlib.sha256(probe["stdout"].encode()).hexdigest() ==
             probe["stdout_sha256"] and
-            probe["stderr_sha256"] == hashlib.sha256(b"").hexdigest() and
+            isinstance(probe["stderr"], str) and
+            probe["stderr"] in {"", (
+                f"Reading GPRC: {external['configuration']['path']}\n"
+                "GPRC Done.\n\n")} and
+            hashlib.sha256(probe["stderr"].encode()).hexdigest() ==
+            probe["stderr_sha256"] and
             isinstance(probe["environment"], dict) and
             probe["environment"].get("PATH") ==
             str(Path(external["pari_gp"]["argument_path"]).parent) and

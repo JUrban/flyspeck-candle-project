@@ -652,6 +652,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                         "environment": external_environment,
                         "return_code": 0, "stdout": gp_stdout,
                         "stdout_sha256": digest(gp_stdout.encode()),
+                        "stderr": "",
                         "stderr_sha256": digest(b""),
                     },
                 }
