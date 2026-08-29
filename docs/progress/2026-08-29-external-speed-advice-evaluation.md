@@ -162,6 +162,23 @@ until its exact-product, URL, staged-content, parent, and commit checks compile
 and pass adversarial tests after the serial replay releases the sole-Holmake
 lock.
 
+The first reviewed hardening patch is committed there as
+`ee10267439e09712a2f296b8a2504e9ca8836be6`.  It threads the exact expected
+product set through both the sequential and parallel builders, accepts only a
+closed manifest with safe exact product names and canonical lowercase-SHA-1
+keys/URLs, verifies independently staged bytes before publication, retains
+current-parent validation, rolls back a partial destination commit, repairs
+corrupt entries on the fallback build, and cleans exceptional temporary-file
+paths.  Its hostile static rereview found no P0 or P1 issue; the exact reviewed
+diff digest was
+`742628265fb9b6ef3b3d8205051ad65860b25f4de4961b24b6fac358a6ad6394`.
+Tests cover corrupt bytes and repair, unsafe names, duplicates/omissions,
+noncanonical URLs, the distinct `-j1` call site, and injected second-commit
+failure with rollback/temp cleanup.  Those SML tests are authored but not yet
+executed: doing so would start another `Holmake` while the cold proof owns the
+sole-Holmake slot.  The commit is therefore reviewed source, not a qualified
+cache, and the prohibition remains in force.
+
 ### `Holmake -j2` — benchmark after the serial baseline
 
 Two jobs are plausible; four are not yet justified.  Use a disposable exact
@@ -170,6 +187,17 @@ on sustained swapping, low available memory, or aggregate project RSS near the
 agreed ceiling.  The PFT oracle already retains about 23 GiB, so scheduling
 must account for it.  Do not extrapolate the advice's suggested 2–3 hour build
 time until this benchmark exists.
+
+The user has authorized a temporary ceiling of 120 GiB for a measured stage
+when the machine has sufficient headroom.  That is not the normal target and
+does not override the stop conditions.  At the 16:10 UTC checkpoint the host
+still reported about 183 GiB available and none of the monitored replay, PFT,
+or reference processes had `VmSwap`, with zero current `pswpin`/`pswpout`
+deltas.  The host swap device was nevertheless already almost fully allocated,
+without that allocation appearing in those monitored process trees.  Any
+120-GiB exception
+must therefore be preceded by a fresh headroom check and retain the sustained
+page-in/page-out and available-memory aborts.
 
 ### x64-only specialization — defer
 
