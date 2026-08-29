@@ -172,6 +172,59 @@ NONCE_RE = re.compile(r"[0-9a-f]{64}")
 DECIMAL_RE = re.compile(r"(?:0|[1-9][0-9]*)")
 EMPTY_HYPOTHESES_WIRE = b"4:list1:0"
 EMPTY_HYPOTHESES_SHA256 = hashlib.sha256(EMPTY_HYPOTHESES_WIRE).hexdigest()
+REFERENCE_PLAN_SCHEMA = "candle-s1-reference-plan-v9"
+REFERENCE_CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v9"
+EXTERNAL_RUNTIME_POLICY = \
+    "single_private_path_gp_csdp_with_pinned_shell_v3"
+THREAD_CAP_ENVIRONMENT = {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+}
+CSDP_BUILD_KIND = "candle-hol-light-csdp-single-thread-build"
+CSDP_STATIC_LIBSDP_SHA256 = (
+    "ede58dd5bf3620aa08045aa767fd1280fefe1e76d6ece276e8a674d6156bca25"
+)
+CSDP_TOOLCHAIN = {
+    "archiver_argument": "/usr/bin/ar",
+    "archiver_resolved": "/usr/bin/x86_64-linux-gnu-ar",
+    "archiver_sha256":
+        "534681ac11c18868cfc4fdf98770aa0ba8973eedc90c231e94e6ba96e1a04f27",
+    "binutils_version_first_line": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+    "compiler_argument": "/usr/bin/gcc",
+    "compiler_resolved": "/usr/bin/x86_64-linux-gnu-gcc-13",
+    "compiler_sha256":
+        "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+    "compiler_version_first_line":
+        "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+}
+CSDP_RECIPE = {
+    "cflags": (
+        "-m64 -O2 -fno-ident -ansi -Wall -DBIT64 -DUSESIGTERM "
+        "-DUSEGETTIME -I../include"
+    ),
+    "commands": [
+        "make -C lib clean libsdp.a CC=/usr/bin/gcc CFLAGS=<cflags>",
+        (
+            "make -C solver clean csdp CC=/usr/bin/gcc CFLAGS=<cflags> "
+            "LIBS=<library_flags>"
+        ),
+    ],
+    "library_flags": (
+        "-L../lib -Wl,-Bstatic -lsdp -Wl,-Bdynamic -llapack -lblas "
+        "-lm -lgfortran"
+    ),
+    "native_cpu_flags": False,
+    "openmp_enabled": False,
+}
+CSDP_PROBE_SUCCESS = "Success: SDP solved"
+CSDP_PROBE_PRIMAL = "2.3000000e+01"
+CSDP_PROBE_DUAL = "2.3000000e+01"
+CSDP_FORBIDDEN_ELF_FRAGMENTS = (
+    "libgomp", "libomp", "libiomp", "libopenblas", "libpthread",
+)
 
 REFERENCE_REPLAY_CONTROLLER = r'''import hashlib
 import json
@@ -199,9 +252,9 @@ sys.modules["pexpect"] = types.ModuleType("pexpect")
 load_exact("regression", stage / instructions["regression"])
 reference = load_exact(
     "reference_fingerprints", stage / instructions["validator"])
-if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v8" or
-        reference.CANDIDATE_SCHEMA != "candle-s1-reference-candidate-v8"):
-    raise RuntimeError("captured reference validator is not v8 compatible")
+if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v9" or
+        reference.CANDIDATE_SCHEMA != "candle-s1-reference-candidate-v9"):
+    raise RuntimeError("captured reference validator is not v9 compatible")
 runtime_root = stage / instructions["runtime_root"]
 reference.ROOT = runtime_root
 reference.MANIFEST = runtime_root / "candle/top100_manifest.json"
@@ -274,6 +327,8 @@ for replay in instructions["replays"]:
             plan["reference"]["external_runtime"]["command_shell"]
                 ["resolved_executable"]["path"],
             plan["reference"]["external_runtime"]["pari_gp"]
+                ["resolved_executable"]["path"],
+            plan["reference"]["external_runtime"]["csdp"]
                 ["resolved_executable"]["path"],
         ]),
     ):
@@ -372,6 +427,69 @@ def compact_json_sha256(value: object) -> str:
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
     ).encode("ascii")
     return hashlib.sha256(payload).hexdigest()
+
+
+def validate_csdp_build_statement(
+    statement: object, source: dict[str, object], csdp: dict[str, object],
+    probe_input: dict[str, object],
+) -> dict[str, Any]:
+    """Require the exact reviewed portable, single-thread CSDP build claim."""
+    expected = {
+        "schema": 1,
+        "kind": CSDP_BUILD_KIND,
+        "source": {
+            "archive": Path(str(source["path"])).name,
+            "bytes": source["bytes"],
+            "sha256": source["sha256"],
+            "ubuntu_source_package": "coinor-csdp 6.2.0-5build1 (Noble)",
+            "upstream_tree": "Csdp-6.2.0",
+        },
+        "toolchain": CSDP_TOOLCHAIN,
+        "recipe": CSDP_RECIPE,
+        "outputs": {
+            "csdp_path": "usr/bin/csdp",
+            "csdp_bytes": csdp["bytes"],
+            "csdp_sha256": csdp["sha256"],
+            "static_libsdp_sha256": CSDP_STATIC_LIBSDP_SHA256,
+        },
+        "unit_probe": {
+            "input_path": Path(str(probe_input["path"])).name,
+            "input_bytes": probe_input["bytes"],
+            "input_sha256": probe_input["sha256"],
+            "exit_code": 0,
+            "success_line": CSDP_PROBE_SUCCESS,
+            "primal_objective": CSDP_PROBE_PRIMAL,
+            "dual_objective": CSDP_PROBE_DUAL,
+            "maximum_allowed_dimacs_error": "1.0e-6",
+        },
+        "runtime_policy": {
+            "single_process_solver": True,
+            "single_thread_build": True,
+            "external_shared_libraries_closed_separately": True,
+        },
+    }
+    require(isinstance(statement, dict) and
+            canonical_json_bytes(statement) == canonical_json_bytes(expected),
+            "CSDP build statement differs from exact reviewed contract")
+    return statement
+
+
+def normalize_csdp_probe_stdout(stdout: str) -> str:
+    """Remove exactly CSDP's four measured wall-time values."""
+    timing = re.compile(
+        r"^(Elements|Factor|Other|Total) time: [0-9]+\.[0-9]+ \n$")
+    normalized: list[str] = []
+    seen: list[str] = []
+    for line in stdout.splitlines(keepends=True):
+        match = timing.fullmatch(line)
+        if match is None:
+            normalized.append(line)
+        else:
+            seen.append(match.group(1))
+            normalized.append(f"{match.group(1)} time: <measured>\n")
+    require(seen == ["Elements", "Factor", "Other", "Total"],
+            "CSDP probe has malformed timing records")
+    return "".join(normalized)
 
 
 def bytes_identity(value: bytes) -> FileIdentity:
@@ -1676,7 +1794,7 @@ def prepare_reference_replay_root(
 def validate_elf_runtime_structure(
     evidence: Any, expected_roots: list[str], label: str,
 ) -> dict[str, Any]:
-    """Validate the closed schema-v8 ELF evidence envelope and file pins."""
+    """Validate the closed ELF evidence envelope and file pins."""
     require(isinstance(evidence, dict) and set(evidence) == {
         "policy", "output_normalization", "tools",
         "hardcoded_loader_routes", "ld_so_cache", "ld_so_preload",
@@ -1814,9 +1932,9 @@ def validate_reference_plan_bindings(
     require(set(plan) == {
         "schema", "status", "session_nonce", "fresh_process_contract",
         "reference", "input", "request",
-    } and plan["schema"] == "candle-s1-reference-plan-v8" and
+    } and plan["schema"] == REFERENCE_PLAN_SCHEMA and
             plan["status"] == "planned_not_executed",
-            f"malformed v8 reference plan for {name}")
+            f"malformed v9 reference plan for {name}")
     nonce = run["session_nonce"]
     require(plan["session_nonce"] == candidate.get("session_nonce") == nonce,
             f"reference plan/candidate nonce mismatch for {name}")
@@ -1828,7 +1946,7 @@ def validate_reference_plan_bindings(
         "runtime_stub_files", "elf_runtime", "ocamlc", "findlib",
         "hol_ml", "generated_boot_files", "ocaml_library_tree",
         "external_runtime",
-    }, f"malformed v8 reference provenance for {name}")
+    }, f"malformed v9 reference provenance for {name}")
     require(isinstance(reference["root"], str) and
             Path(reference["root"]).is_absolute() and
             reference["git_head"] == run["reference_git_head"] ==
@@ -1936,11 +2054,12 @@ def validate_reference_plan_bindings(
     require(isinstance(external, dict) and set(external) == {
         "policy", "command_shell", "pari_gp", "pari_gp_version",
         "package_archive", "package_tree", "configuration", "data_tree",
-        "elf_runtime", "probe",
-    } and external["policy"] ==
-            "single_private_path_gp_with_pinned_shell_v2",
+        "csdp", "csdp_bytes", "csdp_source_archive", "csdp_build",
+        "csdp_probe_input", "thread_policy", "elf_runtime", "probe",
+        "csdp_probe",
+    } and external["policy"] == EXTERNAL_RUNTIME_POLICY,
             f"malformed reference external-runtime provenance for {name}")
-    for key in ("command_shell", "pari_gp"):
+    for key in ("command_shell", "pari_gp", "csdp"):
         route = external[key]
         require(isinstance(route, dict) and set(route) == {
             "argument_path", "argument_parent", "argument",
@@ -1954,7 +2073,7 @@ def validate_reference_plan_bindings(
                 Path(route["resolved_executable"]["path"]).is_absolute() and
                 require_sha256(route["resolved_executable"]["sha256"],
                                f"{name} {key} executable") and
-                isinstance(route["resolved_executable"]["mode"], int),
+                is_int(route["resolved_executable"]["mode"]),
                 f"malformed reference {key} route for {name}")
         for component_name in ("argument_parent", "argument"):
             component = route[component_name]
@@ -1991,8 +2110,8 @@ def validate_reference_plan_bindings(
             "root", "root_mode", "entry_count", "inventory_sha256",
             "inventory_policy",
         } and isinstance(value["root"], str) and Path(value["root"]).is_absolute() and
-                isinstance(value["root_mode"], int) and
-                isinstance(value["entry_count"], int) and
+                is_int(value["root_mode"]) and
+                is_int(value["entry_count"]) and
                 value["entry_count"] >= 0 and
                 require_sha256(value["inventory_sha256"], f"{name} {key}") and
                 value["inventory_policy"] ==
@@ -2004,18 +2123,65 @@ def validate_reference_plan_bindings(
     require(external["command_shell"]["argument_path"] == "/bin/sh" and
             external["pari_gp"]["argument_path"] ==
             str(package_root / "usr/bin/gp") and
+            external["csdp"]["argument_path"] ==
+            str(package_root / "usr/bin/csdp") and
+            external["csdp"]["argument"]["kind"] == "file" and
+            external["csdp"]["resolved_executable"]["mode"] == 0o555 and
             external["configuration"]["path"] ==
             str(package_root / "candle-gprc") and
             external["data_tree"]["root"] ==
             str(package_root / "candle-data") and
             external["data_tree"]["entry_count"] == 0,
-            f"reference PARI/GP package paths are not exact for {name}")
+            f"reference GP/CSDP package paths are not exact for {name}")
     validate_elf_runtime_structure(
         external["elf_runtime"], [
             external["command_shell"]["resolved_executable"]["path"],
             external["pari_gp"]["resolved_executable"]["path"],
+            external["csdp"]["resolved_executable"]["path"],
         ], f"{name} external",
     )
+    require(not any(
+        fragment in Path(item["path"]).name.lower()
+        for item in external["elf_runtime"]["closure"]
+        for fragment in CSDP_FORBIDDEN_ELF_FRAGMENTS
+    ), f"reference CSDP ELF closure is threaded for {name}")
+    source = external["csdp_source_archive"]
+    probe_input = external["csdp_probe_input"]
+    for value, label in ((source, "CSDP source"),
+                         (probe_input, "CSDP probe input")):
+        require(isinstance(value, dict) and set(value) == {
+            "path", "sha256", "bytes",
+        } and isinstance(value["path"], str) and
+                Path(value["path"]).is_absolute() and
+                require_sha256(value["sha256"], f"{name} {label}") and
+                is_int(value["bytes"]) and value["bytes"] > 0,
+                f"malformed reference {label} for {name}")
+    build = external["csdp_build"]
+    require(is_int(external["csdp_bytes"]) and external["csdp_bytes"] > 0 and
+            isinstance(build, dict) and set(build) == {
+        "receipt", "statement",
+    } and isinstance(build["receipt"], dict) and
+            set(build["receipt"]) == {"path", "sha256"} and
+            isinstance(build["receipt"]["path"], str) and
+            Path(build["receipt"]["path"]).is_absolute() and
+            require_sha256(build["receipt"]["sha256"],
+                           f"{name} CSDP build receipt") and
+            validate_csdp_build_statement(
+                build["statement"], source, {
+                    "bytes": external["csdp_bytes"],
+                    "sha256": external["csdp"]["resolved_executable"]["sha256"],
+                }, probe_input,
+            ), f"malformed reference CSDP build for {name}")
+    thread_policy = external["thread_policy"]
+    require(thread_policy == {
+        "single_process_solver": True,
+        "single_thread_build": True,
+        "openmp_enabled": False,
+        "native_cpu_flags": False,
+        "environment": THREAD_CAP_ENVIRONMENT,
+        "forbidden_elf_dependency_name_fragments":
+            list(CSDP_FORBIDDEN_ELF_FRAGMENTS),
+    }, f"malformed reference CSDP thread policy for {name}")
     probe = external["probe"]
     probe_source = \
         "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp"
@@ -2039,18 +2205,47 @@ def validate_reference_plan_bindings(
             isinstance(probe["environment"], dict) and
             set(probe["environment"]) == {
                 "HOME", "PATH", "LC_ALL", "GPRC", "GP_DATA_DIR",
+                *THREAD_CAP_ENVIRONMENT,
             } and probe["environment"].get("HOME") == reference["root"] and
             probe["environment"].get("LC_ALL") == "C" and
             probe["environment"].get("PATH") ==
             str(Path(external["pari_gp"]["argument_path"]).parent) and
             probe["environment"].get("GPRC") == external["configuration"]["path"] and
-            probe["environment"].get("GP_DATA_DIR") == external["data_tree"]["root"],
+            probe["environment"].get("GP_DATA_DIR") == external["data_tree"]["root"] and
+            all(probe["environment"].get(key) == value
+                for key, value in THREAD_CAP_ENVIRONMENT.items()),
             f"malformed reference PARI/GP probe for {name}")
+    csdp_probe = external["csdp_probe"]
+    require(isinstance(csdp_probe, dict) and set(csdp_probe) == {
+        "argv_template", "environment", "return_code", "normalized_stdout",
+        "normalized_stdout_sha256", "stderr", "stderr_sha256", "solution",
+    } and csdp_probe["argv_template"] == [
+        external["csdp"]["argument_path"], probe_input["path"],
+        "<private-temporary-output>",
+    ] and csdp_probe["environment"] == probe["environment"] and
+            csdp_probe["return_code"] == 0 and
+            isinstance(csdp_probe["normalized_stdout"], str) and
+            f"{CSDP_PROBE_SUCCESS}\n" in csdp_probe["normalized_stdout"] and
+            f"Primal objective value: {CSDP_PROBE_PRIMAL} \n" in
+            csdp_probe["normalized_stdout"] and
+            f"Dual objective value: {CSDP_PROBE_DUAL} \n" in
+            csdp_probe["normalized_stdout"] and
+            hashlib.sha256(csdp_probe["normalized_stdout"].encode()).hexdigest() ==
+            csdp_probe["normalized_stdout_sha256"] and
+            csdp_probe["stderr"] == "" and
+            csdp_probe["stderr_sha256"] == hashlib.sha256(b"").hexdigest() and
+            isinstance(csdp_probe["solution"], dict) and
+            set(csdp_probe["solution"]) == {"bytes", "sha256"} and
+            is_int(csdp_probe["solution"]["bytes"]) and
+            csdp_probe["solution"]["bytes"] > 0 and
+            require_sha256(csdp_probe["solution"]["sha256"],
+                           f"{name} CSDP probe solution"),
+            f"malformed reference CSDP probe for {name}")
     runtime_environment = fresh["runtime_environment"]
     require(set(runtime_environment) == {
         "HOME", "PATH", "LC_ALL", "GPRC", "GP_DATA_DIR", "HOLLIGHT_DIR",
         "HOLLIGHT_USE_MODULE", "OCAMLRUNPARAM", "CAML_LD_LIBRARY_PATH",
-        "OCAML_TOPLEVEL_PATH", "OCAMLFIND_CONF",
+        "OCAML_TOPLEVEL_PATH", "OCAMLFIND_CONF", *THREAD_CAP_ENVIRONMENT,
     } and all(runtime_environment.get(key) == probe["environment"].get(key)
               for key in ("HOME", "PATH", "LC_ALL", "GPRC", "GP_DATA_DIR")) and
             runtime_environment["HOLLIGHT_DIR"] == reference["root"] and
@@ -2074,7 +2269,7 @@ def validate_reference_plan_bindings(
         "collector", "collector_repository", "manifest",
         "manifest_schema_version", "target", "load_files", "theorem_names",
         "mapping_status", "serializer", "source_mode", "source_contract",
-    }, f"malformed v8 reference input contract for {name}")
+    }, f"malformed v9 reference input contract for {name}")
     require(inputs["target"] == name and inputs["manifest_schema_version"] == 1 and
             inputs["mapping_status"] == "audited" and
             inputs["source_mode"] == "manifest-exact",
@@ -2270,6 +2465,11 @@ def capture_reference_external_runtime(
     require(external["pari_gp"] == executable_route_record(
         Path(external["pari_gp"]["argument_path"]), "PARI/GP executable",
     ), "live PARI/GP route differs from reference plans")
+    require(external["csdp"] == executable_route_record(
+        Path(external["csdp"]["argument_path"]), "CSDP executable",
+    ) and external["csdp"]["argument"]["kind"] == "file" and
+            external["csdp"]["resolved_executable"]["mode"] == 0o555,
+            "live CSDP route differs from reference plans")
 
     package_pin, package_entries = tree_inventory(
         Path(external["package_tree"]["root"]), "PARI/GP package tree",
@@ -2312,6 +2512,52 @@ def capture_reference_external_runtime(
     }
     require(observed_probe == external["probe"],
             "live PARI/GP shell probe differs from reference plans")
+    build_receipt = ordinary_file(
+        Path(external["csdp_build"]["receipt"]["path"]),
+        "CSDP build receipt",
+    )
+    build_statement = parse_json_bytes(
+        build_receipt.read_bytes(), "CSDP build receipt",
+    )
+    require(validate_csdp_build_statement(
+        build_statement, external["csdp_source_archive"], {
+            "bytes": external["csdp_bytes"],
+            "sha256": external["csdp"]["resolved_executable"]["sha256"],
+        }, external["csdp_probe_input"],
+    ) == external["csdp_build"]["statement"],
+            "live CSDP build receipt differs from reference plans")
+    with tempfile.TemporaryDirectory(
+            prefix="candle-finalizer-csdp-") as directory:
+        solution = Path(directory) / "theta1.sol"
+        completed_csdp = subprocess.run(
+            [external["csdp"]["argument_path"],
+             external["csdp_probe_input"]["path"], str(solution)],
+            env=external["csdp_probe"]["environment"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, timeout=30, check=False,
+        )
+        solution_identity = stable_file_identity(
+            solution, "CSDP probe solution",
+        )
+    normalized_csdp = normalize_csdp_probe_stdout(completed_csdp.stdout)
+    observed_csdp_probe = {
+        "argv_template": [
+            external["csdp"]["argument_path"],
+            external["csdp_probe_input"]["path"],
+            "<private-temporary-output>",
+        ],
+        "environment": external["csdp_probe"]["environment"],
+        "return_code": completed_csdp.returncode,
+        "normalized_stdout": normalized_csdp,
+        "normalized_stdout_sha256": hashlib.sha256(
+            normalized_csdp.encode()).hexdigest(),
+        "stderr": completed_csdp.stderr,
+        "stderr_sha256": hashlib.sha256(
+            completed_csdp.stderr.encode()).hexdigest(),
+        "solution": solution_identity.as_json(),
+    }
+    require(observed_csdp_probe == external["csdp_probe"],
+            "live CSDP probe differs from reference plans")
 
     package_root = Path(package_pin["root"])
     retained_entries: list[dict[str, Any]] = []
@@ -2371,6 +2617,41 @@ def capture_reference_external_runtime(
             external["pari_gp"]["resolved_executable"]["sha256"],
             "retained PARI/GP executable differs from reference plans")
 
+    def retained_package_file(
+        path: str, sha256: str, expected_bytes: int | None, label: str,
+    ) -> Snapshot:
+        source = Path(path)
+        require(source.is_relative_to(package_root),
+                f"{label} is outside the package tree")
+        relative = source.relative_to(package_root).as_posix()
+        snapshot = package_files.get(relative)
+        require(snapshot is not None and snapshot.identity.sha256 == sha256 and
+                (expected_bytes is None or
+                 snapshot.identity.bytes == expected_bytes),
+                f"retained {label} differs from reference plans")
+        return snapshot
+
+    csdp_snapshot = retained_package_file(
+        external["csdp"]["resolved_executable"]["path"],
+        external["csdp"]["resolved_executable"]["sha256"],
+        external["csdp_bytes"], "CSDP executable",
+    )
+    csdp_source = retained_package_file(
+        external["csdp_source_archive"]["path"],
+        external["csdp_source_archive"]["sha256"],
+        external["csdp_source_archive"]["bytes"], "CSDP source archive",
+    )
+    csdp_receipt = retained_package_file(
+        external["csdp_build"]["receipt"]["path"],
+        external["csdp_build"]["receipt"]["sha256"], None,
+        "CSDP build receipt",
+    )
+    csdp_probe_input = retained_package_file(
+        external["csdp_probe_input"]["path"],
+        external["csdp_probe_input"]["sha256"],
+        external["csdp_probe_input"]["bytes"], "CSDP probe input",
+    )
+
     shell_path = Path(external["command_shell"]["resolved_executable"]["path"])
     shell = stager.capture(
         shell_path, "approval/reference-runtime/shell/resolved-executable",
@@ -2415,6 +2696,26 @@ def capture_reference_external_runtime(
             "archive_path": gp_snapshot.archive_path,
             **gp_snapshot.identity.as_json(),
         },
+        "csdp": {
+            "source_path": str(csdp_snapshot.source_path),
+            "archive_path": csdp_snapshot.archive_path,
+            **csdp_snapshot.identity.as_json(),
+        },
+        "csdp_source_archive": {
+            "source_path": str(csdp_source.source_path),
+            "archive_path": csdp_source.archive_path,
+            **csdp_source.identity.as_json(),
+        },
+        "csdp_build_receipt": {
+            "source_path": str(csdp_receipt.source_path),
+            "archive_path": csdp_receipt.archive_path,
+            **csdp_receipt.identity.as_json(),
+        },
+        "csdp_probe_input": {
+            "source_path": str(csdp_probe_input.source_path),
+            "archive_path": csdp_probe_input.archive_path,
+            **csdp_probe_input.identity.as_json(),
+        },
         "command_shell": {
             "source_path": str(shell.source_path),
             "archive_path": shell.archive_path,
@@ -2424,6 +2725,9 @@ def capture_reference_external_runtime(
         "data_tree": data_pin,
         "version": observed_version,
         "probe": observed_probe,
+        "csdp_build_statement": build_statement,
+        "thread_policy": external["thread_policy"],
+        "csdp_probe": observed_csdp_probe,
     }
 
 
@@ -2570,7 +2874,7 @@ def validate_candidate_identity_projection(
     expected_identity: dict[str, Any], serializer_sha256: str,
 ) -> None:
     name = target["name"]
-    require(candidate.get("schema") == "candle-s1-reference-candidate-v8",
+    require(candidate.get("schema") == REFERENCE_CANDIDATE_SCHEMA,
             f"legacy or unsupported reference candidate for {name}")
     identities = candidate.get("candidate_identities")
     require(isinstance(identities, dict) and set(identities) == FINGERPRINT_KEYS and
@@ -2630,11 +2934,11 @@ def run_captured_reference_replay(
             timeout=300,
         )
     except (OSError, subprocess.SubprocessError) as error:
-        raise ValidationError("captured v8 reference replay could not run") from error
+        raise ValidationError("captured v9 reference replay could not run") from error
     expected_stdout = f"reference candidate replay PASS: {len(replays)}\n".encode()
     require(completed.returncode == 0 and completed.stdout == expected_stdout and
             completed.stderr == b"",
-            "captured v8 reference candidate replay failed")
+            "captured v9 reference candidate replay failed")
     return {
         "validator": {
             "committed_archive_path": validator.archive_path,
@@ -2920,16 +3224,19 @@ def authenticate_collection_contract(
 
     external = contract["external_runtime"]
     require(isinstance(external, dict) and set(external) == {
-        "policy", "command_shell", "pari_gp", "package_archive",
-        "package_tree", "configuration", "data_tree", "runtime_environment",
-    } and external["policy"] ==
-            "single_private_path_gp_with_pinned_shell_v2",
+        "policy", "command_shell", "pari_gp", "csdp", "package_archive",
+        "package_tree", "configuration", "data_tree", "csdp_source_archive",
+        "csdp_build", "csdp_probe_input", "thread_policy", "csdp_probe",
+        "runtime_environment",
+    } and external["policy"] == EXTERNAL_RUNTIME_POLICY,
             "malformed collection external-runtime contract")
-    for key in ("command_shell", "pari_gp", "package_archive", "configuration"):
+    for key in ("command_shell", "pari_gp", "csdp", "package_archive",
+                "configuration", "csdp_source_archive", "csdp_probe_input"):
         record = external[key]
         require(isinstance(record, dict) and set(record) == {
             "argument_path", "path", "bytes", "sha256",
-        } and record == runtime_file_record(
+        } and is_int(record["bytes"]) and record["bytes"] > 0 and
+                record == runtime_file_record(
             Path(record["argument_path"]), f"collection external {key}",
         ), f"collection external {key} changed or is malformed")
     for key, label in (
@@ -2937,15 +3244,87 @@ def authenticate_collection_contract(
         ("data_tree", "collection PARI/GP optional-data tree"),
     ):
         pin, _ = tree_inventory(Path(external[key]["root"]), label)
-        require(external[key] == pin,
+        require(is_int(external[key].get("root_mode")) and
+                is_int(external[key].get("entry_count")) and
+                external[key] == pin,
                 f"{label} changed or is malformed")
+    build = external["csdp_build"]
+    require(isinstance(build, dict) and set(build) == {
+        "receipt", "statement",
+    } and isinstance(build["receipt"], dict) and
+            set(build["receipt"]) == {
+                "argument_path", "path", "bytes", "sha256",
+            } and is_int(build["receipt"]["bytes"]) and
+            build["receipt"]["bytes"] > 0 and
+            build["receipt"] == runtime_file_record(
+                Path(build["receipt"]["argument_path"]),
+                "collection CSDP build receipt",
+            ) and validate_csdp_build_statement(
+                build["statement"], external["csdp_source_archive"],
+                external["csdp"], external["csdp_probe_input"],
+            ), "collection CSDP build contract changed or is malformed")
+    package_root = Path(external["package_tree"]["root"])
     require(external["data_tree"]["root_mode"] == 0o555 and
             external["data_tree"]["entry_count"] == 0 and
+            external["command_shell"]["argument_path"] == "/bin/sh" and
+            external["pari_gp"]["argument_path"] ==
+            str(package_root / "usr/bin/gp") and
+            external["csdp"]["argument_path"] ==
+            str(package_root / "usr/bin/csdp") and
+            stat.S_IMODE(Path(external["csdp"]["path"]).lstat().st_mode) ==
+            0o555 and
+            external["configuration"]["argument_path"] ==
+            str(package_root / "candle-gprc") and
+            external["csdp_source_archive"]["argument_path"] ==
+            str(package_root / "candle-csdp-source.tar.gz") and
+            external["csdp_build"]["receipt"]["argument_path"] ==
+            str(package_root / "candle-csdp-build.json") and
+            external["csdp_probe_input"]["argument_path"] ==
+            str(package_root / "candle-csdp-theta1.dat-s") and
+            external["thread_policy"] == {
+                "single_process_solver": True,
+                "single_thread_build": True,
+                "openmp_enabled": False,
+                "native_cpu_flags": False,
+                "environment": THREAD_CAP_ENVIRONMENT,
+                "forbidden_elf_dependency_name_fragments":
+                    list(CSDP_FORBIDDEN_ELF_FRAGMENTS),
+            } and
             external["runtime_environment"] == {
                 "PATH": str(Path(external["pari_gp"]["argument_path"]).parent),
                 "GPRC": external["configuration"]["path"],
                 "GP_DATA_DIR": external["data_tree"]["root"],
+                **THREAD_CAP_ENVIRONMENT,
             }, "collection external-runtime environment is not exact")
+    csdp_probe = external["csdp_probe"]
+    require(isinstance(csdp_probe, dict) and set(csdp_probe) == {
+        "argv_template", "environment", "return_code", "normalized_stdout",
+        "normalized_stdout_sha256", "stderr", "stderr_sha256", "solution",
+    } and csdp_probe["argv_template"] == [
+        external["csdp"]["argument_path"],
+        external["csdp_probe_input"]["argument_path"],
+        "<private-temporary-output>",
+    ] and csdp_probe["environment"] == {
+        "HOME": reference["root"], "LC_ALL": "C",
+        **external["runtime_environment"],
+    } and csdp_probe["return_code"] == 0 and
+            isinstance(csdp_probe["normalized_stdout"], str) and
+            hashlib.sha256(csdp_probe["normalized_stdout"].encode()).hexdigest() ==
+            csdp_probe["normalized_stdout_sha256"] and
+            f"{CSDP_PROBE_SUCCESS}\n" in csdp_probe["normalized_stdout"] and
+            f"Primal objective value: {CSDP_PROBE_PRIMAL} \n" in
+            csdp_probe["normalized_stdout"] and
+            f"Dual objective value: {CSDP_PROBE_DUAL} \n" in
+            csdp_probe["normalized_stdout"] and
+            csdp_probe["stderr"] == "" and
+            csdp_probe["stderr_sha256"] == hashlib.sha256(b"").hexdigest() and
+            isinstance(csdp_probe["solution"], dict) and
+            set(csdp_probe["solution"]) == {"bytes", "sha256"} and
+            is_int(csdp_probe["solution"]["bytes"]) and
+            csdp_probe["solution"]["bytes"] > 0 and
+            require_sha256(csdp_probe["solution"]["sha256"],
+                           "collection CSDP probe solution"),
+            "malformed collection CSDP probe")
     oracle = contract["elf_oracle"]
     require(isinstance(oracle, dict) and set(oracle) == {
         "policy", "output_normalization", "tools",
@@ -3055,7 +3434,7 @@ def capture_collection_evidence(
             "project", "candle", "reference", "runtime", "external_runtime",
             "elf_oracle",
             "deadlines", "inventory", "controller",
-    } and contract["schema"] == 3 and
+    } and contract["schema"] == 4 and
             contract["kind"] ==
             "candle-great100-two-sweep-reference-collection" and
             contract["approval_status"] ==
@@ -3465,7 +3844,9 @@ def validate_approval_and_capture(
                         external_contract[key]["path"] and
                         external_plan[key]["resolved_executable"]["sha256"] ==
                         external_contract[key]["sha256"]
-                        for key in ("command_shell", "pari_gp")) and
+                        for key in ("command_shell", "pari_gp", "csdp")) and
+                    external_plan["csdp_bytes"] ==
+                    external_contract["csdp"]["bytes"] and
                     external_plan["package_archive"] == {
                         "path": external_contract["package_archive"]["path"],
                         "sha256":
@@ -3477,6 +3858,22 @@ def validate_approval_and_capture(
                         "sha256": external_contract["configuration"]["sha256"]} and
                     external_plan["data_tree"] ==
                     external_contract["data_tree"] and
+                    external_plan["csdp_source_archive"] == {
+                        key: external_contract["csdp_source_archive"][key]
+                        for key in ("path", "sha256", "bytes")
+                    } and external_plan["csdp_build"] == {
+                        "receipt": {
+                            key: external_contract["csdp_build"]["receipt"][key]
+                            for key in ("path", "sha256")
+                        },
+                        "statement": external_contract["csdp_build"]["statement"],
+                    } and external_plan["csdp_probe_input"] == {
+                        key: external_contract["csdp_probe_input"][key]
+                        for key in ("path", "sha256", "bytes")
+                    } and external_plan["thread_policy"] ==
+                    external_contract["thread_policy"] and
+                    external_plan["csdp_probe"] ==
+                    external_contract["csdp_probe"] and
                     all(plan["fresh_process_contract"]["runtime_environment"].get(
                         key) == value for key, value in
                         external_contract["runtime_environment"].items()),

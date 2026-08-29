@@ -106,7 +106,7 @@ source-contract attachment records, plus the exact collection contract, closed
 validator output records. The finalizer resolves every attachment as
 an ordinary Candle-root-relative file, rehashes it, enforces distinct run
 artifacts, and retains its exact bytes. It also captures the committed
-`candle/reference_fingerprints.py` validator and replays every staged schema-v8
+`candle/reference_fingerprints.py` validator and replays every staged schema-v9
 candidate from its exact staged plan, generated request, and transcript under
 the captured compatible regression/serializer semantics. The replay must bind
 the target, selected source hashes, reference head, session nonce, and source
