@@ -112,3 +112,32 @@ declares.
 - Schema 2 remains disjoint and all evidence-v3 records remain explicitly
   nonpromotable.
 
+## Resolution and final scoped verdict
+
+The P1 above was repaired and independently re-reviewed at these exact
+revisions:
+
+- CakeML `0e97a1ab86924e905e1d1c893191651197b82f6e`;
+- Candle `baac7909f1dae44928e8990a2926370444801fa4`.
+
+CakeML now keeps pending source identities in a LIFO stack.  A successful
+nested load commits its identity before the resumed outer load commits its
+own, while an evaluator error clears the entire pending stack.  Candle action
+295 requires the exact head-first logical-ledger delta
+`[serialization; update_database_400]`; missing, reordered, extra, or skipped
+nested identities fail before the action marker.  The nested source is now
+classified as `observed-nested-source`.
+
+A later integration check also found that the boundary checker still projected
+the old three-field action-event tuple after events gained an exact expected
+delta.  Candle `baac790` changes that projection to the four-field event and
+adds a compiled OCaml extraction regression.  The complete Candle Python suite
+passed 224/224 in the parent check.  The final independent focused check passed
+120/120, the exact CakeML compiled stack fixture passed 1/1, and diff checks
+were clean.
+
+**Final scoped verdict: PASS with no remaining P0/P1/P2 finding in this
+nested-ledger repair.**  This is not approval for a release run.  A fresh
+runtime must still be proof-built from the pinned CakeML source and exercised
+end to end.  The separately documented lack of a complete physical-loader
+trace and canonical lexical-alias resolution also remains nonpromotable.
