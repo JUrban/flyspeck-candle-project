@@ -4,9 +4,13 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
+import errno
 import json
 import os
 from pathlib import Path
+import resource
+import re
 import stat
 import subprocess
 
@@ -17,12 +21,49 @@ GIT_ENVIRONMENT = {
     "GIT_CONFIG_NOSYSTEM": "1",
     "GIT_CONFIG_GLOBAL": "/dev/null",
     "GIT_TERMINAL_PROMPT": "0",
+    "GIT_NO_REPLACE_OBJECTS": "1",
 }
+GIT_OPTIONS = (
+    "-c", "core.fsmonitor=false",
+    "-c", "core.untrackedCache=false",
+    "-c", "core.preloadIndex=false",
+)
 TIME_RECEIPTS = (
     "01-cake-compile-heap.time",
     "02-compiler64Prog.time",
     "03-x64Bootstrap.time",
     "04-x64BootstrapProof.time",
+)
+TIME_TARGETS = (
+    "cake_compile_heap",
+    "compiler64ProgTheory.uo",
+    "x64BootstrapTheory.uo",
+    "x64BootstrapProofTheory.uo",
+)
+TIME_FIELDS = (
+    "Command being timed",
+    "User time (seconds)",
+    "System time (seconds)",
+    "Percent of CPU this job got",
+    "Elapsed (wall clock) time (h:mm:ss or m:ss)",
+    "Average shared text size (kbytes)",
+    "Average unshared data size (kbytes)",
+    "Average stack size (kbytes)",
+    "Average total size (kbytes)",
+    "Maximum resident set size (kbytes)",
+    "Average resident set size (kbytes)",
+    "Major (requiring I/O) page faults",
+    "Minor (reclaiming a frame) page faults",
+    "Voluntary context switches",
+    "Involuntary context switches",
+    "Swaps",
+    "File system inputs",
+    "File system outputs",
+    "Socket messages sent",
+    "Socket messages received",
+    "Signals delivered",
+    "Page size (bytes)",
+    "Exit status",
 )
 CAKEML_POSTCONDITIONS = (
     "cv_translator/cake_compile_heap",
@@ -55,9 +96,38 @@ def ordinary_exact_directory(path: Path, label: str) -> Path:
     return path
 
 
+def stable_file_bytes(path: Path, label: str, *, nonempty: bool = True) -> bytes:
+    try:
+        descriptor = os.open(
+            path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+        )
+    except OSError as error:
+        raise GateError(f"could not open ordinary {label}: {path}") from error
+    try:
+        before = os.fstat(descriptor)
+        chunks = []
+        while block := os.read(descriptor, 1024 * 1024):
+            chunks.append(block)
+        after = os.fstat(descriptor)
+        named = path.stat(follow_symlinks=False)
+    finally:
+        os.close(descriptor)
+    value = b"".join(chunks)
+    require(stat.S_ISREG(before.st_mode) and
+            (before.st_dev, before.st_ino, before.st_size,
+             before.st_mtime_ns, before.st_ctime_ns) ==
+            (after.st_dev, after.st_ino, after.st_size,
+             after.st_mtime_ns, after.st_ctime_ns) and
+            (named.st_dev, named.st_ino) == (after.st_dev, after.st_ino) and
+            len(value) == before.st_size,
+            f"{label} changed while reading: {path}")
+    require(not nonempty or value, f"empty {label}: {path}")
+    return value
+
+
 def git_output(root: Path, *arguments: str) -> str:
     process = subprocess.run(
-        ["/usr/bin/git", "-C", str(root), *arguments],
+        ["/usr/bin/git", *GIT_OPTIONS, "-C", str(root), *arguments],
         check=False,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -71,15 +141,41 @@ def git_output(root: Path, *arguments: str) -> str:
 
 
 def validate_git(root: Path, expected_head: str, label: str) -> None:
+    require(git_output(root, "rev-parse", "--show-toplevel").strip() == str(root),
+            f"{label} is not the exact Git worktree root")
     observed = git_output(root, "rev-parse", "HEAD").strip()
     require(observed == expected_head, f"{label} head mismatch: {observed}")
+    require(git_output(root, "replace", "-l") == "",
+            f"{label} Git replacement refs are present")
+    graft_value = git_output(root, "rev-parse", "--git-path", "info/grafts").strip()
+    graft_path = Path(graft_value)
+    if not graft_path.is_absolute():
+        graft_path = root / graft_path
+    require(not os.path.lexists(graft_path) or
+            (graft_path.is_file() and graft_path.stat().st_size == 0),
+            f"{label} Git grafts are present")
     status = git_output(root, "status", "--porcelain=v1", "--untracked-files=all")
     require(status == "", f"{label} worktree is not clean")
 
 
+def validate_self_authority(project_root: Path, expected_head: str) -> str:
+    project_root = ordinary_exact_directory(project_root, "project gate root")
+    validate_git(project_root, expected_head, "project gate authority")
+    source = Path(__file__).resolve(strict=True)
+    require(source.is_relative_to(project_root),
+            "project gate source is outside authenticated project root")
+    relative = source.relative_to(project_root).as_posix()
+    live = stable_file_bytes(source, "project gate source")
+    committed = git_output(project_root, "show", f"{expected_head}:{relative}").encode()
+    require(live == committed, "project gate source differs from committed blob")
+    return expected_head
+
+
 def read_positive_pid(path: Path) -> int:
     try:
-        value = int(path.read_text(encoding="ascii").strip())
+        value = int(stable_file_bytes(
+            path, "replay controller PID",
+        ).decode("ascii").strip())
     except (OSError, UnicodeError, ValueError) as error:
         raise GateError(f"malformed replay controller PID: {path}") from error
     require(value > 1, f"malformed replay controller PID: {value}")
@@ -93,12 +189,91 @@ def live_holmake_pids(proc_root: Path) -> list[int]:
             continue
         try:
             command_name = (child / "comm").read_text(encoding="ascii").strip()
-            executable = os.readlink(child / "exe")
-        except (FileNotFoundError, PermissionError, ProcessLookupError, OSError):
+        except (FileNotFoundError, ProcessLookupError):
             continue
-        if command_name == "Holmake" or Path(executable).name == "Holmake":
+        except (PermissionError, UnicodeError, OSError) as error:
+            raise GateError(f"could not inspect process name: {child}") from error
+        if command_name == "Holmake":
+            result.append(int(child.name))
+            continue
+        try:
+            executable = os.readlink(child / "exe")
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except PermissionError as error:
+            raise GateError(f"could not inspect process executable: {child}") from error
+        except OSError as error:
+            if error.errno in {errno.ENOENT, errno.ESRCH}:
+                continue
+            raise GateError(f"could not inspect process executable: {child}") from error
+        if Path(executable).name == "Holmake":
             result.append(int(child.name))
     return sorted(result)
+
+
+def process_group_members(proc_root: Path, process_group: int) -> list[int]:
+    result = []
+    for child in proc_root.iterdir():
+        if not child.name.isdigit():
+            continue
+        try:
+            value = (child / "stat").read_text(encoding="ascii")
+            fields = value[value.rindex(") ") + 2:].split()
+            observed_group = int(fields[2])
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except (PermissionError, OSError, UnicodeError, ValueError, IndexError) as error:
+            raise GateError(f"could not inspect process group: {child}") from error
+        if observed_group == process_group:
+            result.append(int(child.name))
+    return sorted(result)
+
+
+def validate_time_receipt(path: Path, hol4: Path, target: str) -> None:
+    try:
+        lines = stable_file_bytes(
+            path, "cold replay time receipt",
+        ).decode("utf-8").splitlines()
+    except (OSError, UnicodeError) as error:
+        raise GateError(f"could not read cold replay time receipt: {path}") from error
+    require(len(lines) == len(TIME_FIELDS) and
+            all(line.startswith("\t") for line in lines),
+            f"cold replay time receipt field count mismatch: {path}")
+    values = []
+    for line, expected_field in zip(lines, TIME_FIELDS, strict=True):
+        prefix = f"\t{expected_field}: "
+        require(line.startswith(prefix),
+                f"cold replay time receipt field mismatch: {path}")
+        values.append(line[len(prefix):])
+    expected_command = f'"{hol4}/bin/Holmake -j1 --mt=1 {target}"'
+    require(values[0] == expected_command,
+            f"cold replay time command mismatch: {path}")
+    require(all(re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value)
+                for value in values[1:3]),
+            f"cold replay time CPU fields are malformed: {path}")
+    require(re.fullmatch(r"[0-9]+%", values[3]) is not None,
+            f"cold replay time percent field is malformed: {path}")
+    require(re.fullmatch(r"(?:[0-9]+:)?[0-9]+:[0-9]+(?:\.[0-9]+)?", values[4])
+            is not None,
+            f"cold replay elapsed field is malformed: {path}")
+    require(all(re.fullmatch(r"[0-9]+", value) for value in values[5:22]),
+            f"cold replay time integer fields are malformed: {path}")
+    require(values[22] == "0",
+            f"cold replay command did not record exit zero: {path}")
+
+
+def validate_inherited_limits() -> dict[str, str]:
+    observed = {}
+    for label, limit in (
+        ("cpu", resource.RLIMIT_CPU),
+        ("file_size", resource.RLIMIT_FSIZE),
+        ("address_space", resource.RLIMIT_AS),
+    ):
+        soft, _hard = resource.getrlimit(limit)
+        require(soft == resource.RLIM_INFINITY,
+                f"inherited {label} soft limit is not unlimited: {soft}")
+        observed[label] = "unlimited"
+    return observed
 
 
 def memory_available_kib(proc_root: Path) -> int:
@@ -113,6 +288,19 @@ def memory_available_kib(proc_root: Path) -> int:
         raise GateError("could not read MemAvailable") from error
 
 
+def utc_timestamp(value: bytes, label: str) -> datetime:
+    try:
+        text = value.decode("ascii")
+        require(re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+                             r"[0-9]{2}:[0-9]{2}:[0-9]{2}Z\n", text) is not None,
+                f"malformed {label}")
+        return datetime.strptime(text.strip(), "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc,
+        )
+    except (UnicodeError, ValueError) as error:
+        raise GateError(f"malformed {label}") from error
+
+
 def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
     replay = ordinary_exact_directory(arguments.replay_root, "replay root")
     candle = ordinary_exact_directory(arguments.candle_root, "Candle root")
@@ -124,22 +312,34 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
     validate_git(cakeml, arguments.cakeml_head, "CakeML")
     validate_git(hol4, arguments.hol4_head, "HOL4")
 
-    require((replay / "stage").read_text(encoding="ascii") == "complete\n",
+    require(stable_file_bytes(
+                replay / "stage", "cold replay stage",
+            ) == b"complete\n",
             "cold replay has not completed all four stages")
-    require((replay / "finished_utc").is_file() and
-            (replay / "finished_utc").stat().st_size > 0,
-            "cold replay has no completion timestamp")
+    started = utc_timestamp(
+        stable_file_bytes(replay / "started_utc", "cold replay start timestamp"),
+        "cold replay start timestamp",
+    )
+    finished = utc_timestamp(
+        stable_file_bytes(replay / "finished_utc", "cold replay completion timestamp"),
+        "cold replay completion timestamp",
+    )
+    require(started <= finished <= datetime.now(timezone.utc),
+            "cold replay timestamp ordering is invalid")
     controller_pid = read_positive_pid(replay / "controller_pid")
+    require(controller_pid == arguments.replay_controller_pid,
+            "cold replay controller PID differs from pinned launch identity")
     require(not (proc_root / str(controller_pid)).exists(),
             f"cold replay controller is still live: {controller_pid}")
-    for relative in TIME_RECEIPTS:
+    group_members = process_group_members(proc_root, arguments.replay_process_group)
+    require(not group_members,
+            f"cold replay process group is still live: {group_members}")
+    for relative, target in zip(TIME_RECEIPTS, TIME_TARGETS, strict=True):
         path = replay / relative
-        require(path.is_file() and path.stat().st_size > 0,
-                f"missing cold replay time receipt: {path}")
+        validate_time_receipt(path, hol4, target)
     for relative in CAKEML_POSTCONDITIONS:
         path = cakeml / relative
-        require(path.is_file() and path.stat().st_size > 0,
-                f"missing cold replay postcondition: {path}")
+        stable_file_bytes(path, "cold replay postcondition")
 
     holmake = live_holmake_pids(proc_root)
     require(not holmake, f"Holmake is still live: {holmake}")
@@ -150,6 +350,7 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
     require(not os.path.lexists(arguments.attempt_root),
             f"canonical attempt root already exists: {arguments.attempt_root}")
     ordinary_exact_directory(arguments.attempt_root.parent, "attempt parent")
+    inherited_limits = validate_inherited_limits()
 
     return {
         "gate": "canonical-cakeml-bootstrap-ready",
@@ -157,16 +358,23 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
         "cakeml_head": arguments.cakeml_head,
         "hol4_head": arguments.hol4_head,
         "replay_controller_pid": controller_pid,
+        "replay_process_group": arguments.replay_process_group,
         "mem_available_kib": available_kib,
         "minimum_mem_available_kib": required_kib,
         "attempt_root": str(arguments.attempt_root),
         "live_holmake_pids": holmake,
+        "live_replay_process_group_members": group_members,
+        "inherited_soft_limits": inherited_limits,
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--project-root", type=Path, required=True)
+    parser.add_argument("--project-head", required=True)
     parser.add_argument("--replay-root", type=Path, required=True)
+    parser.add_argument("--replay-controller-pid", type=int, required=True)
+    parser.add_argument("--replay-process-group", type=int, required=True)
     parser.add_argument("--candle-root", type=Path, required=True)
     parser.add_argument("--candle-head", required=True)
     parser.add_argument("--cakeml-root", type=Path, required=True)
@@ -180,7 +388,15 @@ def main() -> None:
     arguments = parser.parse_args()
     require(arguments.minimum_mem_available_gib > 0,
             "minimum memory threshold must be positive")
-    print(json.dumps(validate_gate(arguments), sort_keys=True))
+    require(arguments.replay_controller_pid > 1 and
+            arguments.replay_process_group > 1,
+            "replay launch identity must use positive non-system IDs")
+    project_head = validate_self_authority(
+        arguments.project_root, arguments.project_head,
+    )
+    result = validate_gate(arguments)
+    result["project_gate_head"] = project_head
+    print(json.dumps(result, sort_keys=True))
 
 
 if __name__ == "__main__":
