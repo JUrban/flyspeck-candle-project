@@ -41,10 +41,11 @@ and sources instead.
   pilot.  Its own contract says the first-discovery traversal reaches 392
   nodes and binds eight exclusions; an all-inventory diagnostic must therefore
   select all 400 explicitly rather than relabeling the 392-node traversal.
-- At the latest review point the serial replay itself used only a few GiB,
-  total relevant project RSS was roughly 27 GiB, and available RAM was above
-  180 GiB.  The user's temporary 120 GiB allowance is therefore available but
-  is not currently needed.
+- The cold serial `cake_compile_heap` stage completed in 1:42:57 with maximum
+  RSS 6,399,540 KiB, 101% CPU, and zero swaps.  After the transition to
+  `compiler64ProgTheory.uo`, total relevant project RSS remained roughly
+  27 GiB and available RAM remained above 180 GiB.  The user's temporary
+  120 GiB allowance is therefore available but was not needed for this stage.
 
 ## Decisions by suggestion
 
@@ -106,4 +107,3 @@ contract intentionally permits one target runtime at a time.  The live sweep
 must not be restarted or silently parallelized.  A future controller could be
 designed and reviewed for two concurrent targets, but that would be a new
 evidence protocol and would require a fresh collection.
-
