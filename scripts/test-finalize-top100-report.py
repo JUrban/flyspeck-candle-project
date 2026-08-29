@@ -26,7 +26,6 @@ SPEC.loader.exec_module(MODULE)
 
 CAKEML = "2" * 40
 HOL4 = "3" * 40
-REFERENCE = "4" * 40
 
 
 def digest(value: bytes) -> str:
@@ -291,10 +290,14 @@ class Fixture:
     def _create_manifest_and_sources(self) -> dict:
         targets = []
         extra = "100/shared-extra.ml"
+        reviewed_delta_sources = (
+            "100/e_is_transcendental.ml", "100/euler.ml", "100/lagrange.ml",
+        )
         self._write(self.candle_root, extra, b"extra first-target source\n")
         for index in range(65):
             name = f"100/test-{index:02d}"
-            source = f"{name}.ml"
+            source = (reviewed_delta_sources[index] if index < 3
+                      else f"{name}.ml")
             self._write(
                 self.candle_root, source,
                 f"(* canonical source {index} *)\n".encode(),
@@ -564,6 +567,52 @@ def validate_elf_closure_evidence_live(evidence, expected_roots):
     return evidence
 
 
+def _require_current_plan_pins(plan):
+    reference = plan["reference"]
+    runtime = Path(reference["runtime_executable"]["path"])
+    first_line = runtime.read_bytes().split(b"\n", 1)[0]
+    match = re.fullmatch(br"#!(/[^\x00-\x20]+)(?:[ \t]+.*)?", first_line)
+    if match is None:
+        raise CollectionError("fixture runtime shebang is malformed")
+    interpreter = Path(match.group(1).decode()).resolve(strict=True)
+    expected_interpreter = {
+        "path": str(interpreter),
+        "sha256": hashlib.sha256(interpreter.read_bytes()).hexdigest(),
+    }
+    if reference["runtime_interpreter"] != expected_interpreter:
+        raise CollectionError("fixture runtime interpreter differs from live plan")
+    hol_ml = Path(reference["root"]) / "hol.ml"
+    expected_hol_ml = {
+        "path": str(hol_ml.resolve(strict=True)),
+        "sha256": hashlib.sha256(hol_ml.read_bytes()).hexdigest(),
+    }
+    if reference["hol_ml"] != expected_hol_ml:
+        raise CollectionError("fixture hol.ml differs from live plan")
+    roots = {
+        Path(reference["runtime_stublib"]["path"]).parent,
+        Path(reference["ocamlc"]["stdlib_directory"]) / "stublibs",
+        *(Path(item["root"]) / "stublibs"
+          for item in reference["findlib"]["package_roots"]),
+    }
+    observed = {}
+    for root in roots:
+        if root.is_dir():
+            for path in root.glob("*.so"):
+                resolved = path.resolve(strict=True)
+                observed[str(resolved)] = {
+                    "path": str(resolved),
+                    "sha256": hashlib.sha256(resolved.read_bytes()).hexdigest(),
+                }
+    expected = [observed[path] for path in sorted(observed)]
+    if reference["runtime_stub_files"] != expected:
+        raise CollectionError("fixture runtime stubs differ from live plan")
+
+
+def _rebuild_plan(plan):
+    _require_current_plan_pins(plan)
+    return json.loads(json.dumps(plan))
+
+
 def _json_sha256(value):
     return hashlib.sha256(
         (json.dumps(value, indent=2) + "\n").encode("utf-8")).hexdigest()
@@ -753,19 +802,57 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         return {**projection, "sha256": MODULE.compact_json_sha256(projection)}
 
     def _create_approval(self) -> None:
-        deltas = []
-        for index, path in enumerate((
+        tools_root = self.root / "reference-tools"
+        reference_root = tools_root / "reference"
+        reference_root.mkdir(parents=True)
+        self.reference_root = reference_root
+        for relative in sorted({
+            relative
+            for target in self.manifest["targets"]
+            for relative in target["load_files"]
+        }):
+            self._write(
+                reference_root, relative,
+                (self.candle_root / relative).read_bytes(),
+            )
+        delta_paths = (
             "100/e_is_transcendental.ml", "100/euler.ml", "100/lagrange.ml",
-        )):
+        )
+        historical_values = {}
+        for index, relative in enumerate(delta_paths):
+            value = f"(* historical fixture delta {index} *)\n".encode()
+            historical_values[relative] = value
+            self._write(reference_root, relative, value)
+        self._write(
+            reference_root, ".gitignore",
+            (b"/ocaml-hol\n/hol.ml\n/stublibs/\n/bin/\n/ocamlfind.conf\n"
+             b"/ocaml/\n/hol_loader.cmo\n/pa_j.cmo\n"
+             b"/load_camlp5_topfind.ml\n"),
+        )
+        git(reference_root, "init", "-q")
+        git(reference_root, "config", "user.email", "fixture@example.invalid")
+        git(reference_root, "config", "user.name", "fixture")
+        git(reference_root, "add", ".")
+        git(reference_root, "commit", "-qm", "historical fixture reference")
+        self.historical_reference_head = git(
+            reference_root, "rev-parse", "HEAD",
+        )
+        deltas = []
+        for index, path in enumerate(delta_paths):
+            selected = (self.candle_root / path).read_bytes()
+            self._write(reference_root, path, selected)
             deltas.append({
                 "path": path,
-                "historical_sha256": f"{7000 + index:064x}",
-                "selected_sha256": f"{8000 + index:064x}",
+                "historical_sha256": digest(historical_values[path]),
+                "selected_sha256": digest(selected),
                 "reason": f"reviewed fixture delta {index}",
             })
+        git(reference_root, "add", *delta_paths)
+        git(reference_root, "commit", "-qm", "exact fixture reference")
+        self.reference_head = git(reference_root, "rev-parse", "HEAD")
         reference_policy = {
-            "historical_upstream_commit": "6" * 40,
-            "exact_source_reference_commit": REFERENCE,
+            "historical_upstream_commit": self.historical_reference_head,
+            "exact_source_reference_commit": self.reference_head,
             "compatibility_deltas": deltas,
         }
         shared_source_contract = self.approval_root / "source-contract.json"
@@ -790,9 +877,6 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         protocol = self.candle / "reference_protocol.py"
         protocol_sha256 = digest(protocol.read_bytes())
         manifest_pin = self.candle / "top100_manifest.json"
-        tools_root = self.root / "reference-tools"
-        reference_root = tools_root / "reference"
-        reference_root.mkdir(parents=True)
         runtime = self._write(
             reference_root, "ocaml-hol", b"#!/bin/sh\nexit 0\n")
         runtime.chmod(0o755)
@@ -948,7 +1032,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     },
                     "reference": {
                         "root": str(reference_root),
-                        "git_head": REFERENCE,
+                        "git_head": self.reference_head,
                         "git_status": [],
                         "runtime_executable": {
                             "path": str(runtime), "sha256": digest(runtime.read_bytes())},
@@ -1169,7 +1253,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 }
                 runs.append({
                     "artifacts": artifacts,
-                    "reference_git_head": REFERENCE,
+                    "reference_git_head": self.reference_head,
                     "session_nonce": nonce,
                     "identity_sha256": identity_sha256,
                     "sweep": sweep,
@@ -1228,7 +1312,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                               "reference_source_contracts.json")},
             },
             "reference": {"root": str(reference_root),
-                          "git_head": REFERENCE,
+                          "git_head": self.reference_head,
                           "source_policy": reference_policy},
             "runtime": {
                 "runtime": MODULE.runtime_file_record(
@@ -1733,6 +1817,17 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         with context:
             self.fixture.finalize()
 
+    def test_git_checkout_accepts_clean_linked_worktree(self) -> None:
+        linked = self.fixture.root / "linked-finalizer-project"
+        git(
+            self.fixture.project_root, "worktree", "add", "--detach",
+            str(linked), self.fixture.project_head,
+        )
+        self.assertTrue((linked / ".git").is_file())
+        MODULE.validate_git_checkout(
+            linked, self.fixture.project_head, "linked finalizer fixture",
+        )
+
     def test_positive_hypothesis_theorem_and_wire_are_rejected(self):
         _, theorem = self.fixture._wire_record("EGCD", 0, 0)
         theorem["hypothesis_count"] = 1
@@ -1984,9 +2079,10 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             )
 
     def test_source_closure_is_live_hashed_and_committed(self) -> None:
-        source = self.fixture.candle_root / "100/test-00.ml"
+        relative = self.fixture.manifest["targets"][0]["load_files"][0]
+        source = self.fixture.candle_root / relative
         source.write_bytes(source.read_bytes() + b"tamper\n")
-        git(self.fixture.candle_root, "add", "100/test-00.ml")
+        git(self.fixture.candle_root, "add", relative)
         git(self.fixture.candle_root, "commit", "-qm", "changed source fixture")
         new_head = git(self.fixture.candle_root, "rev-parse", "HEAD")
         for report_value in self.fixture.reports:
@@ -2165,6 +2261,51 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.rewrite_all_reference_plans(omit_dependency)
         self.assert_rejected("captured v8 reference candidate replay failed")
 
+    def test_omitted_runtime_stub_is_rejected_after_complete_rehash(self) -> None:
+        def omit_stub_and_rebuild_elf(plan: dict) -> None:
+            reference = plan["reference"]
+            stubs = reference["runtime_stub_files"]
+            self.assertGreater(len(stubs), 1)
+            stubs.pop(0)
+            reference["elf_runtime"] = elf_evidence([
+                Path(reference["runtime_interpreter"]["path"]),
+                *(Path(item["path"]) for item in stubs),
+            ])
+
+        self.fixture.rewrite_all_reference_plans(omit_stub_and_rebuild_elf)
+        self.assert_rejected("captured v8 reference candidate replay failed")
+
+    def test_rebound_runtime_interpreter_is_rejected_after_rehash(self) -> None:
+        def rebind_interpreter(plan: dict) -> None:
+            reference = plan["reference"]
+            interpreter = Path("/bin/bash").resolve()
+            reference["runtime_interpreter"] = {
+                "path": str(interpreter),
+                "sha256": digest(interpreter.read_bytes()),
+            }
+            reference["elf_runtime"] = elf_evidence([
+                interpreter,
+                *(Path(item["path"])
+                  for item in reference["runtime_stub_files"]),
+            ])
+
+        self.fixture.rewrite_all_reference_plans(rebind_interpreter)
+        self.assert_rejected("captured v8 reference candidate replay failed")
+
+    def test_rebound_hol_init_script_is_rejected_after_rehash(self) -> None:
+        alternate = self.fixture.root / "alternate-hol.ml"
+        alternate.write_bytes(b"(* forged HOL initialization *)\n")
+
+        def rebind_hol_ml(plan: dict) -> None:
+            reference = plan["reference"]
+            reference["hol_ml"] = {
+                "path": str(alternate), "sha256": digest(alternate.read_bytes()),
+            }
+            plan["fresh_process_contract"]["runtime_argv"][2] = str(alternate)
+
+        self.fixture.rewrite_all_reference_plans(rebind_hol_ml)
+        self.assert_rejected("captured v8 reference candidate replay failed")
+
     def test_reference_external_package_is_live_rechecked(self) -> None:
         package = self.fixture.root / "reference-tools/pari.deb"
         package.chmod(0o644)
@@ -2197,6 +2338,48 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         contract["controller"] = {"fabricated": True}
         self.fixture.replace_collection_documents(contract, receipt)
         self.assert_rejected("committed project")
+
+    def test_alternate_committed_controller_is_rejected_after_rehash(self) -> None:
+        alternate = self.fixture.root / "alternate-controller-project"
+        controller_path = alternate / "scripts/run-top100-reference-sweeps.py"
+        controller_path.parent.mkdir(parents=True)
+        controller_path.write_bytes(
+            (self.fixture.project_root /
+             "scripts/run-top100-reference-sweeps.py").read_bytes(),
+        )
+        controller_path.chmod(0o755)
+        git(alternate, "init", "-q")
+        git(alternate, "config", "user.email", "fixture@example.invalid")
+        git(alternate, "config", "user.name", "fixture")
+        git(alternate, "add", ".")
+        git(alternate, "commit", "-qm", "alternate controller authority")
+        alternate_head = git(alternate, "rev-parse", "HEAD")
+
+        contract_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["contract"]["path"]
+        receipt_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["receipt"]["path"]
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        controller_record = {
+            "path": "scripts/run-top100-reference-sweeps.py",
+            **record(controller_path),
+        }
+        contract["project"] = {
+            "root": str(alternate), "git_head": alternate_head,
+            "controller": controller_record,
+        }
+        contract["controller"].update({
+            "path": str(controller_path), **record(controller_path),
+        })
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("authorized finalizer project")
+
+    def test_reference_checkout_and_sources_are_live_authenticated(self) -> None:
+        source = self.fixture.reference_root / self.fixture.manifest[
+            "targets"][0]["load_files"][0]
+        source.write_bytes(b"forged selected reference source\n")
+        self.assert_rejected("reference checkout.*not clean|source differs")
 
     def test_fabricated_aggregate_attempt_is_rejected_after_rehash(self) -> None:
         contract_path = self.fixture.candle_root / self.fixture.approval[

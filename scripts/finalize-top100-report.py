@@ -202,7 +202,35 @@ reference = load_exact(
 if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v8" or
         reference.CANDIDATE_SCHEMA != "candle-s1-reference-candidate-v8"):
     raise RuntimeError("captured reference validator is not v8 compatible")
+runtime_root = stage / instructions["runtime_root"]
+reference.ROOT = runtime_root
+reference.MANIFEST = runtime_root / "candle/top100_manifest.json"
+reference.SERIALIZER = runtime_root / "candle/fingerprint.ml"
+reference.SOURCE_CONTRACT = \
+    runtime_root / "candle/reference_source_contracts.json"
+
+def stable_runtime_projection(plan):
+    projection = {
+        key: plan["reference"][key] for key in (
+            "runtime_executable", "runtime_interpreter", "runtime_stublib",
+            "runtime_library_tree", "runtime_stub_files", "elf_runtime",
+            "ocamlc", "findlib", "hol_ml", "generated_boot_files",
+            "ocaml_library_tree", "external_runtime",
+        )
+    }
+    projection["elf_runtime"] = reference._stable_elf_evidence(
+        projection["elf_runtime"])
+    external = dict(projection["external_runtime"])
+    external["elf_runtime"] = reference._stable_elf_evidence(
+        external["elf_runtime"])
+    projection["external_runtime"] = external
+    return {
+        "reference": projection,
+        "fresh_process_contract": plan["fresh_process_contract"],
+    }
+
 validated_elf = set()
+validated_current_plan = False
 for replay in instructions["replays"]:
     candidate = json.loads(
         (stage / replay["candidate"]).read_text(encoding="utf-8"))
@@ -214,6 +242,26 @@ for replay in instructions["replays"]:
         candidate["session_nonce"])
     if request != expected_request:
         raise RuntimeError("request does not regenerate from target and nonce")
+    if not validated_current_plan:
+        target = json.loads(json.dumps(replay["target"]))
+        target["fingerprint_request"]["expected_identities"] = None
+
+        def authenticated_target(name):
+            if name != target["name"]:
+                raise RuntimeError("unexpected reconstruction target")
+            return {
+                "schema_version": 1,
+                "target_count": 1,
+                "targets": [target],
+            }, target
+
+        reference._target_from_manifest = authenticated_target
+        reference._collector_repository_pin = lambda: \
+            plan["input"]["collector_repository"]
+        rebuilt = reference._rebuild_plan(plan)
+        if stable_runtime_projection(rebuilt) != stable_runtime_projection(plan):
+            raise RuntimeError("live reference runtime differs from plan")
+        validated_current_plan = True
     core = plan["reference"]["elf_runtime"]
     external = plan["reference"]["external_runtime"]["elf_runtime"]
     for evidence, roots in (
@@ -398,6 +446,40 @@ def stable_file_identity(path: Path, label: str) -> FileIdentity:
     finally:
         os.close(descriptor)
     return FileIdentity(count, digest.hexdigest())
+
+
+def stable_file_bytes(path: Path, label: str) -> bytes:
+    """Read an ordinary file while rejecting replacement or concurrent edits."""
+    path = ordinary_file(path, label)
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as error:
+        raise ValidationError(f"cannot open {label}: {path}") from error
+    chunks = []
+    count = 0
+    try:
+        before = os.fstat(descriptor)
+        require(stat.S_ISREG(before.st_mode), f"{label} is not ordinary: {path}")
+        while True:
+            block = os.read(descriptor, 1024 * 1024)
+            if not block:
+                break
+            chunks.append(block)
+            count += len(block)
+        after = os.fstat(descriptor)
+        named = path.stat(follow_symlinks=False)
+        require(
+            (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+             before.st_ctime_ns) ==
+            (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns,
+             after.st_ctime_ns) and
+            (named.st_dev, named.st_ino) == (after.st_dev, after.st_ino) and
+            count == after.st_size,
+            f"{label} changed while being read: {path}",
+        )
+    finally:
+        os.close(descriptor)
+    return b"".join(chunks)
 
 
 def executable_route_record(path: Path, label: str) -> dict[str, Any]:
@@ -730,9 +812,53 @@ def git_bytes(root: Path, *arguments: str) -> bytes:
     return completed.stdout
 
 
+def git_common_directory(root: Path, label: str) -> Path:
+    dot_git = root / ".git"
+    if dot_git.is_dir():
+        git_directory = ordinary_directory(dot_git, f"{label} Git directory")
+    else:
+        try:
+            value = stable_file_bytes(dot_git, f"{label} .git file").decode(
+                "utf-8", errors="strict",
+            )
+        except UnicodeDecodeError as error:
+            raise ValidationError(f"{label} has malformed .git metadata") from error
+        require(value.startswith("gitdir: ") and value.endswith("\n") and
+                value.count("\n") == 1,
+                f"{label} has malformed .git metadata")
+        git_path = Path(value[len("gitdir: "):-1])
+        if not git_path.is_absolute():
+            git_path = root / git_path
+        git_directory = ordinary_directory(
+            git_path.resolve(strict=True), f"{label} Git directory",
+        )
+    common_file = git_directory / "commondir"
+    if not os.path.lexists(common_file):
+        return git_directory
+    try:
+        value = stable_file_bytes(
+            common_file, f"{label} Git common-directory file",
+        ).decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise ValidationError(
+            f"{label} has malformed Git common-directory metadata",
+        ) from error
+    require(value.endswith("\n") and value.count("\n") == 1,
+            f"{label} has malformed Git common-directory metadata")
+    common_path = Path(value[:-1])
+    if not common_path.is_absolute():
+        common_path = git_directory / common_path
+    return ordinary_directory(
+        common_path.resolve(strict=True), f"{label} Git common directory",
+    )
+
+
 def validate_git_checkout(root: Path, expected_head: str, label: str) -> None:
     root = ordinary_directory(root, label)
     require_commit(expected_head, f"{label} head")
+    common_path = git_common_directory(root, label)
+    require(not os.path.lexists(common_path / "info/grafts"),
+            f"{label} has a Git grafts file")
     top = git_bytes(root, "rev-parse", "--show-toplevel").decode().strip()
     require(Path(top) == root, f"{label} is not the exact Git top level")
     head = git_bytes(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
@@ -741,6 +867,13 @@ def validate_git_checkout(root: Path, expected_head: str, label: str) -> None:
         root, "status", "--porcelain=v1", "-z", "--untracked-files=all",
     )
     require(status == b"", f"{label} worktree is not clean")
+    require(git_bytes(
+        root, "for-each-ref", "--format=%(refname)", "refs/replace",
+    ) == b"", f"{label} has Git replacement objects")
+    for record in git_bytes(root, "ls-files", "-v", "-z").split(b"\0"):
+        if record:
+            require(record.startswith(b"H "),
+                    f"{label} has assume-unchanged or skip-worktree index flags")
 
 
 def committed_file_at(
@@ -1506,7 +1639,8 @@ def snapshot_utf8(stage: Path, snapshot: Snapshot, label: str) -> str:
 
 def prepare_reference_replay_root(
     stage: Path, stager: Stager, validator: Snapshot, protocol: Snapshot,
-    contracts: dict[str, Snapshot], closure: dict[str, Any],
+    source_contract: Snapshot, contracts: dict[str, Snapshot],
+    closure: dict[str, Any],
 ) -> dict[str, str]:
     runtime_root = "approval/replay/runtime-root"
     inputs = {
@@ -1515,6 +1649,7 @@ def prepare_reference_replay_root(
         "candle/regression.py": contracts["candle/regression.py"],
         "candle/fingerprint.ml": contracts["candle/fingerprint.ml"],
         "candle/top100_manifest.json": contracts["candle/top100_manifest.json"],
+        "candle/reference_source_contracts.json": source_contract,
     }
     for relative, snapshot in inputs.items():
         identity = stager.write(
@@ -2478,6 +2613,7 @@ def run_captured_reference_replay(
         "schema": "candle-great100-reference-replay-v1",
         "validator": replay_runtime["validator"],
         "regression": replay_runtime["regression"],
+        "runtime_root": replay_runtime["root"],
         "replays": replays,
     }
     instructions_identity = stager.write(
@@ -2530,7 +2666,8 @@ def run_captured_reference_replay(
 
 def authenticate_collection_contract(
     contract: dict[str, Any], reference_policy: dict[str, Any],
-    stage: Path, stager: Stager,
+    inventory: dict[str, Any], trusted_project_root: Path,
+    trusted_project_head: str, stage: Path, stager: Stager,
 ) -> dict[str, Any]:
     """Authenticate the controller, repositories, and launch-time runtimes."""
     def retain_live(path: Path, archive_path: str, label: str) -> dict[str, Any]:
@@ -2558,6 +2695,9 @@ def authenticate_collection_contract(
             Path(project["root"]).is_absolute(),
             "malformed collection project contract")
     project_root = Path(project["root"])
+    require(project_root == trusted_project_root and
+            project["git_head"] == trusted_project_head,
+            "collection controller is not from the authorized finalizer project")
     controller_record, controller_source = committed_file_at(
         project_root, project["git_head"], COLLECTION_CONTROLLER_PATH,
         "100755", "collection controller",
@@ -2643,6 +2783,106 @@ def authenticate_collection_contract(
             COMMIT_RE.fullmatch(reference["git_head"]) is not None and
             reference["source_policy"] == reference_policy,
             "malformed or unauthorized collection reference contract")
+    reference_root = Path(reference["root"])
+    reference_head = reference["git_head"]
+    require(reference_head == reference_policy["exact_source_reference_commit"],
+            "collection reference head differs from approved exact source")
+    validate_git_checkout(
+        reference_root, reference_head, "collection reference checkout",
+    )
+    historical_head = reference_policy["historical_upstream_commit"]
+    parent = git_bytes(
+        reference_root, "rev-parse", "--verify", f"{reference_head}^{{commit}}^",
+    ).decode("utf-8", errors="strict").strip()
+    require(parent == historical_head,
+            "exact reference is not a direct child of the historical commit")
+    changed_lines = git_bytes(
+        reference_root, "diff", "--name-status", "--no-renames",
+        "--no-ext-diff", "--no-textconv",
+        historical_head, reference_head, "--",
+    ).decode("utf-8", errors="strict").splitlines()
+    expected_delta_paths = sorted(
+        value["path"] for value in reference_policy["compatibility_deltas"])
+    require(changed_lines == [f"M\t{path}" for path in expected_delta_paths],
+            "exact reference commit has an unauthorized source delta")
+
+    selected_hashes: dict[str, str] = {}
+    for target in inventory["targets"]:
+        for relative, sha256 in target["load_file_sha256"].items():
+            previous = selected_hashes.setdefault(relative, sha256)
+            require(previous == sha256,
+                    f"conflicting selected reference hash for {relative}")
+    require(len(selected_hashes) == inventory["source_count"] == 66,
+            "collection reference source inventory is not exact")
+    retained_sources = {}
+    for index, (relative, expected_sha256) in enumerate(
+            sorted(selected_hashes.items()), 1):
+        record, committed = committed_file_at(
+            reference_root, reference_head, relative, "100644",
+            f"collection reference source {relative}",
+        )
+        require(record["sha256"] == expected_sha256,
+                f"committed reference source differs for {relative}")
+        live = ordinary_file(
+            reference_root / relative, f"live reference source {relative}",
+        )
+        require(stable_file_identity(
+            live, f"live reference source {relative}",
+        ) == bytes_identity(committed),
+                f"live reference source differs from commit for {relative}")
+        archive_path = (
+            f"approval/reference-collection/reference-sources/{index:02d}/"
+            f"{relative}"
+        )
+        identity = stager.write(archive_path, committed)
+        retained_sources[relative] = {
+            "archive_path": archive_path, **identity.as_json(),
+        }
+
+    retained_deltas = []
+    for index, delta in enumerate(reference_policy["compatibility_deltas"], 1):
+        relative = delta["path"]
+        historical_record, historical = committed_file_at(
+            reference_root, historical_head, relative, "100644",
+            f"historical reference delta {relative}",
+        )
+        selected_record, selected = committed_file_at(
+            reference_root, reference_head, relative, "100644",
+            f"selected reference delta {relative}",
+        )
+        require(historical_record["sha256"] == delta["historical_sha256"] and
+                selected_record["sha256"] == delta["selected_sha256"],
+                f"reference compatibility delta differs for {relative}")
+        live = ordinary_file(
+            reference_root / relative, f"live selected delta {relative}",
+        )
+        require(stable_file_identity(
+            live, f"live selected delta {relative}",
+        ) == bytes_identity(selected),
+                f"live selected reference delta differs for {relative}")
+        historical_archive = (
+            "approval/reference-collection/reference-deltas/"
+            f"{index:02d}-historical-{Path(relative).name}"
+        )
+        historical_identity = stager.write(historical_archive, historical)
+        selected_capture = retained_sources.get(relative)
+        if selected_capture is None:
+            selected_archive = (
+                "approval/reference-collection/reference-deltas/"
+                f"{index:02d}-selected-{Path(relative).name}"
+            )
+            selected_identity = stager.write(selected_archive, selected)
+            selected_capture = {
+                "archive_path": selected_archive, **selected_identity.as_json(),
+            }
+        retained_deltas.append({
+            "path": relative,
+            "historical": {
+                "archive_path": historical_archive,
+                **historical_identity.as_json(),
+            },
+            "selected": selected_capture,
+        })
 
     deadlines = contract["deadlines"]
     require(isinstance(deadlines, dict) and set(deadlines) == {
@@ -2766,12 +3006,19 @@ def authenticate_collection_contract(
             "git": git_retained,
         },
         "candle": retained_candle,
+        "reference": {
+            "root": str(reference_root), "git_head": reference_head,
+            "historical_upstream_commit": historical_head,
+            "sources": retained_sources,
+            "compatibility_deltas": retained_deltas,
+        },
         "runtime": retained_runtimes,
     }
 
 
 def capture_collection_evidence(
     approval: dict[str, Any], root: Path, manifest: dict[str, Any],
+    trusted_project_root: Path, trusted_project_head: str,
     stage: Path, stager: Stager,
 ) -> tuple[
     dict[str, Any], dict[tuple[int, int], dict[str, Any]], dict[str, Any], Path,
@@ -2849,7 +3096,8 @@ def capture_collection_evidence(
             inventory == expected_inventory,
             "reference collection inventory differs from manifest")
     authenticated_contract = authenticate_collection_contract(
-        contract, approval["reference_policy"], stage, stager,
+        contract, approval["reference_policy"], inventory,
+        trusted_project_root, trusted_project_head, stage, stager,
     )
     require(isinstance(receipt, dict) and set(receipt) == {
         "schema", "kind", "contract_sha256", "contract", "sweep_count",
@@ -2936,7 +3184,8 @@ def validate_approval_and_capture(
     root: Path, manifest: dict[str, Any], expected_semantics: list[dict[str, Any]],
     serializer_sha256: str, validator: Snapshot, protocol: Snapshot,
     regression: Snapshot,
-    replay_runtime: dict[str, str], stage: Path, stager: Stager,
+    replay_runtime: dict[str, str], trusted_project_root: Path,
+    trusted_project_head: str, stage: Path, stager: Stager,
 ) -> dict[str, Any]:
     require(set(approval) == APPROVAL_KEYS and
             approval["schema"] == "candle-s1-identity-approval-v2" and
@@ -2990,7 +3239,10 @@ def validate_approval_and_capture(
 
     (collection_contract, collection_successes, collection_capture,
      collection_root) = \
-        capture_collection_evidence(approval, root, manifest, stage, stager)
+        capture_collection_evidence(
+            approval, root, manifest,
+            trusted_project_root, trusted_project_head, stage, stager,
+        )
 
     targets = approval["targets"]
     require(isinstance(targets, list) and len(targets) == 65,
@@ -3288,12 +3540,7 @@ def validate_approval_and_capture(
                 "plan": captured_artifacts["plan"].archive_path,
                 "request": captured_artifacts["request"].archive_path,
                 "transcript": captured_artifacts["transcript"].archive_path,
-                "target": {
-                    "load_files": target["load_files"],
-                    "fingerprint_request": {
-                        "theorems": target["fingerprint_request"]["theorems"],
-                    },
-                },
+                "target": target,
             })
         require(len(nonces) == 2,
                 f"reference runs do not use distinct session nonces for {name}")
@@ -3485,6 +3732,15 @@ def archive(
         validate_committed_snapshot(
             root, REFERENCE_PROTOCOL_PATH, reference_protocol, stage, "100644",
         )
+        reference_source_contract = stager.capture(
+            root / "candle/reference_source_contracts.json",
+            "execution-contract/candle/reference_source_contracts.json",
+            "reference source contract",
+        )
+        validate_committed_snapshot(
+            root, "candle/reference_source_contracts.json",
+            reference_source_contract, stage, "100644",
+        )
         if _TEST_AFTER_CONTRACT_CAPTURE is not None:
             _TEST_AFTER_CONTRACT_CAPTURE()
         execution_contract = {
@@ -3502,7 +3758,7 @@ def archive(
         )
         replay_runtime = prepare_reference_replay_root(
             stage, stager, reference_validator, reference_protocol,
-            contract_snapshots, closure,
+            reference_source_contract, contract_snapshots, closure,
         )
 
         approval_references = [report.get("independent_approval") for report in reports]
@@ -3536,7 +3792,8 @@ def archive(
             contract_snapshots["candle/fingerprint.ml"].identity.sha256,
             reference_validator, reference_protocol,
             contract_snapshots["candle/regression.py"],
-            replay_runtime, stage, stager,
+            replay_runtime, finalizer["project_root"],
+            finalizer["project_head"], stage, stager,
         )
 
         linked_hashes = []
