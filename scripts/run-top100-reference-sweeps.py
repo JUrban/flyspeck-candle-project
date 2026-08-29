@@ -208,6 +208,62 @@ def runtime_file_record(path: Path, label: str) -> dict[str, object]:
     }
 
 
+def tree_record(path: Path, label: str) -> dict[str, object]:
+    """Match the collector's versioned path/kind/mode/link/content digest."""
+    root = ordinary_directory(path, label)
+    records: list[dict[str, object]] = []
+    for entry in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        relative = entry.relative_to(root).as_posix()
+        metadata = entry.lstat()
+        mode = stat.S_IMODE(metadata.st_mode)
+        if stat.S_ISLNK(metadata.st_mode):
+            try:
+                resolved = entry.resolve(strict=True)
+            except (FileNotFoundError, RuntimeError, OSError) as error:
+                raise CollectionFailure(
+                    f"broken symlink in {label}: {entry}",
+                ) from error
+            value: dict[str, object] = {
+                "path": relative, "kind": "symlink", "mode": mode,
+                "target": os.readlink(entry), "resolved_path": str(resolved),
+            }
+            if resolved.is_file():
+                value["resolved_sha256"] = hashlib.sha256(
+                    stable_bytes(resolved, f"{label} resolved symlink"),
+                ).hexdigest()
+            else:
+                require(resolved.is_dir(),
+                        f"unsupported symlink target in {label}: {entry}")
+            records.append(value)
+        elif stat.S_ISREG(metadata.st_mode):
+            records.append({
+                "path": relative, "kind": "file", "mode": mode,
+                "sha256": hashlib.sha256(
+                    stable_bytes(entry, f"{label} file"),
+                ).hexdigest(),
+            })
+        elif stat.S_ISDIR(metadata.st_mode):
+            records.append({
+                "path": relative, "kind": "directory", "mode": mode,
+            })
+        else:
+            raise CollectionFailure(
+                f"unsupported filesystem entry in {label}: {entry}",
+            )
+    digest = hashlib.sha256()
+    for value in records:
+        digest.update(json.dumps(
+            value, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8"))
+        digest.update(b"\n")
+    return {
+        "root": str(root), "root_mode": stat.S_IMODE(root.lstat().st_mode),
+        "entry_count": len(records), "inventory_sha256": digest.hexdigest(),
+        "inventory_policy":
+            "relative_path_kind_mode_link_target_and_content_v1",
+    }
+
+
 def parse_json_bytes(value: bytes, label: str) -> dict[str, Any]:
     try:
         decoded = value.decode("utf-8", errors="strict")
@@ -672,6 +728,66 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         require(identity["sha256"] == require_sha256(
             supplied_sha256, f"pinned {name}"), f"{name} differs from command-line pin")
         runtime[name] = identity
+    pari_gp_root = ordinary_directory(
+        arguments.pari_gp_root, "PARI/GP package root",
+    )
+    pari_gp = runtime_file_record(
+        pari_gp_root / "usr/bin/gp", "PARI/GP executable",
+    )
+    require(pari_gp["sha256"] == require_sha256(
+        arguments.pari_gp_sha256, "pinned PARI/GP executable"),
+        "PARI/GP executable differs from command-line pin")
+    command_shell = runtime_file_record(
+        arguments.command_shell, "Sys.command shell",
+    )
+    require(command_shell["sha256"] == require_sha256(
+        arguments.command_shell_sha256, "pinned Sys.command shell"),
+        "Sys.command shell differs from command-line pin")
+    package_archive = runtime_file_record(
+        arguments.pari_gp_package, "PARI/GP package archive",
+    )
+    require(package_archive["argument_path"] == package_archive["path"] and
+            stat.S_IMODE(Path(package_archive["path"]).lstat().st_mode) == 0o444,
+            "PARI/GP package archive must be a canonical 0444 regular file")
+    require(package_archive["sha256"] == require_sha256(
+        arguments.pari_gp_package_sha256, "pinned PARI/GP package archive"),
+        "PARI/GP package archive differs from command-line pin")
+    configuration = runtime_file_record(
+        pari_gp_root / "candle-gprc", "PARI/GP configuration",
+    )
+    require(configuration["argument_path"] == configuration["path"] and
+            stat.S_IMODE(Path(configuration["path"]).lstat().st_mode) == 0o444,
+            "PARI/GP configuration must be a canonical 0444 regular file")
+    require(configuration["sha256"] == require_sha256(
+        arguments.pari_gp_gprc_sha256, "pinned PARI/GP configuration"),
+        "PARI/GP configuration differs from command-line pin")
+    package_tree = tree_record(pari_gp_root, "PARI/GP package tree")
+    require(package_tree["inventory_sha256"] == require_sha256(
+        arguments.pari_gp_tree_sha256, "pinned PARI/GP package tree"),
+        "PARI/GP package tree differs from command-line pin")
+    data_tree = tree_record(
+        pari_gp_root / "candle-data", "PARI/GP optional-data tree",
+    )
+    require(data_tree["root_mode"] == 0o555,
+            "PARI/GP optional-data root mode must be exactly 0555")
+    require(data_tree["inventory_sha256"] == require_sha256(
+        arguments.pari_gp_data_tree_sha256,
+        "pinned PARI/GP optional-data tree"),
+        "PARI/GP optional-data tree differs from command-line pin")
+    external_runtime = {
+        "policy": "single_private_path_gp_with_pinned_shell_v1",
+        "command_shell": command_shell,
+        "pari_gp": pari_gp,
+        "package_archive": package_archive,
+        "package_tree": package_tree,
+        "configuration": configuration,
+        "data_tree": data_tree,
+        "runtime_environment": {
+            "PATH": str(pari_gp_root / "usr/bin"),
+            "GPRC": configuration["path"],
+            "GP_DATA_DIR": data_tree["root"],
+        },
+    }
     require(is_int(arguments.collection_wall_seconds) and
             arguments.collection_wall_seconds > 0 and
             is_int(arguments.target_wall_seconds) and
@@ -688,7 +804,7 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         arguments.git_sha256, "pinned Git"),
         "Git executable differs from command-line pin")
     contract = {
-        "schema": 1,
+        "schema": 2,
         "kind": "candle-great100-two-sweep-reference-collection",
         "approval_status": "candidate_collection_only_unapproved",
         "promotion_allowed": False,
@@ -711,6 +827,7 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
             "source_policy": source_policy,
         },
         "runtime": runtime,
+        "external_runtime": external_runtime,
         "deadlines": {
             "collection_wall_seconds": arguments.collection_wall_seconds,
             "target_wall_seconds": arguments.target_wall_seconds,
@@ -751,6 +868,31 @@ def validate_environment(contract: dict[str, Any]) -> None:
         require(runtime_file_record(
             Path(expected["argument_path"]), f"current {name}",
         ) == expected, f"pinned runtime input changed: {name}")
+    external = contract["external_runtime"]
+    require(runtime_file_record(
+        Path(external["command_shell"]["argument_path"]),
+        "current Sys.command shell",
+    ) == external["command_shell"], "pinned Sys.command shell changed")
+    require(runtime_file_record(
+        Path(external["pari_gp"]["argument_path"]),
+        "current PARI/GP executable",
+    ) == external["pari_gp"], "pinned PARI/GP executable changed")
+    require(runtime_file_record(
+        Path(external["package_archive"]["argument_path"]),
+        "current PARI/GP package archive",
+    ) == external["package_archive"], "pinned PARI/GP package archive changed")
+    require(runtime_file_record(
+        Path(external["configuration"]["argument_path"]),
+        "current PARI/GP configuration",
+    ) == external["configuration"], "pinned PARI/GP configuration changed")
+    require(tree_record(
+        Path(external["package_tree"]["root"]),
+        "current PARI/GP package tree",
+    ) == external["package_tree"], "pinned PARI/GP package tree changed")
+    require(tree_record(
+        Path(external["data_tree"]["root"]),
+        "current PARI/GP optional-data tree",
+    ) == external["data_tree"], "pinned PARI/GP optional-data tree changed")
     observed_controller = validate_committed_file(
         project_root, CONTROLLER_RELATIVE, "100755",
     )
@@ -912,6 +1054,7 @@ def collector_command(
 ) -> list[str]:
     candle = contract["candle"]
     runtime = contract["runtime"]
+    external = contract["external_runtime"]
     return [
         str(PYTHON_ARGUMENT_PATH), "-I", "-S",
         str(Path(candle["root"]) / COLLECTOR_RELATIVE),
@@ -921,6 +1064,9 @@ def collector_command(
         "--runtime-stublib", runtime["runtime_stublib"]["argument_path"],
         "--ocamlc", runtime["ocamlc"]["argument_path"],
         "--ocamlfind", runtime["ocamlfind"]["argument_path"],
+        "--pari-gp-root", external["package_tree"]["root"],
+        "--pari-gp-package", external["package_archive"]["argument_path"],
+        "--command-shell", external["command_shell"]["argument_path"],
         "--plan", str(attempt / ARTIFACT_NAMES["plan"]),
         "--request", str(attempt / ARTIFACT_NAMES["request"]),
         "--source-mode", "manifest-exact",
@@ -965,7 +1111,7 @@ def validate_artifact_semantics(
     )
     plan = parse_json_bytes(plan_bytes, "reference plan")
     candidate = parse_json_bytes(candidate_bytes, "reference candidate")
-    require(plan.get("schema") == "candle-s1-reference-plan-v6" and
+    require(plan.get("schema") == "candle-s1-reference-plan-v7" and
             plan.get("status") == "planned_not_executed" and
             plan.get("session_nonce") and
             NONCE_RE.fullmatch(plan["session_nonce"]) is not None,
@@ -1012,6 +1158,42 @@ def validate_artifact_semantics(
             reference.get("git_head") == contract["reference"]["git_head"] and
             reference.get("git_status") == [],
             f"reference plan repository mismatch for {target['name']}")
+    external_contract = contract["external_runtime"]
+    external_plan = reference.get("external_runtime")
+    require(isinstance(external_plan, dict) and set(external_plan) == {
+        "policy", "command_shell", "pari_gp", "pari_gp_version",
+        "package_archive", "package_tree", "configuration", "data_tree",
+        "dynamic_libraries", "probe",
+    } and external_plan.get("policy") == external_contract["policy"],
+            f"reference external-runtime policy mismatch for {target['name']}")
+    for key in ("command_shell", "pari_gp"):
+        observed_route = external_plan.get(key)
+        expected_route = external_contract[key]
+        resolved = observed_route.get("resolved_executable", {}) \
+            if isinstance(observed_route, dict) else {}
+        require(isinstance(observed_route, dict) and
+                observed_route.get("argument_path") ==
+                expected_route["argument_path"] and
+                resolved.get("path") == expected_route["path"] and
+                resolved.get("sha256") == expected_route["sha256"],
+                f"reference {key} route mismatch for {target['name']}")
+    require(external_plan.get("package_archive") == {
+        "path": external_contract["package_archive"]["path"],
+        "sha256": external_contract["package_archive"]["sha256"],
+    } and external_plan.get("package_tree") ==
+            external_contract["package_tree"] and
+            external_plan.get("configuration") == {
+                "path": external_contract["configuration"]["path"],
+                "sha256": external_contract["configuration"]["sha256"],
+            } and external_plan.get("data_tree") ==
+            external_contract["data_tree"],
+            f"reference PARI/GP closure mismatch for {target['name']}")
+    fresh = plan.get("fresh_process_contract")
+    runtime_environment = fresh.get("runtime_environment", {}) \
+        if isinstance(fresh, dict) else {}
+    require(all(runtime_environment.get(key) == value for key, value in
+                external_contract["runtime_environment"].items()),
+            f"reference external environment mismatch for {target['name']}")
     require(plan.get("request") == {
         "source": request_bytes.decode("utf-8", errors="strict"),
         "sha256": hashlib.sha256(request_bytes).hexdigest(),
@@ -1020,13 +1202,13 @@ def validate_artifact_semantics(
         "schema", "artifact_kind", "approval_status", "promotion_allowed",
         "warning", "plan_pins", "session_nonce", "process_exit_code",
         "artifact_hashes", "candidate_identities",
-    } and candidate["schema"] == "candle-s1-reference-candidate-v6" and
+    } and candidate["schema"] == "candle-s1-reference-candidate-v7" and
             candidate["artifact_kind"] == "reference_identity_candidate" and
             candidate["approval_status"] == "candidate_unapproved" and
             candidate["promotion_allowed"] is False and
             candidate["process_exit_code"] == 0 and
             candidate["session_nonce"] == plan["session_nonce"],
-            f"candidate is not exact unapproved v6 for {target['name']}")
+            f"candidate is not exact unapproved v7 for {target['name']}")
     hashes = candidate["artifact_hashes"]
     require(isinstance(hashes, dict) and hashes == {
         "plan_sha256": reference_json_sha256(plan),
@@ -1727,6 +1909,15 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--ocamlc-sha256", required=True)
     result.add_argument("--ocamlfind", type=Path, required=True)
     result.add_argument("--ocamlfind-sha256", required=True)
+    result.add_argument("--pari-gp-root", type=Path, required=True)
+    result.add_argument("--pari-gp-sha256", required=True)
+    result.add_argument("--pari-gp-package", type=Path, required=True)
+    result.add_argument("--pari-gp-package-sha256", required=True)
+    result.add_argument("--pari-gp-gprc-sha256", required=True)
+    result.add_argument("--pari-gp-tree-sha256", required=True)
+    result.add_argument("--pari-gp-data-tree-sha256", required=True)
+    result.add_argument("--command-shell", type=Path, required=True)
+    result.add_argument("--command-shell-sha256", required=True)
     result.add_argument("--collection-wall-seconds", type=int, required=True)
     result.add_argument("--target-wall-seconds", type=int, required=True)
     result.add_argument("--validation-wall-seconds", type=int, required=True)
