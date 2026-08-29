@@ -28,6 +28,19 @@ and sources instead.
 - The pinned HOL4 `Holmake` supports `-j`, `--mt`, `--cache-dir`,
   `--cachekey`, `--use-cache`, and cache-key rebuild decisions.  A new custom
   cache should not be invented before the native cache is tested.
+- `--cache-dir` enables native cache fetch/upload but leaves ordinary
+  timestamp rebuild decisions in place; `--use-cache` additionally selects
+  cache-key rebuild decisions and the default cache directory.  An experiment
+  must pass a dedicated `--cache-dir` explicitly rather than sharing the
+  user's default cache implicitly.
+- A native cache key SHA-1-hashes the target's hashable dependency inputs.  It
+  maps theory `.uo`/`.ui` dependencies to `.dat`, walks through non-theory
+  dependencies, and excludes other `.uo`/`.ui` files and the HOL heap.  The
+  key does **not** bind the `Holmake`/`hol` executables, `hol.state`, kernel ID,
+  Poly/ML/toolchain, build options, or target platform.  Fetch-time validation
+  compares every cached theory's recorded parent hashes with the current
+  parent `.dat` files and rejects partial or stale hits, but this does not add
+  the missing toolchain identity to the key.
 - The running clean proof replay deliberately uses `-j1 --mt=1`.  This gives a
   trustworthy serial timing and peak-memory baseline; changing it mid-run
   would destroy that comparison.
@@ -81,10 +94,29 @@ mandatory after the final source change.
 ### Native theory cache — accept for development, conditional
 
 Test the pinned HOL4 native cache in a disposable exact checkout.  Promotion
-requires evidence that a cache key binds the complete theory dependency
-closure, HOL4/kernel identity, relevant CakeML source, and build options, and
-that restored artifacts work across worktree paths.  Cached builds may be used
-for development iteration but cannot be the sole release evidence.
+requires evidence that restored artifacts work across worktree paths and that
+all stale/partial-parent cases fail closed.  The native entry key cannot by
+itself satisfy the earlier proposed identity condition: local source and
+theory dependencies are content-bound, but the producing executable, heap,
+kernel, platform, and invocation are not.
+
+Therefore each experiment must use a physically separate cache namespace
+derived from a canonical preflight receipt that binds at least:
+
+- the exact clean HOL4 and CakeML commits;
+- SHA-256 hashes of `Holmake`, `hol`, `hol.state`, and `.kernelidstr`;
+- the Poly/ML executable/version and relevant dynamically linked libraries;
+- architecture/OS identity, `--mt`, job count, target, and the effective build
+  environment (`HOLDIR`, `CAKEMLDIR`, locale, and controlled `PATH`);
+- the cache schema and experiment protocol versions.
+
+The receipt and its SHA-256 namespace digest must be retained with timing and
+cache-hit logs.  A mismatch creates a new empty namespace; it must never reuse
+or overwrite a namespace under a different identity.  Start with
+`--cache-dir` only so caching and rebuild-strategy effects are measured
+separately, then test `--use-cache --cache-dir=<same isolated namespace>` as a
+second mode.  Both modes remain development acceleration only.  Final release
+qualification still requires an empty-tree, cache-disabled replay.
 
 ### `Holmake -j2` — benchmark after the serial baseline
 
