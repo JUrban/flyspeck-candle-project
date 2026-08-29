@@ -50,7 +50,7 @@ def git(root: Path, *arguments: str) -> str:
 
 
 def elf_evidence(roots: list[Path]) -> dict:
-    """Build real host-backed v8 ELF evidence for finalizer fixtures."""
+    """Build real host-backed ELF evidence for finalizer fixtures."""
     bash = MODULE.executable_route_record(Path("/bin/bash"), "fixture ELF bash")
     ldd = MODULE.executable_route_record(Path("/usr/bin/ldd"), "fixture ELF ldd")
     loaders = []
@@ -468,8 +468,8 @@ import regression
 
 SESSION_MARKER = "CANDLE_REFERENCE_SESSION_V1"
 COMPLETE_MARKER = "CANDLE_REFERENCE_COMPLETE_V1"
-PLAN_SCHEMA = "candle-s1-reference-plan-v8"
-CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v8"
+PLAN_SCHEMA = "candle-s1-reference-plan-v9"
+CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v9"
 
 
 class CollectionError(Exception):
@@ -920,6 +920,90 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
         (gp_bin / "gp").symlink_to("gp-2.15")
+        csdp_source = self._write(
+            gp_root, "candle-csdp-source.tar.gz", b"fixture CSDP source\n",
+        )
+        csdp_source.chmod(0o444)
+        csdp_probe_input = self._write(
+            gp_root, "candle-csdp-theta1.dat-s", b"fixture theta1 input\n",
+        )
+        csdp_probe_input.chmod(0o444)
+        csdp_program = self._write(
+            gp_root, "usr/bin/csdp-fixture.c",
+            (b'#include <stdio.h>\n'
+             b'int main(int argc, char **argv) {\n'
+             b'  if (argc != 3) return 2;\n'
+             b'  FILE *out = fopen(argv[2], "wb");\n'
+             b'  if (!out) return 3;\n'
+             b'  fputs("fixture csdp solution\\n", out); fclose(out);\n'
+             b'  puts("CSDP 6.2.0");\n'
+             b'  puts("Success: SDP solved");\n'
+             b'  puts("Primal objective value: 2.3000000e+01 ");\n'
+             b'  puts("Dual objective value: 2.3000000e+01 ");\n'
+             b'  puts("Elements time: 0.01 ");\n'
+             b'  puts("Factor time: 0.02 ");\n'
+             b'  puts("Other time: 0.03 ");\n'
+             b'  puts("Total time: 0.06 ");\n'
+             b'  return 0;\n}\n'),
+        )
+        csdp_executable = gp_root / "usr/bin/csdp"
+        subprocess.run(
+            ["/usr/bin/cc", "-O0", "-o", str(csdp_executable),
+             str(csdp_program)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        csdp_executable.chmod(0o555)
+        csdp_solution = b"fixture csdp solution\n"
+        csdp_normalized_stdout = (
+            "CSDP 6.2.0\n"
+            "Success: SDP solved\n"
+            "Primal objective value: 2.3000000e+01 \n"
+            "Dual objective value: 2.3000000e+01 \n"
+            "Elements time: <measured>\n"
+            "Factor time: <measured>\n"
+            "Other time: <measured>\n"
+            "Total time: <measured>\n"
+        )
+        csdp_build_statement = {
+            "schema": 1,
+            "kind": MODULE.CSDP_BUILD_KIND,
+            "source": {
+                "archive": csdp_source.name,
+                "bytes": csdp_source.stat().st_size,
+                "sha256": digest(csdp_source.read_bytes()),
+                "ubuntu_source_package":
+                    "coinor-csdp 6.2.0-5build1 (Noble)",
+                "upstream_tree": "Csdp-6.2.0",
+            },
+            "toolchain": deepcopy(MODULE.CSDP_TOOLCHAIN),
+            "recipe": deepcopy(MODULE.CSDP_RECIPE),
+            "outputs": {
+                "csdp_path": "usr/bin/csdp",
+                "csdp_bytes": csdp_executable.stat().st_size,
+                "csdp_sha256": digest(csdp_executable.read_bytes()),
+                "static_libsdp_sha256": MODULE.CSDP_STATIC_LIBSDP_SHA256,
+            },
+            "unit_probe": {
+                "input_path": csdp_probe_input.name,
+                "input_bytes": csdp_probe_input.stat().st_size,
+                "input_sha256": digest(csdp_probe_input.read_bytes()),
+                "exit_code": 0,
+                "success_line": MODULE.CSDP_PROBE_SUCCESS,
+                "primal_objective": MODULE.CSDP_PROBE_PRIMAL,
+                "dual_objective": MODULE.CSDP_PROBE_DUAL,
+                "maximum_allowed_dimacs_error": "1.0e-6",
+            },
+            "runtime_policy": {
+                "single_process_solver": True,
+                "single_thread_build": True,
+                "external_shared_libraries_closed_separately": True,
+            },
+        }
+        csdp_build_receipt = self._write(
+            gp_root, "candle-csdp-build.json",
+            MODULE.canonical_json_bytes(csdp_build_statement),
+        )
+        csdp_build_receipt.chmod(0o444)
         gprc = self._write(
             gp_root, "candle-gprc", b"\\\\ pinned fixture configuration\n",
         )
@@ -945,6 +1029,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             "LC_ALL": "C",
             "GPRC": str(gprc),
             "GP_DATA_DIR": str(data_root),
+            **MODULE.THREAD_CAP_ENVIRONMENT,
         }
         probe_source = (
             "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp")
@@ -952,10 +1037,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             shell.resolve(), runtime_stub, runtime_stublib,
         ])
         external_elf_runtime = elf_evidence([
-            shell.resolve(), gp_executable.resolve(),
+            shell.resolve(), gp_executable.resolve(), csdp_executable,
         ])
         external_runtime = {
-            "policy": "single_private_path_gp_with_pinned_shell_v2",
+            "policy": MODULE.EXTERNAL_RUNTIME_POLICY,
             "command_shell": MODULE.executable_route_record(shell, "fixture shell"),
             "pari_gp": MODULE.executable_route_record(
                 gp_bin / "gp", "fixture PARI/GP",
@@ -963,6 +1048,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             "pari_gp_version": {
                 "stdout": "2.15.4\n", "sha256": digest(b"2.15.4\n"),
             },
+            "csdp": MODULE.executable_route_record(
+                csdp_executable, "fixture CSDP",
+            ),
+            "csdp_bytes": csdp_executable.stat().st_size,
             "package_archive": {
                 "path": str(package_archive),
                 "sha256": digest(package_archive.read_bytes()),
@@ -972,6 +1061,32 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "path": str(gprc), "sha256": digest(gprc.read_bytes()),
             },
             "data_tree": data_tree,
+            "csdp_source_archive": {
+                "path": str(csdp_source),
+                "sha256": digest(csdp_source.read_bytes()),
+                "bytes": csdp_source.stat().st_size,
+            },
+            "csdp_build": {
+                "receipt": {
+                    "path": str(csdp_build_receipt),
+                    "sha256": digest(csdp_build_receipt.read_bytes()),
+                },
+                "statement": csdp_build_statement,
+            },
+            "csdp_probe_input": {
+                "path": str(csdp_probe_input),
+                "sha256": digest(csdp_probe_input.read_bytes()),
+                "bytes": csdp_probe_input.stat().st_size,
+            },
+            "thread_policy": {
+                "single_process_solver": True,
+                "single_thread_build": True,
+                "openmp_enabled": False,
+                "native_cpu_flags": False,
+                "environment": deepcopy(MODULE.THREAD_CAP_ENVIRONMENT),
+                "forbidden_elf_dependency_name_fragments":
+                    list(MODULE.CSDP_FORBIDDEN_ELF_FRAGMENTS),
+            },
             "elf_runtime": external_elf_runtime,
             "probe": {
                 "shell_argv": [str(shell), "-c", probe_source],
@@ -979,6 +1094,22 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "return_code": 0, "stdout": gp_stdout,
                 "stdout_sha256": digest(gp_stdout.encode()),
                 "stderr": "", "stderr_sha256": digest(b""),
+            },
+            "csdp_probe": {
+                "argv_template": [
+                    str(csdp_executable), str(csdp_probe_input),
+                    "<private-temporary-output>",
+                ],
+                "environment": deepcopy(external_environment),
+                "return_code": 0,
+                "normalized_stdout": csdp_normalized_stdout,
+                "normalized_stdout_sha256": digest(
+                    csdp_normalized_stdout.encode()),
+                "stderr": "", "stderr_sha256": digest(b""),
+                "solution": {
+                    "bytes": len(csdp_solution),
+                    "sha256": digest(csdp_solution),
+                },
             },
         }
         collection_deadlines = {
@@ -1007,7 +1138,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "",
                 ])
                 plan = {
-                    "schema": "candle-s1-reference-plan-v8",
+                    "schema": "candle-s1-reference-plan-v9",
                     "status": "planned_not_executed",
                     "session_nonce": nonce,
                     "fresh_process_contract": {
@@ -1145,7 +1276,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "approval_sha256": None,
                 }
                 candidate = {
-                    "schema": "candle-s1-reference-candidate-v8",
+                    "schema": "candle-s1-reference-candidate-v9",
                     "artifact_kind": "reference_identity_candidate",
                     "approval_status": "candidate_unapproved",
                     "promotion_allowed": False,
@@ -1280,7 +1411,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "expected_identity": expected_identity,
             })
         collection_contract = {
-            "schema": 3,
+            "schema": 4,
             "kind": "candle-great100-two-sweep-reference-collection",
             "approval_status": "candidate_collection_only_unapproved",
             "promotion_allowed": False,
@@ -1330,15 +1461,33 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     shell, "fixture contract shell"),
                 "pari_gp": MODULE.runtime_file_record(
                     gp_bin / "gp", "fixture contract PARI/GP"),
+                "csdp": MODULE.runtime_file_record(
+                    csdp_executable, "fixture contract CSDP"),
                 "package_archive": MODULE.runtime_file_record(
                     package_archive, "fixture contract package archive"),
                 "package_tree": external_runtime["package_tree"],
                 "configuration": MODULE.runtime_file_record(
                     gprc, "fixture contract configuration"),
                 "data_tree": external_runtime["data_tree"],
+                "csdp_source_archive": MODULE.runtime_file_record(
+                    csdp_source, "fixture contract CSDP source"),
+                "csdp_build": {
+                    "receipt": MODULE.runtime_file_record(
+                        csdp_build_receipt,
+                        "fixture contract CSDP build receipt",
+                    ),
+                    "statement": deepcopy(csdp_build_statement),
+                },
+                "csdp_probe_input": MODULE.runtime_file_record(
+                    csdp_probe_input, "fixture contract CSDP probe input"),
+                "thread_policy": deepcopy(external_runtime["thread_policy"]),
+                "csdp_probe": deepcopy(external_runtime["csdp_probe"]),
                 "runtime_environment": {
                     key: external_environment[key]
-                    for key in ("PATH", "GPRC", "GP_DATA_DIR")},
+                    for key in (
+                        "PATH", "GPRC", "GP_DATA_DIR",
+                        *MODULE.THREAD_CAP_ENVIRONMENT,
+                    )},
             },
             "elf_oracle": MODULE.elf_oracle_projection(
                 external_elf_runtime,
@@ -1868,7 +2017,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             )
         external = bundle["approval_replay"]["external_runtime"]
         self.assertEqual(external["policy"],
-                         "single_private_path_gp_with_pinned_shell_v2")
+                         MODULE.EXTERNAL_RUNTIME_POLICY)
         self.assertEqual(
             (self.fixture.destination /
              external["package_archive"]["archive_path"]).read_bytes(),
@@ -1876,6 +2025,16 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         )
         self.assertTrue(external["package_tree"]["pin"]["entry_count"] > 0)
         self.assertEqual(external["data_tree"]["entry_count"], 0)
+        for key in ("csdp", "csdp_source_archive", "csdp_build_receipt",
+                    "csdp_probe_input"):
+            self.assertTrue(
+                (self.fixture.destination /
+                 external[key]["archive_path"]).is_file(),
+            )
+        self.assertEqual(
+            external["thread_policy"]["environment"],
+            MODULE.THREAD_CAP_ENVIRONMENT,
+        )
         executable = self.fixture.destination / \
             bundle["candle"]["executable"]["archive_path"]
         self.assertEqual(executable.read_bytes(), (self.fixture.build / "cake").read_bytes())
@@ -2251,6 +2410,29 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         )
         self.assert_rejected("controller receipt does not bind")
 
+    def test_schema_v8_reference_plans_are_nonpromotable(self) -> None:
+        def downgrade(plan: dict) -> None:
+            plan["schema"] = "candle-s1-reference-plan-v8"
+
+        self.fixture.rewrite_all_reference_plans(downgrade)
+        self.assert_rejected("malformed v9 reference plan")
+
+    def test_forged_csdp_build_statement_rejects_after_full_rehash(self) -> None:
+        def forge_recipe(plan: dict) -> None:
+            plan["reference"]["external_runtime"]["csdp_build"]["statement"][
+                "recipe"]["openmp_enabled"] = True
+
+        self.fixture.rewrite_all_reference_plans(forge_recipe)
+        self.assert_rejected("CSDP build statement")
+
+    def test_csdp_build_boolean_type_confusion_rejects(self) -> None:
+        def confuse_boolean(plan: dict) -> None:
+            plan["reference"]["external_runtime"]["csdp_build"]["statement"][
+                "recipe"]["openmp_enabled"] = 0
+
+        self.fixture.rewrite_all_reference_plans(confuse_boolean)
+        self.assert_rejected("CSDP build statement")
+
     def test_omitted_elf_dependency_is_rejected_after_complete_rehash(self) -> None:
         def omit_dependency(plan: dict) -> None:
             closure = plan["reference"]["external_runtime"]["elf_runtime"][
@@ -2259,7 +2441,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             closure.pop(0)
 
         self.fixture.rewrite_all_reference_plans(omit_dependency)
-        self.assert_rejected("captured v8 reference candidate replay failed")
+        self.assert_rejected("captured v9 reference candidate replay failed")
 
     def test_omitted_runtime_stub_is_rejected_after_complete_rehash(self) -> None:
         def omit_stub_and_rebuild_elf(plan: dict) -> None:
@@ -2273,7 +2455,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             ])
 
         self.fixture.rewrite_all_reference_plans(omit_stub_and_rebuild_elf)
-        self.assert_rejected("captured v8 reference candidate replay failed")
+        self.assert_rejected("captured v9 reference candidate replay failed")
 
     def test_rebound_runtime_interpreter_is_rejected_after_rehash(self) -> None:
         def rebind_interpreter(plan: dict) -> None:
@@ -2290,7 +2472,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             ])
 
         self.fixture.rewrite_all_reference_plans(rebind_interpreter)
-        self.assert_rejected("captured v8 reference candidate replay failed")
+        self.assert_rejected("captured v9 reference candidate replay failed")
 
     def test_rebound_hol_init_script_is_rejected_after_rehash(self) -> None:
         alternate = self.fixture.root / "alternate-hol.ml"
@@ -2304,7 +2486,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             plan["fresh_process_contract"]["runtime_argv"][2] = str(alternate)
 
         self.fixture.rewrite_all_reference_plans(rebind_hol_ml)
-        self.assert_rejected("captured v8 reference candidate replay failed")
+        self.assert_rejected("captured v9 reference candidate replay failed")
 
     def test_reference_external_package_is_live_rechecked(self) -> None:
         package = self.fixture.root / "reference-tools/pari.deb"
