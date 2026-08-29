@@ -100,6 +100,7 @@ EXECUTION_CONTRACT_PATHS = {
     "candle/fingerprint.ml": "100644",
     "candle.sh": "100755",
 }
+REFERENCE_VALIDATOR_PATH = "candle/reference_fingerprints.py"
 FINGERPRINT_CONTRACT = {
     "serializer": "candle/fingerprint.ml structural v2",
     "load_pass_is_fingerprint_match": False,
@@ -161,6 +162,49 @@ NONCE_RE = re.compile(r"[0-9a-f]{64}")
 DECIMAL_RE = re.compile(r"(?:0|[1-9][0-9]*)")
 EMPTY_HYPOTHESES_WIRE = b"4:list1:0"
 EMPTY_HYPOTHESES_SHA256 = hashlib.sha256(EMPTY_HYPOTHESES_WIRE).hexdigest()
+
+REFERENCE_REPLAY_CONTROLLER = r'''import json
+from pathlib import Path
+import sys
+import types
+
+sys.dont_write_bytecode = True
+
+
+def load_exact(name, path):
+    source_path = Path(path)
+    source = source_path.read_bytes()
+    module = types.ModuleType(name)
+    module.__file__ = str(source_path)
+    module.__package__ = ""
+    sys.modules[name] = module
+    exec(compile(source, str(source_path), "exec"), module.__dict__)
+    return module
+
+
+stage = Path(sys.argv[1])
+instructions = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+sys.modules["pexpect"] = types.ModuleType("pexpect")
+load_exact("regression", stage / instructions["regression"])
+reference = load_exact(
+    "reference_fingerprints", stage / instructions["validator"])
+if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v6" or
+        reference.CANDIDATE_SCHEMA != "candle-s1-reference-candidate-v6"):
+    raise RuntimeError("captured reference validator is not v6 compatible")
+for replay in instructions["replays"]:
+    candidate = json.loads(
+        (stage / replay["candidate"]).read_text(encoding="utf-8"))
+    plan = json.loads((stage / replay["plan"]).read_text(encoding="utf-8"))
+    request = (stage / replay["request"]).read_text(encoding="utf-8")
+    transcript = (stage / replay["transcript"]).read_text(encoding="utf-8")
+    expected_request = reference._request_source(
+        replay["target"], plan["input"]["serializer"]["path"],
+        candidate["session_nonce"])
+    if request != expected_request:
+        raise RuntimeError("request does not regenerate from target and nonce")
+    reference.validate_candidate(candidate, plan, request, transcript)
+print(f"reference candidate replay PASS: {len(instructions['replays'])}")
+'''
 
 # Test-only hook. Production callers cannot select it through the CLI.
 _TEST_AFTER_CONTRACT_CAPTURE = None
@@ -1273,11 +1317,271 @@ def validate_linked_and_capture(
     return record, record_snapshot, executable
 
 
+def snapshot_utf8(stage: Path, snapshot: Snapshot, label: str) -> str:
+    try:
+        return snapshot_bytes(stage, snapshot).decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise ValidationError(f"{label} is not UTF-8") from error
+
+
+def prepare_reference_replay_root(
+    stage: Path, stager: Stager, validator: Snapshot,
+    contracts: dict[str, Snapshot], closure: dict[str, Any],
+) -> dict[str, str]:
+    runtime_root = "approval/replay/runtime-root"
+    inputs = {
+        REFERENCE_VALIDATOR_PATH: validator,
+        "candle/regression.py": contracts["candle/regression.py"],
+        "candle/fingerprint.ml": contracts["candle/fingerprint.ml"],
+        "candle/top100_manifest.json": contracts["candle/top100_manifest.json"],
+    }
+    for relative, snapshot in inputs.items():
+        identity = stager.write(
+            f"{runtime_root}/{relative}", snapshot_bytes(stage, snapshot),
+        )
+        require(identity == snapshot.identity,
+                f"reference replay mirror differs for {relative}")
+    for index, source in enumerate(closure["files"], 1):
+        relative = source["path"]
+        archived = stage / f"source-closure/files/{index:02d}/{relative}"
+        value = archived.read_bytes()
+        identity = stager.write(f"{runtime_root}/{relative}", value)
+        require(identity.as_json() == {
+            "bytes": source["bytes"], "sha256": source["sha256"],
+        }, f"reference replay source mirror differs for {relative}")
+    return {
+        "root": runtime_root,
+        "validator": f"{runtime_root}/{REFERENCE_VALIDATOR_PATH}",
+        "regression": f"{runtime_root}/candle/regression.py",
+    }
+
+
+def validate_reference_plan_bindings(
+    plan: dict[str, Any], candidate: dict[str, Any], target: dict[str, Any],
+    run: dict[str, Any], policy: dict[str, Any], source_contract: Snapshot,
+    validator: Snapshot, serializer_sha256: str,
+) -> None:
+    name = target["name"]
+    require(set(plan) == {
+        "schema", "status", "session_nonce", "fresh_process_contract",
+        "reference", "input", "request",
+    } and plan["schema"] == "candle-s1-reference-plan-v6" and
+            plan["status"] == "planned_not_executed",
+            f"malformed v6 reference plan for {name}")
+    nonce = run["session_nonce"]
+    require(plan["session_nonce"] == candidate.get("session_nonce") == nonce,
+            f"reference plan/candidate nonce mismatch for {name}")
+
+    reference = plan["reference"]
+    require(isinstance(reference, dict) and set(reference) == {
+        "root", "git_head", "git_status", "runtime_executable",
+        "runtime_interpreter", "runtime_stublib", "runtime_library_tree",
+        "runtime_stub_files", "dynamic_libraries", "ocamlc", "findlib",
+        "hol_ml", "generated_boot_files", "ocaml_library_tree",
+    }, f"malformed v6 reference provenance for {name}")
+    require(isinstance(reference["root"], str) and
+            Path(reference["root"]).is_absolute() and
+            reference["git_head"] == run["reference_git_head"] ==
+            policy["exact_source_reference_commit"] and
+            reference["git_status"] == [],
+            f"reference plan head/status mismatch for {name}")
+
+    fresh = plan["fresh_process_contract"]
+    require(isinstance(fresh, dict) and set(fresh) == {
+        "required", "preloaded_checkpoint_allowed", "working_directory",
+        "environment_policy", "runtime_argv", "runtime_environment",
+    } and fresh["required"] is True and
+            fresh["preloaded_checkpoint_allowed"] is False and
+            fresh["working_directory"] == reference["root"] and
+            fresh["environment_policy"] ==
+            "sanitized_allowlist_no_inherited_overrides" and
+            isinstance(fresh["runtime_argv"], list) and
+            isinstance(fresh["runtime_environment"], dict),
+            f"reference plan fresh-process contract mismatch for {name}")
+
+    inputs = plan["input"]
+    require(isinstance(inputs, dict) and set(inputs) == {
+        "collector", "collector_repository", "manifest",
+        "manifest_schema_version", "target", "load_files", "theorem_names",
+        "mapping_status", "serializer", "source_mode", "source_contract",
+    }, f"malformed v6 reference input contract for {name}")
+    require(inputs["target"] == name and inputs["manifest_schema_version"] == 1 and
+            inputs["mapping_status"] == "audited" and
+            inputs["source_mode"] == "manifest-exact",
+            f"reference plan target/mode mismatch for {name}")
+    theorem_names = [
+        theorem["name"] for theorem in target["fingerprint_request"]["theorems"]
+    ]
+    require(inputs["theorem_names"] == theorem_names,
+            f"reference plan theorem order mismatch for {name}")
+
+    collector = inputs["collector"]
+    repository = inputs["collector_repository"]
+    require(isinstance(collector, dict) and set(collector) == {"path", "sha256"} and
+            require_sha256(collector["sha256"], f"{name} collector") ==
+            validator.identity.sha256 and
+            isinstance(repository, dict) and set(repository) == {
+                "root", "git_head", "git_status", "collector_relative_path",
+                "collector_at_head_sha256", "collector_matches_head",
+            } and isinstance(repository["root"], str) and
+            Path(repository["root"]).is_absolute() and
+            repository["collector_relative_path"] == REFERENCE_VALIDATOR_PATH and
+            require_commit(repository["git_head"], f"{name} collector head") and
+            repository["git_status"] == [] and
+            repository["collector_at_head_sha256"] == validator.identity.sha256 and
+            repository["collector_matches_head"] is True and
+            collector["path"] == str(
+                Path(repository["root"]) / REFERENCE_VALIDATOR_PATH),
+            f"reference plan collector binding mismatch for {name}")
+
+    serializer = inputs["serializer"]
+    require(isinstance(serializer, dict) and set(serializer) == {"path", "sha256"} and
+            serializer["sha256"] == serializer_sha256 and
+            isinstance(serializer["path"], str) and
+            Path(serializer["path"]).is_absolute() and
+            serializer["path"] == str(
+                Path(repository["root"]) / "candle/fingerprint.ml"),
+            f"reference plan serializer binding mismatch for {name}")
+    manifest_pin = inputs["manifest"]
+    require(isinstance(manifest_pin, dict) and
+            set(manifest_pin) == {"path", "sha256"} and
+            isinstance(manifest_pin["path"], str) and
+            Path(manifest_pin["path"]).is_absolute() and
+            manifest_pin["path"] == str(
+                Path(repository["root"]) / "candle/top100_manifest.json") and
+            require_sha256(manifest_pin["sha256"], f"{name} reference manifest"),
+            f"reference plan manifest binding mismatch for {name}")
+
+    selected_sources = inputs["load_files"]
+    require(isinstance(selected_sources, list) and
+            len(selected_sources) == len(target["load_files"]),
+            f"reference selected-source count mismatch for {name}")
+    for selected, relative in zip(selected_sources, target["load_files"]):
+        require(isinstance(selected, dict) and set(selected) == {
+            "relative_path", "path", "sha256", "source_role",
+        } and selected["relative_path"] == relative and
+                selected["path"] == str(Path(reference["root"]) / relative) and
+                selected["sha256"] == target["load_file_sha256"][relative] and
+                selected["source_role"] == "selected-manifest-source",
+                f"reference selected-source binding mismatch for {name}:{relative}")
+
+    source = inputs["source_contract"]
+    require(isinstance(source, dict) and set(source) == {
+        "path", "sha256", "historical_upstream_commit",
+        "exact_source_reference_commit", "compatibility_deltas",
+    } and isinstance(source["path"], str) and Path(source["path"]).is_absolute() and
+            source["path"] == str(
+                Path(repository["root"]) / "candle/reference_source_contracts.json") and
+            source["sha256"] == source_contract.identity.sha256 and
+            {key: source[key] for key in REFERENCE_POLICY_KEYS} == policy,
+            f"reference source-contract binding mismatch for {name}")
+
+    request = plan["request"]
+    require(isinstance(request, dict) and set(request) == {"source", "sha256"} and
+            isinstance(request["source"], str) and
+            hashlib.sha256(request["source"].encode("utf-8")).hexdigest() ==
+            request["sha256"], f"malformed generated reference request for {name}")
+
+
+def validate_candidate_identity_projection(
+    candidate: dict[str, Any], target: dict[str, Any],
+    expected_identity: dict[str, Any], serializer_sha256: str,
+) -> None:
+    name = target["name"]
+    require(candidate.get("schema") == "candle-s1-reference-candidate-v6",
+            f"legacy or unsupported reference candidate for {name}")
+    identities = candidate.get("candidate_identities")
+    require(isinstance(identities, dict) and set(identities) == FINGERPRINT_KEYS and
+            identities["status"] == "observed_uncompared" and
+            identities["mapping_status"] == "audited" and
+            identities["expected_identities_present"] is False and
+            identities["approval_sha256"] is None and
+            identities["serializer"] == {
+                "path": "candle/fingerprint.ml", "sha256": serializer_sha256,
+            }, f"malformed replayable candidate identities for {name}")
+    theorem_names = [
+        theorem["name"] for theorem in target["fingerprint_request"]["theorems"]
+    ]
+    require(isinstance(identities["theorems"], list) and
+            [validate_theorem_record(
+                theorem, f"{name} reference candidate theorem {index}",
+            )["name"] for index, theorem in enumerate(
+                identities["theorems"], 1,
+            )] == theorem_names,
+            f"reference candidate theorem order mismatch for {name}")
+    validate_post_state(identities["post_state"], f"{name} reference candidate")
+    derived = {
+        "serializer_sha256": identities["serializer"]["sha256"],
+        "theorems": identities["theorems"],
+        "post_state": identities["post_state"],
+    }
+    require(derived == expected_identity,
+            f"reference candidate identity projection differs for {name}")
+
+
+def run_captured_reference_replay(
+    stage: Path, validator: Snapshot, regression: Snapshot,
+    replay_runtime: dict[str, str], replays: list[dict[str, Any]], stager: Stager,
+) -> dict[str, Any]:
+    require(len(replays) == 130, "reference replay set must contain 130 runs")
+    controller_identity = stager.write(
+        "approval/replay/controller.py", REFERENCE_REPLAY_CONTROLLER.encode("utf-8"),
+    )
+    instructions = {
+        "schema": "candle-great100-reference-replay-v1",
+        "validator": replay_runtime["validator"],
+        "regression": replay_runtime["regression"],
+        "replays": replays,
+    }
+    instructions_identity = stager.write(
+        "approval/replay/instructions.json", canonical_json_bytes(instructions),
+    )
+    controller_path = stage / "approval/replay/controller.py"
+    instructions_path = stage / "approval/replay/instructions.json"
+    try:
+        completed = subprocess.run(
+            [str(PYTHON_PATH), "-I", "-S", str(controller_path), str(stage),
+             str(instructions_path)],
+            check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+            timeout=300,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValidationError("captured v6 reference replay could not run") from error
+    expected_stdout = f"reference candidate replay PASS: {len(replays)}\n".encode()
+    require(completed.returncode == 0 and completed.stdout == expected_stdout and
+            completed.stderr == b"",
+            "captured v6 reference candidate replay failed")
+    return {
+        "validator": {
+            "committed_archive_path": validator.archive_path,
+            "executed_archive_path": replay_runtime["validator"],
+            **validator.identity.as_json(),
+        },
+        "regression": {
+            "committed_archive_path": regression.archive_path,
+            "executed_archive_path": replay_runtime["regression"],
+            **regression.identity.as_json(),
+        },
+        "controller": {
+            "archive_path": "approval/replay/controller.py",
+            **controller_identity.as_json(),
+        },
+        "instructions": {
+            "archive_path": "approval/replay/instructions.json",
+            **instructions_identity.as_json(),
+        },
+        "candidate_count": len(replays),
+        "runtime_root": replay_runtime["root"],
+    }
+
+
 def validate_approval_and_capture(
     approval: dict[str, Any], approval_snapshot: Snapshot,
     root: Path, manifest: dict[str, Any], expected_semantics: list[dict[str, Any]],
-    serializer_sha256: str, stage: Path, stager: Stager,
-) -> list[Snapshot]:
+    serializer_sha256: str, validator: Snapshot, regression: Snapshot,
+    replay_runtime: dict[str, str], stage: Path, stager: Stager,
+) -> dict[str, Any]:
     require(set(approval) == APPROVAL_KEYS and
             approval["schema"] == "candle-s1-identity-approval-v1" and
             approval["artifact_kind"] ==
@@ -1331,8 +1635,8 @@ def validate_approval_and_capture(
     targets = approval["targets"]
     require(isinstance(targets, list) and len(targets) == 65,
             "independent approval does not cover 65 targets")
-    snapshots: list[Snapshot] = []
     artifact_cache: dict[str, tuple[str, Snapshot]] = {}
+    replays: list[dict[str, Any]] = []
     for target_index, (target, approved, semantic) in enumerate(zip(
             manifest["targets"], targets, expected_semantics), 1):
         name = target["name"]
@@ -1367,6 +1671,7 @@ def validate_approval_and_capture(
             require(isinstance(artifacts, dict) and set(artifacts) == {
                 "candidate", "plan", "request", "transcript", "source_contract",
             }, f"incomplete reference artifacts for {name}")
+            captured_artifacts: dict[str, Snapshot] = {}
             for artifact_name, artifact in sorted(artifacts.items()):
                 relative, path, expected = validate_root_file_reference(
                     artifact, root, f"{name} reference {artifact_name}",
@@ -1389,29 +1694,72 @@ def validate_approval_and_capture(
                         "schema": "candle-s1-reference-source-contract-v1",
                         **policy,
                     }, f"reference source contract differs from approval policy for {name}")
-                    continue
-                captured = stager.capture(
-                    path,
-                    (f"approval/reference-runs/{target_index:02d}/run-{run_index}/"
-                     f"{artifact_name}-{Path(relative).name}"),
-                    f"{name} reference {artifact_name} run {run_index}",
-                )
-                require(captured.identity == expected,
-                        f"reference artifact bytes differ for {name} {artifact_name}")
-                if artifact_name == "source_contract":
-                    require(snapshot_json(
-                        stage, captured, f"{name} reference source contract",
-                    ) == {
-                        "schema": "candle-s1-reference-source-contract-v1",
-                        **policy,
-                    }, f"reference source contract differs from approval policy for {name}")
-                artifact_cache[relative] = (artifact_name, captured)
-                snapshots.append(captured)
+                else:
+                    captured = stager.capture(
+                        path,
+                        (f"approval/reference-runs/{target_index:02d}/"
+                         f"run-{run_index}/{artifact_name}-{Path(relative).name}"),
+                        f"{name} reference {artifact_name} run {run_index}",
+                    )
+                    require(captured.identity == expected,
+                            f"reference artifact bytes differ for {name} {artifact_name}")
+                    if artifact_name == "source_contract":
+                        require(snapshot_json(
+                            stage, captured, f"{name} reference source contract",
+                        ) == {
+                            "schema": "candle-s1-reference-source-contract-v1",
+                            **policy,
+                        }, f"reference source contract differs from approval policy for {name}")
+                    artifact_cache[relative] = (artifact_name, captured)
+                captured_artifacts[artifact_name] = captured
+
+            candidate = snapshot_json(
+                stage, captured_artifacts["candidate"],
+                f"{name} reference candidate run {run_index}",
+            )
+            plan = snapshot_json(
+                stage, captured_artifacts["plan"],
+                f"{name} reference plan run {run_index}",
+            )
+            request_source = snapshot_utf8(
+                stage, captured_artifacts["request"],
+                f"{name} reference request run {run_index}",
+            )
+            snapshot_utf8(
+                stage, captured_artifacts["transcript"],
+                f"{name} reference transcript run {run_index}",
+            )
+            validate_reference_plan_bindings(
+                plan, candidate, target, run, policy,
+                captured_artifacts["source_contract"], validator,
+                serializer_sha256,
+            )
+            require(plan["request"]["source"] == request_source,
+                    f"staged reference request differs from plan for {name}")
+            validate_candidate_identity_projection(
+                candidate, target, expected_identity, serializer_sha256,
+            )
+            replays.append({
+                "name": name,
+                "run": run_index,
+                "candidate": captured_artifacts["candidate"].archive_path,
+                "plan": captured_artifacts["plan"].archive_path,
+                "request": captured_artifacts["request"].archive_path,
+                "transcript": captured_artifacts["transcript"].archive_path,
+                "target": {
+                    "load_files": target["load_files"],
+                    "fingerprint_request": {
+                        "theorems": target["fingerprint_request"]["theorems"],
+                    },
+                },
+            })
         require(len(nonces) == 2,
                 f"reference runs do not use distinct session nonces for {name}")
         require(all(len(values) == 2 for values in distinct_run_artifacts.values()),
                 f"reference run artifacts are not distinct for {name}")
-    return snapshots
+    return run_captured_reference_replay(
+        stage, validator, regression, replay_runtime, replays, stager,
+    )
 
 
 def preflight_finalizer() -> dict[str, Any]:
@@ -1563,6 +1911,14 @@ def archive(
             )
             validate_committed_snapshot(root, relative, snapshot, stage, mode)
             contract_snapshots[relative] = snapshot
+        reference_validator = stager.capture(
+            root / REFERENCE_VALIDATOR_PATH,
+            f"execution-contract/{REFERENCE_VALIDATOR_PATH}",
+            "reference fingerprint validator",
+        )
+        validate_committed_snapshot(
+            root, REFERENCE_VALIDATOR_PATH, reference_validator, stage, "100644",
+        )
         if _TEST_AFTER_CONTRACT_CAPTURE is not None:
             _TEST_AFTER_CONTRACT_CAPTURE()
         execution_contract = {
@@ -1577,6 +1933,9 @@ def archive(
             validate_manifest_and_capture_closure(
             root, manifest, contract_snapshots["candle/top100_manifest.json"],
             contract_snapshots["candle/fingerprint.ml"], stage, stager,
+        )
+        replay_runtime = prepare_reference_replay_root(
+            stage, stager, reference_validator, contract_snapshots, closure,
         )
 
         approval_references = [report.get("independent_approval") for report in reports]
@@ -1605,10 +1964,11 @@ def archive(
             "approval_status": "approved",
             "promotion_allowed": True,
         }, "manifest identity-approval metadata mismatch")
-        validate_approval_and_capture(
+        approval_replay = validate_approval_and_capture(
             approval, approval_snapshot, root, manifest, approved_semantics,
             contract_snapshots["candle/fingerprint.ml"].identity.sha256,
-            stage, stager,
+            reference_validator, contract_snapshots["candle/regression.py"],
+            replay_runtime, stage, stager,
         )
 
         linked_hashes = []
@@ -1740,6 +2100,7 @@ def archive(
                 "archive_path": approval_snapshot.archive_path,
                 **approval_snapshot.identity.as_json(),
             },
+            "approval_replay": approval_replay,
             "comparison": {
                 "runs": 2, "target_count": 65, "source_file_count": 66,
                 "fingerprint_request_count": 97,

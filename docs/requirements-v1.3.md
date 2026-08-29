@@ -103,7 +103,13 @@ distinct reference-session nonces per target, one identical canonical
 reference-source delta policy, and exact candidate/plan/request/transcript/
 source-contract attachment records. The finalizer resolves every attachment as
 an ordinary Candle-root-relative file, rehashes it, enforces distinct run
-artifacts, and retains its exact bytes.
+artifacts, and retains its exact bytes. It also captures the committed
+`candle/reference_fingerprints.py` validator and replays every staged schema-v6
+candidate from its exact staged plan, generated request, and transcript under
+the captured compatible regression/serializer semantics. The replay must bind
+the target, selected source hashes, reference head, session nonce, and source
+contract and derive exactly the independently approved identity projection;
+arbitrary text and legacy candidate formats are not evidence.
 
 The external authorization JSON has exact top-level keys `schema`, `kind`,
 `issued_utc`, `authority`, `reports`, `suite_nonces`,
