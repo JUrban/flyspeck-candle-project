@@ -317,6 +317,13 @@ V4_BUILD_INPUT_CLOSURE_POLICY = (
 V4_BUILD_INPUT_CLOSURE_ENTRY_MAX = 196_608
 V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES = 1_073_741_824
 V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES = 68_719_476_736
+V4_BUILD_EXECUTABLE_VERSION_MAX_BYTES = 4_096
+V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES = 167_772_160
+V4_BUILD_INPUT_ENTRY_AUTHORITY_NODE_MAX = 8_388_608
+V4_BUILD_INPUT_ENTRY_AUTHORITY_CONTAINER_MAX = 196_608
+V4_BUILD_INPUT_ENTRY_AUTHORITY_STRING_MAX_BYTES = 4_096
+V4_BUILD_INPUT_ENTRY_AUTHORITY_KEY_MAX_BYTES = 255
+V4_BUILD_INPUT_ENTRY_AUTHORITY_FRAGMENT_MAX_BYTES = 32_768
 V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS = (
     "index", "relative", "object_type", "mode", "bytes", "sha256",
     "selector", "st_nlink", "parent_descriptor_identity", "mount_id",
@@ -4490,6 +4497,7 @@ def _v4_native_build_executable_record(
     mode = _v4_full_regular_mode(value.get("mode"), label)
     require(mode & 0o111 != 0, f"non-executable {label} mode")
     require(type(value.get("version")) is str and value["version"] and
+            len(value["version"]) <= V4_BUILD_EXECUTABLE_VERSION_MAX_BYTES and
             all(32 <= ord(character) < 127 for character in value["version"]),
             f"malformed {label} version")
     return value
@@ -4718,6 +4726,98 @@ _v4_build_input_closure_entry_authority_fields = (
 )
 
 
+def _v4_resource_checked_json_graph(
+    value: object, label: str,
+) -> object:
+    node_count = 0
+    string_bytes = 0
+    active_containers: set[int] = set()
+    integer_limit = 10 ** JSON_INTEGER_MAX_DIGITS
+
+    def account_text(text: str, maximum: int, text_label: str) -> None:
+        nonlocal string_bytes
+        require(len(text) <= maximum, f"{text_label} exceeds character cap")
+        try:
+            encoded = text.encode("utf-8")
+        except UnicodeEncodeError as error:
+            raise ProtocolError(f"malformed {text_label}: {error}") from error
+        require(len(encoded) <= maximum, f"{text_label} exceeds byte cap")
+        string_bytes += len(encoded)
+        require(
+            string_bytes <= V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES,
+            f"{label} string bytes exceed graph cap",
+        )
+
+    def visit(item: object, depth: int) -> object:
+        nonlocal node_count
+        require(
+            depth <= V4_EXACT_JSON_TYPE_DEPTH_MAX,
+            f"{label} JSON depth exceeds cap",
+        )
+        node_count += 1
+        require(
+            node_count <= V4_BUILD_INPUT_ENTRY_AUTHORITY_NODE_MAX,
+            f"{label} JSON node count exceeds cap",
+        )
+        if item is None or type(item) is bool:
+            return item
+        if type(item) is int:
+            require(
+                -integer_limit < item < integer_limit,
+                f"{label} integer exceeds digit cap",
+            )
+            return item
+        if type(item) is str:
+            account_text(
+                item, V4_BUILD_INPUT_ENTRY_AUTHORITY_STRING_MAX_BYTES,
+                f"{label} string",
+            )
+            return item
+        if type(item) not in {list, dict}:
+            raise ProtocolError(f"malformed {label} JSON type")
+        length = len(item)
+        require(
+            length <= V4_BUILD_INPUT_ENTRY_AUTHORITY_CONTAINER_MAX,
+            f"{label} JSON container exceeds member cap",
+        )
+        identity = id(item)
+        require(
+            identity not in active_containers,
+            f"cyclic {label} JSON graph",
+        )
+        active_containers.add(identity)
+        try:
+            if type(item) is list:
+                result_list = []
+                for index in range(length):
+                    child = visit(item[index], depth + 1)
+                    result_list.append(child)
+                require(len(item) == length,
+                        f"{label} changed during resource preflight")
+                return result_list
+            keys = tuple(item.keys())
+            result_dict = {}
+            for key in keys:
+                require(type(key) is str, f"malformed {label} key type")
+                account_text(
+                    key, V4_BUILD_INPUT_ENTRY_AUTHORITY_KEY_MAX_BYTES,
+                    f"{label} key",
+                )
+                child = visit(item[key], depth + 1)
+                result_dict[key] = child
+            require(tuple(item.keys()) == keys,
+                    f"{label} changed during resource preflight")
+            return result_dict
+        except (IndexError, KeyError, RuntimeError) as error:
+            raise ProtocolError(
+                f"{label} changed during resource preflight: {error}"
+            ) from error
+        finally:
+            active_containers.remove(identity)
+
+    return visit(value, 0)
+
+
 def _v4_bounded_compact_canonical_digest(
     value: object, maximum_bytes: int, label: str,
 ) -> tuple[int, str]:
@@ -4725,11 +4825,17 @@ def _v4_bounded_compact_canonical_digest(
             f"malformed {label} encoded cap")
     encoder = json.JSONEncoder(
         sort_keys=True, separators=(",", ":"), allow_nan=False,
+        ensure_ascii=True,
     )
     byte_count = 0
     digest = hashlib.sha256()
     try:
         for fragment in encoder.iterencode(value):
+            require(
+                len(fragment) <=
+                V4_BUILD_INPUT_ENTRY_AUTHORITY_FRAGMENT_MAX_BYTES,
+                f"{label} canonical fragment exceeds cap",
+            )
             encoded = fragment.encode()
             byte_count += len(encoded)
             require(byte_count <= maximum_bytes,
@@ -4746,6 +4852,31 @@ def validate_v4_build_input_closure_entry_authority(
 ) -> dict[str, Any]:
     """Validate and snapshot the derived entry/selector closure authority."""
     label = "V4 native build input-closure entry authority"
+    raw_graph = {
+        "compiler": compiler,
+        "linker": linker,
+        "source_tree": source_tree,
+        "runtime_inputs": runtime_inputs,
+        "entry_authority": value,
+    }
+    first_frozen = _v4_resource_checked_json_graph(raw_graph, label)
+    first_size, first_digest = _v4_bounded_compact_canonical_digest(
+        first_frozen, V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES, label,
+    )
+    frozen = _v4_resource_checked_json_graph(raw_graph, label)
+    require(type(frozen) is dict, f"malformed frozen {label}")
+    frozen_size, frozen_digest = _v4_bounded_compact_canonical_digest(
+        frozen, V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES, label,
+    )
+    require(
+        (frozen_size, frozen_digest) == (first_size, first_digest),
+        f"{label} changed while freezing",
+    )
+    compiler = frozen["compiler"]
+    linker = frozen["linker"]
+    source_tree = frozen["source_tree"]
+    runtime_inputs = frozen["runtime_inputs"]
+    value = frozen["entry_authority"]
     result = _v4_exact_dict(
         value, _v4_build_input_closure_entry_authority_fields, label,
     )
@@ -4763,6 +4894,7 @@ def validate_v4_build_input_closure_entry_authority(
 
     observed_fields = set(V4_BUILD_INPUT_CLOSURE_OBSERVED_ENTRY_FIELDS)
     total_file_bytes = 0
+    stable_objects: set[tuple[int, int, int]] = set()
     for index, entry in enumerate(entries):
         entry_label = f"{label} entry {index}"
         item = _v4_exact_dict(
@@ -4795,7 +4927,9 @@ def validate_v4_build_input_closure_entry_authority(
         mount_id = _v4_uint(
             item.get("mount_id"), 32, f"{entry_label} mount ID",
         )
-        _v4_uint(item.get("st_dev"), 64, f"{entry_label} st_dev")
+        st_dev = _v4_uint(
+            item.get("st_dev"), 64, f"{entry_label} st_dev",
+        )
         st_ino = _v4_uint(item.get("st_ino"), 64, f"{entry_label} st_ino")
         generation = _v4_uint(
             item.get("stable_generation"), 64,
@@ -4805,6 +4939,12 @@ def validate_v4_build_input_closure_entry_authority(
             mount_id > 0 and st_ino > 0 and generation > 0,
             f"malformed {entry_label} observed identity",
         )
+        stable_object = (mount_id, st_dev, st_ino)
+        require(
+            stable_object not in stable_objects,
+            f"duplicate {entry_label} stable object identity",
+        )
+        stable_objects.add(stable_object)
 
     require(
         is_int(result.get("total_file_bytes")) and
@@ -4879,17 +5019,7 @@ def validate_v4_build_input_closure_entry_authority(
     _v4_bounded_compact_canonical_digest(
         result, V4_AUTHORITY_OBJECT_MAX_BYTES, label,
     )
-    try:
-        snapshot_bytes = canonical_value_bytes({
-            "compiler": compiler,
-            "linker": linker,
-            "source_tree": source_tree,
-            "runtime_inputs": runtime_inputs,
-            "entry_authority": result,
-        })
-    except (TypeError, ValueError) as error:
-        raise ProtocolError(f"malformed {label} snapshot: {error}") from error
-    return json.loads(snapshot_bytes)
+    return frozen
 
 
 def enumerate_isolated_native_build_filter_v6() -> dict[str, Any]:
