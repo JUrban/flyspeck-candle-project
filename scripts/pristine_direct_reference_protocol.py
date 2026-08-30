@@ -2752,16 +2752,37 @@ def _validate_v4_parent_fd_open_descriptions(
         generation = _v4_uint(
             description.get("generation"), 64, f"{label} generation",
         )
-        _v4_uint(description.get("status_flags"), 64,
-                 f"{label} status flags")
+        status_flags = _v4_uint(
+            description.get("status_flags"), 64, f"{label} status flags",
+        )
         _v4_uint(description.get("offset"), 64, f"{label} offset")
+        access_mode = description.get("access_mode")
+        access_bits = status_flags & 0x03
+        o_path = 0x20_0000
+        o_directory = 0x01_0000
+        o_nofollow = 0x02_0000
+        if access_mode == "read-search-only":
+            require(
+                status_flags & o_path == o_path and access_bits == 0 and
+                status_flags & ~(o_path | o_directory | o_nofollow) == 0,
+                f"malformed {label} O_PATH status flags",
+            )
+        else:
+            require(
+                status_flags & o_path == 0 and access_bits != 3 and
+                access_mode == (
+                    "read-only" if access_bits == 0 else
+                    "write-only" if access_bits == 1 else "read-write"
+                ),
+                f"{label} access/status mismatch",
+            )
         require(
             open_description_id > 0 and
             open_description_id not in open_description_ids and
             generation > 0 and
             is_int(description.get("object_edge_index")) and
             0 <= description["object_edge_index"] < len(initial_edges) and
-            description.get("access_mode") in {
+            access_mode in {
                 "read-only", "write-only", "read-write", "read-search-only",
             } and
             is_int(description.get("descriptor_ref_count")) and
@@ -2914,8 +2935,10 @@ def _validate_v4_parent_address_space_mappings(
         )
         object_edge_index = mapping.get("object_edge_index")
         if object_edge_index is None:
-            require(file_offset == 0,
-                    f"anonymous {label} has nonzero file offset")
+            require(
+                file_offset == 0 and flags & map_anonymous == map_anonymous,
+                f"anonymous {label} lacks canonical flags/offset",
+            )
         else:
             require(
                 is_int(object_edge_index) and

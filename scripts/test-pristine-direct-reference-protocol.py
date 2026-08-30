@@ -1772,7 +1772,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         description = {
             "index": 0, "open_description_id": 9, "generation": 2,
             "object_edge_index": 1, "access_mode": "read-search-only",
-            "status_flags": 0, "offset": 0,
+            "status_flags": 0x21_0000, "offset": 0,
             "lock_state": {"mode": "unlocked"},
             "descriptor_ref_count": 1,
         }
@@ -2191,6 +2191,44 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertEqual(snapshot["fd_table"]["generation"], 5)
         table["generation"] = 5
 
+        def set_ofd_mode(
+            table_value: dict[str, object], ofd_value: dict[str, object],
+            description_index: int, access_mode: str, status_flags: int,
+        ) -> None:
+            ofd_value["entries"][description_index]["access_mode"] = access_mode
+            ofd_value["entries"][description_index]["status_flags"] = status_flags
+            for fd in table_value["fds"]:
+                if fd["open_description_index"] == description_index:
+                    fd["access_mode"] = access_mode
+
+        read_write_table = copy.deepcopy(table)
+        read_write_ofds = copy.deepcopy(ofds)
+        set_ofd_mode(read_write_table, read_write_ofds, 0, "read-write", 2)
+        read_write_table["ordered_fd_sha256"] = subject.canonical_sha256(
+            read_write_table["fds"],
+        )
+        read_write_ofds["ordered_entry_sha256"] = subject.canonical_sha256(
+            read_write_ofds["entries"],
+        )
+        subject.validate_v4_build_parent_fd_state(
+            edges, read_write_table, read_write_ofds, [0, 1, 2],
+        )
+
+        path_table = copy.deepcopy(table)
+        path_ofds = copy.deepcopy(ofds)
+        set_ofd_mode(
+            path_table, path_ofds, 1, "read-search-only", 0x23_0000,
+        )
+        path_table["ordered_fd_sha256"] = subject.canonical_sha256(
+            path_table["fds"],
+        )
+        path_ofds["ordered_entry_sha256"] = subject.canonical_sha256(
+            path_ofds["entries"],
+        )
+        subject.validate_v4_build_parent_fd_state(
+            edges, path_table, path_ofds, [0, 1, 2],
+        )
+
         def mutated(
             mutator: object,
         ) -> tuple[dict[str, object], dict[str, object], dict[str, object], list[int]]:
@@ -2223,9 +2261,30 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 open_description_index=2,
             ),
             lambda e, t, o, i: t["fds"][1].update(access_mode="read-only"),
-            lambda e, t, o, i: (
-                t["fds"][0].update(access_mode="invented-mode"),
-                o["entries"][0].update(access_mode="invented-mode"),
+            lambda e, t, o, i: set_ofd_mode(
+                t, o, 0, "invented-mode", 1,
+            ),
+            lambda e, t, o, i: set_ofd_mode(t, o, 0, "read-only", 1),
+            lambda e, t, o, i: set_ofd_mode(t, o, 0, "read-only", 2),
+            lambda e, t, o, i: set_ofd_mode(t, o, 0, "write-only", 0),
+            lambda e, t, o, i: set_ofd_mode(t, o, 0, "write-only", 2),
+            lambda e, t, o, i: set_ofd_mode(t, o, 0, "read-write", 0),
+            lambda e, t, o, i: set_ofd_mode(t, o, 0, "read-write", 1),
+            lambda e, t, o, i: set_ofd_mode(t, o, 0, "read-write", 3),
+            lambda e, t, o, i: set_ofd_mode(
+                t, o, 1, "read-search-only", 0,
+            ),
+            lambda e, t, o, i: set_ofd_mode(
+                t, o, 1, "read-only", 0x21_0000,
+            ),
+            lambda e, t, o, i: set_ofd_mode(
+                t, o, 1, "read-search-only", 0x21_0001,
+            ),
+            lambda e, t, o, i: set_ofd_mode(
+                t, o, 1, "read-search-only", 0x21_0400,
+            ),
+            lambda e, t, o, i: set_ofd_mode(
+                t, o, 1, "read-search-only", 0x29_0000,
             ),
             lambda e, t, o, i: o["entries"][1].update(
                 open_description_id=100,
@@ -2359,6 +2418,13 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 object_edge_index=1,
             ),
             lambda e, s, m, g: m["entries"][1].update(file_offset=0x1000),
+            lambda e, s, m, g: m["entries"][1].update(flags=2),
+            lambda e, s, m, g: m["entries"][0].update(
+                object_edge_index=None,
+            ),
+            lambda e, s, m, g: m["entries"][1].update(
+                object_edge_index=0,
+            ),
             lambda e, s, m, g: m["entries"][0].update(flags=0x22),
             lambda e, s, m, g: m["entries"][0].update(gate_mapping=0),
             lambda e, s, m, g: m["entries"][1].update(gate_mapping=True),
