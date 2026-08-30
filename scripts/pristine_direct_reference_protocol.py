@@ -169,6 +169,102 @@ MARKER_CONTRACT = {
     "nonce_in_every_marker": True,
 }
 
+# Reserved disjoint V4 identities.  The currently available V3 diagnostic
+# producer/parser remains separate until the V4 fixed loaders, collector and
+# descriptor-rooted postflight exist.  In particular, none of these constants
+# causes a V3 value to be relabelled or enables a V4 promotion-bearing value.
+V4_RAW_PROTOCOL_SCHEMA = 4
+V4_PLAN_KIND = "candle-flyspeck-pristine-direct-reference-raw-plan-v4"
+V4_REQUEST_KIND = "candle-flyspeck-pristine-direct-reference-request-v4"
+V4_TRANSCRIPT_KIND = (
+    "candle-flyspeck-pristine-direct-reference-transcript-v4"
+)
+V4_NATIVE_CLOSURE_KIND = (
+    "candle-flyspeck-pristine-direct-native-execution-closure-v4"
+)
+V4_SOURCE_REDERIVATION_KIND = (
+    "candle-flyspeck-pristine-direct-raw-source-rederivation-v4"
+)
+V4_INCOMPLETE_SOURCE_REDERIVATION_KIND = (
+    "candle-flyspeck-pristine-direct-incomplete-source-rederivation-"
+    "diagnostic-v4"
+)
+V4_RAW_CANDIDATE_KIND = (
+    "candle-flyspeck-pristine-direct-reference-raw-candidate-v4"
+)
+V4_MARKER_PROTOCOL = "candle-flyspeck-pristine-direct-reference-markers-v4"
+V4_SEMANTIC_COMPLETION_SCHEMA = 2
+V4_SEMANTIC_COMPLETION_KIND = (
+    "candle-flyspeck-pristine-direct-semantic-completion-observation-v2"
+)
+V4_CAPTURE_ENVELOPE_SCHEMA = 2
+V4_CAPTURE_ENVELOPE_KIND = (
+    "candle-flyspeck-pristine-direct-capture-envelope-v2"
+)
+V4_PENDING_CANDIDATE_SCHEMA = 2
+V4_PENDING_CANDIDATE_KIND = (
+    "candle-flyspeck-pristine-direct-pending-candidate-v2"
+)
+V4_CAPTURE_COMPLETION_SCHEMA = 2
+V4_CAPTURE_COMPLETION_KIND = (
+    "candle-flyspeck-pristine-direct-capture-completion-v2"
+)
+V4_BUNDLE_SCHEMA = 4
+V4_BUNDLE_KIND = "candle-flyspeck-pristine-direct-reference-bundle-v4"
+V4_PAIR_SCHEMA = 4
+V4_PAIR_KIND = "candle-flyspeck-pristine-direct-reference-pair-v4"
+V4_AUTHORITY_POLICY = (
+    "exact-clean-project-hol-light-flyspeck-runtime-tool-input-and-capture-"
+    "authority-v4"
+)
+V4_KERNEL_PROFILE_SCHEMA = 2
+V4_KERNEL_PROFILE_KIND = "candle-flyspeck-current-kernel-profile-v2"
+V4_PREFLIGHT_SCHEMA = 2
+V4_PREFLIGHT_KIND = (
+    "candle-flyspeck-current-host-seccomp-preflight-v2"
+)
+
+V4_MARKER_CONTRACT = {
+    "protocol": V4_MARKER_PROTOCOL,
+    "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V4",
+    "native_load": "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V4",
+    "startup_baseline": "CANDLE_PRISTINE_DIRECT_STARTUP_BASELINE_V4",
+    "strictbuild_complete": (
+        "CANDLE_PRISTINE_DIRECT_STRICTBUILD_COMPLETE_V4"
+    ),
+    "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V4",
+    "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V4",
+    "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V4",
+    "session_complete": "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V4",
+    "nonce_in_every_marker": True,
+}
+
+V4_CONTROL_MAX_BYTES = 67_108_864
+V4_CONTROL_READ_MAX_BYTES = 67_108_865
+V4_AUTHORITY_CAPSULE_MAX_BYTES = 587_202_560
+V4_AUTHORITY_CAPSULE_READ_MAX_BYTES = 587_202_561
+V4_POSTFLIGHT_RESULT_MAX_BYTES = 1_073_741_824
+V4_POSTFLIGHT_RESULT_READ_MAX_BYTES = 1_073_741_825
+V4_TRACE_CHUNK_MAX_BYTES = 67_108_864
+V4_TRACE_CHUNK_COUNT_MAX = 4_096
+V4_TRACE_TOTAL_MAX_BYTES = 274_877_906_944
+
+V4_BUNDLE_FIELDS = frozenset({
+    "schema", "kind", "role", "reference_ordinal", "nonce_kind",
+    "session_nonce", "boundary_id", "plan", "request",
+    "request_generation_receipt", "collection_authority_receipt",
+    "capture_envelope", "source_rederivation", "coverage",
+    "pending_candidate", "capture_completion", "approval_included",
+    "pft_used", "s2_eligible", "s3_eligible", "s2_s3_evidence",
+})
+V4_PAIR_FIELDS = frozenset({
+    "schema", "kind", "role", "first", "second", "shared_authority",
+    "shared_evidence_contracts", "distinct_attempt_roots",
+    "distinct_ordinals", "distinct_nonces", "semantic_equal",
+    "coverage_equal", "approval_included", "pft_used", "s2_eligible",
+    "s3_eligible", "s2_s3_evidence",
+})
+
 HEX64 = re.compile(r"[0-9a-f]{64}")
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX32 = re.compile(r"[0-9a-f]{32}")
@@ -1204,6 +1300,86 @@ def validate_distinct_reference_pair(
         "schema-v3 reference-pair consumption requires two future "
         "descriptor-rooted capture bundles"
     )
+
+
+def _v4_consumption_disabled(label: str) -> None:
+    """Reject before decoding or traversing any caller-supplied V4 value."""
+    raise ProtocolError(
+        f"V4 {label} consumption is disabled until the captured supervisor, "
+        "pending publication and terminal descriptor-rooted postflight exist"
+    )
+
+
+def validate_v4_raw_candidate(value: object) -> dict[str, Any]:
+    del value
+    _v4_consumption_disabled("raw candidate")
+
+
+def validate_v4_capture_envelope(value: object) -> dict[str, Any]:
+    del value
+    _v4_consumption_disabled("capture envelope")
+
+
+def validate_v4_pending_candidate(value: object) -> dict[str, Any]:
+    del value
+    _v4_consumption_disabled("pending candidate")
+
+
+def validate_v4_capture_completion(value: object) -> dict[str, Any]:
+    del value
+    _v4_consumption_disabled("capture completion")
+
+
+def validate_v4_reference_bundle(value: object) -> dict[str, Any]:
+    del value
+    _v4_consumption_disabled("reference bundle")
+
+
+def validate_v4_distinct_reference_pair(
+    first: object, second: object,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    del first, second
+    _v4_consumption_disabled("reference pair")
+
+
+def validate_canonical_v4_raw_candidate_bytes(data: bytes) -> dict[str, Any]:
+    del data
+    _v4_consumption_disabled("canonical raw candidate")
+
+
+def validate_canonical_v4_capture_envelope_bytes(
+    data: bytes,
+) -> dict[str, Any]:
+    del data
+    _v4_consumption_disabled("canonical capture envelope")
+
+
+def validate_canonical_v4_pending_candidate_bytes(
+    data: bytes,
+) -> dict[str, Any]:
+    del data
+    _v4_consumption_disabled("canonical pending candidate")
+
+
+def validate_canonical_v4_capture_completion_bytes(
+    data: bytes,
+) -> dict[str, Any]:
+    del data
+    _v4_consumption_disabled("canonical capture completion")
+
+
+def validate_canonical_v4_reference_bundle_bytes(
+    data: bytes,
+) -> dict[str, Any]:
+    del data
+    _v4_consumption_disabled("canonical reference bundle")
+
+
+def validate_canonical_v4_distinct_reference_pair_bytes(
+    data: bytes,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    del data
+    _v4_consumption_disabled("canonical reference pair")
 
 
 def validate_canonical_raw_plan_bytes(data: bytes) -> dict[str, Any]:

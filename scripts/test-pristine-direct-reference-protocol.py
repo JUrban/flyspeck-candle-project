@@ -607,6 +607,83 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             for name in dir(subject)
         ))
 
+    def test_v4_identity_reservation_is_exact_and_disjoint(self) -> None:
+        self.assertEqual(subject.V4_RAW_PROTOCOL_SCHEMA, 4)
+        self.assertEqual(subject.V4_PLAN_KIND,
+                         "candle-flyspeck-pristine-direct-reference-raw-plan-v4")
+        self.assertEqual(subject.V4_REQUEST_KIND,
+                         "candle-flyspeck-pristine-direct-reference-request-v4")
+        self.assertEqual(
+            subject.V4_TRANSCRIPT_KIND,
+            "candle-flyspeck-pristine-direct-reference-transcript-v4",
+        )
+        self.assertEqual(
+            subject.V4_NATIVE_CLOSURE_KIND,
+            "candle-flyspeck-pristine-direct-native-execution-closure-v4",
+        )
+        self.assertEqual(subject.V4_BUNDLE_SCHEMA, 4)
+        self.assertEqual(subject.V4_PAIR_SCHEMA, 4)
+        self.assertEqual(subject.V4_KERNEL_PROFILE_SCHEMA, 2)
+        self.assertEqual(subject.V4_PREFLIGHT_SCHEMA, 2)
+        self.assertNotEqual(subject.V4_PLAN_KIND, subject.PLAN_KIND)
+        self.assertNotEqual(subject.V4_REQUEST_KIND, subject.REQUEST_KIND)
+        self.assertNotEqual(subject.V4_MARKER_PROTOCOL, subject.MARKER_PROTOCOL)
+        self.assertEqual(
+            tuple(subject.V4_MARKER_CONTRACT),
+            (
+                "protocol", "session_start", "native_load",
+                "startup_baseline", "strictbuild_complete",
+                "action_complete", "lp_success", "semantic_observation",
+                "session_complete", "nonce_in_every_marker",
+            ),
+        )
+        self.assertTrue(all(
+            type(value) is bool or value.endswith("V4") or value.endswith("-v4")
+            for value in subject.V4_MARKER_CONTRACT.values()
+        ))
+        self.assertEqual(subject.V4_CONTROL_MAX_BYTES, 67_108_864)
+        self.assertEqual(subject.V4_CONTROL_READ_MAX_BYTES, 67_108_865)
+        self.assertEqual(subject.V4_AUTHORITY_CAPSULE_MAX_BYTES, 587_202_560)
+        self.assertEqual(
+            subject.V4_AUTHORITY_CAPSULE_READ_MAX_BYTES, 587_202_561,
+        )
+        self.assertEqual(subject.V4_POSTFLIGHT_RESULT_MAX_BYTES, 1_073_741_824)
+        self.assertEqual(
+            subject.V4_POSTFLIGHT_RESULT_READ_MAX_BYTES, 1_073_741_825,
+        )
+
+    def test_all_reserved_v4_consumers_fail_before_decoding(self) -> None:
+        one_value = (
+            subject.validate_v4_raw_candidate,
+            subject.validate_v4_capture_envelope,
+            subject.validate_v4_pending_candidate,
+            subject.validate_v4_capture_completion,
+            subject.validate_v4_reference_bundle,
+        )
+        canonical = (
+            subject.validate_canonical_v4_raw_candidate_bytes,
+            subject.validate_canonical_v4_capture_envelope_bytes,
+            subject.validate_canonical_v4_pending_candidate_bytes,
+            subject.validate_canonical_v4_capture_completion_bytes,
+            subject.validate_canonical_v4_reference_bundle_bytes,
+        )
+        for validator in one_value:
+            with self.subTest(validator=validator.__name__), self.assertRaisesRegex(
+                subject.ProtocolError, "V4 .* consumption is disabled",
+            ):
+                validator(object())
+        for validator in canonical:
+            with self.subTest(validator=validator.__name__), self.assertRaisesRegex(
+                subject.ProtocolError, "V4 .* consumption is disabled",
+            ):
+                validator(b'{"schema":4}')
+        with self.assertRaisesRegex(subject.ProtocolError, "V4 .* disabled"):
+            subject.validate_v4_distinct_reference_pair(object(), object())
+        with self.assertRaisesRegex(subject.ProtocolError, "V4 .* disabled"):
+            subject.validate_canonical_v4_distinct_reference_pair_bytes(
+                b'{"schema":4}',
+            )
+
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
         cases = (
