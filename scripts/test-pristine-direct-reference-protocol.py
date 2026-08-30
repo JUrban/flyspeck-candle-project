@@ -255,6 +255,9 @@ def make_plan(
         ),
         "actions": actions,
         "lp_certificate_inputs": lp_inputs,
+        "retained_stdout_max_bytes": subject.RETAINED_STDOUT_MAX_BYTES,
+        "retained_stderr_max_bytes": subject.RETAINED_STDERR_MAX_BYTES,
+        "retained_input_artifact_root": "/project/reference-inputs",
         "approval_included": False,
         "pft_used": False,
         "s2_s3_evidence": False,
@@ -286,6 +289,9 @@ def make_request(plan: dict) -> dict:
         ),
         "fresh_process_replay_from_action_zero": True,
         "process_state_checkpoint": None,
+        "retained_stdout_max_bytes": plan["retained_stdout_max_bytes"],
+        "retained_stderr_max_bytes": plan["retained_stderr_max_bytes"],
+        "retained_input_artifact_root": plan["retained_input_artifact_root"],
         "approval_included": False,
         "pft_used": False,
         "s2_s3_evidence": False,
@@ -554,9 +560,24 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         cls.common = common_projections()
         cls.bundle = bundle_fixture(common=cls.common)
 
-    def test_valid_bundle_is_strictly_unapproved(self) -> None:
+    def test_v3_core_artifacts_validate_but_candidate_and_bundle_fail_closed(self) -> None:
         bundle = copy.deepcopy(self.bundle)
-        self.assertIs(subject.validate_reference_bundle(bundle), bundle)
+        self.assertIs(subject.validate_raw_plan(bundle["plan"]), bundle["plan"])
+        self.assertIs(
+            subject.validate_raw_request(bundle["request"], bundle["plan"]),
+            bundle["request"],
+        )
+        self.assertIs(
+            subject.validate_raw_transcript(
+                bundle["transcript"], bundle["plan"], bundle["request"],
+            ), bundle["transcript"],
+        )
+        self.assertIs(
+            subject.validate_native_execution_closure(
+                bundle["native_execution_closure"], bundle["plan"],
+                bundle["request"], bundle["transcript"],
+            ), bundle["native_execution_closure"],
+        )
         self.assertEqual(bundle["plan"]["schema"], subject.RAW_PROTOCOL_SCHEMA)
         self.assertEqual(bundle["request"]["schema"], subject.RAW_PROTOCOL_SCHEMA)
         self.assertEqual(
@@ -571,19 +592,21 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             bundle["request"]["marker_contract"]["native_load"],
             subject.MARKER_CONTRACT["native_load"],
         )
-        candidate = bundle["candidate"]
-        self.assertEqual(candidate["authentication_status"], "not-authenticated")
-        for field in (
-            "approved_reference_present", "promotion_allowed", "pft_used",
-            "s2_eligible", "s3_eligible", "s2_s3_evidence",
-        ):
-            self.assertIs(candidate[field], False)
+        arguments = (
+            bundle["candidate"], bundle["plan"], bundle["request"],
+            bundle["transcript"], bundle["native_execution_closure"],
+            bundle["semantic_projection"], bundle["cross_runtime_coverage"],
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "future held collector"):
+            subject.validate_raw_candidate(*arguments)
+        with self.assertRaisesRegex(subject.ProtocolError, "descriptor-rooted"):
+            subject.validate_reference_bundle(bundle)
         self.assertFalse(any(
             name.startswith("build_authenticated") or "descriptor" in name
             for name in dir(subject)
         ))
 
-    def test_all_five_artifact_schemas_are_canonical(self) -> None:
+    def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
         cases = (
             (
@@ -603,15 +626,6 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 (
                     bundle["native_execution_closure"], bundle["plan"],
                     bundle["request"], bundle["transcript"],
-                ),
-            ),
-            (
-                "candidate", subject.validate_canonical_raw_candidate_bytes,
-                (
-                    bundle["candidate"], bundle["plan"], bundle["request"],
-                    bundle["transcript"], bundle["native_execution_closure"],
-                    bundle["semantic_projection"],
-                    bundle["cross_runtime_coverage"],
                 ),
             ),
         )
@@ -638,7 +652,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             subject.canonical_json_bytes({"value": math.nan})
 
-    def test_schema_v1_artifact_chain_is_disjoint_and_rejected(self) -> None:
+    def test_schema_v2_artifact_chain_is_disjoint_and_rejected(self) -> None:
         bundle = self.bundle
         cases = (
             ("plan", subject.validate_raw_plan, ()),
@@ -652,24 +666,15 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 subject.validate_native_execution_closure,
                 (bundle["plan"], bundle["request"], bundle["transcript"]),
             ),
-            (
-                "candidate", subject.validate_raw_candidate,
-                (
-                    bundle["plan"], bundle["request"], bundle["transcript"],
-                    bundle["native_execution_closure"],
-                    bundle["semantic_projection"],
-                    bundle["cross_runtime_coverage"],
-                ),
-            ),
         )
         for name, validator, dependencies in cases:
             for field in ("schema", "kind"):
                 forged = copy.deepcopy(bundle[name])
                 if field == "schema":
-                    forged[field] = 1
+                    forged[field] = 2
                 else:
-                    self.assertTrue(forged[field].endswith("-v2"))
-                    forged[field] = forged[field][:-1] + "1"
+                    self.assertTrue(forged[field].endswith("-v3"))
+                    forged[field] = forged[field][:-1] + "2"
                 with self.subTest(name=name, field=field), self.assertRaises(
                     subject.ProtocolError,
                 ):
@@ -696,6 +701,27 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 lambda item: item["serialization_environment"].update(present=True),
             ),
             ("thread bool", lambda item: item.update(thread_count=True)),
+            ("stdout cap bool", lambda item: item.update(
+                retained_stdout_max_bytes=True,
+            )),
+            ("stdout cap drift", lambda item: item.update(
+                retained_stdout_max_bytes=subject.RETAINED_STDOUT_MAX_BYTES - 1,
+            )),
+            ("stderr cap float", lambda item: item.update(
+                retained_stderr_max_bytes=0.0,
+            )),
+            ("stderr cap drift", lambda item: item.update(
+                retained_stderr_max_bytes=1,
+            )),
+            ("relative retained root", lambda item: item.update(
+                retained_input_artifact_root="reference-inputs",
+            )),
+            ("root retained root", lambda item: item.update(
+                retained_input_artifact_root="/",
+            )),
+            ("double-slash retained root", lambda item: item.update(
+                retained_input_artifact_root="//project/reference-inputs",
+            )),
             (
                 "dirty project",
                 lambda item: item["authority"]["repositories"]["project"].update(
@@ -833,6 +859,18 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 ),
             ),
             ("action bool", lambda item: item.update(action_count=True)),
+            ("stdout cap bool", lambda item: item.update(
+                retained_stdout_max_bytes=True,
+            )),
+            ("stdout cap drift", lambda item: item.update(
+                retained_stdout_max_bytes=subject.RETAINED_STDOUT_MAX_BYTES - 1,
+            )),
+            ("stderr cap float", lambda item: item.update(
+                retained_stderr_max_bytes=0.0,
+            )),
+            ("retained root drift", lambda item: item.update(
+                retained_input_artifact_root="/project/other-inputs",
+            )),
             ("checkpoint", lambda item: item.update(process_state_checkpoint={})),
             ("approval", lambda item: item.update(approval_included=True)),
             (
@@ -1012,107 +1050,31 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                     forged, plan, request, transcript,
                 )
 
-    def test_candidate_rejects_artifact_types_splices_and_approval(self) -> None:
+    def test_candidate_surface_is_unconditionally_unavailable_in_this_slice(self) -> None:
         bundle = self.bundle
         arguments = (
             bundle["plan"], bundle["request"], bundle["transcript"],
             bundle["native_execution_closure"], bundle["semantic_projection"],
             bundle["cross_runtime_coverage"],
         )
-        mutations = (
-            ("authenticated relabel", lambda item: item.update(
-                authentication_status="authenticated"
-            )),
-            ("artifact splice", lambda item: item["artifacts"]["plan"].update(
-                sha256="0" * 64
-            )),
-            ("missing artifact", lambda item: item["artifacts"].pop("transcript")),
-            ("action bool", lambda item: item.update(action_count=True)),
-            ("loader float", lambda item: item.update(loader_event_count=1.0)),
-            ("LP bool", lambda item: item.update(lp_success_count=True)),
-            ("exit bool", lambda item: item.update(exit_code=False)),
-            ("validation error", lambda item: item.update(validation_error="forged")),
-            ("checkpoint", lambda item: item.update(process_state_checkpoint={})),
-            (
-                "serialization integer false",
-                lambda item: item["serialization_environment"].update(present=0),
-            ),
-            ("approval", lambda item: item.update(approved_reference_present=True)),
-            ("promotion", lambda item: item.update(promotion_allowed=True)),
-            ("S2", lambda item: item.update(s2_eligible=True)),
-            ("S3", lambda item: item.update(s3_eligible=True)),
-            ("PFT", lambda item: item.update(pft_used=True)),
-        )
-        for label, mutate in mutations:
-            forged = copy.deepcopy(bundle["candidate"])
-            mutate(forged)
-            with self.subTest(label=label), self.assertRaises(subject.ProtocolError):
-                subject.validate_raw_candidate(forged, *arguments)
-
-        semantic = copy.deepcopy(bundle["semantic_projection"])
-        semantic["theorems"][0]["name"] = "Forged.theorem"
-        with self.assertRaisesRegex(subject.ProtocolError, "common direct projection"):
-            subject.validate_raw_candidate(
-                bundle["candidate"], bundle["plan"], bundle["request"],
-                bundle["transcript"], bundle["native_execution_closure"],
-                semantic, bundle["cross_runtime_coverage"],
-            )
-
-        closure = copy.deepcopy(bundle["native_execution_closure"])
-        nested = next(
-            event for event in closure["loader_events"]
-            if event["logical_source"] == "flyspeck:b.hl"
-        )
-        nested["logical_source"] = "flyspeck:fixture/unexpected-native.hl"
-        nested["basename"] = "unexpected-native.hl"
-        closure["ordered_loader_event_sha256"] = subject.canonical_sha256(
-            closure["loader_events"]
-        )
-        candidate = copy.deepcopy(bundle["candidate"])
-        candidate["artifacts"]["native_execution_closure"] = (
-            subject.content_record(closure)
-        )
-        with self.assertRaisesRegex(
-            subject.ProtocolError, "native logical closure differs",
+        for label, candidate in (
+            ("legacy-shaped", copy.deepcopy(bundle["candidate"])),
+            ("empty", {}),
+            ("approval relabel", {"approved_reference_present": True}),
         ):
-            subject.validate_raw_candidate(
-                candidate, bundle["plan"], bundle["request"],
-                bundle["transcript"], closure, bundle["semantic_projection"],
-                bundle["cross_runtime_coverage"],
-            )
+            with self.subTest(label=label), self.assertRaisesRegex(
+                subject.ProtocolError, "future held collector",
+            ):
+                subject.validate_raw_candidate(candidate, *arguments)
+        encoded = subject.canonical_json_bytes(bundle["candidate"])
+        with self.assertRaisesRegex(subject.ProtocolError, "future held collector"):
+            subject.validate_canonical_raw_candidate_bytes(encoded, *arguments)
 
-        closure = copy.deepcopy(bundle["native_execution_closure"])
-        closure["action_bindings"]["records"][0]["index"] = False
-        candidate = copy.deepcopy(bundle["candidate"])
-        candidate["artifacts"]["native_execution_closure"] = (
-            subject.content_record(closure)
-        )
-        with self.assertRaisesRegex(
-            subject.ProtocolError, "exact JSON native action bindings",
-        ):
-            subject.validate_raw_candidate(
-                candidate, bundle["plan"], bundle["request"],
-                bundle["transcript"], closure, bundle["semantic_projection"],
-                bundle["cross_runtime_coverage"],
-            )
-
-    def test_pair_requires_exact_ordinals_distinct_nonce_and_shared_authority(self) -> None:
+    def test_value_only_pair_consumption_is_unavailable(self) -> None:
         first = bundle_fixture(1, "1" * 64, common=self.common)
         second = bundle_fixture(2, "2" * 64, common=self.common)
-        self.assertEqual(
-            subject.validate_distinct_reference_pair(first, second),
-            (first, second),
-        )
-        same_nonce = bundle_fixture(2, "1" * 64, common=self.common)
-        with self.assertRaisesRegex(subject.ProtocolError, "reused a session nonce"):
-            subject.validate_distinct_reference_pair(first, same_nonce)
-        wrong_authority = bundle_fixture(
-            2, "2" * 64, authority_seed="b", common=self.common,
-        )
-        with self.assertRaisesRegex(subject.ProtocolError, "exact.*authority"):
-            subject.validate_distinct_reference_pair(first, wrong_authority)
-        with self.assertRaisesRegex(subject.ProtocolError, "ordinals"):
-            subject.validate_distinct_reference_pair(second, first)
+        with self.assertRaisesRegex(subject.ProtocolError, "descriptor-rooted"):
+            subject.validate_distinct_reference_pair(first, second)
 
 
 if __name__ == "__main__":

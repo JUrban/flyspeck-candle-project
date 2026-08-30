@@ -20,18 +20,24 @@ from typing import Any, Callable
 
 FINAL_BOUNDARY_ID = "07-final_assembly-through-296"
 FINAL_ACTION_COUNT = 297
-RAW_PROTOCOL_SCHEMA = 2
+RAW_PROTOCOL_SCHEMA = 3
 REFERENCE_ROLE = "pristine-clean-reference"
 REFERENCE_ORDINALS = (1, 2)
 REFERENCE_NONCE_KIND = "reference-session-nonce-v1"
-PLAN_KIND = "candle-flyspeck-pristine-direct-reference-raw-plan-v2"
-REQUEST_KIND = "candle-flyspeck-pristine-direct-reference-request-v2"
-TRANSCRIPT_KIND = "candle-flyspeck-pristine-direct-reference-transcript-v2"
+PLAN_KIND = "candle-flyspeck-pristine-direct-reference-raw-plan-v3"
+REQUEST_KIND = "candle-flyspeck-pristine-direct-reference-request-v3"
+TRANSCRIPT_KIND = "candle-flyspeck-pristine-direct-reference-transcript-v3"
 NATIVE_CLOSURE_KIND = (
-    "candle-flyspeck-pristine-direct-native-execution-closure-v2"
+    "candle-flyspeck-pristine-direct-native-execution-closure-v3"
 )
 RAW_CANDIDATE_KIND = (
-    "candle-flyspeck-pristine-direct-reference-raw-candidate-v2"
+    "candle-flyspeck-pristine-direct-reference-raw-candidate-v3"
+)
+SOURCE_REDERIVATION_KIND = (
+    "candle-flyspeck-pristine-direct-raw-source-rederivation-v3"
+)
+SEMANTIC_COMPLETION_KIND = (
+    "candle-flyspeck-pristine-direct-semantic-completion-observation-v1"
 )
 AUTHORITY_POLICY = (
     "exact-clean-project-hol-light-flyspeck-runtime-tool-and-input-authority-v3"
@@ -49,11 +55,13 @@ LOADER_LEDGER_POLICY = (
 LOADER_LEDGER_ORDER = (
     "per-phase-new-loaded-files-delta-reversed-to-success-order-v1"
 )
-MARKER_PROTOCOL = "candle-flyspeck-pristine-direct-reference-markers-v2"
+MARKER_PROTOCOL = "candle-flyspeck-pristine-direct-reference-markers-v3"
 ENVIRONMENT_POLICY = (
     "fresh-sanitized-single-thread-reference-process-serialization-key-absent-v1"
 )
 SERIALIZATION_ENVIRONMENT_KEY = "FLYSPECK_SERIALIZATION"
+RETAINED_STDOUT_MAX_BYTES = 536870912
+RETAINED_STDERR_MAX_BYTES = 0
 PRODUCER_ENTRYPOINT_PATH = "scripts/collect-pristine-direct-reference.py"
 PROTOCOL_PATH = "scripts/pristine_direct_reference_protocol.py"
 OUTPUT_PARSER_PATH = "scripts/parse-pristine-direct-reference-output.py"
@@ -137,12 +145,12 @@ ENTRYPOINT_SEQUENCE = (
 )
 MARKER_CONTRACT = {
     "protocol": MARKER_PROTOCOL,
-    "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V2",
-    "native_load": "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V2",
-    "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V2",
-    "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V2",
-    "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V2",
-    "session_complete": "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V2",
+    "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V3",
+    "native_load": "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V3",
+    "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V3",
+    "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V3",
+    "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V3",
+    "session_complete": "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V3",
     "nonce_in_every_marker": True,
 }
 
@@ -256,10 +264,13 @@ def _safe_relative(value: object, label: str) -> str:
 
 def _safe_absolute(value: object, label: str) -> str:
     text = _printable(value, label)
-    require("\\" not in text, f"malformed {label}")
+    require(len(text) <= 4096 and "\\" not in text and
+            text.startswith("/") and not text.startswith("//"),
+            f"malformed {label}")
     path = PurePosixPath(text)
     require(text != "/" and path.is_absolute() and path.as_posix() == text and
-            all(part not in {"", ".", ".."} for part in path.parts[1:]),
+            all(part not in {"", ".", ".."} and len(part) <= 255
+                for part in path.parts[1:]),
             f"unsafe {label}")
     return text
 
@@ -537,8 +548,9 @@ def validate_raw_plan(value: object) -> dict[str, Any]:
         "session_nonce", "boundary_id", "fresh_process_replay_from_action_zero",
         "process_state_checkpoint", "serialization_environment",
         "environment_policy", "thread_count", "authority", "actions",
-        "lp_certificate_inputs", "approval_included", "pft_used",
-        "s2_s3_evidence",
+        "lp_certificate_inputs", "retained_stdout_max_bytes",
+        "retained_stderr_max_bytes", "retained_input_artifact_root",
+        "approval_included", "pft_used", "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
             is_int(value.get("schema")) and
@@ -549,6 +561,10 @@ def validate_raw_plan(value: object) -> dict[str, Any]:
             value.get("process_state_checkpoint") is None and
             value.get("environment_policy") == ENVIRONMENT_POLICY and
             is_int(value.get("thread_count")) and value["thread_count"] == 1 and
+            is_int(value.get("retained_stdout_max_bytes")) and
+            value["retained_stdout_max_bytes"] == RETAINED_STDOUT_MAX_BYTES and
+            is_int(value.get("retained_stderr_max_bytes")) and
+            value["retained_stderr_max_bytes"] == RETAINED_STDERR_MAX_BYTES and
             value.get("approval_included") is False and
             value.get("pft_used") is False and
             value.get("s2_s3_evidence") is False,
@@ -563,6 +579,10 @@ def validate_raw_plan(value: object) -> dict[str, Any]:
     _validate_authority(value.get("authority"))
     _validate_actions(value.get("actions"))
     _validate_lp_inputs(value.get("lp_certificate_inputs"))
+    _safe_absolute(
+        value.get("retained_input_artifact_root"),
+        "retained input artifact root",
+    )
     return value
 
 
@@ -582,8 +602,9 @@ def validate_raw_request(value: object, plan: object) -> dict[str, Any]:
         "session_nonce", "boundary_id", "plan", "request_source",
         "entrypoint_sequence", "marker_contract", "action_count",
         "serialization_environment", "fresh_process_replay_from_action_zero",
-        "process_state_checkpoint", "approval_included", "pft_used",
-        "s2_s3_evidence",
+        "process_state_checkpoint", "retained_stdout_max_bytes",
+        "retained_stderr_max_bytes", "retained_input_artifact_root",
+        "approval_included", "pft_used", "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
             is_int(value.get("schema")) and
@@ -610,6 +631,14 @@ def validate_raw_request(value: object, plan: object) -> dict[str, Any]:
         plan["serialization_environment"],
         "pristine reference request serialization environment",
     )
+    for field in (
+        "retained_stdout_max_bytes", "retained_stderr_max_bytes",
+        "retained_input_artifact_root",
+    ):
+        require_exact_json(
+            value.get(field), plan[field],
+            f"pristine reference request {field}",
+        )
     _validate_role_nonce(value, "pristine reference request")
     _same_run(value, plan, "pristine reference request")
     require_exact_json(
@@ -960,221 +989,45 @@ def _direct_protocol() -> ModuleType:
     return module
 
 
-def _validate_common_projections(
-    semantic_projection: object, coverage_projection: object,
-) -> None:
-    direct = _direct_protocol()
-    try:
-        direct.validate_semantic_projection(semantic_projection)
-        direct.validate_cross_runtime_coverage_projection(coverage_projection)
-    except direct.ProtocolError as error:
-        raise ProtocolError(f"invalid common direct projection: {error}") from error
-
-
-def _bind_plan_to_common_projections(
-    plan: dict[str, Any], semantic_projection: dict[str, Any],
-    coverage_projection: dict[str, Any],
-) -> None:
-    plan_actions = plan["actions"]["records"]
-    coverage_actions = coverage_projection["actions"]["records"]
-    require(len(plan_actions) == len(coverage_actions) and all(
-                all(plan_action[field] == coverage_action[field] for field in (
-                    "index", "selected_source", "target", "stratum",
-                    "original_bytes", "original_sha256", "original_md5",
-                    "candle_plan_execution_selection",
-                )) and coverage_action["completion_status"] ==
-                "completed-observed-unapproved"
-                for plan_action, coverage_action in
-                zip(plan_actions, coverage_actions, strict=True)
-            ), "pristine raw plan actions differ from common coverage")
-    plan_lp = plan["lp_certificate_inputs"]["records"]
-    coverage_lp = coverage_projection["lp_certificate_consumption"]["records"]
-    require(len(plan_lp) == len(coverage_lp) and all(
-                all(plan_record[field] == coverage_record[field] for field in (
-                    "index", "class", "relative", "bytes", "sha256",
-                )) and coverage_record["successful_deserialization_count"] == 1
-                for plan_record, coverage_record in
-                zip(plan_lp, coverage_lp, strict=True)
-            ), "pristine raw plan LP inputs differ from common coverage")
-    authority_inputs = plan["authority"]["inputs"]
-    for name, value in (
-        ("action_plan", plan["actions"]),
-        ("source_inventory", coverage_projection["original_source_inventory"]),
-        ("generated_inputs", coverage_projection["generated_inputs"]),
-    ):
-        record = authority_inputs[name]
-        require({"bytes": record["bytes"], "sha256": record["sha256"]} ==
-                content_record(value),
-                f"pristine {name} authority differs from common coverage")
-    require(authority_inputs["serializer"]["sha256"] ==
-            semantic_projection["serializer"]["sha256"],
-            "pristine serializer authority differs from semantic projection")
-    final = next(
-        (record for record in
-         coverage_projection["original_source_inventory"]["records"]
-         if record["key"] == FINAL_TARGET_SOURCE),
-        None,
-    )
-    require(final is not None and
-            authority_inputs["final_target"]["bytes"] ==
-            final["original_bytes"] and
-            authority_inputs["final_target"]["sha256"] ==
-            final["original_sha256"],
-            "pristine final-target authority differs from common coverage")
-
-
-def _bind_native_closure_to_common_coverage(
-    native_closure: dict[str, Any], coverage_projection: dict[str, Any],
-) -> None:
-    expected_records = coverage_projection[
-        "selected_logical_source_closure"
-    ]["records"]
-    expected = {record["key"]: record for record in expected_records}
-    observed_events = [
-        event for event in native_closure["loader_events"]
-        if event["logical_source"] != SERIALIZER_SOURCE
-    ]
-    observed = {event["logical_source"]: event for event in observed_events}
-    require(len(observed) == len(observed_events) and
-            set(observed) == set(expected),
-            "pristine native logical closure differs from common coverage")
-    for key, record in expected.items():
-        event = observed[key]
-        require(event["bytes"] == record["original_bytes"] and
-                event["sha256"] == record["original_sha256"] and
-                event["md5"] == record["original_md5"],
-                f"pristine native logical content differs from common coverage: "
-                f"{key}")
-
-
 def validate_raw_candidate(
     value: object, plan: object, request: object, transcript: object,
     native_closure: object, semantic_projection: object,
     coverage_projection: object,
 ) -> dict[str, Any]:
-    plan = validate_raw_plan(plan)
-    request = validate_raw_request(request, plan)
-    transcript = validate_raw_transcript(transcript, plan, request)
-    native_closure = validate_native_execution_closure(
-        native_closure, plan, request, transcript,
+    # Schema v3 candidates require the descriptor-rooted capture envelope,
+    # coverage adapter, pending publication, and terminal postflight specified
+    # by the accepted design.  None exists in this pure migration slice.  Keep
+    # the legacy signature fail closed so no value-only caller can mint or
+    # consume an underspecified v3 candidate.
+    raise ProtocolError(
+        "schema-v3 raw candidate validation requires the future held collector "
+        "and descriptor-rooted terminal postflight"
     )
-    _validate_common_projections(semantic_projection, coverage_projection)
-    _bind_plan_to_common_projections(
-        plan, semantic_projection, coverage_projection,
-    )
-    _bind_native_closure_to_common_coverage(
-        native_closure, coverage_projection,
-    )
-    fields = {
-        "schema", "kind", "role", "reference_ordinal", "nonce_kind",
-        "session_nonce", "boundary_id", "status", "authentication_status",
-        "authority_sha256", "artifacts", "action_count", "loader_event_count",
-        "lp_success_count", "exit_code", "timed_out", "validation_error",
-        "fresh_process_replay_from_action_zero", "process_state_checkpoint",
-        "serialization_environment", "approved_reference_present",
-        "promotion_allowed", "pft_used", "s2_eligible", "s3_eligible",
-        "s2_s3_evidence",
-    }
-    require(isinstance(value, dict) and set(value) == fields and
-            is_int(value.get("schema")) and
-            value["schema"] == RAW_PROTOCOL_SCHEMA and
-            value.get("kind") == RAW_CANDIDATE_KIND and
-            value.get("status") == "complete-unapproved" and
-            value.get("authentication_status") == "not-authenticated" and
-            value.get("authority_sha256") == canonical_sha256(plan["authority"]) and
-            is_int(value.get("action_count")) and
-            value["action_count"] == FINAL_ACTION_COUNT and
-            is_int(value.get("loader_event_count")) and
-            value["loader_event_count"] == native_closure["loader_event_count"] and
-            is_int(value.get("lp_success_count")) and
-            value["lp_success_count"] == 39 and
-            is_int(value.get("exit_code")) and value["exit_code"] == 0 and
-            value.get("timed_out") is False and
-            value.get("validation_error") is None and
-            value.get("fresh_process_replay_from_action_zero") is True and
-            value.get("process_state_checkpoint") is None and
-            value.get("approved_reference_present") is False and
-            value.get("promotion_allowed") is False and
-            value.get("pft_used") is False and
-            value.get("s2_eligible") is False and
-            value.get("s3_eligible") is False and
-            value.get("s2_s3_evidence") is False,
-            "malformed or overclaiming pristine raw candidate")
-    require_exact_json(
-        value.get("serialization_environment"),
-        plan["serialization_environment"],
-        "pristine raw candidate serialization environment",
-    )
-    _validate_role_nonce(value, "pristine raw candidate")
-    _same_run(value, plan, "pristine raw candidate")
-    artifacts = value.get("artifacts")
-    expected = {
-        "plan": content_record(plan),
-        "request": content_record(request),
-        "transcript": content_record(transcript),
-        "native_execution_closure": content_record(native_closure),
-        "semantic_projection": content_record(semantic_projection),
-        "cross_runtime_coverage": content_record(coverage_projection),
-    }
-    require(isinstance(artifacts, dict) and set(artifacts) == set(expected),
-            "malformed pristine raw candidate artifact closure")
-    for name, record in artifacts.items():
-        _content_record(record, f"raw candidate {name}")
-    require_exact_json(
-        artifacts, expected, "pristine raw candidate artifact content",
-    )
-    return value
 
 
 BUNDLE_FIELDS = {
-    "plan", "request", "transcript", "native_execution_closure",
-    "semantic_projection", "cross_runtime_coverage", "candidate",
+    "plan", "request", "request_source_capture", "transcript",
+    "native_execution_closure", "semantic_projection",
+    "semantic_completion_observation", "cross_runtime_coverage",
+    "source_rederivation", "capture_envelope", "candidate",
+    "capture_completion",
 }
 
 
 def validate_reference_bundle(value: object) -> dict[str, Any]:
-    require(isinstance(value, dict) and set(value) == BUNDLE_FIELDS,
-            "malformed pristine raw reference bundle")
-    validate_raw_candidate(
-        value["candidate"], value["plan"], value["request"],
-        value["transcript"], value["native_execution_closure"],
-        value["semantic_projection"], value["cross_runtime_coverage"],
+    raise ProtocolError(
+        "schema-v3 bundle consumption requires the future descriptor-rooted "
+        "capture-bundle validator"
     )
-    return value
 
 
 def validate_distinct_reference_pair(
     first: object, second: object,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    first = validate_reference_bundle(first)
-    second = validate_reference_bundle(second)
-    first_plan = first["plan"]
-    second_plan = second["plan"]
-    require((first_plan["reference_ordinal"], second_plan["reference_ordinal"]) ==
-            REFERENCE_ORDINALS,
-            "pristine reference pair ordinals must be exactly 1 then 2")
-    require(first_plan["session_nonce"] != second_plan["session_nonce"],
-            "pristine reference pair reused a session nonce")
-    require_exact_json(
-        first_plan["authority"], second_plan["authority"],
-        "pristine reference pair authority",
+    raise ProtocolError(
+        "schema-v3 reference-pair consumption requires two future "
+        "descriptor-rooted capture bundles"
     )
-    require_exact_json(
-        first_plan["actions"], second_plan["actions"],
-        "pristine reference pair actions",
-    )
-    require_exact_json(
-        first_plan["lp_certificate_inputs"],
-        second_plan["lp_certificate_inputs"],
-        "pristine reference pair LP inputs",
-    )
-    for artifact in ("request", "transcript", "native_execution_closure"):
-        require(first["candidate"]["artifacts"][artifact] !=
-                second["candidate"]["artifacts"][artifact],
-                f"pristine reference pair reused {artifact} content")
-    require(content_record(first["candidate"]) != content_record(second["candidate"]),
-            "pristine reference pair reused candidate content")
-    return first, second
 
 
 def validate_canonical_raw_plan_bytes(data: bytes) -> dict[str, Any]:

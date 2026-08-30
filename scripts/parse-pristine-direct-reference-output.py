@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Pure byte parser for pristine direct-reference source observations.
 
-This module consumes immutable stdout/stderr bytes and already validated v2
+This module consumes immutable stdout/stderr bytes and already validated v3
 plan/request values.  It constructs the raw transcript and native execution
 closure; it never accepts those projections as inputs.
 
@@ -18,10 +18,11 @@ Every symbolic name, including the native-loader observation marker, comes
 from the validated request marker contract.  The prose above uses spaces only
 for readability; the wire separator is one tab.
 
-No exact pristine dependency-history/semantic marker grammar exists yet.
-Accordingly this parser rejects semantic, fingerprint, and other unknown
-success-like markers and emits no semantic or coverage projection.  Its result
-is raw, unauthenticated, unapproved, and ineligible for S2/S3.
+This migration slice includes a bounded pure decoder for the exact semantic-v3
+wire forms.  The source-stream state machine does not consume those forms yet;
+it therefore rejects semantic markers and emits an explicitly incomplete,
+noncandidate source rederivation.  Its result is raw, unauthenticated,
+unapproved, and ineligible for S2/S3.
 
 Trusted activation and the injected modules below are private plumbing, not an
 in-process security boundary.  A future collector must run the separately
@@ -39,41 +40,49 @@ from typing import Any
 
 
 SOURCE_REDERIVATION_KIND = (
-    "candle-flyspeck-pristine-direct-raw-source-rederivation-v2"
+    "candle-flyspeck-pristine-direct-raw-source-rederivation-v3"
 )
-EXPECTED_RAW_PROTOCOL_SCHEMA = 2
-EXPECTED_PLAN_KIND = "candle-flyspeck-pristine-direct-reference-raw-plan-v2"
-EXPECTED_REQUEST_KIND = "candle-flyspeck-pristine-direct-reference-request-v2"
+EXPECTED_RAW_PROTOCOL_SCHEMA = 3
+EXPECTED_PLAN_KIND = "candle-flyspeck-pristine-direct-reference-raw-plan-v3"
+EXPECTED_REQUEST_KIND = "candle-flyspeck-pristine-direct-reference-request-v3"
 EXPECTED_TRANSCRIPT_KIND = (
-    "candle-flyspeck-pristine-direct-reference-transcript-v2"
+    "candle-flyspeck-pristine-direct-reference-transcript-v3"
 )
 EXPECTED_NATIVE_CLOSURE_KIND = (
-    "candle-flyspeck-pristine-direct-native-execution-closure-v2"
+    "candle-flyspeck-pristine-direct-native-execution-closure-v3"
 )
 EXPECTED_MARKER_PROTOCOL = (
-    "candle-flyspeck-pristine-direct-reference-markers-v2"
+    "candle-flyspeck-pristine-direct-reference-markers-v3"
 )
 EXPECTED_OUTPUT_PARSER_PATH = (
     "scripts/parse-pristine-direct-reference-output.py"
 )
 EXPECTED_MARKER_CONTRACT = {
     "protocol": EXPECTED_MARKER_PROTOCOL,
-    "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V2",
-    "native_load": "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V2",
-    "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V2",
-    "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V2",
-    "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V2",
-    "session_complete": "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V2",
+    "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V3",
+    "native_load": "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V3",
+    "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V3",
+    "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V3",
+    "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V3",
+    "session_complete": "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V3",
     "nonce_in_every_marker": True,
 }
 SEMANTIC_GRAMMAR_STATUS = (
-    "not-parsed-exact-pristine-semantic-marker-grammar-absent"
+    "decoder-available-not-integrated-into-source-stream"
 )
 COVERAGE_GRAMMAR_STATUS = (
-    "not-derived-semantic-and-completion-grammar-absent"
+    "not-derived-requires-authenticated-inventory-and-generated-inputs"
 )
 CANONICAL_DECIMAL = re.compile(r"0|[1-9][0-9]*")
 MAX_CANONICAL_DECIMAL_DIGITS = 19
+MAX_FRAMED_DECIMAL_DIGITS = 9
+MAX_FRAMED_VALUE = 536870912
+EXPECTED_FINAL_THEOREM_NAMES = (
+    "Linear_programming_results.linear_programming_results_th",
+    "Mk_all_ineq.the_nonlinear_inequalities",
+    "The_kepler_conjecture.tame_nonlinear_imp_kepler_conjecture",
+    "Candle_flyspeck_l2.tame_imp_kepler_conjecture",
+)
 PFT_TOKEN = re.compile(r"(?<![A-Za-z0-9])pft(?![A-Za-z0-9])", re.IGNORECASE)
 SUCCESS_LIKE = re.compile(
     r"(?:CANDLE_|PASS(?:[\t :]|$)|SUCCESS(?:[\t :]|$)|"
@@ -158,6 +167,10 @@ def _require_compatible_protocol(module: ModuleType) -> None:
             getattr(module, "FINAL_ACTION_COUNT", None) == 297 and
             getattr(module, "FINAL_BOUNDARY_ID", None) ==
             "07-final_assembly-through-296" and
+            getattr(module, "RETAINED_STDOUT_MAX_BYTES", None) == 536870912 and
+            getattr(module, "RETAINED_STDERR_MAX_BYTES", None) == 0 and
+            getattr(module, "SOURCE_REDERIVATION_KIND", None) ==
+            SOURCE_REDERIVATION_KIND and
             getattr(module, "LP_CONSUMER_ACTION_INDEX", None) == 184 and
             getattr(module, "LP_SUCCESS_KIND", None) ==
             "candle-flyspeck-pristine-direct-lp-success-stream-v1" and
@@ -242,6 +255,246 @@ def _decode_lines(data: bytes, label: str, *, allow_empty: bool) -> list[str]:
                 for character in text),
             f"{label} contains a character outside the exact ASCII wire alphabet")
     return text[:-1].split("\n")
+
+
+def _serialized_hex(value: str, label: str) -> bytes:
+    require(value != "" and len(value) % 2 == 0 and
+            re.fullmatch(r"[0-9a-f]+", value) is not None,
+            f"malformed lowercase serialized hex for {label}")
+    try:
+        return bytes.fromhex(value)
+    except ValueError as error:
+        raise OutputProtocolError(f"cannot decode serialized hex for {label}") from error
+
+
+def _framed_decimal(value: bytes, label: str) -> int:
+    require(0 < len(value) <= MAX_FRAMED_DECIMAL_DIGITS,
+            f"overlong {label}")
+    require(all(48 <= byte <= 57 for byte in value) and
+            (value == b"0" or value[0] != 48), f"noncanonical {label}")
+    try:
+        result = int(value)
+    except (ValueError, OverflowError) as error:
+        raise OutputProtocolError(f"cannot convert {label}") from error
+    require(result <= MAX_FRAMED_VALUE, f"oversize {label}")
+    return result
+
+
+def _read_frame(
+    data: bytes, offset: int, label: str,
+) -> tuple[bytes, int]:
+    colon = data.find(b":", offset)
+    require(colon >= offset, f"missing {label} frame delimiter")
+    length = _framed_decimal(data[offset:colon], f"{label} frame length")
+    payload_start = colon + 1
+    remaining = len(data) - payload_start
+    require(length <= remaining, f"{label} frame exceeds remaining bytes")
+    payload_end = payload_start + length
+    return data[payload_start:payload_end], payload_end
+
+
+def _decode_node(data: bytes, label: str) -> tuple[bytes, list[bytes]]:
+    tag, offset = _read_frame(data, 0, f"{label} tag")
+    count_bytes, offset = _read_frame(data, offset, f"{label} child count")
+    child_count = _framed_decimal(count_bytes, f"{label} child count")
+    # An empty canonical frame is two bytes (0:).  This check is deliberately
+    # before range construction or child iteration.
+    require(child_count <= (len(data) - offset) // 2,
+            f"{label} child count exceeds remaining framed bytes")
+    children: list[bytes] = []
+    for child_index in range(child_count):
+        child, offset = _read_frame(data, offset, f"{label} child {child_index}")
+        children.append(child)
+    require(offset == len(data), f"trailing bytes in {label} node")
+    return tag, children
+
+
+def _encode_frame(data: bytes) -> bytes:
+    return str(len(data)).encode("ascii") + b":" + data
+
+
+def _encode_node(tag: bytes, children: list[bytes]) -> bytes:
+    return (
+        _encode_frame(tag) + _encode_frame(str(len(children)).encode("ascii")) +
+        b"".join(_encode_frame(child) for child in children)
+    )
+
+
+def _validate_list_node(data: bytes, count: int, label: str) -> None:
+    tag, children = _decode_node(data, label)
+    require(tag == b"list" and len(children) == count,
+            f"{label} is not the exact declared list")
+
+
+def decode_semantic_v3_bytes(
+    data: bytes, plan: object, request: object,
+) -> dict[str, Any]:
+    """Decode exactly ten semantic-v3 lines into a nonce-free projection.
+
+    This pure decoder establishes only byte grammar and internal equality.  It
+    is intentionally not called by the source-stream parser in this migration
+    slice and cannot create a completion observation or raw candidate.
+    """
+
+    protocol = _protocol()
+    try:
+        plan = protocol.validate_raw_plan(plan)
+        request = protocol.validate_raw_request(request, plan)
+    except protocol.ProtocolError as error:
+        raise OutputProtocolError(f"invalid pristine semantic input: {error}") from error
+    require(type(data) is bytes and
+            len(data) <= plan["retained_stdout_max_bytes"],
+            "semantic marker bytes exceed the exact retained stdout cap")
+    lines = _decode_lines(data, "pristine semantic marker stream", allow_empty=False)
+    require(len(lines) == 10, "semantic marker stream is not exactly ten lines")
+    marker = request["marker_contract"]["semantic_observation"]
+    nonce = plan["session_nonce"]
+    direct = protocol._direct_protocol()
+    require(tuple(getattr(direct, "FINAL_THEOREM_NAMES", ())) ==
+            EXPECTED_FINAL_THEOREM_NAMES,
+            "incompatible direct theorem-name contract")
+
+    theorem_records: list[dict[str, Any]] = []
+    theorem_axioms: list[bytes] = []
+    for index, line in enumerate(lines[:4]):
+        require(PFT_TOKEN.search(line) is None,
+                f"PFT namespace is forbidden in semantic line {index}")
+        fields = _exact_fields(line, 11, "semantic THEOREM")
+        require(fields[0] == marker and fields[1] == "THEOREM" and
+                fields[2] == nonce and
+                _decimal(fields[3], "semantic theorem index") == index,
+                f"semantic theorem order/identity mismatch: {index}")
+        name_bytes = _serialized_hex(fields[4], f"semantic theorem name {index}")
+        try:
+            name = name_bytes.decode("ascii", errors="strict")
+        except UnicodeDecodeError as error:
+            raise OutputProtocolError(
+                f"semantic theorem name is not ASCII: {index}"
+            ) from error
+        require(name == EXPECTED_FINAL_THEOREM_NAMES[index],
+                f"semantic theorem name mismatch: {index}")
+        theorem = _serialized_hex(fields[5], f"semantic theorem {index}")
+        hypotheses = _serialized_hex(fields[6], f"semantic hypotheses {index}")
+        conclusion = _serialized_hex(fields[7], f"semantic conclusion {index}")
+        global_axioms = _serialized_hex(
+            fields[8], f"semantic global axioms {index}",
+        )
+        hypothesis_count = _decimal(fields[9], "semantic hypothesis count")
+        global_axiom_count = _decimal(fields[10], "semantic global-axiom count")
+        _validate_list_node(hypotheses, hypothesis_count,
+                            f"semantic hypotheses {index}")
+        _validate_list_node(global_axioms, global_axiom_count,
+                            f"semantic global axioms {index}")
+        require(hypothesis_count == 0 and hypotheses == b"4:list1:0",
+                f"semantic theorem has noncanonical hypotheses: {index}")
+        require(global_axiom_count == 3,
+                f"semantic theorem global-axiom count mismatch: {index}")
+        require(theorem == _encode_node(b"theorem", [hypotheses, conclusion]),
+                f"semantic theorem composite mismatch: {index}")
+        theorem_axioms.append(global_axioms)
+        theorem_records.append({
+            "name": name,
+            "theorem_sha256": hashlib.sha256(theorem).hexdigest(),
+            "hypotheses_sha256": hashlib.sha256(hypotheses).hexdigest(),
+            "conclusion_sha256": hashlib.sha256(conclusion).hexdigest(),
+            "global_axioms_sha256": hashlib.sha256(global_axioms).hexdigest(),
+            "hypothesis_count": hypothesis_count,
+            "global_axiom_count": global_axiom_count,
+        })
+
+    require(PFT_TOKEN.search(lines[4]) is None,
+            "PFT namespace is forbidden in semantic line 4")
+    fields = _exact_fields(lines[4], 12, "semantic POST_STATE")
+    require(fields[0] == marker and fields[1] == "POST_STATE" and
+            fields[2] == nonce, "semantic post-state identity mismatch")
+    kernel_state = _serialized_hex(fields[3], "semantic kernel state")
+    type_constants = _serialized_hex(fields[4], "semantic type constants")
+    term_constants = _serialized_hex(fields[5], "semantic term constants")
+    definitions = _serialized_hex(fields[6], "semantic definitions")
+    global_axioms = _serialized_hex(fields[7], "semantic post-state global axioms")
+    type_count = _decimal(fields[8], "semantic type-constant count")
+    term_count = _decimal(fields[9], "semantic term-constant count")
+    definition_count = _decimal(fields[10], "semantic definition count")
+    global_axiom_count = _decimal(fields[11], "semantic global-axiom count")
+    for component, count, label in (
+        (type_constants, type_count, "semantic type constants"),
+        (term_constants, term_count, "semantic term constants"),
+        (definitions, definition_count, "semantic definitions"),
+        (global_axioms, global_axiom_count, "semantic post-state global axioms"),
+    ):
+        _validate_list_node(component, count, label)
+    require(global_axiom_count == 3 and
+            all(item == global_axioms for item in theorem_axioms),
+            "semantic theorem/post-state global axioms differ")
+    require(kernel_state == _encode_node(
+                b"kernel-state",
+                [type_constants, term_constants, definitions, global_axioms],
+            ), "semantic kernel-state composite mismatch")
+    post_state = {
+        "kernel_state_sha256": hashlib.sha256(kernel_state).hexdigest(),
+        "type_constants_sha256": hashlib.sha256(type_constants).hexdigest(),
+        "term_constants_sha256": hashlib.sha256(term_constants).hexdigest(),
+        "definitions_sha256": hashlib.sha256(definitions).hexdigest(),
+        "global_axioms_sha256": hashlib.sha256(global_axioms).hexdigest(),
+        "type_constant_count": type_count,
+        "term_constant_count": term_count,
+        "definition_count": definition_count,
+        "global_axiom_count": global_axiom_count,
+    }
+
+    dependency_records: list[dict[str, Any]] = []
+    for index, line in enumerate(lines[5:9]):
+        line_index = index + 5
+        require(PFT_TOKEN.search(line) is None,
+                f"PFT namespace is forbidden in semantic line {line_index}")
+        fields = _exact_fields(line, 6, "semantic DEPENDENCY")
+        require(fields[0] == marker and fields[1] == "DEPENDENCY" and
+                fields[2] == nonce and
+                _decimal(fields[3], "semantic dependency index") == index,
+                f"semantic dependency order/identity mismatch: {index}")
+        name_bytes = _serialized_hex(fields[4], f"semantic dependency name {index}")
+        try:
+            name = name_bytes.decode("ascii", errors="strict")
+        except UnicodeDecodeError as error:
+            raise OutputProtocolError(
+                f"semantic dependency name is not ASCII: {index}"
+            ) from error
+        require(name == EXPECTED_FINAL_THEOREM_NAMES[index],
+                f"semantic dependency name mismatch: {index}")
+        require(re.fullmatch(r"[0-9a-f]{32}", fields[5]) is not None,
+                f"malformed semantic dependency digest: {index}")
+        dependency_records.append({
+            "index": index,
+            "name": name,
+            "full_digest_md5": fields[5],
+        })
+
+    require(PFT_TOKEN.search(lines[9]) is None,
+            "PFT namespace is forbidden in semantic line 9")
+    fields = _exact_fields(lines[9], 6, "semantic COMPLETE")
+    require(fields[0] == marker and fields[1] == "COMPLETE" and
+            fields[2] == nonce and fields[3] == plan["boundary_id"] and
+            _decimal(fields[4], "semantic theorem count") == 4 and
+            _decimal(fields[5], "semantic dependency count") == 4,
+            "semantic completion identity/count mismatch")
+
+    projection = {
+        "schema": 1,
+        "kind": direct.SEMANTIC_PROJECTION_KIND,
+        "serializer": {
+            "path": plan["authority"]["inputs"]["serializer"]["path"],
+            "sha256": plan["authority"]["inputs"]["serializer"]["sha256"],
+        },
+        "theorems": theorem_records,
+        "post_state": post_state,
+        "dependency_history": dependency_records,
+    }
+    try:
+        return direct.validate_semantic_projection(projection)
+    except direct.ProtocolError as error:
+        raise OutputProtocolError(
+            f"derived semantic projection is invalid: {error}"
+        ) from error
 
 
 def _exact_fields(line: str, count: int, label: str) -> list[str]:
@@ -497,6 +750,12 @@ def rederive_raw_source_observations(
         request = protocol.validate_raw_request(request, plan)
     except protocol.ProtocolError as error:
         raise OutputProtocolError(f"invalid pristine input: {error}") from error
+    require(type(stdout) is bytes and
+            len(stdout) <= plan["retained_stdout_max_bytes"],
+            "pristine reference stdout exceeds the exact retained-byte cap")
+    require(type(stderr) is bytes and
+            len(stderr) <= plan["retained_stderr_max_bytes"],
+            "pristine reference stderr exceeds the exact retained-byte cap")
     _require_exact_json(
         plan["authority"]["producer"]["output_parser"],
         _executing_parser_source_record(protocol),
@@ -574,7 +833,7 @@ def rederive_raw_source_observations(
         "loader_parentage_observed": False,
         "loader_cache_outcomes_observed": False,
         # Both observation classes are emitted into and content-bound by the
-        # same immutable stdout marker stream in this v2 parser.
+        # same immutable stdout marker stream in this v3 migration parser.
         "loader_ledger_artifact": stdout_record,
         "loader_event_count": len(events),
         "ordered_loader_event_sha256": protocol.canonical_sha256(events),
@@ -611,9 +870,11 @@ def rederive_raw_source_observations(
         "request": protocol.content_record(request),
         "stdout": stdout_record,
         "stderr": stderr_record,
+        "process_result": {"exit_code": 0, "timed_out": False},
         "transcript": transcript,
         "native_execution_closure": closure,
         "semantic_projection": None,
+        "semantic_completion_observation": None,
         "cross_runtime_coverage": None,
         "semantic_status": SEMANTIC_GRAMMAR_STATUS,
         "coverage_status": COVERAGE_GRAMMAR_STATUS,
