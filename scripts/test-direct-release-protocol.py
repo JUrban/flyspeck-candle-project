@@ -796,6 +796,9 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         self.assertFalse(capture["v1_3_s3_release_approved"])
         self.assertFalse(capture["pft_used"])
         self.assertFalse(capture["s2_s3_evidence"])
+        self.assertEqual(
+            capture["kind"], subject.COMPILED_DIRECT_CANDIDATE_KIND,
+        )
 
         for label, mutate in (
             ("receipt digest", lambda item: item["receipt"].update(
@@ -849,6 +852,137 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 capture, receipt=receipt, authenticated_plan=spliced_plan,
                 expected_authority=capture["authority"],
             )
+
+    def test_unapproved_three_way_comparison_fixture_is_exact(self) -> None:
+        semantic = subject.project_authenticated_semantic_observations(*fixture())
+        coverage = coverage_fixture()
+        content = lambda byte, length: {
+            "bytes": length,
+            "sha256": byte * 64,
+            "md5": byte * 32,
+        }
+        plan_record = content("1", 101)
+        compiled_record = content("2", 102)
+        reference_records = [content("3", 103), content("4", 104)]
+        source = lambda path, byte: {
+            "path": path, "bytes": 10,
+            "sha256": byte * 64, "md5": byte * 32,
+        }
+        authority = {
+            "policy": subject.COMPARISON_AUTHORITY_POLICY,
+            "reviewer_project_commit": "5" * 40,
+            "reviewer_sources": [source("scripts/reviewer.py", "5")],
+            "compiled_producer_project_commit": "6" * 40,
+            "compiled_consumer_sources": [
+                source("scripts/compiled-consumer.py", "6"),
+            ],
+            "reference_producer_project_commit": "7" * 40,
+            "reference_validator_sources": [
+                source("scripts/reference-validator.py", "7"),
+            ],
+        }
+        comparison = {
+            "schema": 1,
+            "kind": subject.INDEPENDENT_COMPARISON_KIND,
+            "policy": subject.INDEPENDENT_COMPARISON_POLICY,
+            "boundary_id": subject.FINAL_BOUNDARY_ID,
+            "action_count": subject.FINAL_ACTION_COUNT,
+            "authenticated_plan": plan_record,
+            "compiled_candidate": {
+                "candidate": compiled_record,
+                "attempt_nonce": "8" * 32,
+            },
+            "reference_candidates": [{
+                "ordinal": 1, "candidate": reference_records[0],
+                "session_nonce": "9" * 64,
+            }, {
+                "ordinal": 2, "candidate": reference_records[1],
+                "session_nonce": "a" * 64,
+            }],
+            "semantic_projection": semantic,
+            "coverage_projection": coverage,
+            "authority": authority,
+            "comparison_status": "three-way-exact-match-unapproved",
+            "promotion_allowed": False,
+            "approval_included": False,
+            "direct_s2_execution_approved": False,
+            "direct_s3_coverage_approved": False,
+            "v1_3_s3_release_approved": False,
+            "pft_used": False,
+            "s2_s3_evidence": False,
+        }
+        arguments = {
+            "expected_authenticated_plan": plan_record,
+            "expected_compiled_candidate": compiled_record,
+            "expected_reference_candidates": reference_records,
+            "authenticated_semantic_projections": [semantic] * 3,
+            "authenticated_coverage_projections": [coverage] * 3,
+            "expected_authority": authority,
+        }
+        self.assertIs(
+            subject.validate_unapproved_direct_comparison_fixture(
+                comparison, **arguments,
+            ), comparison,
+        )
+        self.assertEqual(
+            subject.validate_canonical_unapproved_direct_comparison_fixture_bytes(
+                subject.canonical_json_bytes(comparison), **arguments,
+            ), comparison,
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "not canonical"):
+            subject.validate_canonical_unapproved_direct_comparison_fixture_bytes(
+                subject.canonical_value_bytes(comparison), **arguments,
+            )
+
+        def change_coverage(_item, candidate_arguments):
+            action_events = candidate_arguments[
+                "authenticated_coverage_projections"
+            ][2]["action_events"]
+            action_events["records"][0]["source_sha256"] = "0" * 64
+            action_events["ordered_record_sha256"] = subject.canonical_sha256(
+                action_events["records"]
+            )
+
+        def inject_pft_source(item, candidate_arguments):
+            item["authority"]["reference_validator_sources"][0]["path"] = (
+                "scripts/pft-results.py"
+            )
+            candidate_arguments["expected_authority"][
+                "reference_validator_sources"
+            ][0]["path"] = "scripts/pft-results.py"
+
+        cases = (
+            ("claim", lambda item, args: item.update(
+                direct_s3_coverage_approved=True,
+            )),
+            ("bool ordinal", lambda item, args: item[
+                "reference_candidates"
+            ][0].update(ordinal=True)),
+            ("duplicate nonce", lambda item, args: item[
+                "reference_candidates"
+            ][1].update(session_nonce="9" * 64)),
+            ("duplicate candidate", lambda item, args: item[
+                "reference_candidates"
+            ][1].update(candidate=copy.deepcopy(reference_records[0]))),
+            ("reviewer descendant", lambda item, args: item[
+                "authority"
+            ].update(reviewer_project_commit="b" * 40)),
+            ("PFT source", inject_pft_source),
+            ("semantic mismatch", lambda item, args: args[
+                "authenticated_semantic_projections"
+            ][2]["theorems"][0].update(theorem_sha256="0" * 64)),
+            ("coverage mismatch", change_coverage),
+        )
+        for label, mutate in cases:
+            forged = copy.deepcopy(comparison)
+            forged_arguments = copy.deepcopy(arguments)
+            mutate(forged, forged_arguments)
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_unapproved_direct_comparison_fixture(
+                    forged, **forged_arguments,
+                )
 
     def test_coverage_requires_exact_final_boundary_count_and_no_pft(self) -> None:
         for field, value in (
