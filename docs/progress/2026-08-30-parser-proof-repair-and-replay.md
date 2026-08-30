@@ -429,3 +429,22 @@ compiler qualification, Candle repin, or 20/400 gate is claimed from this
 failure.  The next warm replay will start only after the focused
 `source_to_flatProof` target passes at a committed CakeML head; final
 qualification still requires the clean cold four-stage replay.
+
+## Isolated proof-worktree metadata incident
+
+While preparing a focused `source_to_flatProof` build, a development-only
+cache copy accidentally included the source worktree's `.git` indirection
+file.  The isolated directory consequently pointed at the main
+`codex/flyspeck-v13-runtime-stack` worktree metadata even though Git's worktree
+registry still held a separate `codex/flyspeck-v13-source-to-flat-dopen`
+entry.  This was detected before accepting a proof result.
+
+The build wrapper and its surviving HOL child were terminated.  The main
+runtime-stack worktree was verified clean at `77b769a99`; the isolated
+directory contained only the intended uncommitted `source_to_flatProofScript`
+change.  Its `.git` pointer was restored to the registered isolated gitdir,
+after which its branch, head and diff were rechecked.  The interrupted build
+is discarded as evidence.  A new focused developer build may proceed only
+after an immediate preflight branch-pointer check and must recheck that pointer
+after completion.  No generated cache copy may include `.git` or other
+repository metadata.
