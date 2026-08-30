@@ -2,6 +2,12 @@
 
 ## Status
 
+> Update at 03:08 UTC: the `ca67ffaa...` replay described below exposed a
+> second, narrower proof obligation and is now retained as a failed attempt.
+> The current repair is CakeML `586e06883d44f5c447793597bdaf0aa76e7a9952`,
+> and its fresh replay is recorded in the final section of this report.  No
+> Candle repin is authorized until that replay passes all four stages.
+
 The first exact four-stage replay at CakeML
 `964406486a52e1a53a94eade4cf86a666dc8055a` failed in
 `compiler64ProgTheory.uo`.  This was a deterministic HOL source failure, not a
@@ -76,5 +82,64 @@ No other `Holmake` may run concurrently.  The long PFT trace remains a P1-only
 oracle and is not proof evidence.  The reference sweep remains serial and is
 not restarted.  The old CakeML/Candle pin, linked runtime, parser plans, and
 gate handoffs remain authoritative only as historical/preparation artifacts;
-they must be regenerated against `ca67ffaa...` after, and only after, this
-replay passes.
+at that launch they were expected to be regenerated against `ca67ffaa...`
+only after this replay passed.  The following section supersedes that target.
+
+## Second proof frontier and repair
+
+The `ca67ffaa...` replay proved that the overload-capture repair was effective:
+the parser-diagnostic definitions and translations were saved through
+`compiler64Prog_env_316`, and the original `stdout` type error did not recur.
+It then failed at the top-level theorem
+`run_candle_parser_diagnostic_ok_spec`.  The exact remaining goal required the
+final `TextIOProof.print_spec` application to establish stdout state with the
+semantic string `reply_out`; the generic `xapp \\ xsimpl` sequence had not
+provided that existential witness.
+
+CakeML commit `586e06883d44f5c447793597bdaf0aa76e7a9952` (`proof: bind
+parser diagnostic print replies`) replaces that final application with
+`xapp_spec print_spec`, `qexists_tac reply_out`, and `xsimpl`.  It makes the
+same witness explicit for the corresponding first print in the error proof.
+This changes proof scripts only; it neither weakens a theorem nor changes the
+translated runtime definition.  The regression requires exactly one ordered,
+adjacent witness sequence in each theorem block and passes 7/7.  Independent
+review of exact diff SHA-256
+`e1aafed8d6b60524276a3b893c95556557a84392ba4ac794aad060c988c44903`
+reported no P0, P1, or P2 finding.
+
+The retained failed attempt is:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-ca67ffaa8-attempt-001`
+
+Stage 1 reused the authenticated dependency products and passed in 24.60
+seconds with zero swaps.  Stage 2 printed the terminal proof failure at
+02:49:45 UTC.  HOL then consumed CPU without log or receipt progress for more
+than the announced 15-minute unwind window.  After exact identity checks, one
+`SIGINT` was sent at 03:06:31 UTC to authenticated replay process group
+`3291501` only.  The controller and sole Holmake exited, the timing receipt
+closed as signal 2 after 1:06:44, and no `finished_utc` was created.  The PFT,
+reference sweep, and sampler were in other process groups and were not
+signalled.  `intervention.txt` records the decision.  The committed sampler
+auto-sealed mode 0444 with 119 samples, no alerts, and a terminal
+`controller-exited` record.
+
+## Current exact replay
+
+The cached clean build worktree was fast-forwarded to `586e06883...` only
+after the failed controller closed.  A fresh replay now runs at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-586e06883-attempt-001`
+
+Its controller PID/process group is `3395323`, with `/proc` start ticks
+`317525210`.  The clean pinned HOL4 head remains
+`a390cbabd3a4521bab4ee20281e3e42933a8a3ae`.  The four targets, serial
+`Holmake -j1 --mt=1` discipline, and `117964800` KiB address-space ceiling are
+unchanged.  The committed fail-closed sampler is PID `3395459` and also
+observes, but cannot control, the PFT and reference scopes.  At launch the
+host had about 190 GiB available; tracked scopes had zero swap I/O.  The host
+swap device remained mostly allocated by unrelated historical state, so live
+page-in/page-out and available-memory conditions remain authoritative.
+
+This is an active proof replay, not a pass.  Candle must be repinned to
+`586e06883...`, not `ca67ffaa...`, only after all four exact stages and six
+postconditions succeed.

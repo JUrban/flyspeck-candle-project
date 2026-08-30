@@ -1,14 +1,19 @@
-# CakeML `ca67ffaa` Candle repin impact (2026-08-30)
+# CakeML parser-repair Candle repin impact (2026-08-30)
+
+> Supersession: `ca67ffaa...` fixed the original overload capture but exposed
+> a missing `print_spec` witness.  The only prospective pin is now
+> `586e06883d44f5c447793597bdaf0aa76e7a9952`.  The ca67 replay and its
+> intervention evidence remain historical and must never be relabelled.
 
 ## Gate
 
 This is a preparation checklist, not authority to repin.  Do not mutate Candle
 or materialize new plans until the repaired CakeML replay at
-`cakeml-parser-diagnostic-proof-ca67ffaa8-attempt-001` has completed all four
+`cakeml-parser-diagnostic-proof-586e06883-attempt-001` has completed all four
 stages with zero-exit receipts and its required postconditions pass.
 
 The intended CakeML target is
-`ca67ffaa831845c20c905bf94924b457951f8968`.  The old Candle authority is clean
+`586e06883d44f5c447793597bdaf0aa76e7a9952`.  The old Candle authority is clean
 at `688d9d1738a7021501f95b6f0ed788e014fa726f`.  Preserve its worktree and create
 a separately named branch/worktree for the new pin.
 
