@@ -1260,11 +1260,13 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         self.assertFalse(capture["v1_3_s3_release_approved"])
         self.assertFalse(capture["pft_used"])
         self.assertFalse(capture["s2_s3_evidence"])
+        self.assertEqual(capture["schema"], 2)
         self.assertEqual(
             capture["kind"], subject.COMPILED_DIRECT_CANDIDATE_KIND,
         )
 
         for label, mutate in (
+            ("schema downgrade", lambda item: item.update(schema=1)),
             ("receipt digest", lambda item: item["receipt"].update(
                 sha256="0" * 64,
             )),
@@ -1319,6 +1321,61 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 capture, receipt=receipt, authenticated_plan=spliced_plan,
                 expected_authority=capture["authority"],
             )
+
+    def test_producer_shaped_compiled_descriptor_is_role_correct(self) -> None:
+        receipt, plan = schema6_fixture()
+        capture = subject.build_authenticated_schema6_capture(receipt, plan, {
+            "policy": subject.AUTHENTICATED_CAPTURE_POLICY,
+            "consumer_project_commit": "1" * 40,
+            "candle_commit": "c" * 40,
+            "cakeml_commit": "2" * 40,
+            "hol4_commit": "3" * 40,
+            "flyspeck_commit": "f" * 40,
+        })
+        entrypoint = {
+            "path": "scripts/check-published-direct-result.py",
+            "bytes": 10,
+            "sha256": "6" * 64,
+            "md5": "6" * 32,
+        }
+        descriptor = {
+            "schema": 2,
+            "kind": subject.AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND,
+            "role": subject.COMPILED_COMPARISON_ROLE,
+            "ordinal": 0,
+            "candidate": subject._content_record(capture),
+            "authenticated_nonce": {
+                "kind": subject.COMPILED_COMPARISON_NONCE_KIND,
+                "value": receipt["attempt_nonce"],
+            },
+            "authenticated_plan": copy.deepcopy(capture["authenticated_plan"]),
+            "semantic_projection": copy.deepcopy(
+                capture["semantic_projection"]
+            ),
+            "cross_runtime_coverage_projection": copy.deepcopy(
+                capture["cross_runtime_coverage_projection"]
+            ),
+            "compiled_coverage_projection": copy.deepcopy(
+                capture["coverage_projection"]
+            ),
+            "candidate_authority": {
+                "policy": subject.COMPARISON_CANDIDATE_AUTHORITY_POLICY,
+                "authenticator": subject.COMPILED_COMPARISON_AUTHENTICATOR,
+                "project_commit": "1" * 40,
+                "runtime_commit": "c" * 40,
+                "entrypoint": copy.deepcopy(entrypoint),
+                "sources": [copy.deepcopy(entrypoint)],
+            },
+            "pft_used": False,
+        }
+        self.assertIs(
+            subject._validate_authenticated_comparison_descriptor(
+                descriptor,
+                role=subject.COMPILED_COMPARISON_ROLE,
+                ordinal=0,
+            ),
+            descriptor,
+        )
 
     def test_schema6_projection_rejects_nonfresh_or_checkpointed_execution(
         self,
@@ -1519,6 +1576,16 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 actions["records"]
             )
 
+        def change_report_cross_coverage(item, _candidate_arguments):
+            item["cross_runtime_coverage_projection"]["generated_inputs"][
+                "contract_sha256"
+            ] = "c" * 64
+
+        def change_report_compiled_coverage(item, _candidate_arguments):
+            item["compiled_coverage_projection"]["generated_inputs"][
+                "contract_sha256"
+            ] = "c" * 64
+
         def inject_pft_source(item, candidate_arguments):
             item["authority"]["reference_validator_sources"][0]["path"] = (
                 "scripts/pft-results.py"
@@ -1582,6 +1649,11 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("candidate descriptor splice", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][0].update(candidate=copy.deepcopy(reference_records[0]))),
+            ("full descriptor role swap", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ].__setitem__(0, copy.deepcopy(args[
+                "authenticated_candidate_descriptors"
+            ][1]))),
             ("compiled role omits detailed coverage", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][0].pop("compiled_coverage_projection")),
@@ -1630,9 +1702,15 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("float reference bytes", lambda item, args: item[
                 "reference_candidates"
             ][0]["candidate"].update(bytes=103.0)),
+            ("boolean reference closure bytes", lambda item, args: item[
+                "reference_candidates"
+            ][0]["execution_closure"].update(bytes=True)),
             ("float descriptor bytes", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][1]["candidate"].update(bytes=103.0)),
+            ("float descriptor closure bytes", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][1]["reference_execution_closure"].update(bytes=105.0)),
             ("compiled authority drift", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][0]["candidate_authority"].update(runtime_commit="d" * 40)),
@@ -1649,6 +1727,9 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ][0]["compiled_coverage_projection"]["action_events"][
                 "records"
             ][0].update(source_sha256="0" * 64)),
+            ("report cross coverage mismatch", change_report_cross_coverage),
+            ("report compiled coverage mismatch",
+             change_report_compiled_coverage),
             ("coverage mismatch", change_coverage),
         )
         for label, mutate in cases:

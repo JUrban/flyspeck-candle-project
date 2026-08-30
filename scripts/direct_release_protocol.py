@@ -1946,7 +1946,7 @@ def validate_authenticated_schema6_capture(
         "v1_3_s3_release_approved", "pft_used", "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
-            type(value.get("schema")) is int and value["schema"] == 1 and
+            type(value.get("schema")) is int and value["schema"] == 2 and
             value.get("kind") == AUTHENTICATED_CAPTURE_KIND and
             value.get("boundary_id") == FINAL_BOUNDARY_ID and
             type(value.get("action_count")) is int and
@@ -2012,7 +2012,7 @@ def build_authenticated_schema6_capture(
 ) -> dict[str, Any]:
     authority = copy.deepcopy(_validate_capture_authority(authority))
     capture = {
-        "schema": 1,
+        "schema": 2,
         "kind": AUTHENTICATED_CAPTURE_KIND,
         "boundary_id": FINAL_BOUNDARY_ID,
         "action_count": FINAL_ACTION_COUNT,
