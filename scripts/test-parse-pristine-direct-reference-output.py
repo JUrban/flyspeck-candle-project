@@ -6,6 +6,7 @@ import copy
 import hashlib
 import importlib._bootstrap_external as bootstrap_external
 import importlib.util
+import os
 from pathlib import Path
 import sys
 import tempfile
@@ -33,6 +34,18 @@ fixture_module = load_module(
 )
 protocol = fixture_module.subject
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
+
+
+def install_fixed_sources(root: Path) -> Path:
+    scripts = root / "scripts"
+    scripts.mkdir(parents=True)
+    for relative in (
+        protocol.PROTOCOL_PATH, protocol.OUTPUT_PARSER_PATH,
+        protocol.DIRECT_PROTOCOL_PATH,
+    ):
+        source = PROJECT_ROOT / relative
+        (root / relative).write_bytes(source.read_bytes())
+    return scripts
 
 
 def replace_field(line: str, index: int, value: str) -> str:
@@ -626,6 +639,127 @@ class PristineOutputParserTests(unittest.TestCase):
                 loader_module.LoaderError, "cannot pin fixed.*sources",
             ):
                 loader_module.load_trusted_output_parser(root, plan)
+
+    def test_trusted_loader_rejects_project_root_entry_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            outer = Path(temporary).resolve()
+            named_parent = outer / "named-parent"
+            root = named_parent / "project-root"
+            scripts = install_fixed_sources(root)
+            replacement_parent = outer / "replacement-parent"
+            (replacement_parent / "project-root").mkdir(parents=True)
+            displaced_parent = outer / "displaced-parent"
+            plan = copy.deepcopy(self.plan)
+            plan["authority"]["repositories"]["project"]["path"] = str(root)
+
+            held_descriptors = [
+                os.open(root, os.O_RDONLY | os.O_DIRECTORY),
+                os.open(scripts, os.O_RDONLY | os.O_DIRECTORY),
+                *(os.open(root / relative, os.O_RDONLY) for relative in (
+                    protocol.PROTOCOL_PATH, protocol.OUTPUT_PARSER_PATH,
+                    protocol.DIRECT_PROTOCOL_PATH,
+                )),
+            ]
+            held_before = [
+                loader_module._descriptor_identity(os.fstat(descriptor))
+                for descriptor in held_descriptors
+            ]
+            original_compile = loader_module._compile_exact_module
+            mutation_ran = False
+
+            def replace_root(*args, **kwargs):
+                nonlocal mutation_ran
+                if not mutation_ran:
+                    mutation_ran = True
+                    named_parent.rename(displaced_parent)
+                    replacement_parent.rename(named_parent)
+                return original_compile(*args, **kwargs)
+
+            loader_module._compile_exact_module = replace_root
+            try:
+                with self.assertRaisesRegex(
+                    loader_module.LoaderError,
+                    "named project path component .*named-parent no longer "
+                    "identifies its held descriptor",
+                ):
+                    loader_module.load_trusted_output_parser(root, plan)
+                self.assertTrue(mutation_ran)
+                self.assertEqual(
+                    held_before,
+                    [loader_module._descriptor_identity(os.fstat(descriptor))
+                     for descriptor in held_descriptors],
+                    "root-path replacement must leave every old held fstat "
+                    "unchanged",
+                )
+            finally:
+                loader_module._compile_exact_module = original_compile
+                for descriptor in held_descriptors:
+                    os.close(descriptor)
+
+    def test_trusted_loader_rejects_scripts_entry_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            scripts = install_fixed_sources(root)
+            replacement = root / "replacement-scripts"
+            replacement.mkdir()
+            displaced = root / "displaced-scripts"
+            plan = copy.deepcopy(self.plan)
+            plan["authority"]["repositories"]["project"]["path"] = str(root)
+            original_compile = loader_module._compile_exact_module
+            mutation_ran = False
+
+            def replace_scripts(*args, **kwargs):
+                nonlocal mutation_ran
+                if not mutation_ran:
+                    mutation_ran = True
+                    scripts.rename(displaced)
+                    replacement.rename(scripts)
+                return original_compile(*args, **kwargs)
+
+            loader_module._compile_exact_module = replace_scripts
+            try:
+                with self.assertRaisesRegex(
+                    loader_module.LoaderError,
+                    "named scripts directory no longer identifies its held "
+                    "descriptor",
+                ):
+                    loader_module.load_trusted_output_parser(root, plan)
+                self.assertTrue(mutation_ran)
+            finally:
+                loader_module._compile_exact_module = original_compile
+
+    def test_trusted_loader_rejects_source_entry_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            scripts = install_fixed_sources(root)
+            direct = root / protocol.DIRECT_PROTOCOL_PATH
+            replacement = scripts / "replacement-direct-release-protocol.py"
+            replacement.write_bytes(direct.read_bytes())
+            displaced = scripts / "displaced-direct-release-protocol.py"
+            plan = copy.deepcopy(self.plan)
+            plan["authority"]["repositories"]["project"]["path"] = str(root)
+            original_compile = loader_module._compile_exact_module
+            mutation_ran = False
+
+            def replace_source(*args, **kwargs):
+                nonlocal mutation_ran
+                if not mutation_ran:
+                    mutation_ran = True
+                    direct.rename(displaced)
+                    replacement.rename(direct)
+                return original_compile(*args, **kwargs)
+
+            loader_module._compile_exact_module = replace_source
+            try:
+                with self.assertRaisesRegex(
+                    loader_module.LoaderError,
+                    "named scripts/direct_release_protocol.py no longer "
+                    "identifies its held descriptor",
+                ):
+                    loader_module.load_trusted_output_parser(root, plan)
+                self.assertTrue(mutation_ran)
+            finally:
+                loader_module._compile_exact_module = original_compile
 
     def test_incompatible_protocol_sibling_fails_closed(self) -> None:
         sibling = subject._protocol()

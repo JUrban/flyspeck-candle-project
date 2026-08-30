@@ -92,24 +92,46 @@ class _PinnedSourceTraversal:
         self.root = root
         self._descriptors: list[int] = []
         self._snapshots: list[tuple[str, int, tuple[int, ...]]] = []
+        self._named_entries: list[
+            tuple[str, int, str, int, tuple[int, ...]]
+        ] = []
         self.source_bytes: dict[str, bytes] = {}
         try:
-            self.root_descriptor = os.open(
-                str(root), _open_flags(directory=True),
+            require(root != Path("/"),
+                    "project root cannot be the filesystem root")
+            current_descriptor = os.open(
+                "/", _open_flags(directory=True),
             )
-            self._hold("project root", self.root_descriptor, directory=True)
-            named_root = os.stat(str(root), follow_symlinks=False)
-            require(
-                _descriptor_identity(named_root) ==
-                self._snapshots[-1][2],
-                "trusted project root changed while it was opened",
+            self._hold(
+                "filesystem root anchor", current_descriptor, directory=True,
             )
+            traversed = Path("/")
+            for component in root.parts[1:]:
+                child_descriptor = os.open(
+                    component, _open_flags(directory=True),
+                    dir_fd=current_descriptor,
+                )
+                traversed /= component
+                label = f"project path component {traversed}"
+                expected = self._hold(
+                    label, child_descriptor, directory=True,
+                )
+                self._hold_named_entry(
+                    label, current_descriptor, component, child_descriptor,
+                    expected,
+                )
+                current_descriptor = child_descriptor
+            self.root_descriptor = current_descriptor
             self.scripts_descriptor = os.open(
                 "scripts", _open_flags(directory=True),
                 dir_fd=self.root_descriptor,
             )
-            self._hold(
+            scripts_expected = self._hold(
                 "scripts directory", self.scripts_descriptor, directory=True,
+            )
+            self._hold_named_entry(
+                "scripts directory", self.root_descriptor, "scripts",
+                self.scripts_descriptor, scripts_expected,
             )
             for authority_name, relative in FIXED_SOURCES.items():
                 logical = PurePosixPath(relative)
@@ -123,7 +145,13 @@ class _PinnedSourceTraversal:
                     logical.parts[1], _open_flags(directory=False),
                     dir_fd=self.scripts_descriptor,
                 )
-                self._hold(relative, descriptor, directory=False)
+                expected = self._hold(
+                    relative, descriptor, directory=False,
+                )
+                self._hold_named_entry(
+                    relative, self.scripts_descriptor, logical.parts[1],
+                    descriptor, expected,
+                )
                 self.source_bytes[authority_name] = self._read(
                     relative, descriptor,
                 )
@@ -136,7 +164,9 @@ class _PinnedSourceTraversal:
                 f"cannot pin fixed pristine-reference sources: {error}"
             ) from error
 
-    def _hold(self, label: str, descriptor: int, *, directory: bool) -> None:
+    def _hold(
+        self, label: str, descriptor: int, *, directory: bool,
+    ) -> tuple[int, ...]:
         self._descriptors.append(descriptor)
         try:
             current = os.fstat(descriptor)
@@ -148,8 +178,26 @@ class _PinnedSourceTraversal:
             f"pinned {label} is not an ordinary " +
             ("directory" if directory else "file"),
         )
-        self._snapshots.append(
-            (label, descriptor, _descriptor_identity(current)),
+        identity = _descriptor_identity(current)
+        self._snapshots.append((label, descriptor, identity))
+        return identity
+
+    def _hold_named_entry(
+        self, label: str, parent_descriptor: int, basename: str,
+        descriptor: int, expected: tuple[int, ...],
+    ) -> None:
+        try:
+            named = os.stat(
+                basename, dir_fd=parent_descriptor, follow_symlinks=False,
+            )
+        except OSError as error:
+            raise LoaderError(
+                f"cannot inspect named {label}: {error}"
+            ) from error
+        require(_descriptor_identity(named) == expected,
+                f"named {label} changed while it was opened")
+        self._named_entries.append(
+            (label, parent_descriptor, basename, descriptor, expected),
         )
 
     def _read(self, label: str, descriptor: int) -> bytes:
@@ -175,6 +223,20 @@ class _PinnedSourceTraversal:
         return data
 
     def verify_unchanged(self) -> None:
+        for label, parent, basename, descriptor, _expected in self._named_entries:
+            try:
+                named = os.stat(
+                    basename, dir_fd=parent, follow_symlinks=False,
+                )
+                held = os.fstat(descriptor)
+            except OSError as error:
+                raise LoaderError(
+                    f"cannot recheck named {label}: {error}"
+                ) from error
+            require(
+                _descriptor_identity(named) == _descriptor_identity(held),
+                f"named {label} no longer identifies its held descriptor",
+            )
         for label, descriptor, expected in self._snapshots:
             try:
                 current = os.fstat(descriptor)
