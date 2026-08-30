@@ -175,6 +175,15 @@ def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(canonical_value_bytes(value)).hexdigest()
 
 
+def require_exact_json(value: Any, expected: Any, label: str) -> None:
+    try:
+        value_bytes = canonical_value_bytes(value)
+        expected_bytes = canonical_value_bytes(expected)
+    except (TypeError, ValueError) as error:
+        raise ProtocolError(f"malformed exact JSON {label}: {error}") from error
+    require(value_bytes == expected_bytes, f"exact JSON {label} mismatch")
+
+
 def canonical_json_bytes(value: Any) -> bytes:
     return (
         json.dumps(value, indent=2, sort_keys=True, allow_nan=False) + "\n"
@@ -214,6 +223,7 @@ def decode_object(data: bytes, label: str) -> dict[str, Any]:
 def validate_canonical_bytes(
     data: bytes, label: str, validator: Callable[[object], dict[str, Any]],
 ) -> dict[str, Any]:
+    require(type(data) is bytes, f"{label} is not immutable bytes")
     value = decode_object(data, label)
     require(data == canonical_json_bytes(value), f"{label} is not canonical JSON")
     return validator(value)
@@ -574,20 +584,31 @@ def validate_raw_request(value: object, plan: object) -> dict[str, Any]:
             value.get("kind") == REQUEST_KIND and
             is_int(value.get("action_count")) and
             value["action_count"] == FINAL_ACTION_COUNT and
-            value.get("entrypoint_sequence") == list(ENTRYPOINT_SEQUENCE) and
-            value.get("marker_contract") == MARKER_CONTRACT and
-            value.get("serialization_environment") ==
-            plan["serialization_environment"] and
             value.get("fresh_process_replay_from_action_zero") is True and
             value.get("process_state_checkpoint") is None and
             value.get("approval_included") is False and
             value.get("pft_used") is False and
             value.get("s2_s3_evidence") is False,
             "malformed or overclaiming pristine reference request")
+    require_exact_json(
+        value.get("entrypoint_sequence"), list(ENTRYPOINT_SEQUENCE),
+        "pristine reference request entrypoint sequence",
+    )
+    require_exact_json(
+        value.get("marker_contract"), MARKER_CONTRACT,
+        "pristine reference request marker contract",
+    )
+    require_exact_json(
+        value.get("serialization_environment"),
+        plan["serialization_environment"],
+        "pristine reference request serialization environment",
+    )
     _validate_role_nonce(value, "pristine reference request")
     _same_run(value, plan, "pristine reference request")
-    require(value.get("plan") == content_record(plan),
-            "pristine reference request plan content mismatch")
+    require_exact_json(
+        value.get("plan"), content_record(plan),
+        "pristine reference request plan content",
+    )
     _named_content_record(value.get("request_source"), "reference request source")
     return value
 
@@ -715,9 +736,14 @@ def validate_raw_transcript(
             "malformed or overclaiming pristine reference transcript")
     _validate_role_nonce(value, "pristine reference transcript")
     _same_run(value, plan, "pristine reference transcript")
-    require(value.get("plan") == content_record(plan) and
-            value.get("request") == content_record(request),
-            "pristine reference transcript input content mismatch")
+    require_exact_json(
+        value.get("plan"), content_record(plan),
+        "pristine reference transcript plan content",
+    )
+    require_exact_json(
+        value.get("request"), content_record(request),
+        "pristine reference transcript request content",
+    )
     _content_record(value.get("stdout"), "reference stdout", allow_empty=True)
     _content_record(value.get("stderr"), "reference stderr", allow_empty=True)
     _validate_action_completions(value.get("action_completions"), plan)
@@ -799,10 +825,18 @@ def validate_native_execution_closure(
             "malformed or overclaiming pristine native execution closure")
     _validate_role_nonce(value, "pristine native execution closure")
     _same_run(value, plan, "pristine native execution closure")
-    require(value.get("plan") == content_record(plan) and
-            value.get("request") == content_record(request) and
-            value.get("transcript") == content_record(transcript),
-            "pristine native execution closure input content mismatch")
+    require_exact_json(
+        value.get("plan"), content_record(plan),
+        "pristine native closure plan content",
+    )
+    require_exact_json(
+        value.get("request"), content_record(request),
+        "pristine native closure request content",
+    )
+    require_exact_json(
+        value.get("transcript"), content_record(transcript),
+        "pristine native closure transcript content",
+    )
     _content_record(value.get("loader_ledger_artifact"),
                     "native loader-ledger artifact")
     _content_record(value.get("lp_success_artifact"), "native LP-success artifact")
@@ -815,8 +849,10 @@ def validate_native_execution_closure(
             value.get("ordered_loader_event_sha256") == canonical_sha256(events),
             "pristine native loader event count/digest mismatch")
     action_bindings = value.get("action_bindings")
-    require(action_bindings == transcript["action_completions"],
-            "native action bindings differ from transcript")
+    require_exact_json(
+        action_bindings, transcript["action_completions"],
+        "native action bindings versus transcript",
+    )
     initial = action_bindings["initial_ledger_count"]
     final = action_bindings["final_ledger_count"]
     require(is_int(value.get("pre_action_event_count")) and
@@ -884,8 +920,10 @@ def validate_native_execution_closure(
                     "native serializer MD5 differs from authority")
 
     lp_successes = _validate_lp_successes(value.get("lp_successes"), plan)
-    require(lp_successes == transcript["lp_successes"],
-            "native LP successes differ from transcript")
+    require_exact_json(
+        lp_successes, transcript["lp_successes"],
+        "native LP successes versus transcript",
+    )
     return value
 
 
@@ -1047,8 +1085,6 @@ def validate_raw_candidate(
             value.get("validation_error") is None and
             value.get("fresh_process_replay_from_action_zero") is True and
             value.get("process_state_checkpoint") is None and
-            value.get("serialization_environment") ==
-            plan["serialization_environment"] and
             value.get("approved_reference_present") is False and
             value.get("promotion_allowed") is False and
             value.get("pft_used") is False and
@@ -1056,6 +1092,11 @@ def validate_raw_candidate(
             value.get("s3_eligible") is False and
             value.get("s2_s3_evidence") is False,
             "malformed or overclaiming pristine raw candidate")
+    require_exact_json(
+        value.get("serialization_environment"),
+        plan["serialization_environment"],
+        "pristine raw candidate serialization environment",
+    )
     _validate_role_nonce(value, "pristine raw candidate")
     _same_run(value, plan, "pristine raw candidate")
     artifacts = value.get("artifacts")
@@ -1071,8 +1112,9 @@ def validate_raw_candidate(
             "malformed pristine raw candidate artifact closure")
     for name, record in artifacts.items():
         _content_record(record, f"raw candidate {name}")
-    require(artifacts == expected,
-            "pristine raw candidate artifact content mismatch")
+    require_exact_json(
+        artifacts, expected, "pristine raw candidate artifact content",
+    )
     return value
 
 
@@ -1105,11 +1147,19 @@ def validate_distinct_reference_pair(
             "pristine reference pair ordinals must be exactly 1 then 2")
     require(first_plan["session_nonce"] != second_plan["session_nonce"],
             "pristine reference pair reused a session nonce")
-    require(first_plan["authority"] == second_plan["authority"] and
-            first_plan["actions"] == second_plan["actions"] and
-            first_plan["lp_certificate_inputs"] ==
-            second_plan["lp_certificate_inputs"],
-            "pristine reference pair does not share exact authority/plan inputs")
+    require_exact_json(
+        first_plan["authority"], second_plan["authority"],
+        "pristine reference pair authority",
+    )
+    require_exact_json(
+        first_plan["actions"], second_plan["actions"],
+        "pristine reference pair actions",
+    )
+    require_exact_json(
+        first_plan["lp_certificate_inputs"],
+        second_plan["lp_certificate_inputs"],
+        "pristine reference pair LP inputs",
+    )
     for artifact in ("request", "transcript", "native_execution_closure"):
         require(first["candidate"]["artifacts"][artifact] !=
                 second["candidate"]["artifacts"][artifact],

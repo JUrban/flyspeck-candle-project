@@ -147,15 +147,12 @@ def make_authority(
                 subject.PRODUCER_ENTRYPOINT_PATH,
                 f"collector-{authority_seed}",
             ),
-            "protocol": named(
-                subject.PROTOCOL_PATH,
-                f"protocol-{authority_seed}",
-            ),
+            "protocol": named_file(subject.PROTOCOL_PATH),
             "output_parser": named_file(subject.OUTPUT_PARSER_PATH),
         },
         "repositories": {
             "project": {
-                "path": "/project/reference-project",
+                "path": str(Path(__file__).parent.parent.resolve()),
                 "git_head": "1" * 40,
                 "git_status": "",
             },
@@ -617,6 +614,8 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             encoded = subject.canonical_json_bytes(value)
             with self.subTest(label=label):
                 self.assertEqual(validator(encoded, *dependencies), value)
+                with self.assertRaisesRegex(subject.ProtocolError, "immutable bytes"):
+                    validator(bytearray(encoded), *dependencies)
                 with self.assertRaisesRegex(subject.ProtocolError, "not canonical"):
                     validator(subject.canonical_value_bytes(value), *dependencies)
 
@@ -786,8 +785,28 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 ),
             ),
             (
+                "entrypoint bool index",
+                lambda item: item["entrypoint_sequence"][0].update(index=False),
+            ),
+            (
+                "entrypoint integer success flag",
+                lambda item: item["entrypoint_sequence"][4].update(
+                    emit_only_after_success=1
+                ),
+            ),
+            (
                 "serialization",
                 lambda item: item["serialization_environment"].update(present=True),
+            ),
+            (
+                "serialization integer false",
+                lambda item: item["serialization_environment"].update(present=0),
+            ),
+            (
+                "marker integer true",
+                lambda item: item["marker_contract"].update(
+                    nonce_in_every_marker=1
+                ),
             ),
             ("action bool", lambda item: item.update(action_count=True)),
             ("checkpoint", lambda item: item.update(process_state_checkpoint={})),
@@ -933,6 +952,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ("action binding", lambda item: item["action_bindings"]["records"][0].update(
                 selected_ledger_index=0
             )),
+            (
+                "action binding bool index",
+                lambda item: item["action_bindings"]["records"][0].update(
+                    index=False
+                ),
+            ),
             ("event count bool", lambda item: item.update(loader_event_count=True)),
             ("loader event nonce", lambda item: item["loader_events"][0].update(
                 session_nonce="0" * 64
@@ -984,6 +1009,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ("exit bool", lambda item: item.update(exit_code=False)),
             ("validation error", lambda item: item.update(validation_error="forged")),
             ("checkpoint", lambda item: item.update(process_state_checkpoint={})),
+            (
+                "serialization integer false",
+                lambda item: item["serialization_environment"].update(present=0),
+            ),
             ("approval", lambda item: item.update(approved_reference_present=True)),
             ("promotion", lambda item: item.update(promotion_allowed=True)),
             ("S2", lambda item: item.update(s2_eligible=True)),
@@ -1028,6 +1057,21 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 bundle["cross_runtime_coverage"],
             )
 
+        closure = copy.deepcopy(bundle["native_execution_closure"])
+        closure["action_bindings"]["records"][0]["index"] = False
+        candidate = copy.deepcopy(bundle["candidate"])
+        candidate["artifacts"]["native_execution_closure"] = (
+            subject.content_record(closure)
+        )
+        with self.assertRaisesRegex(
+            subject.ProtocolError, "exact JSON native action bindings",
+        ):
+            subject.validate_raw_candidate(
+                candidate, bundle["plan"], bundle["request"],
+                bundle["transcript"], closure, bundle["semantic_projection"],
+                bundle["cross_runtime_coverage"],
+            )
+
     def test_pair_requires_exact_ordinals_distinct_nonce_and_shared_authority(self) -> None:
         first = bundle_fixture(1, "1" * 64, common=self.common)
         second = bundle_fixture(2, "2" * 64, common=self.common)
@@ -1041,7 +1085,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         wrong_authority = bundle_fixture(
             2, "2" * 64, authority_seed="b", common=self.common,
         )
-        with self.assertRaisesRegex(subject.ProtocolError, "exact authority"):
+        with self.assertRaisesRegex(subject.ProtocolError, "exact.*authority"):
             subject.validate_distinct_reference_pair(first, wrong_authority)
         with self.assertRaisesRegex(subject.ProtocolError, "ordinals"):
             subject.validate_distinct_reference_pair(second, first)
