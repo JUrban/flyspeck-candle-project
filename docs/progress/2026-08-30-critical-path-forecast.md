@@ -1,5 +1,9 @@
 # Whole-Flyspeck critical-path forecast (2026-08-30 03:12 UTC)
 
+> Historical forecast snapshot.  Its `586e...` head and 48/130 sweep count
+> have been superseded.  Current launch dependencies and live counts are in
+> `2026-08-30-v1.3-parser-gate-readiness.md`.
+
 ## Scope
 
 Yes: the governing target is a whole pinned Flyspeck S3 check by direct

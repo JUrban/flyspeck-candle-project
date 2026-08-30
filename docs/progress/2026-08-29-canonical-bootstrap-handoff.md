@@ -1,5 +1,11 @@
 # Canonical CakeML bootstrap handoff — 2026-08-29
 
+> **Historical command template — HOLD.**  The `688d9d1/964406486` pins below
+> are not the current development path and must not be executed unchanged.
+> The current dependency and supersession sequence is recorded in
+> `2026-08-30-v1.3-parser-gate-readiness.md`.  A new handoff with final proved
+> CakeML and repinned Candle heads is required before launch.
+
 ## Decision
 
 The final runtime build must use Candle

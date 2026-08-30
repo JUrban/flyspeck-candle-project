@@ -104,5 +104,9 @@ They cover 65 targets, 66 sources, 97 theorem requests, and 130 target runs.
 Reinvocation is permitted only with the byte-identical command and root.  A
 changed pin or contract requires another new root.
 
-The two frozen worktrees named above were created and checked clean.  No v9
-artifact root was created and no sweep was launched.
+The two frozen worktrees named above were created and checked clean.  At the
+time this launch section was written, no v9 artifact root had been created.
+The exact run was subsequently launched at
+`/project/flyspeck-candle-runs/s1-reference-v9-csdp-two-sweep-652a18a-95bb84f`;
+it must be resumed only by its existing controller and must not be relaunched
+from this command block.

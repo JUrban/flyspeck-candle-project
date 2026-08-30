@@ -1,5 +1,11 @@
 # CakeML parser-repair Candle repin impact (2026-08-30)
 
+> Current status: this is a historical mutation-closure checklist.  The
+> prospective `586e06883...` pin below was superseded by later proof repairs;
+> current development head `77b769a99...` is still undergoing a warm
+> reverse-dependency replay and is not a repin authority.  See
+> `2026-08-30-v1.3-parser-gate-readiness.md`.
+
 > Supersession: `ca67ffaa...` fixed the original overload capture but exposed
 > a missing `print_spec` witness.  The only prospective pin is now
 > `586e06883d44f5c447793597bdaf0aa76e7a9952`.  The ca67 replay and its
