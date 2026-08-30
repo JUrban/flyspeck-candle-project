@@ -330,12 +330,12 @@ V4_BUILD_SOURCE_DIRECTORY = "candle-source"
 V4_BUILD_OUTPUT_DIRECTORY = "candle-output"
 V4_BUILD_OLD_ROOT_DIRECTORY = ".candle-old-root"
 V4_BUILD_ROOT_DERIVATION_MAX_BYTES = 33_554_432
-V4_BUILD_FILTER_SCHEMA = 4
+V4_BUILD_FILTER_SCHEMA = 5
 V4_BUILD_FILTER_KIND = (
-    "candle-flyspeck-isolated-native-build-seccomp-filter-v4"
+    "candle-flyspeck-isolated-native-build-seccomp-filter-v5"
 )
 V4_BUILD_FILTER_POLICY = (
-    "isolated-native-build-post-pivot-deny-escape-network-ipc-transfer-v4"
+    "isolated-native-build-post-pivot-deny-escape-network-ipc-transfer-v5"
 )
 V4_BUILD_FILTER_ERRNO = 1
 V4_BUILD_FILTER_CLONE_SYSCALL = 56
@@ -414,12 +414,15 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (438, "pidfd_getfd"),
     (442, "mount_setattr"),
 )
-V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 3
+V4_BUILD_FILTER_ENOSYS_SYSCALLS = (
+    (435, "clone3"),
+)
+V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 4
 V4_BUILD_EXECUTION_OBSERVATION_KIND = (
-    "candle-flyspeck-isolated-native-build-execution-observation-v3"
+    "candle-flyspeck-isolated-native-build-execution-observation-v4"
 )
 V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
-    "outside-parent-all-task-source-consumption-and-output-chronology-v3"
+    "outside-parent-all-task-source-consumption-and-output-chronology-v4"
 )
 V4_BUILD_EXECUTION_TASK_MAX = 4_096
 V4_BUILD_EXECUTION_EVENT_MAX = 131_072
@@ -502,16 +505,54 @@ V4_BUILD_INITIAL_FS_STATE_FIELDS = (
 )
 V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS = (
     "mount_namespace_identity", "generation", "mount_count", "mounts",
-    "ordered_mount_sha256",
+    "ordered_mount_sha256", "mountinfo_bytes", "mountinfo_sha256",
+    "mountinfo_payload_base64",
 )
 V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS = (
     "index", "mount_id", "parent_mount_id", "root_identity",
-    "mountpoint_identity", "filesystem_type", "flags", "propagation",
+    "mountpoint_identity", "device_major", "device_minor",
+    "root_bytes_base64", "mountpoint_bytes_base64", "filesystem_type",
+    "mount_source_bytes_base64", "flags", "super_options",
+    "optional_fields", "propagation", "user_namespace_locked",
 )
 V4_BUILD_MOUNT_CLONE_FIELDS = (
     "index", "source_mount_id", "child_mount_id", "root_identity",
-    "mountpoint_identity", "filesystem_type", "flags", "propagation",
+    "mountpoint_identity", "device_major", "device_minor",
+    "root_bytes_base64", "mountpoint_bytes_base64", "filesystem_type",
+    "mount_source_bytes_base64", "flags", "super_options",
+    "source_optional_fields", "child_optional_fields",
+    "source_propagation", "child_propagation",
+    "source_user_namespace_locked", "child_user_namespace_locked",
     "source_parent_mount_id", "child_parent_mount_id",
+)
+V4_BUILD_MOUNT_PROPAGATION_FIELDS = (
+    "shared_group_id", "master_group_id", "propagate_from_group_id",
+    "unbindable",
+)
+V4_BUILD_MOUNT_GRAPH_ORDER_POLICY = (
+    "root-first-parent-before-child-then-raw-mountpoint-bytes-then-mount-id-v1"
+)
+V4_BUILD_MOUNTINFO_CAPTURE_POLICY = (
+    "outside-parent-held-proc-pid-mountinfo-complete-bounded-bytes-v1"
+)
+V4_BUILD_MOUNT_OPTION_LIST_POLICY = (
+    "exact-json-list-of-mountinfo-order-nonempty-ascii-tokens-v1"
+)
+V4_BUILD_MOUNT_NAMESPACE_FILE_POLICY = (
+    "reject-source-nsfs-or-mountpoint-rooted-at-proc-namespace-file-v1"
+)
+V4_BUILD_MOUNT_USERNS_COPY_POLICY = (
+    "linux-copy-mnt-ns-shared-to-slave-lock-tree-no-namespace-files-v1"
+)
+V4_BUILD_MOUNT_PROPAGATION_COPY_POLICY = (
+    ("private", "private"),
+    ("shared", "slave-same-source-shared-group-as-master"),
+    ("slave", "slave-same-master-group"),
+    ("shared-slave", "slave-same-source-shared-group-as-master"),
+    ("unbindable", "unbindable"),
+)
+V4_BUILD_MOUNT_USERNS_LOCK_POLICY = (
+    "every-child-mount-true-every-clone-row-child-true-exact-v1"
 )
 V4_BUILD_INITIAL_CREDENTIAL_FIELDS = (
     "real_uid", "effective_uid", "saved_uid", "fsuid", "real_gid",
@@ -532,6 +573,38 @@ V4_BUILD_CAPABILITY_SETS_FIELDS = (
     "effective", "permitted", "inheritable", "ambient", "bounding",
 )
 V4_BUILD_CAPABILITY_SET_NAMES = V4_BUILD_CAPABILITY_SETS_FIELDS
+V4_BUILD_CREDENTIAL_SCALAR_POLICY_FIELDS = (
+    "field", "json_type", "domain", "capture_join",
+)
+V4_BUILD_CREDENTIAL_SCALAR_POLICY = (
+    ("real_uid", "integer-nonbool", ("inclusive-uint", 0, 0xFFFF_FFFF),
+     "exact-proc-credential-snapshot"),
+    ("effective_uid", "integer-nonbool",
+     ("inclusive-uint", 0, 0xFFFF_FFFF),
+     "exact-proc-credential-snapshot"),
+    ("saved_uid", "integer-nonbool", ("inclusive-uint", 0, 0xFFFF_FFFF),
+     "exact-proc-credential-snapshot"),
+    ("fsuid", "integer-nonbool", ("inclusive-uint", 0, 0xFFFF_FFFF),
+     "exact-proc-credential-snapshot"),
+    ("real_gid", "integer-nonbool", ("inclusive-uint", 0, 0xFFFF_FFFF),
+     "exact-proc-credential-snapshot"),
+    ("effective_gid", "integer-nonbool",
+     ("inclusive-uint", 0, 0xFFFF_FFFF),
+     "exact-proc-credential-snapshot"),
+    ("saved_gid", "integer-nonbool", ("inclusive-uint", 0, 0xFFFF_FFFF),
+     "exact-proc-credential-snapshot"),
+    ("fsgid", "integer-nonbool", ("inclusive-uint", 0, 0xFFFF_FFFF),
+     "exact-proc-credential-snapshot"),
+    ("securebits", "integer-nonbool", ("bitmask-subset", 0xFF),
+     "exact-pr-get-securebits-and-proc-status-join"),
+    ("no_new_privileges", "integer-nonbool", ("exact-values", 0, 1),
+     "exact-proc-status-join"),
+    ("seccomp_mode", "integer-nonbool", ("exact-values", 0, 2),
+     "exact-proc-status-join"),
+    ("seccomp_filter_count", "integer-nonbool",
+     ("inclusive-uint", 0, 4_096),
+     "zero-iff-mode-zero-positive-iff-mode-two-proc-status-join"),
+)
 V4_BUILD_INITIAL_TASK_CONTROL_STATE_FIELDS = (
     "signal_disposition_count", "signal_dispositions",
     "signal_disposition_sha256", "blocked_signal_set",
@@ -567,7 +640,42 @@ V4_BUILD_RSEQ_SIGNATURES = (0, 0x5305_3053)
 V4_BUILD_RSEQ_STATE_FLAGS = (0,)
 V4_BUILD_PERSONALITY_STICKY_TIMEOUTS = 0x0400_0000
 V4_BUILD_PERSONALITY_POLICY = (
-    "exact-uint32-nonbool-and-sticky-timeouts-bit-clear-v1"
+    "exact-zero-uint32-nonbool-for-pinned-static-x86-64-exec-profile-v2"
+)
+V4_BUILD_TASK_CONTROL_DERIVATION_FIELDS = (
+    "boundary", "profile", "signal_dispositions", "blocked_signal_set",
+    "pending_signal_set", "signal_altstack", "fs_base", "gs_base",
+    "clear_child_tid", "robust_list_registration", "rseq_registration",
+    "personality",
+)
+V4_BUILD_CLONE_TASK_CONTROL_DERIVATIONS = (
+    (
+        "clone", "fork-equivalent-sigchld", "copy-exact", "copy-exact",
+        "canonical-empty", "copy-exact", "copy-exact", "copy-exact",
+        "canonical-null", "canonical-unregistered",
+        "copy-exact-because-clone-vm-clear", "copy-exact-zero",
+    ),
+    (
+        "clone", "dash-child-tid-sigchld", "copy-exact", "copy-exact",
+        "canonical-empty", "copy-exact", "copy-exact", "copy-exact",
+        "entry-child-tid-pointer-clear-on-exit", "canonical-unregistered",
+        "copy-exact-because-clone-vm-clear", "copy-exact-zero",
+    ),
+    (
+        "clone", "glibc-clone-fallback-vfork-vm-sigchld", "copy-exact",
+        "copy-exact", "canonical-empty",
+        "copy-exact-because-clone-vfork-set", "copy-exact", "copy-exact",
+        "canonical-null", "canonical-unregistered",
+        "canonical-unregistered-because-clone-vm-set", "copy-exact-zero",
+    ),
+)
+V4_BUILD_EXEC_TASK_CONTROL_DERIVATION = (
+    "exec", "pinned-static-linux-x86-64",
+    "preserve-sig-ign-handler-one-else-handler-zero-and-clear-every-flags-"
+    "restorer-mask", "copy-exact", "copy-exact",
+    "canonical-disabled", "canonical-zero", "canonical-zero",
+    "canonical-null", "canonical-unregistered", "canonical-unregistered",
+    "canonical-zero-require-old-zero",
 )
 V4_BUILD_NESTED_VALUE_POLICY_FIELDS = (
     "name", "fields", "exact_rules",
@@ -625,6 +733,13 @@ V4_BUILD_NESTED_VALUE_POLICY = (
         "nonbool-address-length-32-signature-"
         "0x53053053-flags-zero",
     ),
+    (
+        "mount-propagation", V4_BUILD_MOUNT_PROPAGATION_FIELDS,
+        "exact-dict;group-ids-null-or-positive-uint32-nonbool;unbindable-bool;"
+        "private-is-all-null-false;shared-has-shared-group;slave-has-master-"
+        "group;shared-slave-has-both;propagate-from-requires-master;"
+        "unbindable-requires-all-group-ids-null",
+    ),
 )
 V4_BUILD_PRECLONE_SIGNAL_PROFILE = (
     "all-blockable-signals-blocked", "all-dispositions-default",
@@ -673,7 +788,7 @@ V4_BUILD_SETUP_STATE_DIGEST_PREIMAGE = (
     "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
 )
 V4_BUILD_SETUP_POLICY = (
-    "derived-pre-filter-builder-setup-deny-all-other-v2"
+    "derived-pre-filter-builder-setup-deny-all-other-v3"
 )
 V4_BUILD_SETUP_SEQUENCE_FIELDS = (
     "index", "role", "syscall_numbers", "argument_policy",
@@ -726,9 +841,9 @@ V4_BUILD_CLONE_PROFILES = (
         "copy", "copy", "unchanged", "set-and-clear-child-tid",
     ),
     (
-        "ocaml-vfork-vm-clear-sighand-sigchld", 0x0000000100004111,
+        "glibc-clone-fallback-vfork-vm-sigchld", 0x00004111,
         "vfork", "share-held-until-vfork-done", "copy", "copy",
-        "clear", "unchanged", "unchanged",
+        "copy", "unchanged", "unchanged",
     ),
 )
 V4_BUILD_CLONE_PROFILE_POLICY = (
@@ -1142,13 +1257,13 @@ V4_BUILD_TASK_TRANSITION_FIELDS = {
     "wait-consumed": (
         "kind", "index", "task_index", "raw_wait_status",
     ),
-    "credential-change": (
-        "kind", "index", "task_index", "before_credentials",
-        "after_credentials", "changed_fields",
+    "credential-update": (
+        "kind", "index", "task_index", "target_fields",
+        "before_credentials", "after_credentials", "idempotent",
     ),
-    "capability-sets-change": (
-        "kind", "index", "task_index", "changed_sets",
-        "before_capability_sets", "after_capability_sets",
+    "capability-sets-update": (
+        "kind", "index", "task_index", "target_sets",
+        "before_capability_sets", "after_capability_sets", "idempotent",
     ),
     "no-new-privileges-change": (
         "kind", "index", "task_index", "old_value", "new_value",
@@ -1555,13 +1670,15 @@ V4_BUILD_PRCTL_ALLOWED_OPERATIONS = (
     (39, "PR_GET_NO_NEW_PRIVS"),
 )
 V4_BUILD_PRLIMIT64_POLICY = "query-only-null-new-limit-pointer-v1"
+V4_BUILD_REJECTED_STATELESS_SYSCALLS = (
+    (23, "select-unobservable-kernel-fdtable-capacity"),
+)
 V4_BUILD_STATELESS_ALLOWED_SYSCALLS = (
     (4, "stat"),
     (5, "fstat"),
     (6, "lstat"),
     (7, "poll"),
     (21, "access"),
-    (23, "select"),
     (24, "sched_yield"),
     (27, "mincore"),
     (35, "nanosleep"),
@@ -1613,7 +1730,7 @@ V4_BUILD_QUERY_ABI_REGION_POLICY_FIELDS = (
 )
 V4_BUILD_QUERY_ABI_LENGTH_KINDS = (
     "fixed-bytes", "argument-bytes", "nfds-times-pollfd-8",
-    "fdset-bytes-from-nfds", "pages-covered-by-range",
+    "pages-covered-by-range",
 )
 V4_BUILD_QUERY_ABI_LENGTH_FORMULA_FIELDS = (
     "length_kind", "formula", "input_bounds", "overflow_policy",
@@ -1630,13 +1747,6 @@ V4_BUILD_QUERY_ABI_LENGTH_FORMULAS = (
     (
         "nfds-times-pollfd-8", "unsigned-argument[length_value]*8",
         "nfds-0-through-4096", "checked-unsigned-64-bit",
-    ),
-    (
-        "fdset-bytes-from-nfds",
-        "effective_nfds=min(nfds,fd_table.max_fds);"
-        "((effective_nfds+63)//64)*8",
-        "nfds-0-through-4096-and-max-fds-1-through-4096",
-        "checked-add-and-multiply-unsigned-64-bit",
     ),
     (
         "pages-covered-by-range", "(length+4095)//4096",
@@ -1683,14 +1793,26 @@ V4_BUILD_RAW_RESTART_POLICY = (
 V4_BUILD_NEWFSTATAT_ALLOWED_FLAGS = (0, 0x100, 0x1000, 0x1100)
 V4_BUILD_GETRANDOM_ALLOWED_FLAGS = (0, 1, 2, 3, 4, 5, 6, 7)
 V4_BUILD_FACCESSAT2_ALLOWED_FLAG_MASK = 0x1300
+V4_BUILD_ACCESS_ALLOWED_MODES = (0, 1, 2, 3, 4, 5, 6, 7)
+V4_BUILD_RLIMIT_RESOURCE_POLICY = (
+    (0, "RLIMIT_CPU"), (1, "RLIMIT_FSIZE"), (2, "RLIMIT_DATA"),
+    (3, "RLIMIT_STACK"), (4, "RLIMIT_CORE"), (5, "RLIMIT_RSS"),
+    (6, "RLIMIT_NPROC"), (7, "RLIMIT_NOFILE"), (8, "RLIMIT_MEMLOCK"),
+    (9, "RLIMIT_AS"), (10, "RLIMIT_LOCKS"), (11, "RLIMIT_SIGPENDING"),
+    (12, "RLIMIT_MSGQUEUE"), (13, "RLIMIT_NICE"),
+    (14, "RLIMIT_RTPRIO"), (15, "RLIMIT_RTTIME"),
+)
+V4_BUILD_RUSAGE_WHO_POLICY = (
+    (-1, "RUSAGE_CHILDREN"), (0, "RUSAGE_SELF"), (1, "RUSAGE_THREAD"),
+)
+V4_BUILD_STATX_ALLOWED_FLAGS = (
+    0x0000, 0x0100, 0x0800, 0x0900, 0x1000, 0x1100, 0x1800, 0x1900,
+    0x2000, 0x2100, 0x2800, 0x2900, 0x3000, 0x3100, 0x3800, 0x3900,
+    0x4000, 0x4100, 0x4800, 0x4900, 0x5000, 0x5100, 0x5800, 0x5900,
+)
+V4_BUILD_STATX_ALLOWED_MASK = 0x0000_3FFF
 _V4_QUERY_INPUT_REGION_POLICIES = {
     7: ((0, "input", "nfds-times-pollfd-8", 1, "if-nonnull", "same-as-entry"),),
-    23: (
-        (1, "input", "fdset-bytes-from-nfds", 0, "if-nonnull", "same-as-entry"),
-        (2, "input", "fdset-bytes-from-nfds", 0, "if-nonnull", "same-as-entry"),
-        (3, "input", "fdset-bytes-from-nfds", 0, "if-nonnull", "same-as-entry"),
-        (4, "input", "fixed-bytes", 16, "if-nonnull", "same-as-entry"),
-    ),
     35: ((0, "input", "fixed-bytes", 16, "always-nonnull", "same-as-entry"),),
     230: ((2, "input", "fixed-bytes", 16, "always-nonnull", "same-as-entry"),),
     271: (
@@ -1704,12 +1826,6 @@ _V4_QUERY_OUTPUT_REGION_POLICIES = {
     5: ((1, "output", "fixed-bytes", 144, "if-success-nonnull", "fixed"),),
     6: ((1, "output", "fixed-bytes", 144, "if-success-nonnull", "fixed"),),
     7: ((0, "output", "nfds-times-pollfd-8", 1, "if-nonnull-after-exit", "same-as-entry"),),
-    23: (
-        (1, "output", "fdset-bytes-from-nfds", 0, "if-nonnull-after-exit", "same-as-entry"),
-        (2, "output", "fdset-bytes-from-nfds", 0, "if-nonnull-after-exit", "same-as-entry"),
-        (3, "output", "fdset-bytes-from-nfds", 0, "if-nonnull-after-exit", "same-as-entry"),
-        (4, "output", "fixed-bytes", 16, "if-nonnull-after-exit", "fixed"),
-    ),
     27: ((2, "output", "pages-covered-by-range", 1,
           "if-success-nonnull", "fixed"),),
     35: ((1, "output", "fixed-bytes", 16,
@@ -1759,8 +1875,7 @@ _V4_STATELESS_ARGUMENT_POLICIES = {
     5: "live-fd-arg0-stat-output-arg1-exact",
     6: "path-arg0-nul-lstat-output-arg1-exact",
     7: "nfds-at-most-4096-timeout-signed-int-exact",
-    21: "path-arg0-nul-mode-subset-rwx-or-f-ok-exact",
-    23: "nfds-zero-through-4096-nullable-fdsets-and-timeval-exact",
+    21: "path-arg0-nul-mode-in-v4-build-access-allowed-modes-exact",
     24: "six-zero-arguments-exact",
     27: "mapped-page-aligned-range-exact",
     35: "valid-timespec-exact",
@@ -1771,8 +1886,8 @@ _V4_STATELESS_ARGUMENT_POLICIES = {
     79: "nonnull-buffer-arg0-size-1-through-4096-exact",
     89: "buffer-length-0-through-1048576-exact",
     96: "nullable-timeval-and-timezone-exact",
-    97: "resource-selector-linux-x86-64-exact",
-    98: "who-selector-linux-x86-64-exact",
+    97: "resource-selector-in-v4-build-rlimit-resource-policy-exact",
+    98: "who-selector-in-v4-build-rusage-who-policy-exact",
     99: "nonnull-sysinfo-output-arg0-exact",
     100: "nullable-tms-output-arg0-exact",
     102: "six-zero-arguments-exact",
@@ -1795,9 +1910,9 @@ _V4_STATELESS_ARGUMENT_POLICIES = {
     267: "dirfd-path-buffer-length-0-through-1048576-exact",
     271: "nfds-at-most-4096-timespec-sigmask-size-8-exact",
     277: "live-fd-offset-and-length-u64-flags-zero-exact",
-    302: "query-only-null-new-limit-pointer-exact",
+    302: "pid-zero-or-registered-task-resource-in-v4-build-rlimit-policy-null-new-limit-exact",
     318: "length-0-through-1048576-flags-in-v4-getrandom-policy-exact",
-    332: "flags-at-symlink-nofollow-or-at-empty-path-mask-and-statx-mask-exact",
+    332: "flags-in-v4-build-statx-allowed-flags-mask-subset-v4-build-statx-allowed-mask-exact",
     439: "mode-rwx-or-f-ok-flags-subset-0x1300-exact",
 }
 V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY_FIELDS = (
@@ -1835,6 +1950,9 @@ V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY = tuple(
         _v4_cardinality_spec((0,)),
     )
     for number, operation in V4_BUILD_STATELESS_ALLOWED_SYSCALLS
+)
+V4_BUILD_STATELESS_NEGATIVE_RESULT_POLICY = (
+    "all-negative-raw-results-reject-at-exit-without-resume-or-publication-v1"
 )
 V4_BUILD_NONRETURNING_CAPTURE_POLICY_FIELDS = (
     "syscall_number", "operation", "entry_kind", "terminal_kind",
@@ -2658,7 +2776,7 @@ def enumerate_isolated_native_build_root_v1(
     return entries
 
 
-def enumerate_isolated_native_build_filter_v4() -> dict[str, Any]:
+def enumerate_isolated_native_build_filter_v5() -> dict[str, Any]:
     load_word_absolute = 0x20
     jump_equal = 0x15
     jump_mask_nonzero = 0x45
@@ -2694,7 +2812,12 @@ def enumerate_isolated_native_build_filter_v4() -> dict[str, Any]:
             emit(load_word_absolute, 0, 0, 0)
         else:
             emit(jump_equal, 0, 1, syscall_number)
-            emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_ERRNO)
+            emit(
+                return_constant, 0, 0,
+                V4_BUILD_FILTER_RET_ENOSYS
+                if syscall_number in dict(V4_BUILD_FILTER_ENOSYS_SYSCALLS)
+                else V4_BUILD_FILTER_RET_ERRNO,
+            )
     emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_ALLOW)
 
     require(
@@ -2758,7 +2881,10 @@ def enumerate_isolated_native_build_filter_v4() -> dict[str, Any]:
             "syscall_number": syscall_number,
             "argument_policy": argument_policy,
             "decision": "errno",
-            "ret_data": V4_BUILD_FILTER_ERRNO,
+            "ret_data": (
+                38 if syscall_number in dict(V4_BUILD_FILTER_ENOSYS_SYSCALLS)
+                else V4_BUILD_FILTER_ERRNO
+            ),
         })
     decoded_policy.append({
         "index": len(decoded_policy),
@@ -2827,7 +2953,7 @@ def validate_isolated_native_build_filter(value: object) -> dict[str, Any]:
     _require_v4_exact_json_types(value, label)
     require(type(value) is dict, f"malformed {label}")
     require_exact_json(
-        value, enumerate_isolated_native_build_filter_v4(), label,
+        value, enumerate_isolated_native_build_filter_v5(), label,
     )
     return value
 

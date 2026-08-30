@@ -920,8 +920,8 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "PTRACE_O_TRACEEXIT",
             "PTRACE_O_EXITKILL",
         ))
-        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 3)
-        self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 4)
+        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 4)
+        self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 5)
         self.assertFalse(hasattr(
             subject, "enumerate_isolated_native_build_filter_v1",
         ))
@@ -930,6 +930,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         ))
         self.assertFalse(hasattr(
             subject, "enumerate_isolated_native_build_filter_v3",
+        ))
+        self.assertFalse(hasattr(
+            subject, "enumerate_isolated_native_build_filter_v4",
         ))
         self.assertTrue({
             "paired_event_index", "object_edges", "fd_transitions",
@@ -964,7 +967,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "builder-create", "observer-attached-stop", "child-create",
                 "child-attached-stop", "vfork-hold", "vfork-release",
                 "group-listen", "exec-image", "exit-stop", "wait-consumed",
-                "credential-change", "capability-sets-change",
+                "credential-update", "capability-sets-update",
                 "no-new-privileges-change", "seccomp-change",
                 "signal-disposition-change", "signal-mask-change",
                 "signal-altstack-change", "tls-base-change",
@@ -1168,7 +1171,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "lock-state", "supplementary-groups", "capability-set",
                 "capability-sets", "signal-set", "signal-action",
                 "signal-altstack", "robust-list-registration",
-                "rseq-registration",
+                "rseq-registration", "mount-propagation",
             },
         )
         self.assertEqual(subject.V4_BUILD_SIGNAL_DISPOSITION_COUNT, 64)
@@ -1184,6 +1187,20 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertIn(
             "mount-namespace-create", subject.V4_BUILD_FS_TRANSITION_FIELDS,
         )
+        self.assertEqual(
+            subject.V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS[-2:],
+            ("propagation", "user_namespace_locked"),
+        )
+        self.assertIn(
+            "mountinfo_payload_base64",
+            subject.V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS,
+        )
+        self.assertEqual(
+            {row[0] for row in subject.V4_BUILD_MOUNT_PROPAGATION_COPY_POLICY},
+            {"private", "shared", "slave", "shared-slave", "unbindable"},
+        )
+        self.assertIn("nsfs", subject.V4_BUILD_MOUNT_NAMESPACE_FILE_POLICY)
+        self.assertIn("shared-to-slave", subject.V4_BUILD_MOUNT_USERNS_COPY_POLICY)
         namespace_clone = next(
             row for row in subject.V4_BUILD_PTRACE_EVENT_TRANSITION_POLICY
             if row[0] == "namespace-clone"
@@ -1210,7 +1227,23 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertIn("reject-zero", subject.V4_BUILD_MREMAP_OLD_SIZE_POLICY)
         self.assertEqual(
             tuple(row[1] for row in subject.V4_BUILD_CLONE_PROFILES),
-            (0x11, 0x01200011, 0x0000000100004111),
+            (0x11, 0x01200011, 0x00004111),
+        )
+        self.assertTrue(all(
+            len(row) == len(subject.V4_BUILD_TASK_CONTROL_DERIVATION_FIELDS)
+            for row in subject.V4_BUILD_CLONE_TASK_CONTROL_DERIVATIONS
+        ))
+        self.assertEqual(
+            len(subject.V4_BUILD_EXEC_TASK_CONTROL_DERIVATION),
+            len(subject.V4_BUILD_TASK_CONTROL_DERIVATION_FIELDS),
+        )
+        self.assertEqual(
+            tuple(row[1] for row in subject.V4_BUILD_CLONE_TASK_CONTROL_DERIVATIONS),
+            tuple(row[0] for row in subject.V4_BUILD_CLONE_PROFILES),
+        )
+        self.assertIn(
+            "preserve-sig-ign",
+            subject.V4_BUILD_EXEC_TASK_CONTROL_DERIVATION[2],
         )
         self.assertEqual(
             subject.V4_BUILD_EXIT_GROUP_POLICY,
@@ -1266,14 +1299,24 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                  "if-valid-nonzero-ppoll-timeout-nonnull", "fixed"),
             ),
         )
-        self.assertEqual(
-            dict(
-                (row[0], row[1])
-                for row in subject.V4_BUILD_QUERY_ABI_LENGTH_FORMULAS
-            )["fdset-bytes-from-nfds"],
-            "effective_nfds=min(nfds,fd_table.max_fds);"
-            "((effective_nfds+63)//64)*8",
+        self.assertNotIn(
+            23, {row[0] for row in subject.V4_BUILD_STATELESS_ALLOWED_SYSCALLS},
         )
+        self.assertEqual(
+            subject.V4_BUILD_REJECTED_STATELESS_SYSCALLS,
+            ((23, "select-unobservable-kernel-fdtable-capacity"),),
+        )
+        self.assertIn(
+            "reject-at-exit", subject.V4_BUILD_STATELESS_NEGATIVE_RESULT_POLICY,
+        )
+        self.assertEqual(
+            {row[0] for row in subject.V4_BUILD_RLIMIT_RESOURCE_POLICY},
+            set(range(16)),
+        )
+        self.assertEqual(
+            {row[0] for row in subject.V4_BUILD_RUSAGE_WHO_POLICY}, {-1, 0, 1},
+        )
+        self.assertEqual(subject.V4_BUILD_STATX_ALLOWED_MASK, 0x3FFF)
         self.assertEqual(
             {row[0] for row in subject.V4_BUILD_CLOCK_ID_POLICY},
             set(range(10)) | {11},
@@ -1360,10 +1403,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 351)
+        self.assertEqual(len(values), 372)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "221b1795a6f1fc90b5ad334e9baf506a22cb779d4b66ba11a673f7b06a6f095f",
+            "8534f5d65b5974e23acab9481d61ea8f85b0311cc7a62335274eae48905b2d8a",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1750,14 +1793,14 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             )
 
     def test_v4_isolated_native_build_filter_enumerator(self) -> None:
-        authority = subject.enumerate_isolated_native_build_filter_v4()
+        authority = subject.enumerate_isolated_native_build_filter_v5()
         self.assertEqual(set(authority), {
             "schema", "kind", "policy", "architecture", "audit_arch",
             "instruction_count", "instructions_bytes", "instructions_sha256",
             "instructions_payload_base64", "decoded_rule_count",
             "decoded_policy", "policy_sha256",
         })
-        self.assertEqual(authority["schema"], 4)
+        self.assertEqual(authority["schema"], 5)
         self.assertEqual(authority["kind"], subject.V4_BUILD_FILTER_KIND)
         self.assertEqual(authority["policy"], subject.V4_BUILD_FILTER_POLICY)
         self.assertEqual(
@@ -1778,7 +1821,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertEqual(
             authority["instructions_sha256"],
-            "49d8c674b40cbba7141c048d3b35c99307445775ac5abea5f6c7e946a2521565",
+            "ac16fd851e4e8dfc4704364f835bcb01cd4942432807b73f205b2e2db8ff2f8b",
         )
         instructions = [
             struct.unpack("<HBBI", payload[offset:offset + 8])
@@ -1828,15 +1871,16 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "value": None,
             }],
         )
+        self.assertEqual(syscall_rules[435]["ret_data"], 38)
         self.assertEqual(
             authority["policy_sha256"], subject.canonical_sha256(decoded),
         )
         self.assertEqual(
             authority["policy_sha256"],
-            "c4f62ed80a79d38b4d720545fea261032fea91a13907d62402d23ce3e3ae3267",
+            "10d3cb1cfed09d14413f01066a71180359b9252f04daa131978b370d94460ebb",
         )
         self.assertEqual(
-            subject.enumerate_isolated_native_build_filter_v4(), authority,
+            subject.enumerate_isolated_native_build_filter_v5(), authority,
         )
         self.assertIs(
             subject.validate_isolated_native_build_filter(authority), authority,
