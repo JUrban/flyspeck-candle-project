@@ -322,6 +322,38 @@ V4_BUILD_FILTER_KIND = (
 V4_BUILD_FILTER_POLICY = (
     "isolated-native-build-post-pivot-deny-escape-and-network-v1"
 )
+V4_BUILD_FILTER_ERRNO = 1
+V4_BUILD_FILTER_CLONE_SYSCALL = 56
+V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E020000
+V4_BUILD_FILTER_DENIED_SYSCALLS = (
+    (41, "socket"),
+    (53, "socketpair"),
+    (101, "ptrace"),
+    (155, "pivot_root"),
+    (161, "chroot"),
+    (165, "mount"),
+    (166, "umount2"),
+    (248, "add_key"),
+    (249, "request_key"),
+    (250, "keyctl"),
+    (272, "unshare"),
+    (298, "perf_event_open"),
+    (303, "name_to_handle_at"),
+    (304, "open_by_handle_at"),
+    (308, "setns"),
+    (310, "process_vm_readv"),
+    (311, "process_vm_writev"),
+    (321, "bpf"),
+    (428, "open_tree"),
+    (429, "move_mount"),
+    (430, "fsopen"),
+    (431, "fsconfig"),
+    (432, "fsmount"),
+    (433, "fspick"),
+    (435, "clone3"),
+    (438, "pidfd_getfd"),
+    (442, "mount_setattr"),
+)
 V4_BUILD_OUTPUT_ROLES = (
     "target-executable",
     "intermediate-object",
