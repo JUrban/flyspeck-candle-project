@@ -448,3 +448,50 @@ is discarded as evidence.  A new focused developer build may proceed only
 after an immediate preflight branch-pointer check and must recheck that pointer
 after completion.  No generated cache copy may include `.git` or other
 repository metadata.
+
+## Focused exact-domain proof propagation
+
+The exact-domain repair is being developed and checked in the restored
+isolated worktree before it is eligible for integration.  Five labelled
+focused runs have so far produced the following development evidence:
+
+- attempt 001 failed in `open_env_invs` after `1:31.08`, maximum RSS
+  `1131868` KiB and zero swaps.  The proof had left an existential source
+  namespace after `irule`; a direct relational consequence closes it;
+- attempt 002 progressed within `open_env_invs` and failed after `1:32.70`,
+  maximum RSS `961932` KiB and zero swaps.  It exposed that
+  `global_env_inv` is one outer conjunction whose value and constructor
+  relations form an inner conjunction, rather than two outer conjuncts;
+- attempt 003 passed the open-environment and stored-environment lookup
+  lemmas, then failed at the strengthened exact-domain conclusion of
+  `do_eval` after `1:55.02`, maximum RSS `1097164` KiB and zero swaps.  The
+  existing `src_orac_env_invs_lookup_env` result supplies that conclusion;
+- attempt 004 is excluded from proof evidence: it was a zero-second setup
+  failure caused by invoking `Holmake` without its required `PATH`; and
+- attempt 005 passed both `open_env_invs` and the strengthened `do_eval`
+  proof, then failed in `declare_env_store_env_id` after `2:05.50`, maximum
+  RSS `1117000` KiB and zero swaps.  The stored suspended environment now
+  legitimately needs the exact-domain relation in addition to the existing
+  global-environment invariant.
+
+The relevant immutable log SHA-256 values for attempts 001, 002, 003 and 005
+are respectively
+`d84b8b10879ea303f8baeccfdde20003557f410a346c08a62d1aa8134e58af79`,
+`d84b8b10879ea303f8baeccfdde20003557f410a346c08a62d1aa8134e58af79`,
+`198179653626ebac47a5ba210a10dae0e8a7b3d7b17fdab8bdc207dce8cb3f65`
+and
+`3878b7e68564ecb746274a0329064a213c0dfb0bea3ba995f3d174e592a9b57b`.
+Their timing-record hashes are
+`b9b714eb4332fc3b78f158b3e04f08305dfbc04bdc63b92e1bb1fe63ce7e0420`,
+`30236007e05b1af246e0dd64bc4a054778ae433c43187b6da3289627855`,
+`fb75e6b0117683e2469b8d956ed1768a382f6e878da92000ab844aac5dcda6c9`
+and
+`5fa392bb3d9508af900b7e6c5a803509b08c596656afc5e95bfab77224f295dc`.
+
+The strengthened `declare_env_store_env_id` theorem itself now verifies in
+the saved heap when its successful declaration result requires both
+`global_env_inv` and `env_domain_eq`.  Its evaluator consumer still has to
+join the initial and successful-result exact-domain facts through environment
+append, alongside the pre-existing global-invariant append/weakening proof.
+That consumer repair and a fresh focused target are still in progress.  None
+of these attempts is compiler qualification or authorizes a Candle repin.
