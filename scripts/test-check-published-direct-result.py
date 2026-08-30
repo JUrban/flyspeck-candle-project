@@ -53,6 +53,28 @@ class FakeController:
         return subject.hashlib.sha256(data).hexdigest()
 
 
+class FakeCaptureProtocol:
+    AUTHENTICATED_CAPTURE_POLICY = "test-content-bound-capture-v1"
+
+    @staticmethod
+    def canonical_json_bytes(value):
+        return (json.dumps(
+            value, indent=2, sort_keys=True, allow_nan=False,
+        ) + "\n").encode()
+
+    @classmethod
+    def build_authenticated_schema6_capture(cls, receipt, plan, authority):
+        return {
+            "receipt": subject.data_record(cls.canonical_json_bytes(receipt)),
+            "authenticated_plan":
+                subject.data_record(cls.canonical_json_bytes(plan)),
+            "authority": authority,
+            "approval_included": False,
+            "pft_used": False,
+            "s2_s3_evidence": False,
+        }
+
+
 def make_record(data: bytes, *, path: str | None = None):
     result = subject.data_record(data)
     if path is not None:
@@ -180,6 +202,37 @@ class PublishedDirectResultTests(unittest.TestCase):
         )
         self.assertTrue(ordinary["scheduling_authority"])
         self.assertFalse(ordinary["promotion"])
+
+    def test_schema6_capture_binds_exact_held_source_bytes(self):
+        receipt = {"schema": 6, "state": "completed"}
+        plan = {"schema": 1, "action_count": 297}
+        receipt_data = FakeCaptureProtocol.canonical_json_bytes(receipt)
+        plan_data = FakeCaptureProtocol.canonical_json_bytes(plan)
+        arguments = types.SimpleNamespace(
+            evidence_schema=6,
+            project_head="1" * 40,
+            candle_head="2" * 40,
+            cakeml_head="3" * 40,
+            hol4_head="4" * 40,
+            flyspeck_head="5" * 40,
+        )
+        capture = subject.build_schema6_capture_result(
+            FakeCaptureProtocol, arguments, receipt, plan,
+            receipt_data, plan_data,
+        )
+        self.assertEqual(capture["receipt"], subject.data_record(receipt_data))
+        self.assertEqual(
+            capture["authenticated_plan"], subject.data_record(plan_data),
+        )
+        self.assertEqual(
+            capture["authority"]["consumer_project_commit"], "1" * 40,
+        )
+        self.assertFalse(capture["approval_included"])
+        with self.assertRaisesRegex(subject.ResultError, "canonical JSON"):
+            subject.build_schema6_capture_result(
+                FakeCaptureProtocol, arguments, receipt, plan,
+                receipt_data + b" ", plan_data,
+            )
 
     def test_pinned_plan_rejects_extra_file_and_wrong_digest(self):
         with tempfile.TemporaryDirectory() as temporary:

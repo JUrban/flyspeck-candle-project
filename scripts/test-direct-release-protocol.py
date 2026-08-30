@@ -517,6 +517,10 @@ def schema6_fixture() -> tuple[dict, dict]:
         "semantic_evidence_plan": semantic_plan,
         "lp_consumption_contract": lp_contract,
         "inputs": {"plan": plan_record},
+        "repositories": {
+            "candle": "c" * 40,
+            "flyspeck": "f" * 40,
+        },
         "timed_out": False,
         "exit_code": 0,
         "action_markers_validated": subject.FINAL_ACTION_COUNT,
@@ -765,6 +769,67 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 subject.ProtocolError,
             ):
                 subject.coverage_projection_from_schema6(forged, plan)
+
+    def test_authenticated_schema6_capture_binds_sources_and_authority(self) -> None:
+        receipt, plan = schema6_fixture()
+        authority = {
+            "policy": subject.AUTHENTICATED_CAPTURE_POLICY,
+            "consumer_project_commit": "1" * 40,
+            "candle_commit": "c" * 40,
+            "cakeml_commit": "2" * 40,
+            "hol4_commit": "3" * 40,
+            "flyspeck_commit": "f" * 40,
+        }
+        capture = subject.build_authenticated_schema6_capture(
+            receipt, plan, authority,
+        )
+        self.assertIs(
+            subject.validate_authenticated_schema6_capture(
+                capture, receipt=receipt, authenticated_plan=plan,
+            ), capture,
+        )
+        self.assertFalse(capture["approval_included"])
+        self.assertFalse(capture["pft_used"])
+        self.assertFalse(capture["s2_s3_evidence"])
+
+        for label, mutate in (
+            ("receipt digest", lambda item: item["receipt"].update(
+                sha256="0" * 64,
+            )),
+            ("semantic projection", lambda item: item[
+                "semantic_projection"
+            ]["theorems"][0].update(theorem_sha256="0" * 64)),
+            ("approval", lambda item: item.update(approval_included=True)),
+            ("PFT", lambda item: item.update(pft_used=True)),
+            ("authority", lambda item: item["authority"].update(
+                flyspeck_commit="0" * 40,
+            )),
+        ):
+            forged = copy.deepcopy(capture)
+            mutate(forged)
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_authenticated_schema6_capture(
+                    forged, receipt=receipt, authenticated_plan=plan,
+                )
+
+    def test_capture_rejects_a_spliced_source_pair(self) -> None:
+        receipt, plan = schema6_fixture()
+        capture = subject.build_authenticated_schema6_capture(receipt, plan, {
+            "policy": subject.AUTHENTICATED_CAPTURE_POLICY,
+            "consumer_project_commit": "1" * 40,
+            "candle_commit": "c" * 40,
+            "cakeml_commit": "2" * 40,
+            "hol4_commit": "3" * 40,
+            "flyspeck_commit": "f" * 40,
+        })
+        spliced_plan = copy.deepcopy(plan)
+        spliced_plan["action_count"] = 296
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_authenticated_schema6_capture(
+                capture, receipt=receipt, authenticated_plan=spliced_plan,
+            )
 
     def test_coverage_requires_exact_final_boundary_count_and_no_pft(self) -> None:
         for field, value in (

@@ -33,6 +33,12 @@ DEPENDENCY_HISTORY_POLICY = (
 )
 SEMANTIC_PROJECTION_KIND = "candle-flyspeck-direct-semantic-projection-v1"
 COVERAGE_PROJECTION_KIND = "candle-flyspeck-direct-coverage-projection-v1"
+AUTHENTICATED_CAPTURE_KIND = (
+    "candle-flyspeck-authenticated-direct-schema6-capture-v1"
+)
+AUTHENTICATED_CAPTURE_POLICY = (
+    "descriptor-held-schema6-revalidation-and-content-bound-projection-v1"
+)
 PHYSICAL_COVERAGE_KIND = (
     "candle-flyspeck-direct-physical-source-coverage-v1"
 )
@@ -1155,6 +1161,117 @@ def coverage_projection_from_schema5(_schema5: object) -> dict[str, Any]:
     raise ProtocolError(
         "schema 5 authenticates LP-certificate presence but not consumption; "
         "direct coverage projection requires the future disjoint consumption schema"
+    )
+
+
+def _content_record(value: object) -> dict[str, Any]:
+    data = canonical_json_bytes(value)
+    return {
+        "bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "md5": hashlib.md5(data, usedforsecurity=False).hexdigest(),
+    }
+
+
+def _validate_capture_authority(value: object) -> dict[str, Any]:
+    fields = {
+        "policy", "consumer_project_commit", "candle_commit", "cakeml_commit",
+        "hol4_commit", "flyspeck_commit",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            value.get("policy") == AUTHENTICATED_CAPTURE_POLICY,
+            "malformed direct schema-6 capture authority")
+    for field in fields - {"policy"}:
+        _hex(value.get(field), re.compile(r"[0-9a-f]{40}"),
+             f"direct capture authority {field}")
+    return value
+
+
+def validate_authenticated_schema6_capture(
+    value: object,
+    *,
+    receipt: object,
+    authenticated_plan: object,
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "boundary_id", "action_count", "receipt",
+        "authenticated_plan", "semantic_projection", "coverage_projection",
+        "authority", "approval_included", "pft_used", "s2_s3_evidence",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            type(value.get("schema")) is int and value["schema"] == 1 and
+            value.get("kind") == AUTHENTICATED_CAPTURE_KIND and
+            value.get("boundary_id") == FINAL_BOUNDARY_ID and
+            type(value.get("action_count")) is int and
+            value["action_count"] == FINAL_ACTION_COUNT and
+            value.get("approval_included") is False and
+            value.get("pft_used") is False and
+            value.get("s2_s3_evidence") is False,
+            "malformed direct authenticated schema-6 capture")
+    for field in ("receipt", "authenticated_plan"):
+        record = value.get(field)
+        require(isinstance(record, dict) and set(record) == {
+                    "bytes", "sha256", "md5",
+                } and type(record.get("bytes")) is int and
+                record["bytes"] > 0,
+                f"malformed direct capture {field} record")
+        _hex(record.get("sha256"), HEX64,
+             f"direct capture {field} SHA-256")
+        _hex(record.get("md5"), HEX32, f"direct capture {field} MD5")
+    validate_semantic_projection(value.get("semantic_projection"))
+    validate_coverage_projection(value.get("coverage_projection"))
+    authority = _validate_capture_authority(value.get("authority"))
+
+    require(value["receipt"] == _content_record(receipt) and
+            value["authenticated_plan"] == _content_record(authenticated_plan),
+            "direct capture source content differs from bound records")
+    require(isinstance(receipt, dict) and
+            receipt.get("repositories") == {
+                "candle": authority["candle_commit"],
+                "flyspeck": authority["flyspeck_commit"],
+            }, "direct capture source repositories differ from authority")
+    semantic = project_authenticated_semantic_observations(
+        receipt.get("semantic_fingerprints"),
+        receipt.get("dependency_history"),
+    )
+    coverage = coverage_projection_from_schema6(
+        receipt, authenticated_plan,
+    )
+    require(value["semantic_projection"] == semantic and
+            value["coverage_projection"] == coverage,
+            "direct capture projections differ from bound source content")
+    return value
+
+
+def build_authenticated_schema6_capture(
+    receipt: object,
+    authenticated_plan: object,
+    authority: object,
+) -> dict[str, Any]:
+    authority = copy.deepcopy(_validate_capture_authority(authority))
+    capture = {
+        "schema": 1,
+        "kind": AUTHENTICATED_CAPTURE_KIND,
+        "boundary_id": FINAL_BOUNDARY_ID,
+        "action_count": FINAL_ACTION_COUNT,
+        "receipt": _content_record(receipt),
+        "authenticated_plan": _content_record(authenticated_plan),
+        "semantic_projection": project_authenticated_semantic_observations(
+            receipt.get("semantic_fingerprints")
+            if isinstance(receipt, dict) else None,
+            receipt.get("dependency_history")
+            if isinstance(receipt, dict) else None,
+        ),
+        "coverage_projection": coverage_projection_from_schema6(
+            receipt, authenticated_plan,
+        ),
+        "authority": authority,
+        "approval_included": False,
+        "pft_used": False,
+        "s2_s3_evidence": False,
+    }
+    return validate_authenticated_schema6_capture(
+        capture, receipt=receipt, authenticated_plan=authenticated_plan,
     )
 
 

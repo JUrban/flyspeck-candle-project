@@ -919,18 +919,63 @@ def build_gate_result(
     }
 
 
+def build_schema6_capture_result(
+    protocol: Any,
+    arguments: argparse.Namespace,
+    receipt: dict[str, Any],
+    plan: dict[str, Any],
+    receipt_data: bytes,
+    plan_data: bytes,
+) -> dict[str, Any]:
+    """Build one unapproved content-bound capture from already-held sources."""
+    require(arguments.evidence_schema == 6 and
+            receipt_data == protocol.canonical_json_bytes(receipt) and
+            plan_data == protocol.canonical_json_bytes(plan),
+            "schema-6 capture sources are not exact canonical JSON")
+    capture = protocol.build_authenticated_schema6_capture(
+        receipt, plan, {
+            "policy": protocol.AUTHENTICATED_CAPTURE_POLICY,
+            "consumer_project_commit": arguments.project_head,
+            "candle_commit": arguments.candle_head,
+            "cakeml_commit": arguments.cakeml_head,
+            "hol4_commit": arguments.hol4_head,
+            "flyspeck_commit": arguments.flyspeck_head,
+        },
+    )
+    require(capture["receipt"] == data_record(receipt_data) and
+            capture["authenticated_plan"] == data_record(plan_data) and
+            capture["approval_included"] is False and
+            capture["pft_used"] is False and
+            capture["s2_s3_evidence"] is False,
+            "schema-6 capture differs from held source bytes")
+    return capture
+
+
 def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
     require(dict(os.environ) == CONSUMER_ENVIRONMENT,
             "consumer requires exact PATH=/usr/bin:/bin and LC_ALL=C.UTF-8 environment")
     project_root = arguments.project_root.resolve(strict=True)
     checker_source = Path(__file__).resolve(strict=True)
     checker_relative = checker_source.relative_to(project_root).as_posix()
-    checker = authenticate_sources(
-        project_root, arguments.project_head, (checker_relative,),
+    protocol_relative = "scripts/direct_release_protocol.py"
+    consumer_relatives = (
+        (checker_relative, protocol_relative)
+        if arguments.evidence_schema == 6 else (checker_relative,)
+    )
+    consumer_sources = authenticate_sources(
+        project_root, arguments.project_head, consumer_relatives,
         "direct result consumer",
-    )[checker_relative]
+    )
+    checker = consumer_sources[checker_relative]
     require(checker == stable_file_bytes(checker_source, "direct result consumer"),
             "direct result consumer changed after authentication")
+    project_protocol = None
+    if arguments.evidence_schema == 6:
+        project_protocol = exact_source_module(
+            "_candle_flyspeck_direct_release_protocol",
+            project_root / protocol_relative,
+            consumer_sources[protocol_relative],
+        )
 
     candle_root = arguments.candle_root.resolve(strict=True)
     flyspeck_root = arguments.flyspeck_root.resolve(strict=True)
@@ -949,6 +994,7 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
 
     plan_fd_root = Path(f"/proc/self/fd/{arguments._plan_fd}")
     result_fd_root = Path(f"/proc/self/fd/{arguments._result_fd}")
+    schema6_capture: dict[str, Any] | None = None
     lock = controller.runtime_lock.acquire_build_lock(candle_root)
     try:
         validate_held_runtime_lock(lock, candle_root)
@@ -1092,11 +1138,11 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
             controller, snapshot, candle_root, prepared_post, linked_post,
             retained_controller,
         )
-        final_checker = authenticate_sources(
-            project_root, arguments.project_head, (checker_relative,),
+        final_consumer_sources = authenticate_sources(
+            project_root, arguments.project_head, consumer_relatives,
             "final direct result consumer",
-        )[checker_relative]
-        require(final_checker == checker,
+        )
+        require(final_consumer_sources == consumer_sources,
                 "direct result consumer authority changed during validation")
         authenticate_git_root(
             flyspeck_root, arguments.flyspeck_head, "final Flyspeck",
@@ -1115,9 +1161,21 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
             "result root",
         )
         validate_held_runtime_lock(lock, candle_root)
+        if arguments.evidence_schema == 6:
+            require(project_protocol is not None,
+                    "schema-6 capture protocol was not authenticated")
+            final_plan_data = stable_file_bytes(
+                plan_fd_root / "plan.json", "final captured direct plan",
+            )
+            schema6_capture = build_schema6_capture_result(
+                project_protocol, arguments, receipt, prepared_post["plan"],
+                receipt_data, final_plan_data,
+            )
     finally:
         lock.close()
 
+    if schema6_capture is not None:
+        return schema6_capture
     return build_gate_result(arguments, prepared, result_root)
 
 
