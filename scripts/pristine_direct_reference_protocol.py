@@ -2632,6 +2632,649 @@ def validate_v4_build_capability_sets_update(
     return result
 
 
+def _validate_v4_indexed_list_container(
+    value: object, container_fields: tuple[str, ...], entry_fields: tuple[str, ...],
+    maximum: int, label: str,
+) -> list[dict[str, Any]]:
+    result = _v4_exact_dict(value, container_fields, label)
+    entries = result.get("entries")
+    require(
+        is_int(result.get("count")) and
+        0 <= result["count"] <= maximum and
+        type(entries) is list and len(entries) == result["count"],
+        f"malformed {label} count/list",
+    )
+    for index, entry in enumerate(entries):
+        item = _v4_exact_dict(entry, entry_fields, f"{label} entry {index}")
+        require(item.get("index") == index, f"nonconsecutive {label} index")
+    require(
+        type(result.get("ordered_entry_sha256")) is str and
+        result["ordered_entry_sha256"] == canonical_sha256(entries),
+        f"{label} digest mismatch",
+    )
+    return entries
+
+
+def _validate_v4_root_stable_identity(
+    edge: dict[str, Any], label: str,
+) -> None:
+    require(
+        type(edge.get("root_identity")) is dict and
+        type(edge.get("parent_descriptor_identity")) is dict and
+        is_int(edge.get("mount_id")) and edge["mount_id"] > 0 and
+        is_int(edge.get("st_dev")) and edge["st_dev"] >= 0 and
+        is_int(edge.get("st_ino")) and edge["st_ino"] > 0 and
+        is_int(edge.get("stable_generation")) and
+        edge["stable_generation"] > 0 and
+        edge.get("resolved_relative") == "." and
+        edge.get("symlink_decisions") == [],
+        f"malformed {label} stable identity",
+    )
+
+
+def _validate_v4_initial_root_edge(
+    edge: dict[str, Any], domain: str, root_identity: object,
+    root_fd_generation: object,
+) -> dict[str, Any]:
+    label = f"V4 initial {domain} edge"
+    require(edge.get("domain") == domain, f"wrong {label} domain")
+    _validate_v4_root_stable_identity(edge, label)
+    require(
+        edge.get("root_identity") == root_identity and
+        edge.get("root_fd_generation") == root_fd_generation and
+        edge.get("input_root_entry_index") is None and
+        edge.get("stream_role") is None,
+        f"wrong {label} root join",
+    )
+    if domain == "setup-root":
+        require(
+            edge.get("authority_role") is None and
+            edge.get("authority_index") is None and
+            edge.get("setup_role") == "builder-initial-root" and
+            root_fd_generation is None,
+            f"malformed {label} selectors",
+        )
+    else:
+        require(
+            type(edge.get("authority_role")) is str and
+            bool(edge["authority_role"]) and
+            is_int(edge.get("authority_index")) and
+            edge["authority_index"] >= 0 and
+            edge.get("setup_role") is None and
+            is_int(root_fd_generation) and root_fd_generation > 0,
+            f"malformed {label} selectors",
+        )
+    return edge
+
+
+def _validate_v4_builder_mount_root(
+    value: object, setup_root_edge: dict[str, Any],
+) -> dict[str, Any]:
+    label = "V4 builder mount graph"
+    result = _v4_exact_dict(value, V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS, label)
+    mounts = result.get("mounts")
+    require(
+        type(result.get("mount_namespace_identity")) is dict and
+        is_int(result.get("generation")) and result["generation"] > 0 and
+        is_int(result.get("mount_count")) and
+        1 <= result["mount_count"] <= V4_BUILD_MOUNT_GRAPH_MAX and
+        type(mounts) is list and len(mounts) == result["mount_count"],
+        f"malformed {label} count/list",
+    )
+    mount_ids: list[int] = []
+    for index, mount in enumerate(mounts):
+        item = _v4_exact_dict(
+            mount, V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS,
+            f"{label} entry {index}",
+        )
+        require(
+            item.get("index") == index and
+            is_int(item.get("mount_id")) and item["mount_id"] > 0 and
+            item["mount_id"] not in mount_ids and
+            is_int(item.get("raw_parent_mount_id")) and
+            item["raw_parent_mount_id"] > 0 and
+            type(item.get("root_identity")) is dict and
+            type(item.get("mountpoint_identity")) is dict,
+            f"malformed {label} entry {index} identity",
+        )
+        if index == 0:
+            require(
+                item.get("parent_mount_id") is None and
+                item["raw_parent_mount_id"] not in {
+                    candidate.get("mount_id") for candidate in mounts
+                    if type(candidate) is dict
+                },
+                f"malformed {label} root parent",
+            )
+        else:
+            require(
+                is_int(item.get("parent_mount_id")) and
+                item["parent_mount_id"] in mount_ids and
+                item["raw_parent_mount_id"] == item["parent_mount_id"],
+                f"malformed {label} parent topology",
+            )
+        mount_ids.append(item["mount_id"])
+    require(
+        type(result.get("ordered_mount_sha256")) is str and
+        result["ordered_mount_sha256"] == canonical_sha256(mounts),
+        f"{label} digest mismatch",
+    )
+    root = mounts[0]
+    require(
+        root["mount_id"] == setup_root_edge["mount_id"] and
+        root["mountpoint_identity"] == setup_root_edge["root_identity"],
+        f"{label} root does not join initial setup root",
+    )
+    return root
+
+
+def _validate_v4_initial_fd_ofd_roots(
+    fd_table: object, open_descriptions: object,
+    initial_edges: list[dict[str, Any]], input_root_edge: dict[str, Any],
+    input_root_fd_generation: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    table_label = "V4 initial fd table"
+    table = _v4_exact_dict(
+        fd_table, V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS, table_label,
+    )
+    fds = table.get("fds")
+    require(
+        is_int(table.get("table_id")) and table["table_id"] > 0 and
+        is_int(table.get("generation")) and table["generation"] > 0 and
+        is_int(table.get("fd_count")) and
+        0 <= table["fd_count"] <= V4_BUILD_FD_PER_TABLE_MAX and
+        type(fds) is list and len(fds) == table["fd_count"],
+        f"malformed {table_label} count/list",
+    )
+    previous_fd = -1
+    for index, fd in enumerate(fds):
+        item = _v4_exact_dict(
+            fd, V4_BUILD_INITIAL_FD_FIELDS, f"{table_label} entry {index}",
+        )
+        require(
+            item.get("index") == index and is_int(item.get("fd")) and
+            previous_fd < item["fd"] < 4_096 and
+            is_int(item.get("fd_generation")) and
+            item["fd_generation"] > 0 and
+            type(item.get("cloexec")) is bool and
+            type(item.get("access_mode")) is str and
+            bool(item["access_mode"]) and
+            is_int(item.get("open_description_index")),
+            f"malformed {table_label} entry {index}",
+        )
+        previous_fd = item["fd"]
+    require(
+        type(table.get("ordered_fd_sha256")) is str and
+        table["ordered_fd_sha256"] == canonical_sha256(fds),
+        f"{table_label} digest mismatch",
+    )
+
+    descriptions = _validate_v4_indexed_list_container(
+        open_descriptions, V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
+        V4_BUILD_INITIAL_OPEN_DESCRIPTION_FIELDS, V4_BUILD_FD_PER_TABLE_MAX,
+        "V4 initial open descriptions",
+    )
+    references = [0] * len(descriptions)
+    for fd in fds:
+        selected = fd["open_description_index"]
+        require(0 <= selected < len(descriptions),
+                "V4 initial fd selects absent open description")
+        description = descriptions[selected]
+        require(fd["access_mode"] == description.get("access_mode"),
+                "V4 initial fd/OFD access mismatch")
+        references[selected] += 1
+    for index, description in enumerate(descriptions):
+        label = f"V4 initial open description {index}"
+        require(
+            is_int(description.get("open_description_id")) and
+            description["open_description_id"] > 0 and
+            is_int(description.get("generation")) and
+            description["generation"] > 0 and
+            is_int(description.get("object_edge_index")) and
+            0 <= description["object_edge_index"] < len(initial_edges) and
+            type(description.get("access_mode")) is str and
+            bool(description["access_mode"]) and
+            is_int(description.get("status_flags")) and
+            description["status_flags"] >= 0 and
+            is_int(description.get("offset")) and description["offset"] >= 0 and
+            description.get("descriptor_ref_count") == references[index] and
+            references[index] > 0,
+            f"malformed {label}",
+        )
+        validate_v4_build_lock_state(description.get("lock_state"))
+
+    input_description_indices = [
+        index for index, description in enumerate(descriptions)
+        if description["object_edge_index"] == input_root_edge["index"]
+    ]
+    require(len(input_description_indices) == 1,
+            "input root does not select exactly one initial OFD")
+    input_description = descriptions[input_description_indices[0]]
+    input_fds = [
+        fd for fd in fds
+        if fd["open_description_index"] == input_description_indices[0]
+    ]
+    require(
+        len(input_fds) == 1 and
+        input_fds[0]["fd_generation"] == input_root_fd_generation and
+        input_description["access_mode"] == input_fds[0]["access_mode"] and
+        input_description["descriptor_ref_count"] == 1,
+        "input root fd/OFD join mismatch",
+    )
+    return input_fds[0], input_description
+
+
+def validate_v4_build_initial_root_authority(
+    initial_object_edges: object, fd_table: object, open_descriptions: object,
+    fs_state: object, builder_mount_graph: object,
+    input_root_identity: object, input_root_fd_generation: object,
+) -> dict[str, Any]:
+    label = "V4 initial root authority"
+    _require_v4_exact_json_types(
+        [initial_object_edges, fd_table, open_descriptions, fs_state,
+         builder_mount_graph, input_root_identity, input_root_fd_generation],
+        label,
+    )
+    require(
+        type(input_root_identity) is dict and
+        is_int(input_root_fd_generation) and input_root_fd_generation > 0,
+        f"malformed {label} input closure join",
+    )
+    edges = _validate_v4_indexed_list_container(
+        initial_object_edges, V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
+        V4_BUILD_INITIAL_OBJECT_EDGE_FIELDS, V4_BUILD_INPUT_CLOSURE_ENTRY_MAX,
+        "V4 initial object edges",
+    )
+    require(
+        all(edge.get("domain") in V4_BUILD_INITIAL_OBJECT_EDGE_DOMAINS
+            for edge in edges),
+        "unknown V4 initial object-edge domain",
+    )
+    setup_roots = [edge for edge in edges if edge["domain"] == "setup-root"]
+    input_roots = [edge for edge in edges if edge["domain"] == "input-root"]
+    require(len(setup_roots) == 1 and len(input_roots) == 1,
+            "V4 initial roots are not unique")
+    state = _v4_exact_dict(fs_state, V4_BUILD_INITIAL_FS_STATE_FIELDS,
+                           "V4 initial FS state")
+    require(
+        type(state.get("root_identity")) is dict and
+        type(state.get("cwd_identity")) is dict and
+        is_int(state.get("umask")) and 0 <= state["umask"] <= 0o777 and
+        is_int(state.get("generation")) and state["generation"] > 0,
+        "malformed V4 initial FS state",
+    )
+    setup_root = _validate_v4_initial_root_edge(
+        setup_roots[0], "setup-root", state["root_identity"], None,
+    )
+    input_root = _validate_v4_initial_root_edge(
+        input_roots[0], "input-root", input_root_identity,
+        input_root_fd_generation,
+    )
+    mount_root = _validate_v4_builder_mount_root(
+        builder_mount_graph, setup_root,
+    )
+    input_fd, input_description = _validate_v4_initial_fd_ofd_roots(
+        fd_table, open_descriptions, edges, input_root,
+        input_root_fd_generation,
+    )
+    return {
+        "setup_root_edge": setup_root,
+        "input_root_edge": input_root,
+        "input_root_fd": input_fd,
+        "input_root_open_description": input_description,
+        "initial_fs_state": state,
+        "builder_mount_root": mount_root,
+        "builder_mounts": builder_mount_graph["mounts"],
+        "builder_mount_namespace_identity": builder_mount_graph[
+            "mount_namespace_identity"
+        ],
+        "builder_mount_generation": builder_mount_graph["generation"],
+    }
+
+
+def _validate_v4_event_object_edge(
+    value: object, index: int, allowed_domains: tuple[str, ...], label: str,
+) -> dict[str, Any]:
+    edge = _v4_exact_dict(value, V4_BUILD_OBJECT_EDGE_FIELDS, label)
+    require(
+        edge.get("index") == index and edge.get("domain") in allowed_domains and
+        type(edge.get("root_identity")) is dict and
+        is_int(edge.get("root_fd_generation")) and
+        edge["root_fd_generation"] > 0 and
+        type(edge.get("parent_descriptor_identity")) is dict and
+        is_int(edge.get("mount_id")) and edge["mount_id"] > 0 and
+        is_int(edge.get("st_dev")) and edge["st_dev"] >= 0 and
+        is_int(edge.get("st_ino")) and edge["st_ino"] > 0 and
+        is_int(edge.get("stable_generation")) and
+        edge["stable_generation"] > 0 and
+        type(edge.get("resolved_relative")) is str and
+        type(edge.get("symlink_decisions")) is list,
+        f"malformed {label}",
+    )
+    domain = edge["domain"]
+    if domain == "input-root-entry":
+        require(
+            is_int(edge.get("input_root_entry_index")) and
+            edge["input_root_entry_index"] >= 0 and
+            edge.get("output_generation_index") is None and
+            edge.get("post_tree_entry_index") is None and
+            edge["resolved_relative"] != ".",
+            f"malformed {label} input selector",
+        )
+    elif domain == "output-generation":
+        require(
+            edge.get("input_root_entry_index") is None and
+            is_int(edge.get("output_generation_index")) and
+            edge["output_generation_index"] >= 0 and
+            (
+                edge.get("post_tree_entry_index") is None or
+                is_int(edge["post_tree_entry_index"]) and
+                edge["post_tree_entry_index"] >= 0
+            ) and edge["resolved_relative"] != ".",
+            f"malformed {label} output selector",
+        )
+    else:
+        require(
+            domain == "output-root" and
+            edge.get("input_root_entry_index") is None and
+            edge.get("output_generation_index") is None and
+            edge.get("post_tree_entry_index") is None and
+            edge["resolved_relative"] == "." and
+            edge["symlink_decisions"] == [],
+            f"malformed {label} output-root selector",
+        )
+    if edge["resolved_relative"] != ".":
+        _v4_source_tree_relative(
+            edge["resolved_relative"], f"{label} resolved relative",
+        )
+    return edge
+
+
+def _validate_v4_root_authority_context(value: object) -> dict[str, Any]:
+    fields = {
+        "setup_root_edge", "input_root_edge", "input_root_fd",
+        "input_root_open_description", "initial_fs_state",
+        "builder_mount_root", "builder_mounts",
+        "builder_mount_namespace_identity",
+        "builder_mount_generation",
+    }
+    require(type(value) is dict and set(value) == fields,
+            "malformed V4 root-authority context")
+    return value
+
+
+def validate_v4_build_event_object_edges(
+    value: object, *, phase: object, setup_step_index: object = None,
+    root_authority: object = None,
+) -> list[dict[str, Any]]:
+    label = "V4 build event object edges"
+    _require_v4_exact_json_types(
+        [value, phase, setup_step_index, root_authority], label,
+    )
+    require(type(value) is list and len(value) <= V4_BUILD_TRANSITION_PER_EVENT_MAX,
+            f"malformed {label} list")
+    if phase == "setup":
+        require(
+            is_int(setup_step_index) and
+            0 <= setup_step_index < len(V4_BUILD_SETUP_SEQUENCE),
+            f"malformed {label} setup step",
+        )
+        setup_row = V4_BUILD_SETUP_SEQUENCE[setup_step_index]
+        capture_row = V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY[setup_step_index]
+        require(setup_row[0] == setup_step_index and
+                capture_row[0] == setup_row[1],
+                f"misordered {label} setup policy")
+        object_count_policy = capture_row[5]
+        require(object_count_policy[0] == "exact-values",
+                f"nonexact {label} setup cardinality")
+        expected_count = object_count_policy[1]
+        require(len(value) == expected_count,
+                f"wrong {label} setup cardinality")
+        if expected_count == 0:
+            require(root_authority is None,
+                    f"unexpected {label} root authority")
+            return value
+        authority = _validate_v4_root_authority_context(root_authority)
+        role = setup_row[1]
+        initial_edge = (
+            authority["setup_root_edge"]
+            if role == "private-mount-propagation"
+            else authority["input_root_edge"]
+        )
+        expected = enumerate_isolated_native_build_setup_root_edge_v1(
+            role, initial_edge,
+            authority["setup_root_edge"]["root_identity"],
+            authority["input_root_edge"]["root_identity"],
+            authority["input_root_fd"]["fd_generation"],
+        )
+        require_exact_json(value[0], expected, f"{label} setup root")
+        return value
+    require(phase == "post-filter" and setup_step_index is None and
+            root_authority is None,
+            f"malformed {label} phase dispatch")
+    for index, edge in enumerate(value):
+        _validate_v4_event_object_edge(
+            edge, index, V4_BUILD_OBJECT_EDGE_DOMAINS,
+            f"{label} post-filter entry {index}",
+        )
+    return value
+
+
+def _validate_v4_setup_fs_state(value: object, label: str) -> dict[str, Any]:
+    state = _v4_exact_dict(value, V4_BUILD_INITIAL_FS_STATE_FIELDS, label)
+    require(
+        type(state.get("root_identity")) is dict and
+        type(state.get("cwd_identity")) is dict and
+        is_int(state.get("umask")) and 0 <= state["umask"] <= 0o777 and
+        is_int(state.get("generation")) and state["generation"] > 0,
+        f"malformed {label}",
+    )
+    return state
+
+
+def _derive_v4_setup_root_fs_states(
+    root_authority: dict[str, Any], step_index: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    initial = root_authority["initial_fs_state"]
+    setup_root = root_authority["setup_root_edge"]["root_identity"]
+    input_root = root_authority["input_root_edge"]["root_identity"]
+    generation = initial["generation"]
+    states = [json.loads(canonical_value_bytes(initial))]
+    states.append({
+        **states[-1], "cwd_identity": input_root,
+        "generation": generation + 1,
+    })
+    states.append({
+        **states[-1], "root_identity": input_root,
+        "generation": generation + 2,
+    })
+    states.append({
+        **states[-1], "cwd_identity": input_root,
+        "generation": generation + 3,
+    })
+    require(states[0]["root_identity"] == setup_root,
+            "V4 setup initial FS root drift")
+    if step_index == 0:
+        return states[0], states[0]
+    return states[step_index - 1], states[step_index]
+
+
+_v4_build_setup_root_observation_fields = (
+    "step_index", "role", "entry_capture", "object_edge_count",
+    "object_edges", "fs_transition_count", "fs_transitions",
+    "state_before_fs", "state_after_fs",
+)
+
+
+def _validate_v4_setup_path_operand(
+    value: object, argument_index: int, path: str, label: str,
+) -> dict[str, Any]:
+    operand = _v4_exact_dict(value, V4_BUILD_PATH_OPERAND_FIELDS, label)
+    payload = path.encode("ascii") + b"\x00"
+    require(
+        operand.get("index") == 0 and
+        operand.get("argument_index") == argument_index and
+        operand.get("dirfd_argument_index") is None and
+        operand.get("dirfd") is None and
+        operand.get("dirfd_generation") is None and
+        is_int(operand.get("pointer")) and operand["pointer"] > 0 and
+        operand.get("bytes") == len(payload) and
+        operand.get("sha256") == hashlib.sha256(payload).hexdigest() and
+        operand.get("payload_base64") == base64.b64encode(payload).decode("ascii") and
+        operand.get("nul_terminated") is True and
+        type(operand.get("resolution_role")) is str and
+        bool(operand["resolution_role"]),
+        f"malformed {label}",
+    )
+    return operand
+
+
+def validate_v4_build_setup_root_observation(
+    value: object, root_authority: object,
+) -> dict[str, Any]:
+    label = "V4 build setup-root observation"
+    _require_v4_exact_json_types([value, root_authority], label)
+    result = _v4_exact_dict(
+        value, _v4_build_setup_root_observation_fields, label,
+    )
+    authority = _validate_v4_root_authority_context(root_authority)
+    step_index = result.get("step_index")
+    require(is_int(step_index) and 0 <= step_index <= 3,
+            f"malformed {label} step index")
+    sequence = V4_BUILD_SETUP_SEQUENCE[step_index]
+    require(result.get("role") == sequence[1], f"misordered {label} role")
+    entry_kind = V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY[step_index][2]
+    entry = _v4_exact_dict(
+        result.get("entry_capture"), V4_BUILD_ENTRY_CAPTURE_FIELDS[entry_kind],
+        f"{label} entry capture",
+    )
+    expected_operations = (
+        "mount", "fchdir", "chroot", "chdir",
+    )
+    require(
+        entry.get("kind") == entry_kind and
+        entry.get("operation") == expected_operations[step_index] and
+        (
+            entry.get("peer_barrier_index") is None or
+            is_int(entry["peer_barrier_index"]) and
+            entry["peer_barrier_index"] >= 0
+        ),
+        f"wrong {label} entry capture",
+    )
+    if step_index == 0:
+        require(
+            entry.get("source_operand") is None and
+            entry.get("filesystem_type_operand") is None and
+            entry.get("flags") == 0x44000 and
+            entry.get("data_region") is None,
+            f"wrong {label} mount arguments",
+        )
+        _validate_v4_setup_path_operand(
+            entry.get("target_operand"), 1, "/", f"{label} mount target",
+        )
+    elif step_index == 1:
+        input_fd = authority["input_root_fd"]
+        require(
+            entry.get("fd") == input_fd["fd"] and
+            entry.get("fd_generation") == input_fd["fd_generation"] and
+            entry.get("command") is None and
+            entry.get("scalar_argument") is None and
+            entry.get("pointed_argument") is None,
+            f"wrong {label} fchdir fd/OFD join",
+        )
+    else:
+        require(
+            entry.get("operand_count") == 1 and
+            type(entry.get("operands")) is list and
+            len(entry["operands"]) == 1 and
+            entry.get("scalar_flags") is None and
+            entry.get("pointed_struct") is None,
+            f"wrong {label} path arguments",
+        )
+        _validate_v4_setup_path_operand(
+            entry["operands"][0], 0, "." if step_index == 2 else "/",
+            f"{label} path operand",
+        )
+    edges = result.get("object_edges")
+    require(result.get("object_edge_count") == 1 and type(edges) is list,
+            f"wrong {label} object-edge count")
+    validate_v4_build_event_object_edges(
+        edges, phase="setup", setup_step_index=step_index,
+        root_authority=authority,
+    )
+    transitions = result.get("fs_transitions")
+    require(
+        result.get("fs_transition_count") == 1 and
+        type(transitions) is list and len(transitions) == 1,
+        f"wrong {label} FS-transition count",
+    )
+    before = _validate_v4_setup_fs_state(
+        result.get("state_before_fs"), f"{label} state before",
+    )
+    after = _validate_v4_setup_fs_state(
+        result.get("state_after_fs"), f"{label} state after",
+    )
+    expected_before, expected_after = _derive_v4_setup_root_fs_states(
+        authority, step_index,
+    )
+    require_exact_json(before, expected_before, f"{label} state before")
+    require_exact_json(after, expected_after, f"{label} state after")
+    edge = edges[0]
+    if step_index == 0:
+        transition = _v4_exact_dict(
+            transitions[0],
+            V4_BUILD_FS_TRANSITION_FIELDS["mount-propagation-change"],
+            f"{label} mount transition",
+        )
+        affected = transition.get("affected_mount_ids")
+        builder_mounts = authority["builder_mounts"]
+        expected_affected = [mount["mount_id"] for mount in builder_mounts]
+        expected_old = [mount["propagation"] for mount in builder_mounts]
+        private_propagation = {
+            "shared_group_id": None, "master_group_id": None,
+            "propagate_from_group_id": None, "unbindable": False,
+        }
+        require(
+            transition.get("kind") == "mount-propagation-change" and
+            transition.get("index") == 0 and
+            transition.get("mount_namespace_identity") ==
+            authority["builder_mount_namespace_identity"] and
+            transition.get("before_generation") ==
+            authority["builder_mount_generation"] and
+            transition.get("after_generation") ==
+            authority["builder_mount_generation"] + 1 and
+            is_int(transition.get("affected_mount_count")) and
+            type(affected) is list and
+            len(affected) == transition["affected_mount_count"] and
+            affected == expected_affected and
+            edge["mount_id"] in affected and
+            transition.get("old_propagations") == expected_old and
+            transition.get("new_propagations") == [
+                private_propagation for _ in builder_mounts
+            ],
+            f"wrong {label} mount transition join",
+        )
+    else:
+        transition_kind = (
+            "root-change" if step_index == 2 else "cwd-change"
+        )
+        transition = _v4_exact_dict(
+            transitions[0], V4_BUILD_FS_TRANSITION_FIELDS[transition_kind],
+            f"{label} {transition_kind}",
+        )
+        require(
+            transition.get("kind") == transition_kind and
+            transition.get("index") == 0 and
+            is_int(transition.get("fs_state_id")) and
+            transition["fs_state_id"] > 0 and
+            transition.get("before_generation") == before["generation"] and
+            transition.get("after_generation") == after["generation"] and
+            transition.get("object_edge_index") == 0,
+            f"wrong {label} FS transition join",
+        )
+    return result
+
+
 def require_exact_json(value: Any, expected: Any, label: str) -> None:
     try:
         value_bytes = canonical_value_bytes(value)

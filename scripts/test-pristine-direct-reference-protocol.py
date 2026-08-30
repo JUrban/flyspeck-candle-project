@@ -1734,6 +1734,295 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "enter-held-input-root", input_edge, setup_root_identity,
                 input_root_identity, input_root_fd_generation,
             )
+
+    def test_v4_root_authority_and_phase_dispatch_reject_hostile_replays(
+        self,
+    ) -> None:
+        setup_identity = {"fixture": "setup-root"}
+        input_identity = {"fixture": "input-root"}
+        setup_edge = {
+            "index": 0, "domain": "setup-root", "authority_role": None,
+            "authority_index": None, "root_identity": setup_identity,
+            "root_fd_generation": None, "input_root_entry_index": None,
+            "stream_role": None, "setup_role": "builder-initial-root",
+            "parent_descriptor_identity": {"fixture": "setup-descriptor"},
+            "mount_id": 100, "st_dev": 7, "st_ino": 40,
+            "stable_generation": 3, "resolved_relative": ".",
+            "symlink_decisions": [],
+        }
+        input_edge = {
+            "index": 1, "domain": "input-root",
+            "authority_role": "native-build-input-closure",
+            "authority_index": 0, "root_identity": input_identity,
+            "root_fd_generation": 17, "input_root_entry_index": None,
+            "stream_role": None, "setup_role": None,
+            "parent_descriptor_identity": {"fixture": "input-descriptor"},
+            "mount_id": 101, "st_dev": 8, "st_ino": 41,
+            "stable_generation": 4, "resolved_relative": ".",
+            "symlink_decisions": [],
+        }
+
+        def list_container(entries: list[dict[str, object]]) -> dict[str, object]:
+            return {
+                "count": len(entries), "entries": entries,
+                "ordered_entry_sha256": subject.canonical_sha256(entries),
+            }
+
+        edges = list_container([setup_edge, input_edge])
+        description = {
+            "index": 0, "open_description_id": 9, "generation": 2,
+            "object_edge_index": 1, "access_mode": "read-search-only",
+            "status_flags": 0, "offset": 0,
+            "lock_state": {"mode": "unlocked"},
+            "descriptor_ref_count": 1,
+        }
+        descriptions = list_container([description])
+        fds = [{
+            "index": 0, "fd": 10, "fd_generation": 17,
+            "cloexec": False, "access_mode": "read-search-only",
+            "open_description_index": 0,
+        }]
+        fd_table = {
+            "table_id": 5, "generation": 1, "fd_count": 1, "fds": fds,
+            "ordered_fd_sha256": subject.canonical_sha256(fds),
+        }
+        propagation = {
+            "shared_group_id": None, "master_group_id": None,
+            "propagate_from_group_id": None, "unbindable": False,
+        }
+        mount = {
+            "index": 0, "mount_id": 100, "raw_parent_mount_id": 999,
+            "parent_mount_id": None,
+            "root_identity": {"fixture": "filesystem-root"},
+            "mountpoint_identity": setup_identity,
+            "device_major": 0, "device_minor": 42,
+            "root_bytes_base64": "Lw==", "mountpoint_bytes_base64": "Lw==",
+            "filesystem_type": "tmpfs", "mount_source_bytes_base64": "dG1wZnM=",
+            "flags": ["rw"], "super_options": ["rw"],
+            "optional_fields": [], "propagation": propagation,
+        }
+        mountinfo = b"fixture mountinfo\n"
+        mount_graph = {
+            "mount_namespace_identity": {"fixture": "mount-namespace"},
+            "generation": 1, "mount_count": 1, "mounts": [mount],
+            "ordered_mount_sha256": subject.canonical_sha256([mount]),
+            "mountinfo_bytes": len(mountinfo),
+            "mountinfo_sha256": hashlib.sha256(mountinfo).hexdigest(),
+            "mountinfo_payload_base64": base64.b64encode(mountinfo).decode(),
+        }
+        initial_fs = {
+            "root_identity": setup_identity, "cwd_identity": setup_identity,
+            "umask": 0o22, "generation": 1,
+        }
+        authority = subject.validate_v4_build_initial_root_authority(
+            edges, fd_table, descriptions, initial_fs, mount_graph,
+            input_identity, 17,
+        )
+        self.assertEqual(authority["input_root_fd"]["fd"], 10)
+        self.assertEqual(
+            authority["builder_mount_root"]["mountpoint_identity"],
+            setup_identity,
+        )
+
+        input_setup_edge = (
+            subject.enumerate_isolated_native_build_setup_root_edge_v1(
+                "enter-held-input-root", input_edge, setup_identity,
+                input_identity, 17,
+            )
+        )
+        setup_setup_edge = (
+            subject.enumerate_isolated_native_build_setup_root_edge_v1(
+                "private-mount-propagation", setup_edge, setup_identity,
+                input_identity, 17,
+            )
+        )
+        states = [copy.deepcopy(initial_fs)]
+        states.append({**states[-1], "cwd_identity": input_identity,
+                       "generation": 2})
+        states.append({**states[-1], "root_identity": input_identity,
+                       "generation": 3})
+        states.append({**states[-1], "generation": 4})
+
+        def path_operand(argument_index: int, path: str) -> dict[str, object]:
+            payload = path.encode("ascii") + b"\x00"
+            return {
+                "index": 0, "argument_index": argument_index,
+                "dirfd_argument_index": None, "dirfd": None,
+                "dirfd_generation": None, "pointer": 4096,
+                "bytes": len(payload),
+                "sha256": hashlib.sha256(payload).hexdigest(),
+                "payload_base64": base64.b64encode(payload).decode(),
+                "nul_terminated": True, "resolution_role": "setup-root",
+            }
+
+        def entry_capture(step_index: int) -> dict[str, object]:
+            if step_index == 0:
+                return {
+                    "kind": "mount-entry", "operation": "mount",
+                    "source_operand": None,
+                    "target_operand": path_operand(1, "/"),
+                    "filesystem_type_operand": None, "flags": 0x44000,
+                    "data_region": None, "peer_barrier_index": 0,
+                }
+            if step_index == 1:
+                return {
+                    "kind": "fd-control-entry", "operation": "fchdir",
+                    "fd": 10, "fd_generation": 17, "command": None,
+                    "scalar_argument": None, "pointed_argument": None,
+                    "peer_barrier_index": 0,
+                }
+            return {
+                "kind": "path-entry",
+                "operation": "chroot" if step_index == 2 else "chdir",
+                "operand_count": 1,
+                "operands": [path_operand(
+                    0, "." if step_index == 2 else "/",
+                )],
+                "scalar_flags": None, "pointed_struct": None,
+                "peer_barrier_index": 0,
+            }
+
+        def observation(step_index: int) -> dict[str, object]:
+            if step_index == 0:
+                transition = {
+                    "kind": "mount-propagation-change", "index": 0,
+                    "mount_namespace_identity": {
+                        "fixture": "mount-namespace",
+                    },
+                    "before_generation": 1, "after_generation": 2,
+                    "affected_mount_count": 1, "affected_mount_ids": [100],
+                    "old_propagations": [propagation],
+                    "new_propagations": [propagation],
+                }
+                before = states[0]
+                after = states[0]
+                event_edge = setup_setup_edge
+            else:
+                kind = "root-change" if step_index == 2 else "cwd-change"
+                transition = {
+                    "kind": kind, "index": 0, "fs_state_id": 6,
+                    "before_generation": states[step_index - 1]["generation"],
+                    "after_generation": states[step_index]["generation"],
+                    "object_edge_index": 0,
+                }
+                before = states[step_index - 1]
+                after = states[step_index]
+                event_edge = input_setup_edge
+            return {
+                "step_index": step_index,
+                "role": subject.V4_BUILD_SETUP_SEQUENCE[step_index][1],
+                "entry_capture": entry_capture(step_index),
+                "object_edge_count": 1, "object_edges": [event_edge],
+                "fs_transition_count": 1, "fs_transitions": [transition],
+                "state_before_fs": before, "state_after_fs": after,
+            }
+
+        observations = [observation(index) for index in range(4)]
+        observations[1]["entry_capture"]["peer_barrier_index"] = None
+        for item in observations:
+            self.assertIs(
+                subject.validate_v4_build_setup_root_observation(item, authority),
+                item,
+            )
+        self.assertEqual(
+            subject.validate_v4_build_event_object_edges(
+                [], phase="setup", setup_step_index=4,
+            ),
+            [],
+        )
+
+        ordinary_edge = {
+            **input_setup_edge, "domain": "input-root-entry",
+            "input_root_entry_index": 0,
+            "resolved_relative": "candle-source/main.c",
+        }
+        self.assertEqual(
+            subject.validate_v4_build_event_object_edges(
+                [ordinary_edge], phase="post-filter",
+            ),
+            [ordinary_edge],
+        )
+
+        duplicate_setup = [
+            setup_edge,
+            {**setup_edge, "index": 1, "st_ino": 44},
+            {**input_edge, "index": 2},
+        ]
+        hostile_authorities = (
+            (
+                list_container(duplicate_setup), fd_table, descriptions,
+                initial_fs, mount_graph, input_identity, 17,
+            ),
+            (
+                edges, fd_table,
+                list_container([{**description, "object_edge_index": 0}]),
+                initial_fs, mount_graph, input_identity, 17,
+            ),
+            (
+                edges, fd_table,
+                list_container([{**description, "descriptor_ref_count": 2}]),
+                initial_fs, mount_graph, input_identity, 17,
+            ),
+            (
+                edges, fd_table, descriptions, initial_fs,
+                {
+                    **mount_graph,
+                    "mounts": [{
+                        **mount,
+                        "mountpoint_identity": {"fixture": "wrong-root"},
+                    }],
+                    "ordered_mount_sha256": subject.canonical_sha256([{
+                        **mount,
+                        "mountpoint_identity": {"fixture": "wrong-root"},
+                    }]),
+                },
+                input_identity, 17,
+            ),
+        )
+        for hostile in hostile_authorities:
+            with self.subTest(authority=hostile), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_initial_root_authority(*hostile)
+
+        mixed_setup = copy.deepcopy(observations[1])
+        mixed_setup["object_edges"] = [ordinary_edge]
+        replayed = copy.deepcopy(observations[2])
+        replayed["step_index"] = 3
+        replayed["role"] = "enter-new-root"
+        wrong_fd = copy.deepcopy(observations[1])
+        wrong_fd["entry_capture"]["fd_generation"] = 18
+        wrong_path = copy.deepcopy(observations[2])
+        wrong_path["entry_capture"]["operands"][0]["payload_base64"] = "LwA="
+        missing_mount = copy.deepcopy(observations[0])
+        missing_mount["fs_transitions"][0]["affected_mount_count"] = 0
+        missing_mount["fs_transitions"][0]["affected_mount_ids"] = []
+        missing_mount["fs_transitions"][0]["old_propagations"] = []
+        missing_mount["fs_transitions"][0]["new_propagations"] = []
+        for hostile in (
+            mixed_setup, replayed, wrong_fd, wrong_path, missing_mount,
+        ):
+            with self.subTest(observation=hostile), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_setup_root_observation(
+                    hostile, authority,
+                )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_event_object_edges(
+                [input_setup_edge], phase="post-filter",
+            )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_event_object_edges(
+                [ordinary_edge], phase="setup", setup_step_index=1,
+                root_authority=authority,
+            )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_event_object_edges(
+                [input_setup_edge], phase="setup", setup_step_index=4,
+                root_authority=authority,
+            )
+
     def test_v4_credentials_task_control_and_capset_transition(self) -> None:
         empty_digest = subject.canonical_sha256([])
         empty_cap = {
