@@ -334,6 +334,10 @@ V4_BUILD_INPUT_CLOSURE_INHERITED_FD_LAYOUT = (
     (1, "build-stdout", "write-only"),
     (2, "build-stderr", "write-only"),
 )
+V4_BUILD_INPUT_CLOSURE_TASK_IDENTITY_FIELDS = ("pid", "start_ticks")
+V4_BUILD_INPUT_CLOSURE_TASK_IDENTITIES_FIELDS = (
+    "builder_task_identity", "observer_task_identity",
+)
 V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS = (
     "index", "relative", "object_type", "mode", "bytes", "sha256",
     "selector", "st_nlink", "parent_descriptor_identity", "mount_id",
@@ -4917,6 +4921,54 @@ def validate_v4_build_input_closure_inherited_fds(
             f"duplicate {label} object identity",
         )
         encoded_identities.add(identity_bytes)
+    return result
+
+
+def validate_v4_build_input_closure_task_identities(
+    value: object,
+) -> dict[str, Any]:
+    """Validate and snapshot the structural builder/observer identities."""
+    label = "V4 native build input-closure task identities"
+    first_frozen = _v4_resource_checked_json_graph(value, label)
+    first_size, first_digest = _v4_bounded_compact_canonical_digest(
+        first_frozen, V4_AUTHORITY_OBJECT_MAX_BYTES, label,
+    )
+    frozen = _v4_resource_checked_json_graph(value, label)
+    frozen_size, frozen_digest = _v4_bounded_compact_canonical_digest(
+        frozen, V4_AUTHORITY_OBJECT_MAX_BYTES, label,
+    )
+    require(
+        (frozen_size, frozen_digest) == (first_size, first_digest),
+        f"{label} changed while freezing",
+    )
+    result = _v4_exact_dict(
+        frozen, V4_BUILD_INPUT_CLOSURE_TASK_IDENTITIES_FIELDS, label,
+    )
+
+    def task_identity(field: str) -> tuple[int, int]:
+        identity_label = f"{label} {field}"
+        identity = _v4_exact_dict(
+            result.get(field),
+            V4_BUILD_INPUT_CLOSURE_TASK_IDENTITY_FIELDS,
+            identity_label,
+        )
+        pid = _v4_uint(identity.get("pid"), 32, f"{identity_label} PID")
+        start_ticks = _v4_uint(
+            identity.get("start_ticks"), 64,
+            f"{identity_label} start ticks",
+        )
+        require(
+            pid > 0 and start_ticks > 0,
+            f"malformed {identity_label}",
+        )
+        return pid, start_ticks
+
+    builder_identity = task_identity("builder_task_identity")
+    observer_identity = task_identity("observer_task_identity")
+    require(
+        builder_identity != observer_identity,
+        f"equal {label}",
+    )
     return result
 
 

@@ -2995,10 +2995,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 394)
+        self.assertEqual(len(values), 396)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "eba873817e212ddbe4e8de8849b9c9b1d5988e1f0cafca03ea5c635e44926f06",
+            "ff9e405e6e399c3c08348508b49ce9e38c241fa9eb4768595eeb170c07a76d95",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -3383,6 +3383,179 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.enumerate_isolated_native_build_root_v2(
                 compiler, linker, source_tree, inputs,
             )
+
+    def test_v4_input_closure_task_identities_rejects_hostile_splices(
+        self,
+    ) -> None:
+        authority = {
+            "builder_task_identity": {"pid": 101, "start_ticks": 1_001},
+            "observer_task_identity": {"pid": 99, "start_ticks": 901},
+        }
+        snapshot = subject.validate_v4_build_input_closure_task_identities(
+            authority,
+        )
+        self.assertEqual(snapshot, authority)
+        self.assertIsNot(snapshot, authority)
+        self.assertIsNot(
+            snapshot["builder_task_identity"],
+            authority["builder_task_identity"],
+        )
+        authority["builder_task_identity"]["pid"] = 102
+        authority["observer_task_identity"]["start_ticks"] = 902
+        self.assertEqual(snapshot["builder_task_identity"]["pid"], 101)
+        self.assertEqual(
+            snapshot["observer_task_identity"]["start_ticks"], 901,
+        )
+        authority["builder_task_identity"]["pid"] = 101
+        authority["observer_task_identity"]["start_ticks"] = 901
+
+        real_bounded_digest = subject._v4_bounded_compact_canonical_digest
+        raced = copy.deepcopy(authority)
+        digest_calls = 0
+
+        def mutate_between_frozen_captures(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 1:
+                raced["builder_task_identity"]["pid"] = 102
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_between_frozen_captures,
+        ), self.assertRaisesRegex(subject.ProtocolError, "changed while freezing"):
+            subject.validate_v4_build_input_closure_task_identities(raced)
+
+        post_freeze = copy.deepcopy(authority)
+        digest_calls = 0
+
+        def mutate_caller_after_second_frozen_digest(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 2:
+                post_freeze["builder_task_identity"]["pid"] = 102
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_caller_after_second_frozen_digest,
+        ):
+            stable_snapshot = (
+                subject.validate_v4_build_input_closure_task_identities(
+                    post_freeze,
+                )
+            )
+        self.assertEqual(post_freeze["builder_task_identity"]["pid"], 102)
+        self.assertEqual(stable_snapshot["builder_task_identity"]["pid"], 101)
+
+        def hostile(mutator: object) -> dict[str, object]:
+            value = copy.deepcopy(authority)
+            mutator(value)
+            return value
+
+        mutations = (
+            lambda value: value.pop("builder_task_identity"),
+            lambda value: value.pop("observer_task_identity"),
+            lambda value: value.update(extra=False),
+            lambda value: value["builder_task_identity"].pop("pid"),
+            lambda value: value["observer_task_identity"].pop("start_ticks"),
+            lambda value: value["builder_task_identity"].update(extra=False),
+            lambda value: value["observer_task_identity"].update(extra=False),
+            lambda value: value["builder_task_identity"].update(pid=True),
+            lambda value: value["builder_task_identity"].update(pid=0),
+            lambda value: value["builder_task_identity"].update(pid=-1),
+            lambda value: value["builder_task_identity"].update(pid=1 << 32),
+            lambda value: value["observer_task_identity"].update(pid=False),
+            lambda value: value["observer_task_identity"].update(pid=0),
+            lambda value: value["observer_task_identity"].update(pid=-1),
+            lambda value: value["observer_task_identity"].update(pid=1 << 32),
+            lambda value: value["builder_task_identity"].update(
+                start_ticks=True,
+            ),
+            lambda value: value["builder_task_identity"].update(start_ticks=0),
+            lambda value: value["builder_task_identity"].update(
+                start_ticks=-1,
+            ),
+            lambda value: value["builder_task_identity"].update(
+                start_ticks=1 << 64,
+            ),
+            lambda value: value["observer_task_identity"].update(
+                start_ticks=False,
+            ),
+            lambda value: value["observer_task_identity"].update(start_ticks=0),
+            lambda value: value["observer_task_identity"].update(
+                start_ticks=-1,
+            ),
+            lambda value: value["observer_task_identity"].update(
+                start_ticks=1 << 64,
+            ),
+            lambda value: value.update(
+                observer_task_identity=copy.deepcopy(
+                    value["builder_task_identity"],
+                ),
+            ),
+        )
+        for mutation in mutations:
+            forged = hostile(mutation)
+            with self.subTest(forged=forged), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_input_closure_task_identities(forged)
+
+        outer_subclass = type("TaskIdentities", (dict,), {})(authority)
+        identity_subclass = copy.deepcopy(authority)
+        identity_subclass["builder_task_identity"] = type(
+            "TaskIdentity", (dict,), {},
+        )(identity_subclass["builder_task_identity"])
+        scalar_subclass = copy.deepcopy(authority)
+        scalar_subclass["observer_task_identity"]["pid"] = type(
+            "PID", (int,), {},
+        )(99)
+        for malformed in (
+            outer_subclass, identity_subclass, scalar_subclass,
+        ):
+            with self.subTest(subclass=malformed), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_input_closure_task_identities(
+                    malformed,
+                )
+
+        cyclic = copy.deepcopy(authority)
+        cyclic_identity: dict[str, object] = {
+            "pid": 101, "start_ticks": 1_001,
+        }
+        cyclic_identity["cycle"] = cyclic_identity
+        cyclic["builder_task_identity"] = cyclic_identity
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=AssertionError("encoding reached before preflight"),
+        ), self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_input_closure_task_identities(cyclic)
+
+        encoded = subject.canonical_value_bytes(authority)
+        cap_cases = (
+            ("V4_AUTHORITY_OBJECT_MAX_BYTES", len(encoded) - 1),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_NODE_MAX", 3),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_CONTAINER_MAX", 1),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_KEY_MAX_BYTES", 5),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_FRAGMENT_MAX_BYTES", 3),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES", 32),
+            ("JSON_INTEGER_MAX_DIGITS", 2),
+        )
+        for constant, cap in cap_cases:
+            with self.subTest(constant=constant), mock.patch.object(
+                subject, constant, cap,
+            ), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_input_closure_task_identities(
+                    authority,
+                )
 
     def test_v4_input_closure_inherited_fds_rejects_hostile_splices(
         self,
