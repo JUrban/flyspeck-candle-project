@@ -238,3 +238,66 @@ canonical, PFT, and reference scopes, about 188 GiB available, no swap I/O,
 and no alerts.  The replay remains `-j1 --mt=1` under the user-authorized
 `117964800` KiB address-space limit.  It is not a success claim and does not
 authorize a Candle repin.
+
+## Success-witness and ordinary-dispatch frontiers
+
+The `d5d7ae8cc...` replay saved both run-level specifications and the
+capability branch, then failed at
+`main_candle_parser_diagnostic_ok_spec`.  Stage 2 closed normally after
+`1:13:22`, with maximum RSS `31369484` KiB, zero swaps, and exit 1.  The exact
+12,131,528,096-byte failed-goal heap is retained under that attempt with
+SHA-256
+`65d220133a2514b3ee41e6960aad70eafa8779b8ab9b6e4d7ff5e5c8af7232e7`.
+
+The resumed goal showed that the diagnostic-success application needed an
+`xsimpl` step before the already explicit command-line, reply, filesystem,
+input, and nonce witnesses.  CakeML commit
+`2c3f20f536d54f4c981c2195d4d6636ff3203e9b` adds only that step.  Its fresh
+replay saved the success and error main specifications, then failed later at
+the legacy ordinary `main_spec`.  Stage 2 again closed normally after
+`1:14:58`, with maximum RSS `35343440` KiB, zero swaps, and exit 1.  Its exact
+12,131,625,616-byte `main_spec` heap is retained with SHA-256
+`e0cf64eac971fbe17a5a20c9134b0a9cee6a735cb4e9999ccddd45064801afcf`.
+
+That checkpoint exposed a source-shape change in the ordinary dispatch proof:
+the new capability predicate's false branch required the explicit boolean
+witness `F`, while a duplicated legacy `xlet_auto` no longer corresponded to
+the translated program.  CakeML commit
+`a054e700c600905ea4051221037e5062a2f8f1d6` makes those two proof-only
+repairs.  Its replay saved `main_spec`, proving that the ordinary path was
+repaired, plus the capability and success whole-program specifications.  It
+then reached a still narrower failure at
+`main_candle_parser_diagnostic_error_whole_prog_spec`.
+
+## Error whole-program repair at `9383815a3...`
+
+The `a054e700c...` stage-2 receipt closed after `1:16:06`, maximum RSS
+`35905504` KiB, zero swaps, and exit 1.  Its 12,131,750,936-byte failed-goal
+heap is retained at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-a054e700c-attempt-001/compiler64Prog.main_candle_parser_diagnostic_error_whole_prog_spec.dumpedheap`
+
+The retained heap has SHA-256
+`4bc789b913a6f755af5c217ac8638ab3b7ce9de7c6996c40fc02011cdc9b9c6b`;
+the same artifact root contains closed failure and repair-proof receipts.  The
+old abbreviation tactic expected an equality whose left side was a filesystem
+variable, but the unfolded goal directly exposed the filesystem expression.
+Supplying the exact expected
+`add_stderr (add_stdout (fastForwardFD ...))` witness proves the unchanged
+goal.  The saved-heap replay printed `Initial goal proved` in 25.15 seconds,
+used maximum RSS `12003392` KiB, and had zero swaps.
+
+CakeML commit `9383815a3e3c4feb94b4a95b20183567fe13a3a4`
+(`Prove parser diagnostic error whole-program spec`) contains only that
+direct-witness proof repair.  A fresh canonical four-stage replay is active
+at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-9383815a3-attempt-001`
+
+Its controller/process group is `3623260`; HOL4 remains exact commit
+`a390cbabd3a4521bab4ee20281e3e42933a8a3ae`.  Stage 1 passed and stage 2 is
+active under serial `Holmake -j1 --mt=1`.  At the recorded checkpoint the
+proof process used about 20 GiB RSS and the host still had about 170 GiB
+available.  This remains an active development replay, not proof success or
+compiler qualification.  Candle stays pinned to its prior compiler until all
+four stages and the controller's six postconditions pass.
