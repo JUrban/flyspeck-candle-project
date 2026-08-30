@@ -922,6 +922,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         ))
         self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 4)
         self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 5)
+        self.assertEqual(subject.V4_BUILD_SYSCALL_DISPOSITION_SCHEMA, 4)
+        self.assertNotIn(
+            "max_fds", subject.V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS,
+        )
         self.assertFalse(hasattr(
             subject, "enumerate_isolated_native_build_filter_v1",
         ))
@@ -1015,6 +1019,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         nonreturning_numbers = {
             item[0] for item in subject.V4_BUILD_NONRETURNING_SYSCALLS
         }
+        filter_result_numbers = {
+            item[0]
+            for item in subject.V4_BUILD_FILTER_RESULT_OPERATION_CAPTURE_POLICY
+        }
         self.assertFalse(modeled_numbers & stateless_numbers)
         self.assertFalse(modeled_numbers & exec_numbers)
         self.assertFalse(modeled_numbers & control_numbers)
@@ -1024,6 +1032,16 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertFalse(stateless_numbers & nonreturning_numbers)
         self.assertFalse(exec_numbers & nonreturning_numbers)
         self.assertFalse(control_numbers & nonreturning_numbers)
+        self.assertFalse(filter_result_numbers & modeled_numbers)
+        self.assertFalse(filter_result_numbers & stateless_numbers)
+        self.assertFalse(filter_result_numbers & exec_numbers)
+        self.assertFalse(filter_result_numbers & control_numbers)
+        self.assertFalse(filter_result_numbers & nonreturning_numbers)
+        self.assertEqual(filter_result_numbers, {435})
+        self.assertEqual(
+            subject.V4_BUILD_FILTER_RESULT_OPERATION_CAPTURE_POLICY[0][2:5],
+            ("scalar-entry", "scalar-exit", -38),
+        )
         self.assertEqual(
             control_numbers, {13, 14, 61, 73, 131, 158, 218, 273, 334},
         )
@@ -1149,6 +1167,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertIn(
             "securebits", subject.V4_BUILD_INITIAL_CREDENTIAL_FIELDS,
         )
+        securebits_policy = next(
+            row for row in subject.V4_BUILD_CREDENTIAL_SCALAR_POLICY
+            if row[0] == "securebits"
+        )
+        self.assertEqual(securebits_policy[2], ("exact-values", 0))
+        self.assertIn("clone-newuser", securebits_policy[3])
         self.assertEqual(
             subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
             "candle-flyspeck-v4-initial-state-seed-v2",
@@ -1201,12 +1225,24 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertIn("nsfs", subject.V4_BUILD_MOUNT_NAMESPACE_FILE_POLICY)
         self.assertIn("shared-to-slave", subject.V4_BUILD_MOUNT_USERNS_COPY_POLICY)
+        self.assertIn(
+            "only-null-normalized-parent",
+            subject.V4_BUILD_MOUNT_ROOT_PARENT_POLICY,
+        )
         namespace_clone = next(
             row for row in subject.V4_BUILD_PTRACE_EVENT_TRANSITION_POLICY
             if row[0] == "namespace-clone"
         )
         self.assertEqual(namespace_clone[4], ("exact-values", 2))
         self.assertEqual(subject.V4_BUILD_SETUP_FINAL_FDS, (0, 1, 2))
+        self.assertEqual(
+            dict(subject.V4_BUILD_SETUP_CREDENTIAL_TARGETS)["select-mapped-uid"],
+            ("real_uid", "effective_uid", "saved_uid", "fsuid"),
+        )
+        self.assertEqual(
+            dict(subject.V4_BUILD_SETUP_CAPABILITY_TARGETS)["drop-capabilities"],
+            ("effective", "permitted", "inheritable"),
+        )
         self.assertEqual(len(subject.V4_BUILD_SETUP_SEQUENCE_FIELDS), 4)
         self.assertEqual(
             tuple(step[0] for step in subject.V4_BUILD_SETUP_SEQUENCE),
@@ -1403,10 +1439,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 372)
+        self.assertEqual(len(values), 378)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "8534f5d65b5974e23acab9481d61ea8f85b0311cc7a62335274eae48905b2d8a",
+            "7a41529006e36858f38da8bf88361a72997f7d53e64288bd15e1b239a5182184",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:

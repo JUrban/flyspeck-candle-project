@@ -467,8 +467,7 @@ V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS = (
     "count", "entries", "ordered_entry_sha256",
 )
 V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS = (
-    "table_id", "generation", "max_fds", "fd_count", "fds",
-    "ordered_fd_sha256",
+    "table_id", "generation", "fd_count", "fds", "ordered_fd_sha256",
 )
 V4_BUILD_INITIAL_ADDRESS_SPACE_FIELDS = (
     "address_space_id", "generation", "mapping_count", "mapping_indices",
@@ -509,14 +508,17 @@ V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS = (
     "mountinfo_payload_base64",
 )
 V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS = (
-    "index", "mount_id", "parent_mount_id", "root_identity",
+    "index", "mount_id", "raw_parent_mount_id", "parent_mount_id",
+    "root_identity",
     "mountpoint_identity", "device_major", "device_minor",
     "root_bytes_base64", "mountpoint_bytes_base64", "filesystem_type",
     "mount_source_bytes_base64", "flags", "super_options",
     "optional_fields", "propagation", "user_namespace_locked",
 )
 V4_BUILD_MOUNT_CLONE_FIELDS = (
-    "index", "source_mount_id", "child_mount_id", "root_identity",
+    "index", "source_mount_id", "child_mount_id",
+    "source_raw_parent_mount_id", "child_raw_parent_mount_id",
+    "root_identity",
     "mountpoint_identity", "device_major", "device_minor",
     "root_bytes_base64", "mountpoint_bytes_base64", "filesystem_type",
     "mount_source_bytes_base64", "flags", "super_options",
@@ -531,6 +533,10 @@ V4_BUILD_MOUNT_PROPAGATION_FIELDS = (
 )
 V4_BUILD_MOUNT_GRAPH_ORDER_POLICY = (
     "root-first-parent-before-child-then-raw-mountpoint-bytes-then-mount-id-v1"
+)
+V4_BUILD_MOUNT_ROOT_PARENT_POLICY = (
+    "index-zero-only-null-normalized-parent-raw-parent-positive-absent-from-"
+    "graph;nonroot-raw-parent-equals-normalized-parent-present-earlier-v1"
 )
 V4_BUILD_MOUNTINFO_CAPTURE_POLICY = (
     "outside-parent-held-proc-pid-mountinfo-complete-bounded-bytes-v1"
@@ -595,8 +601,8 @@ V4_BUILD_CREDENTIAL_SCALAR_POLICY = (
      "exact-proc-credential-snapshot"),
     ("fsgid", "integer-nonbool", ("inclusive-uint", 0, 0xFFFF_FFFF),
      "exact-proc-credential-snapshot"),
-    ("securebits", "integer-nonbool", ("bitmask-subset", 0xFF),
-     "exact-pr-get-securebits-and-proc-status-join"),
+    ("securebits", "integer-nonbool", ("exact-values", 0),
+     "derived-exact-zero-from-authenticated-clone-newuser"),
     ("no_new_privileges", "integer-nonbool", ("exact-values", 0, 1),
      "exact-proc-status-join"),
     ("seccomp_mode", "integer-nonbool", ("exact-values", 0, 2),
@@ -819,6 +825,17 @@ V4_BUILD_SETUP_SEQUENCE = (
      "prctl-pr-set-no-new-privs-one-zero-zero-zero-exact"),
     (13, "install-build-filter", (317,),
      "seccomp-set-mode-filter-zero-exact-authority-program"),
+)
+V4_BUILD_SETUP_CREDENTIAL_TARGETS = (
+    ("select-mapped-gid",
+     ("real_gid", "effective_gid", "saved_gid", "fsgid")),
+    ("select-mapped-uid",
+     ("real_uid", "effective_uid", "saved_uid", "fsuid")),
+)
+V4_BUILD_SETUP_CAPABILITY_TARGETS = (
+    ("clear-ambient-capabilities", ("ambient",)),
+    ("drop-capability-bounding-set", ("bounding",)),
+    ("drop-capabilities", ("effective", "permitted", "inheritable")),
 )
 V4_BUILD_SETUP_FINAL_FDS = (0, 1, 2)
 V4_BUILD_SETUP_FINAL_CAPABILITY_SETS = (
@@ -1954,6 +1971,23 @@ V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY = tuple(
 V4_BUILD_STATELESS_NEGATIVE_RESULT_POLICY = (
     "all-negative-raw-results-reject-at-exit-without-resume-or-publication-v1"
 )
+V4_BUILD_FILTER_RESULT_OPERATION_CAPTURE_POLICY_FIELDS = (
+    "syscall_number", "operation", "entry_kind", "exit_kind",
+    "required_raw_return", "object_edge_counts", "fd_transition_counts",
+    "mapping_transition_counts", "fs_transition_counts",
+    "task_transition_counts",
+)
+V4_BUILD_FILTER_RESULT_OPERATION_CAPTURE_POLICY = (
+    (
+        435, "clone3-filter-enosys", "scalar-entry", "scalar-exit", -38,
+        _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+        _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+        _v4_cardinality_spec((0,)),
+    ),
+)
+V4_BUILD_FILTER_RESULT_OPERATION_POLICY = (
+    "post-filter-resume-once-require-installed-filter-result-no-effects-v1"
+)
 V4_BUILD_NONRETURNING_CAPTURE_POLICY_FIELDS = (
     "syscall_number", "operation", "entry_kind", "terminal_kind",
     "entry_object_edge_counts", "entry_fd_transition_counts",
@@ -1970,11 +2004,12 @@ V4_BUILD_NONRETURNING_CAPTURE_POLICY = tuple(
     for number, operation in V4_BUILD_NONRETURNING_SYSCALLS
 )
 V4_BUILD_SYSCALL_DISPOSITION_POLICY = (
-    "phase-split-allow-only-modeled-control-query-deny-all-other-native-v3"
+    "phase-split-allow-only-modeled-control-query-filter-result-deny-all-"
+    "other-native-v4"
 )
-V4_BUILD_SYSCALL_DISPOSITION_SCHEMA = 3
+V4_BUILD_SYSCALL_DISPOSITION_SCHEMA = 4
 V4_BUILD_SYSCALL_DISPOSITION_KIND = (
-    "candle-flyspeck-isolated-native-build-syscall-disposition-v3"
+    "candle-flyspeck-isolated-native-build-syscall-disposition-v4"
 )
 V4_BUILD_REJECTED_OUTPUT_MUTATION_SYSCALLS = (
     (16, "ioctl"),
