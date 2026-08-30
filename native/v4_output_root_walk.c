@@ -217,8 +217,18 @@ v4_orw_parse_u64(
 )
 {
     char *end = NULL;
+    const char *cursor;
     unsigned long long parsed;
 
+    if (text == NULL || *text == '\0') {
+        return -1;
+    }
+    for (cursor = text; *cursor != '\0'; ++cursor) {
+        if ((base == 10 && (*cursor < '0' || *cursor > '9')) ||
+            (base == 8 && (*cursor < '0' || *cursor > '7'))) {
+            return -1;
+        }
+    }
     errno = 0;
     parsed = strtoull(text, &end, base);
     if (errno != 0 || end == text || *end != '\0') {
@@ -582,12 +592,18 @@ v4_orw_output_anchor_open(
     );
     if (result != V4_ORW_OK) {
         (void)close(primary_fd);
+        memset(anchor, 0, sizeof(*anchor));
+        anchor->primary.fd = -1;
+        anchor->guard.fd = -1;
         return result;
     }
     guard_fd = fcntl(primary_fd, F_DUPFD_CLOEXEC, 3);
     if (guard_fd < 0) {
         int saved_errno = errno;
         (void)close(primary_fd);
+        memset(anchor, 0, sizeof(*anchor));
+        anchor->primary.fd = -1;
+        anchor->guard.fd = -1;
         return v4_orw_fail(error, V4_ORW_ERROR, saved_errno,
                            "cannot create retained output-anchor guard");
     }
@@ -597,6 +613,9 @@ v4_orw_output_anchor_open(
     if (result != V4_ORW_OK) {
         (void)close(guard_fd);
         (void)close(primary_fd);
+        memset(anchor, 0, sizeof(*anchor));
+        anchor->primary.fd = -1;
+        anchor->guard.fd = -1;
         return result;
     }
     anchor->live = 1;
@@ -1114,6 +1133,13 @@ v4_orw_output_root_walk(
                  directory_projection.mount_id != projection.mount_id)) {
                 code = v4_orw_fail(error, V4_ORW_ERROR, EINVAL,
                                    "directory walk descriptor changed object");
+            }
+            if (code == V4_ORW_OK) {
+                struct v4_orw_walk_entry *entry =
+                    &result->entries[result->entry_count - 1];
+                entry->has_directory_walk_descriptor = 1;
+                entry->directory_walk_descriptor = directory_descriptor;
+                entry->directory_walk_projection = directory_projection;
             }
             if (code == V4_ORW_OK) {
                 code = v4_orw_list_directory(

@@ -85,6 +85,10 @@ struct v4_orw_walk_entry {
     /* Historical ledger row: this descriptor is closed before return. */
     struct v4_orw_logical_descriptor descriptor;
     struct v4_orw_kernel_projection projection;
+    int has_directory_walk_descriptor;
+    /* Historical and populated only for a directory entry. */
+    struct v4_orw_logical_descriptor directory_walk_descriptor;
+    struct v4_orw_kernel_projection directory_walk_projection;
 };
 
 struct v4_orw_walk_result {

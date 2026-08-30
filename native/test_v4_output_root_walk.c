@@ -201,11 +201,12 @@ main(void)
     code = v4_orw_output_anchor_open(
         root_fd, "candle-output", &exhausted_ledger, &rejected_anchor, &error
     );
-    if (code != V4_ORW_ERROR) {
+    if (code != V4_ORW_ERROR || rejected_anchor.primary.fd != -1 ||
+        rejected_anchor.guard.fd != -1 || rejected_anchor.live != 0) {
         if (code == V4_ORW_OK) {
             v4_orw_output_anchor_close(&rejected_anchor);
         }
-        (void)test_fail("exhausted logical ledger did not reject");
+        (void)test_fail("exhausted ledger did not reject with a safe anchor");
         goto cleanup;
     }
     code = v4_orw_output_anchor_open(
@@ -305,6 +306,11 @@ main(void)
         walk.root_walk_descriptor.fd_generation <= previous_generation ||
         walk.entries[0].descriptor.fd_generation <=
             walk.root_walk_descriptor.fd_generation ||
+        walk.entries[0].has_directory_walk_descriptor != 1 ||
+        walk.entries[0].directory_walk_descriptor.fd_generation <=
+            walk.entries[0].descriptor.fd_generation ||
+        walk.entries[1].has_directory_walk_descriptor != 0 ||
+        walk.entries[2].has_directory_walk_descriptor != 0 ||
         walk.entries[0].projection.mount_id !=
             anchor.initial_projection.mount_id ||
         walk.entries[1].projection.st_nlink != 1 ||
