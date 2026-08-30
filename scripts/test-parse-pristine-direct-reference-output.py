@@ -98,6 +98,53 @@ def lp_line(record: dict) -> str:
     )
 
 
+def framed(value: bytes) -> bytes:
+    return str(len(value)).encode() + b":" + value
+
+
+def node(tag: bytes, children: list[bytes]) -> bytes:
+    return (
+        framed(tag) + framed(str(len(children)).encode()) +
+        b"".join(framed(child) for child in children)
+    )
+
+
+def semantic_lines(plan: dict) -> list[str]:
+    marker = plan_marker = protocol.MARKER_CONTRACT["semantic_observation"]
+    nonce = plan["session_nonce"]
+    hypotheses = node(b"list", [])
+    global_axioms = node(b"list", [b"axiom-0", b"axiom-1", b"axiom-2"])
+    lines = []
+    for index, name in enumerate(subject.EXPECTED_FINAL_THEOREM_NAMES):
+        conclusion = f"conclusion-{index}".encode()
+        theorem = node(b"theorem", [hypotheses, conclusion])
+        lines.append(marker_line(
+            plan_marker, "THEOREM", nonce, index, name.encode().hex(),
+            theorem.hex(), hypotheses.hex(), conclusion.hex(),
+            global_axioms.hex(), 0, 3,
+        ))
+    type_constants = node(b"list", [b"type-0", b"type-1"])
+    term_constants = node(b"list", [b"term-0"])
+    definitions = node(b"list", [b"definition-0"])
+    kernel_state = node(
+        b"kernel-state",
+        [type_constants, term_constants, definitions, global_axioms],
+    )
+    lines.append(marker_line(
+        marker, "POST_STATE", nonce, kernel_state.hex(), type_constants.hex(),
+        term_constants.hex(), definitions.hex(), global_axioms.hex(), 2, 1, 1, 3,
+    ))
+    for index, name in enumerate(subject.EXPECTED_FINAL_THEOREM_NAMES):
+        lines.append(marker_line(
+            marker, "DEPENDENCY", nonce, index, name.encode().hex(),
+            f"{index + 1:032x}",
+        ))
+    lines.append(marker_line(
+        marker, "COMPLETE", nonce, plan["boundary_id"], 4, 4,
+    ))
+    return lines
+
+
 def producer_lines(bundle: dict) -> list[str]:
     plan = bundle["plan"]
     transcript = bundle["transcript"]
@@ -189,7 +236,7 @@ class PristineOutputParserTests(unittest.TestCase):
         closure = result["native_execution_closure"]
         for artifact in (result, transcript, closure):
             self.assertEqual(artifact["schema"], protocol.RAW_PROTOCOL_SCHEMA)
-            self.assertTrue(artifact["kind"].endswith("-v2"))
+            self.assertTrue(artifact["kind"].endswith("-v3"))
         self.assertIs(
             protocol.validate_raw_transcript(
                 transcript, self.plan, self.request,
@@ -208,7 +255,12 @@ class PristineOutputParserTests(unittest.TestCase):
         self.assertEqual(closure["loader_ledger_artifact"], stdout_record)
         self.assertEqual(closure["lp_success_artifact"], stdout_record)
         self.assertIsNone(result["semantic_projection"])
+        self.assertIsNone(result["semantic_completion_observation"])
         self.assertIsNone(result["cross_runtime_coverage"])
+        self.assertEqual(
+            result["semantic_status"],
+            "decoder-available-not-integrated-into-source-stream",
+        )
         for field in (
             "candidate_included", "approval_included", "promotion_allowed",
             "pft_used", "s2_eligible", "s3_eligible", "s2_s3_evidence",
@@ -259,7 +311,7 @@ class PristineOutputParserTests(unittest.TestCase):
             "\u202e",     # bidi override / format control
             "\u2028",     # Unicode line separator
             "\u2029",     # Unicode paragraph separator
-            "\u00e9",     # printable non-ASCII is outside the v2 alphabet
+            "\u00e9",     # printable non-ASCII is outside the v3 alphabet
         )
         for character in hostile_characters:
             forged = copy.deepcopy(self.lines)
@@ -453,14 +505,159 @@ class PristineOutputParserTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assert_rejects(forged, "stdout line")
 
-    def test_native_marker_is_request_bound_and_v1_wire_rejects(self) -> None:
+    def test_pure_semantic_v3_decoder_derives_exact_common_projection(self) -> None:
+        lines = semantic_lines(self.plan)
+        projection = subject.decode_semantic_v3_bytes(
+            encode(lines), copy.deepcopy(self.plan), copy.deepcopy(self.request),
+        )
+        direct = protocol._direct_protocol()
+        self.assertIs(direct.validate_semantic_projection(projection), projection)
+        self.assertEqual(
+            [record["name"] for record in projection["theorems"]],
+            list(subject.EXPECTED_FINAL_THEOREM_NAMES),
+        )
+        self.assertEqual(
+            projection["dependency_history"],
+            [{
+                "index": index,
+                "name": name,
+                "full_digest_md5": f"{index + 1:032x}",
+            } for index, name in enumerate(subject.EXPECTED_FINAL_THEOREM_NAMES)],
+        )
+        hypotheses = node(b"list", [])
+        self.assertEqual(
+            projection["theorems"][0]["hypotheses_sha256"],
+            hashlib.sha256(hypotheses).hexdigest(),
+        )
+        self.assertNotIn("session_nonce", projection)
+        self.assertFalse(any(
+            "candidate" in name or "approval" in name
+            for name in projection
+        ))
+
+    def test_pure_decoder_rejects_order_nonce_version_and_shape_attacks(self) -> None:
+        baseline = semantic_lines(self.plan)
+        mutations: list[tuple[str, list[str]]] = []
+        missing = copy.deepcopy(baseline)
+        missing.pop(0)
+        mutations.append(("missing", missing))
+        duplicate = copy.deepcopy(baseline)
+        duplicate.insert(1, duplicate[0])
+        mutations.append(("duplicate", duplicate))
+        reordered = copy.deepcopy(baseline)
+        reordered[0], reordered[1] = reordered[1], reordered[0]
+        mutations.append(("reordered", reordered))
+        mixed_nonce = copy.deepcopy(baseline)
+        mixed_nonce[4] = replace_field(mixed_nonce[4], 2, "2" * 64)
+        mutations.append(("nonce", mixed_nonce))
+        old_marker = copy.deepcopy(baseline)
+        old_marker[0] = old_marker[0].replace(
+            protocol.MARKER_CONTRACT["semantic_observation"],
+            "CANDLE_PRISTINE_DIRECT_SEMANTIC_V2", 1,
+        )
+        mutations.append(("v2", old_marker))
+        extra = copy.deepcopy(baseline)
+        extra[9] += "\textra"
+        mutations.append(("extra", extra))
+        unknown = copy.deepcopy(baseline)
+        unknown[5] = replace_field(unknown[5], 1, "UNKNOWN")
+        mutations.append(("unknown", unknown))
+        for label, lines in mutations:
+            with self.subTest(label=label), self.assertRaises(
+                subject.OutputProtocolError,
+            ):
+                subject.decode_semantic_v3_bytes(
+                    encode(lines), self.plan, self.request,
+                )
+
+    def test_pure_decoder_rejects_hex_count_and_composite_splices(self) -> None:
+        baseline = semantic_lines(self.plan)
+        mutations: list[tuple[str, list[str]]] = []
+        uppercase = copy.deepcopy(baseline)
+        uppercase[0] = replace_field(uppercase[0], 4, uppercase[0].split("\t")[4].upper())
+        mutations.append(("uppercase name hex", uppercase))
+        odd = copy.deepcopy(baseline)
+        odd[0] = replace_field(odd[0], 6, "0")
+        mutations.append(("odd serialized hex", odd))
+        padded = copy.deepcopy(baseline)
+        padded[0] = replace_field(padded[0], 9, "00")
+        mutations.append(("padded count", padded))
+        nonempty_hypotheses = copy.deepcopy(baseline)
+        changed_hypotheses = node(b"list", [b"assumption"])
+        nonempty_hypotheses[0] = replace_field(
+            replace_field(nonempty_hypotheses[0], 6, changed_hypotheses.hex()),
+            9, "1",
+        )
+        mutations.append(("nonempty hypotheses", nonempty_hypotheses))
+        theorem_splice = copy.deepcopy(baseline)
+        theorem_splice[0] = replace_field(
+            theorem_splice[0], 7, b"different-conclusion".hex(),
+        )
+        mutations.append(("theorem composite splice", theorem_splice))
+        axiom_splice = copy.deepcopy(baseline)
+        axiom_splice[1] = replace_field(
+            axiom_splice[1], 8,
+            node(b"list", [b"other-0", b"other-1", b"other-2"]).hex(),
+        )
+        mutations.append(("axiom splice", axiom_splice))
+        uppercase_md5 = copy.deepcopy(baseline)
+        uppercase_md5[5] = replace_field(uppercase_md5[5], 5, "A" * 32)
+        mutations.append(("uppercase dependency", uppercase_md5))
+        for label, lines in mutations:
+            with self.subTest(label=label), self.assertRaises(
+                subject.OutputProtocolError,
+            ):
+                subject.decode_semantic_v3_bytes(
+                    encode(lines), self.plan, self.request,
+                )
+
+    def test_nine_digit_child_count_rejects_before_child_iteration(self) -> None:
+        lines = semantic_lines(self.plan)
+        # tag frame + a nine-digit canonical child-count frame, with no child
+        # bytes.  100,000,000 is under the global frame cap but impossible for
+        # the remaining zero bytes; the pre-loop remaining//2 guard must fire.
+        hostile_list = b"4:list9:100000000"
+        lines[0] = replace_field(lines[0], 6, hostile_list.hex())
+        with self.assertRaisesRegex(
+            subject.OutputProtocolError,
+            "child count exceeds remaining framed bytes",
+        ):
+            subject.decode_semantic_v3_bytes(
+                encode(lines), self.plan, self.request,
+            )
+
+    def test_well_formed_dependency_substitution_is_only_raw_projection_drift(self) -> None:
+        baseline = semantic_lines(self.plan)
+        original = subject.decode_semantic_v3_bytes(
+            encode(baseline), self.plan, self.request,
+        )
+        substituted = copy.deepcopy(baseline)
+        substituted[5] = replace_field(substituted[5], 5, "e" * 32)
+        changed = subject.decode_semantic_v3_bytes(
+            encode(substituted), self.plan, self.request,
+        )
+        self.assertNotEqual(changed, original)
+        self.assertEqual(
+            changed["dependency_history"][0]["full_digest_md5"], "e" * 32,
+        )
+        self.assertNotIn("approved_reference_present", changed)
+
+    def test_semantic_v3_lines_remain_rejected_by_unintegrated_source_parser(self) -> None:
+        lines = copy.deepcopy(self.lines)
+        complete_index = marker_indices(
+            lines, protocol.MARKER_CONTRACT["session_complete"],
+        )[0]
+        lines[complete_index:complete_index] = semantic_lines(self.plan)
+        self.assert_rejects(lines, "unsupported success-like stdout line")
+
+    def test_native_marker_is_request_bound_and_v2_wire_rejects(self) -> None:
         native = protocol.MARKER_CONTRACT["native_load"]
         self.assertEqual(
             self.request["marker_contract"]["native_load"], native,
         )
         forged = [
-            line.replace(
-                native, "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V1", 1,
+                line.replace(
+                native, "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V2", 1,
             ) if line.startswith(native + "\t") else line
             for line in self.lines
         ]
