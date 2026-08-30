@@ -872,14 +872,21 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             "policy": subject.COMPARISON_AUTHORITY_POLICY,
             "reviewer_project_commit": "5" * 40,
             "reviewer_sources": [source("scripts/reviewer.py", "5")],
+            "reviewer_entrypoint": source("scripts/reviewer.py", "5"),
             "compiled_producer_project_commit": "6" * 40,
             "compiled_consumer_sources": [
                 source("scripts/compiled-consumer.py", "6"),
             ],
+            "compiled_producer_entrypoint": source(
+                "scripts/compiled-consumer.py", "6",
+            ),
             "reference_producer_project_commit": "7" * 40,
             "reference_validator_sources": [
                 source("scripts/reference-validator.py", "7"),
             ],
+            "reference_producer_entrypoint": source(
+                "scripts/reference-validator.py", "7",
+            ),
         }
         comparison = {
             "schema": 1,
@@ -911,12 +918,60 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             "pft_used": False,
             "s2_s3_evidence": False,
         }
+
+        def candidate_authority(role, index):
+            compiled = role == subject.COMPILED_COMPARISON_ROLE
+            authority_byte = ("8", "9", "a")[index]
+            runtime_byte = ("b", "c", "d")[index]
+            entrypoint = source(
+                ("scripts/compiled-schema6-authenticator.py" if compiled else
+                 f"scripts/reference-authenticator-{index}.py"),
+                authority_byte,
+            )
+            return {
+                "policy": subject.COMPARISON_CANDIDATE_AUTHORITY_POLICY,
+                "authenticator": (
+                    subject.COMPILED_COMPARISON_AUTHENTICATOR if compiled else
+                    subject.REFERENCE_COMPARISON_AUTHENTICATOR
+                ),
+                "project_commit": authority_byte * 40,
+                "runtime_commit": runtime_byte * 40,
+                "entrypoint": entrypoint,
+                "sources": [copy.deepcopy(entrypoint)],
+            }
+
+        descriptors = []
+        for index, candidate in enumerate(
+            [compiled_record, *reference_records]
+        ):
+            compiled = index == 0
+            role = (
+                subject.COMPILED_COMPARISON_ROLE
+                if compiled else subject.REFERENCE_COMPARISON_ROLE
+            )
+            descriptors.append({
+                "schema": 1,
+                "kind": subject.AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND,
+                "role": role,
+                "ordinal": index,
+                "candidate": copy.deepcopy(candidate),
+                "authenticated_nonce": {
+                    "kind": (
+                        subject.COMPILED_COMPARISON_NONCE_KIND if compiled else
+                        subject.REFERENCE_COMPARISON_NONCE_KIND
+                    ),
+                    "value": (comparison["compiled_candidate"]["attempt_nonce"]
+                              if compiled else comparison["reference_candidates"]
+                              [index - 1]["session_nonce"]),
+                },
+                "authenticated_plan": copy.deepcopy(plan_record),
+                "semantic_projection": copy.deepcopy(semantic),
+                "coverage_projection": copy.deepcopy(coverage),
+                "candidate_authority": candidate_authority(role, index),
+                "pft_used": False,
+            })
         arguments = {
-            "expected_authenticated_plan": plan_record,
-            "expected_compiled_candidate": compiled_record,
-            "expected_reference_candidates": reference_records,
-            "authenticated_semantic_projections": [semantic] * 3,
-            "authenticated_coverage_projections": [coverage] * 3,
+            "authenticated_candidate_descriptors": descriptors,
             "expected_authority": authority,
         }
         self.assertIs(
@@ -936,8 +991,8 @@ class DirectReleaseProtocolTests(unittest.TestCase):
 
         def change_coverage(_item, candidate_arguments):
             action_events = candidate_arguments[
-                "authenticated_coverage_projections"
-            ][2]["action_events"]
+                "authenticated_candidate_descriptors"
+            ][2]["coverage_projection"]["action_events"]
             action_events["records"][0]["source_sha256"] = "0" * 64
             action_events["ordered_record_sha256"] = subject.canonical_sha256(
                 action_events["records"]
@@ -950,6 +1005,25 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             candidate_arguments["expected_authority"][
                 "reference_validator_sources"
             ][0]["path"] = "scripts/pft-results.py"
+
+        def remove_authority_independence(item, candidate_arguments):
+            compiled_entrypoint = copy.deepcopy(
+                item["authority"]["compiled_producer_entrypoint"]
+            )
+            item["authority"]["reviewer_entrypoint"] = compiled_entrypoint
+            item["authority"]["reviewer_sources"] = [
+                copy.deepcopy(compiled_entrypoint)
+            ]
+            candidate_arguments["expected_authority"] = copy.deepcopy(
+                item["authority"]
+            )
+
+        def use_boolean_expected_bytes(item, candidate_arguments):
+            item["authority"]["reviewer_sources"][0]["bytes"] = True
+            item["authority"]["reviewer_entrypoint"]["bytes"] = True
+            candidate_arguments["expected_authority"] = copy.deepcopy(
+                item["authority"]
+            )
 
         cases = (
             ("claim", lambda item, args: item.update(
@@ -964,13 +1038,41 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("duplicate candidate", lambda item, args: item[
                 "reference_candidates"
             ][1].update(candidate=copy.deepcopy(reference_records[0]))),
+            ("candidate descriptor splice", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][0].update(candidate=copy.deepcopy(reference_records[0]))),
+            ("candidate plan splice", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][1].update(authenticated_plan=content("e", 105))),
+            ("candidate nonce splice", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][2]["authenticated_nonce"].update(value="b" * 64)),
+            ("candidate PFT bit", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][1].update(pft_used=True)),
             ("reviewer descendant", lambda item, args: item[
                 "authority"
             ].update(reviewer_project_commit="b" * 40)),
             ("PFT source", inject_pft_source),
+            ("dependent reviewer", remove_authority_independence),
+            ("boolean expected bytes", use_boolean_expected_bytes),
+            ("boolean plan bytes", lambda item, args: item[
+                "authenticated_plan"
+            ].update(bytes=True)),
+            ("boolean candidate bytes", lambda item, args: item[
+                "compiled_candidate"
+            ]["candidate"].update(bytes=True)),
+            ("float reference bytes", lambda item, args: item[
+                "reference_candidates"
+            ][0]["candidate"].update(bytes=103.0)),
+            ("float descriptor bytes", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][1]["candidate"].update(bytes=103.0)),
             ("semantic mismatch", lambda item, args: args[
-                "authenticated_semantic_projections"
-            ][2]["theorems"][0].update(theorem_sha256="0" * 64)),
+                "authenticated_candidate_descriptors"
+            ][2]["semantic_projection"]["theorems"][0].update(
+                theorem_sha256="0" * 64,
+            )),
             ("coverage mismatch", change_coverage),
         )
         for label, mutate in cases:

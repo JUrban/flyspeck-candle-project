@@ -47,8 +47,20 @@ INDEPENDENT_COMPARISON_POLICY = (
     "one-compiled-plus-two-pristine-clean-reference-exact-projections-v1"
 )
 COMPARISON_AUTHORITY_POLICY = (
-    "exact-commits-and-source-content-inventories-v1"
+    "independent-entrypoints-exact-commits-and-source-inventories-v2"
 )
+AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND = (
+    "candle-flyspeck-authenticated-comparison-candidate-v1"
+)
+COMPARISON_CANDIDATE_AUTHORITY_POLICY = (
+    "candidate-authenticator-exact-entrypoint-and-sources-v1"
+)
+COMPILED_COMPARISON_ROLE = "compiled-direct-schema6"
+REFERENCE_COMPARISON_ROLE = "pristine-clean-reference"
+COMPILED_COMPARISON_AUTHENTICATOR = "compiled-schema6-consumer"
+REFERENCE_COMPARISON_AUTHENTICATOR = "pristine-reference-validator"
+COMPILED_COMPARISON_NONCE_KIND = "compiled-attempt-nonce-v1"
+REFERENCE_COMPARISON_NONCE_KIND = "reference-session-nonce-v1"
 PHYSICAL_COVERAGE_KIND = (
     "candle-flyspeck-direct-physical-source-coverage-v1"
 )
@@ -1321,6 +1333,11 @@ def _validate_content_record(value: object, label: str) -> dict[str, Any]:
     return value
 
 
+def _same_canonical_value(left: object, right: object) -> bool:
+    """Compare already validated JSON values without Python bool/int aliasing."""
+    return canonical_value_bytes(left) == canonical_value_bytes(right)
+
+
 def _validate_source_inventory(value: object, label: str) -> list[dict[str, Any]]:
     require(isinstance(value, list) and value,
             f"malformed {label} source inventory")
@@ -1342,8 +1359,11 @@ def _validate_source_inventory(value: object, label: str) -> list[dict[str, Any]
 def _validate_comparison_authority(value: object) -> dict[str, Any]:
     fields = {
         "policy", "reviewer_project_commit", "reviewer_sources",
+        "reviewer_entrypoint",
         "compiled_producer_project_commit", "compiled_consumer_sources",
+        "compiled_producer_entrypoint",
         "reference_producer_project_commit", "reference_validator_sources",
+        "reference_producer_entrypoint",
     }
     require(isinstance(value, dict) and set(value) == fields and
             value.get("policy") == COMPARISON_AUTHORITY_POLICY,
@@ -1354,32 +1374,123 @@ def _validate_comparison_authority(value: object) -> dict[str, Any]:
     ):
         _hex(value.get(field), re.compile(r"[0-9a-f]{40}"),
              f"direct comparison authority {field}")
-    _validate_source_inventory(value.get("reviewer_sources"), "reviewer")
-    _validate_source_inventory(
-        value.get("compiled_consumer_sources"), "compiled consumer",
+    inventories = {
+        "reviewer_entrypoint": _validate_source_inventory(
+            value.get("reviewer_sources"), "reviewer",
+        ),
+        "compiled_producer_entrypoint": _validate_source_inventory(
+            value.get("compiled_consumer_sources"), "compiled consumer",
+        ),
+        "reference_producer_entrypoint": _validate_source_inventory(
+            value.get("reference_validator_sources"), "reference validator",
+        ),
+    }
+    entrypoints = []
+    for field, inventory in inventories.items():
+        entrypoint = value.get(field)
+        require(isinstance(entrypoint, dict) and set(entrypoint) == {
+                    "path", "bytes", "sha256", "md5",
+                }, f"malformed direct comparison {field}")
+        _safe_relative(entrypoint.get("path"),
+                       f"direct comparison {field} path")
+        _validate_content_record({
+            name: entrypoint[name] for name in ("bytes", "sha256", "md5")
+        }, f"direct comparison {field}")
+        require(any(_same_canonical_value(entrypoint, source)
+                    for source in inventory),
+                f"direct comparison {field} is absent from its source inventory")
+        entrypoints.append(entrypoint)
+    require(len({canonical_value_bytes(item) for item in entrypoints}) == 3,
+            "direct comparison reviewer and producer entrypoints are not independent")
+    return value
+
+
+def _validate_candidate_authority(
+    value: object, role: str,
+) -> dict[str, Any]:
+    fields = {
+        "policy", "authenticator", "project_commit", "runtime_commit",
+        "entrypoint", "sources",
+    }
+    expected_authenticator = (
+        COMPILED_COMPARISON_AUTHENTICATOR
+        if role == COMPILED_COMPARISON_ROLE
+        else REFERENCE_COMPARISON_AUTHENTICATOR
     )
-    _validate_source_inventory(
-        value.get("reference_validator_sources"), "reference validator",
+    require(isinstance(value, dict) and set(value) == fields and
+            value.get("policy") == COMPARISON_CANDIDATE_AUTHORITY_POLICY and
+            value.get("authenticator") == expected_authenticator,
+            "malformed authenticated comparison candidate authority")
+    for field in ("project_commit", "runtime_commit"):
+        _hex(value.get(field), re.compile(r"[0-9a-f]{40}"),
+             f"comparison candidate authority {field}")
+    sources = _validate_source_inventory(
+        value.get("sources"), "comparison candidate authenticator",
     )
+    entrypoint = value.get("entrypoint")
+    require(isinstance(entrypoint, dict) and set(entrypoint) == {
+                "path", "bytes", "sha256", "md5",
+            }, "malformed comparison candidate authority entrypoint")
+    _safe_relative(entrypoint.get("path"),
+                   "comparison candidate authority entrypoint path")
+    _validate_content_record({
+        field: entrypoint[field] for field in ("bytes", "sha256", "md5")
+    }, "comparison candidate authority entrypoint")
+    require(any(_same_canonical_value(entrypoint, source) for source in sources),
+            "comparison candidate authority entrypoint is absent from sources")
+    return value
+
+
+def _validate_authenticated_comparison_descriptor(
+    value: object, *, role: str, ordinal: int,
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "role", "ordinal", "candidate",
+        "authenticated_nonce", "authenticated_plan", "semantic_projection",
+        "coverage_projection", "candidate_authority", "pft_used",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            type(value.get("schema")) is int and value["schema"] == 1 and
+            value.get("kind") == AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND and
+            value.get("role") == role and
+            type(value.get("ordinal")) is int and
+            value["ordinal"] == ordinal and value.get("pft_used") is False,
+            "malformed authenticated comparison candidate descriptor")
+    _validate_content_record(value.get("candidate"),
+                             "authenticated comparison candidate")
+    _validate_content_record(value.get("authenticated_plan"),
+                             "authenticated comparison plan")
+    nonce = value.get("authenticated_nonce")
+    nonce_kind = (
+        COMPILED_COMPARISON_NONCE_KIND
+        if role == COMPILED_COMPARISON_ROLE
+        else REFERENCE_COMPARISON_NONCE_KIND
+    )
+    nonce_pattern = HEX32 if role == COMPILED_COMPARISON_ROLE else HEX64
+    require(isinstance(nonce, dict) and set(nonce) == {"kind", "value"} and
+            nonce.get("kind") == nonce_kind,
+            "malformed authenticated comparison candidate nonce")
+    _hex(nonce.get("value"), nonce_pattern,
+         "authenticated comparison candidate nonce")
+    validate_semantic_projection(value.get("semantic_projection"))
+    validate_coverage_projection(value.get("coverage_projection"))
+    _validate_candidate_authority(value.get("candidate_authority"), role)
     return value
 
 
 def validate_unapproved_direct_comparison_fixture(
     value: object,
     *,
-    expected_authenticated_plan: object,
-    expected_compiled_candidate: object,
-    expected_reference_candidates: object,
-    authenticated_semantic_projections: object,
-    authenticated_coverage_projections: object,
+    authenticated_candidate_descriptors: object,
     expected_authority: object,
 ) -> dict[str, Any]:
     """Validate only equality output supplied by future authenticators.
 
     This is deliberately not a candidate authenticator and has no CLI.  A
-    production caller must first replay the descriptor-held compiled consumer
-    and the future pristine-reference validators from their retained raw
-    bundles, then supply those independently authenticated records here.
+    production caller must first replay the compiled consumer and future
+    pristine-reference validators from retained raw bundles.  Each authenticator
+    must then emit one indivisible descriptor binding its candidate, nonce,
+    plan, two projections, and candidate-specific authority.
     """
     fields = {
         "schema", "kind", "policy", "boundary_id", "action_count",
@@ -1444,27 +1555,59 @@ def validate_unapproved_direct_comparison_fixture(
             len(set(reference_nonces)) == 2,
             "direct comparison candidates or reference nonces are not distinct")
     authority = _validate_comparison_authority(value.get("authority"))
+    expected = _validate_comparison_authority(expected_authority)
     semantic = value.get("semantic_projection")
     coverage = value.get("coverage_projection")
     validate_semantic_projection(semantic)
     validate_coverage_projection(coverage)
 
-    require(plan_record == expected_authenticated_plan and
-            compiled_record == expected_compiled_candidate and
-            reference_records == expected_reference_candidates and
-            authority == expected_authority,
-            "direct comparison differs from authenticated candidate authority")
-    require(isinstance(authenticated_semantic_projections, (list, tuple)) and
-            len(authenticated_semantic_projections) == 3 and
-            isinstance(authenticated_coverage_projections, (list, tuple)) and
-            len(authenticated_coverage_projections) == 3,
-            "direct comparison requires three authenticated projection pairs")
-    for item in authenticated_semantic_projections:
-        validate_semantic_projection(item)
-    for item in authenticated_coverage_projections:
-        validate_coverage_projection(item)
-    require(all(item == semantic for item in authenticated_semantic_projections) and
-            all(item == coverage for item in authenticated_coverage_projections),
+    require(isinstance(authenticated_candidate_descriptors, (list, tuple)) and
+            len(authenticated_candidate_descriptors) == 3,
+            "direct comparison requires three authenticated candidate "
+            "descriptors")
+    compiled_descriptor = _validate_authenticated_comparison_descriptor(
+        authenticated_candidate_descriptors[0],
+        role=COMPILED_COMPARISON_ROLE, ordinal=0,
+    )
+    reference_descriptors = [
+        _validate_authenticated_comparison_descriptor(
+            authenticated_candidate_descriptors[index],
+            role=REFERENCE_COMPARISON_ROLE, ordinal=index,
+        )
+        for index in (1, 2)
+    ]
+    descriptors = [compiled_descriptor, *reference_descriptors]
+    descriptor_candidates = [item["candidate"] for item in descriptors]
+    descriptor_nonces = [
+        item["authenticated_nonce"]["value"] for item in descriptors
+    ]
+    require(len({item["sha256"] for item in descriptor_candidates}) == 3 and
+            len(set(descriptor_nonces)) == 3,
+            "authenticated comparison candidates or nonces are not distinct")
+    require(_same_canonical_value(plan_record,
+                                  compiled_descriptor["authenticated_plan"]) and
+            all(_same_canonical_value(plan_record, item["authenticated_plan"])
+                for item in reference_descriptors),
+            "direct candidates do not bind one authenticated plan")
+    require(_same_canonical_value(compiled_record,
+                                  compiled_descriptor["candidate"]) and
+            all(_same_canonical_value(record, descriptor["candidate"])
+                for record, descriptor in zip(
+                    reference_records, reference_descriptors, strict=True,
+                )) and
+            compiled["attempt_nonce"] == descriptor_nonces[0] and
+            all(nonce == descriptor["authenticated_nonce"]["value"]
+                for nonce, descriptor in zip(
+                    reference_nonces, reference_descriptors, strict=True,
+                )),
+            "direct comparison differs from authenticated candidate "
+            "descriptors")
+    require(_same_canonical_value(authority, expected),
+            "direct comparison differs from authenticated reviewer authority")
+    require(all(_same_canonical_value(item["semantic_projection"], semantic)
+                for item in descriptors) and
+            all(_same_canonical_value(item["coverage_projection"], coverage)
+                for item in descriptors),
             "direct candidates do not have exact three-way projection equality")
     return value
 
