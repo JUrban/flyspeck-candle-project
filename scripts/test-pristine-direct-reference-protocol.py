@@ -923,10 +923,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 175)
+        self.assertEqual(len(values), 177)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "3ba95b4332e45cceceaec0445046b21b250d44660babda9a38e41f4b83cc348f",
+            "e29c9d345451feefcf2d739cd3345701ebe593bf17890d9936b4f2f315eefd7d",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:

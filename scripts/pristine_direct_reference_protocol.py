@@ -405,6 +405,14 @@ V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
 )
 V4_BUILD_EXECUTION_TASK_MAX = 4_096
 V4_BUILD_EXECUTION_EVENT_MAX = 131_072
+V4_BUILD_NAMESPACE_CLONE_FLAGS = 0x78020011
+V4_BUILD_NAMESPACE_KINDS = (
+    "user-namespace",
+    "mount-namespace",
+    "pid-namespace",
+    "network-namespace",
+    "ipc-namespace",
+)
 V4_BUILD_PTRACE_OPTIONS = (
     "PTRACE_O_TRACESYSGOOD",
     "PTRACE_O_TRACEFORK",
