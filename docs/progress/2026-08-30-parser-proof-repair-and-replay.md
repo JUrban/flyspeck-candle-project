@@ -195,3 +195,46 @@ The controller PID/process group is `3469592`, with `/proc` start ticks
 active.  The controller is serial (`-j1 --mt=1`) and its address-space limit is
 `117964800` KiB.  This is an active replay, not a success claim; Candle remains
 unrepinned until all four receipts and all six postconditions pass.
+
+## Capability/main-frame checkpoint repair and replay at `d5d7ae8cc...`
+
+The `9e1bd759f...` replay closed normally in stage 2 with exit 1 after
+`1:16:59`, maximum RSS `32029000` KiB, and zero swaps.  It saved both repaired
+run-level theorems, then failed at
+`main_candle_parser_diagnostic_capability_spec`.  This was another proof
+failure, not a resource failure.  The exact failed-goal heap is retained at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-9e1bd759f-attempt-001/compiler64Prog.main_candle_parser_diagnostic_capability_spec.dumpedheap`
+
+The retained 12,131,483,840-byte heap has SHA-256
+`496cfc2eea94a132fdcf68a7a823beb1289ddf9a4a8202ca5d4fa7dd54c5db24`.
+It exposed two successive defects without another hour-long translation:
+
+- the extended `main` evaluates the new capability predicate in a third
+  translated `let`, but all four `main_v` proofs still attempted `xif` after
+  only the unit and command-line `let`s;
+- the capability `print_spec` and both diagnostic-run specs required their
+  residual `COMMANDLINE` frames and semantic/filesystem witnesses explicitly.
+
+The compact capability, successful-run, and error-run tactics were proved in
+the resumed heap.  The capability tactic was then replayed from the untouched
+saved goal in one complete source-form command.  The ordinary `main_spec`
+received the same generated-prefix repair; an independent no-edit review found
+no P0/P1 defect and confirmed that source-local `fetch "-"` is correct during
+the `compiler64Prog` theory build.  Focused structural tests now pass 9/9 and
+hostile-mutate the capability branch, all ordered frames, the error nonce
+conjunction, and the ordinary third-`let` prefix.
+
+CakeML commit `d5d7ae8cc69050da41984d61fd65b0d46e6b4f2e`
+(`proof: repair parser diagnostic main frames`) contains the proof and focused
+regression changes.  A fresh serial four-stage replay is active at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-d5d7ae8cc-attempt-001`
+
+Its controller PID/process group is `3519885`, with `/proc` start ticks
+`319205058`; sampler PID is `3520157`.  Stage 1 passed in 8.77 seconds and
+stage 2 is active.  The sampler initially observed about 23.8 GiB across the
+canonical, PFT, and reference scopes, about 188 GiB available, no swap I/O,
+and no alerts.  The replay remains `-j1 --mt=1` under the user-authorized
+`117964800` KiB address-space limit.  It is not a success claim and does not
+authorize a Candle repin.
