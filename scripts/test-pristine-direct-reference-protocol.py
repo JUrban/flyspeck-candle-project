@@ -9,6 +9,7 @@ import math
 from pathlib import Path
 import sys
 import unittest
+from unittest import mock
 
 
 SUBJECT_PATH = Path(__file__).with_name("pristine_direct_reference_protocol.py")
@@ -1067,8 +1068,22 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ):
                 subject.validate_raw_candidate(candidate, *arguments)
         encoded = subject.canonical_json_bytes(bundle["candidate"])
-        with self.assertRaisesRegex(subject.ProtocolError, "future held collector"):
-            subject.validate_canonical_raw_candidate_bytes(encoded, *arguments)
+        for label, data in (
+            ("canonical legacy shape", encoded),
+            ("malformed", b"not-json"),
+            ("nested coercion", b'{"candidate":{"schema":true}}\n'),
+            ("mutable bytes", bytearray(encoded)),
+        ):
+            with self.subTest(label=label), self.assertRaisesRegex(
+                subject.ProtocolError, "decoding is disabled",
+            ):
+                subject.validate_canonical_raw_candidate_bytes(data, *arguments)
+        with mock.patch.object(
+            subject, "decode_object",
+            side_effect=AssertionError("disabled surface must not decode"),
+        ):
+            with self.assertRaisesRegex(subject.ProtocolError, "decoding is disabled"):
+                subject.validate_canonical_raw_candidate_bytes(encoded, *arguments)
 
     def test_value_only_pair_consumption_is_unavailable(self) -> None:
         first = bundle_fixture(1, "1" * 64, common=self.common)

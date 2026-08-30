@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
 def load_module(name: str, filename: str):
@@ -215,6 +216,19 @@ class PristineOutputParserTests(unittest.TestCase):
         arguments.update(overrides)
         return subject.rederive_raw_source_observations(**arguments)
 
+    def decode_semantic(self, lines: list[str], **overrides):
+        arguments = {
+            "data": encode(lines),
+            "plan": copy.deepcopy(self.plan),
+            "request": copy.deepcopy(self.request),
+            "transcript": copy.deepcopy(self.bundle["transcript"]),
+            "native_closure": copy.deepcopy(
+                self.bundle["native_execution_closure"]
+            ),
+        }
+        arguments.update(overrides)
+        return subject.decode_semantic_v3_bytes(**arguments)
+
     def assert_rejects(self, lines: list[str], pattern: str | None = None) -> None:
         context = self.assertRaises(subject.OutputProtocolError)
         if pattern is not None:
@@ -237,6 +251,10 @@ class PristineOutputParserTests(unittest.TestCase):
         for artifact in (result, transcript, closure):
             self.assertEqual(artifact["schema"], protocol.RAW_PROTOCOL_SCHEMA)
             self.assertTrue(artifact["kind"].endswith("-v3"))
+        self.assertEqual(
+            result["kind"], protocol.INCOMPLETE_SOURCE_REDERIVATION_KIND,
+        )
+        self.assertNotEqual(result["kind"], protocol.SOURCE_REDERIVATION_KIND)
         self.assertIs(
             protocol.validate_raw_transcript(
                 transcript, self.plan, self.request,
@@ -507,9 +525,7 @@ class PristineOutputParserTests(unittest.TestCase):
 
     def test_pure_semantic_v3_decoder_derives_exact_common_projection(self) -> None:
         lines = semantic_lines(self.plan)
-        projection = subject.decode_semantic_v3_bytes(
-            encode(lines), copy.deepcopy(self.plan), copy.deepcopy(self.request),
-        )
+        projection = self.decode_semantic(lines)
         direct = protocol._direct_protocol()
         self.assertIs(direct.validate_semantic_projection(projection), projection)
         self.assertEqual(
@@ -524,6 +540,11 @@ class PristineOutputParserTests(unittest.TestCase):
                 "full_digest_md5": f"{index + 1:032x}",
             } for index, name in enumerate(subject.EXPECTED_FINAL_THEOREM_NAMES)],
         )
+        final_serializer = self.bundle["native_execution_closure"]["loader_events"][-1]
+        self.assertEqual(projection["serializer"], {
+            "path": final_serializer["logical_source"].partition(":")[2],
+            "sha256": final_serializer["sha256"],
+        })
         hypotheses = node(b"list", [])
         self.assertEqual(
             projection["theorems"][0]["hypotheses_sha256"],
@@ -534,6 +555,65 @@ class PristineOutputParserTests(unittest.TestCase):
             "candidate" in name or "approval" in name
             for name in projection
         ))
+
+    def test_pure_decoder_rebinds_every_plan_to_trusted_activation(self) -> None:
+        lines = semantic_lines(self.plan)
+        mutations = (
+            (
+                "parser SHA",
+                lambda plan: plan["authority"]["producer"]["output_parser"].update(
+                    sha256="0" * 64,
+                ),
+                "output parser versus plan authority",
+            ),
+            (
+                "protocol SHA",
+                lambda plan: plan["authority"]["producer"]["protocol"].update(
+                    sha256="0" * 64,
+                ),
+                "pristine protocol versus plan authority",
+            ),
+            (
+                "direct protocol SHA",
+                lambda plan: plan["authority"]["producer"]
+                ["direct_release_protocol"].update(sha256="0" * 64),
+                "direct-release protocol versus plan authority",
+            ),
+            (
+                "project root",
+                lambda plan: plan["authority"]["repositories"]["project"].update(
+                    path="/project/alternate-project-root",
+                ),
+                "project root differs",
+            ),
+        )
+        for label, mutate, message in mutations:
+            plan = copy.deepcopy(self.plan)
+            mutate(plan)
+            request = fixture_module.make_request(plan)
+            with self.subTest(label=label), self.assertRaisesRegex(
+                subject.OutputProtocolError, message,
+            ):
+                self.decode_semantic(lines, plan=plan, request=request)
+
+    def test_pure_decoder_requires_valid_transcript_and_final_serializer_event(self) -> None:
+        lines = semantic_lines(self.plan)
+        transcript = copy.deepcopy(self.bundle["transcript"])
+        transcript["stdout"]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(
+            subject.OutputProtocolError, "semantic closure",
+        ):
+            self.decode_semantic(lines, transcript=transcript)
+
+        closure = copy.deepcopy(self.bundle["native_execution_closure"])
+        closure["loader_events"][-1]["sha256"] = "0" * 64
+        closure["ordered_loader_event_sha256"] = protocol.canonical_sha256(
+            closure["loader_events"]
+        )
+        with self.assertRaisesRegex(
+            subject.OutputProtocolError, "semantic closure",
+        ):
+            self.decode_semantic(lines, native_closure=closure)
 
     def test_pure_decoder_rejects_order_nonce_version_and_shape_attacks(self) -> None:
         baseline = semantic_lines(self.plan)
@@ -566,9 +646,7 @@ class PristineOutputParserTests(unittest.TestCase):
             with self.subTest(label=label), self.assertRaises(
                 subject.OutputProtocolError,
             ):
-                subject.decode_semantic_v3_bytes(
-                    encode(lines), self.plan, self.request,
-                )
+                self.decode_semantic(lines)
 
     def test_pure_decoder_rejects_hex_count_and_composite_splices(self) -> None:
         baseline = semantic_lines(self.plan)
@@ -607,9 +685,7 @@ class PristineOutputParserTests(unittest.TestCase):
             with self.subTest(label=label), self.assertRaises(
                 subject.OutputProtocolError,
             ):
-                subject.decode_semantic_v3_bytes(
-                    encode(lines), self.plan, self.request,
-                )
+                self.decode_semantic(lines)
 
     def test_nine_digit_child_count_rejects_before_child_iteration(self) -> None:
         lines = semantic_lines(self.plan)
@@ -622,20 +698,34 @@ class PristineOutputParserTests(unittest.TestCase):
             subject.OutputProtocolError,
             "child count exceeds remaining framed bytes",
         ):
-            subject.decode_semantic_v3_bytes(
-                encode(lines), self.plan, self.request,
-            )
+            self.decode_semantic(lines)
+
+    def test_oversize_frame_token_rejects_before_integer_conversion(self) -> None:
+        with mock.patch("builtins.int", side_effect=AssertionError(
+            "integer conversion must not run",
+        )):
+            with self.assertRaisesRegex(
+                subject.OutputProtocolError, "oversize hostile framed value",
+            ):
+                subject._framed_decimal(
+                    b"536870913", "hostile framed value",
+                )
+
+        with mock.patch.object(
+            subject, "_extract_bounded_payload",
+            side_effect=AssertionError("payload extraction must not run"),
+        ):
+            with self.assertRaisesRegex(
+                subject.OutputProtocolError, "frame exceeds remaining bytes",
+            ):
+                subject._read_frame(b"536870912:x", 0, "hostile payload")
 
     def test_well_formed_dependency_substitution_is_only_raw_projection_drift(self) -> None:
         baseline = semantic_lines(self.plan)
-        original = subject.decode_semantic_v3_bytes(
-            encode(baseline), self.plan, self.request,
-        )
+        original = self.decode_semantic(baseline)
         substituted = copy.deepcopy(baseline)
         substituted[5] = replace_field(substituted[5], 5, "e" * 32)
-        changed = subject.decode_semantic_v3_bytes(
-            encode(substituted), self.plan, self.request,
-        )
+        changed = self.decode_semantic(substituted)
         self.assertNotEqual(changed, original)
         self.assertEqual(
             changed["dependency_history"][0]["full_digest_md5"], "e" * 32,
