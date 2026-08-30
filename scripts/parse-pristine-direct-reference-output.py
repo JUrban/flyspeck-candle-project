@@ -72,7 +72,7 @@ EXPECTED_MARKER_CONTRACT = {
     "nonce_in_every_marker": True,
 }
 SEMANTIC_GRAMMAR_STATUS = (
-    "decoder-available-not-integrated-into-source-stream"
+    "complete-observed-unapproved"
 )
 COVERAGE_GRAMMAR_STATUS = (
     "not-derived-requires-authenticated-inventory-and-generated-inputs"
@@ -178,6 +178,12 @@ def _require_compatible_protocol(module: ModuleType) -> None:
             FINAL_SOURCE_REDERIVATION_KIND and
             getattr(module, "INCOMPLETE_SOURCE_REDERIVATION_KIND", None) ==
             INCOMPLETE_SOURCE_REDERIVATION_KIND and
+            getattr(module, "SEMANTIC_COMPLETE_STATUS", None) ==
+            SEMANTIC_GRAMMAR_STATUS and
+            getattr(module, "COVERAGE_INCOMPLETE_STATUS", None) ==
+            COVERAGE_GRAMMAR_STATUS and
+            tuple(getattr(module, "FINAL_THEOREM_NAMES", ())) ==
+            EXPECTED_FINAL_THEOREM_NAMES and
             getattr(module, "LP_CONSUMER_ACTION_INDEX", None) == 184 and
             getattr(module, "LP_SUCCESS_KIND", None) ==
             "candle-flyspeck-pristine-direct-lp-success-stream-v1" and
@@ -643,14 +649,16 @@ def _action_completion(
 
 def _parse_source_lines(
     stdout: bytes, plan: dict[str, Any], request: dict[str, Any],
-) -> tuple[dict[str, object], dict[str, object], list[dict[str, Any]]]:
+) -> tuple[
+    dict[str, object], dict[str, object], list[dict[str, Any]], list[str],
+]:
     protocol = _protocol()
     lines = _decode_lines(stdout, "pristine reference stdout", allow_empty=False)
     markers = request["marker_contract"]
     allowed = {
         markers["session_start"], markers["action_complete"],
         markers["lp_success"], markers["session_complete"],
-        markers["native_load"],
+        markers["native_load"], markers["semantic_observation"],
     }
     nonce = plan["session_nonce"]
     started = False
@@ -662,12 +670,15 @@ def _parse_source_lines(
     completions: list[dict[str, object]] = []
     lp_records: list[dict[str, object]] = []
     lp_input_indices: set[int] = set()
+    semantic_lines: list[str] = []
 
     for line_index, line in enumerate(lines):
         require(PFT_TOKEN.search(line) is None,
                 f"PFT namespace is forbidden in stdout line {line_index}")
         marker_name = line.split("\t", 1)[0]
         if marker_name not in allowed:
+            require(not semantic_lines,
+                    "ordinary stdout interrupts the semantic session")
             stripped = line.lstrip()
             require(SUCCESS_LIKE.match(stripped) is None,
                     f"unknown or unsupported success-like stdout line {line_index}")
@@ -678,6 +689,12 @@ def _parse_source_lines(
             continue
 
         require(not completed, "protocol marker follows terminal completion")
+        if semantic_lines and marker_name != markers["semantic_observation"]:
+            require(
+                len(semantic_lines) == 10 and
+                marker_name == markers["session_complete"],
+                "protocol marker interrupts the semantic session",
+            )
         if marker_name == markers["session_start"]:
             fields = _exact_fields(line, 4, "session-start")
             require(not started and not events and not completions and not lp_records,
@@ -691,6 +708,27 @@ def _parse_source_lines(
             continue
 
         require(started, "observation marker precedes session start")
+        if marker_name == markers["semantic_observation"]:
+            require(len(semantic_lines) < 10,
+                    "semantic session contains more than ten lines")
+            if not semantic_lines:
+                require(next_action == protocol.FINAL_ACTION_COUNT and
+                        len(completions) == protocol.FINAL_ACTION_COUNT and
+                        len(lp_records) == 39,
+                        "semantic session precedes complete action/LP evidence")
+                final_count = completions[-1]["ledger_end_index"]
+                post_events = events[final_count:]
+                require(
+                    len(post_events) == 2 and
+                    all(event["phase"] == "post-action" and
+                        event["action_index"] is None for event in post_events) and
+                    [event["logical_source"] for event in post_events] == [
+                        protocol.FINAL_TARGET_SOURCE, protocol.SERIALIZER_SOURCE,
+                    ],
+                    "semantic session lacks exact final-target/serializer suffix",
+                )
+            semantic_lines.append(line)
+            continue
         if marker_name == markers["native_load"]:
             fields = _exact_fields(line, 10, "native-load")
             require(fields[1] == nonce, "mixed nonce in native-load marker")
@@ -801,7 +839,8 @@ def _parse_source_lines(
                 _decimal(fields[5], "native-load count") == len(events),
                 "session-complete marker has forged counts")
         require(next_action == protocol.FINAL_ACTION_COUNT and
-                len(lp_records) == 39 and line_index == len(lines) - 1,
+                len(lp_records) == 39 and len(semantic_lines) == 10 and
+                line_index == len(lines) - 1,
                 "premature or nonterminal session-complete marker")
         completed = True
 
@@ -810,6 +849,8 @@ def _parse_source_lines(
             "incomplete pristine action completion stream")
     require(lp_input_indices == set(range(39)),
             "incomplete pristine LP-success stream")
+    require(len(semantic_lines) == 10,
+            "incomplete pristine semantic session")
     initial_count = completions[0]["ledger_start_index"]
     final_count = completions[-1]["ledger_end_index"]
     action_completions = {
@@ -827,7 +868,7 @@ def _parse_source_lines(
         "ordered_record_sha256": protocol.canonical_sha256(lp_records),
         "records": lp_records,
     }
-    return action_completions, lp_successes, events
+    return action_completions, lp_successes, events, semantic_lines
 
 
 def rederive_raw_source_observations(
@@ -859,7 +900,7 @@ def rederive_raw_source_observations(
     stdout_record = byte_content_record(stdout, "pristine reference stdout")
     stderr_record = byte_content_record(stderr, "pristine reference stderr")
     require(stderr == b"", "successful pristine reference stderr is not empty")
-    action_completions, lp_successes, events = _parse_source_lines(
+    action_completions, lp_successes, events, semantic_lines = _parse_source_lines(
         stdout, plan, request,
     )
     transcript = {
@@ -934,9 +975,45 @@ def rederive_raw_source_observations(
         raise OutputProtocolError(
             f"rederived pristine native closure is invalid: {error}"
         ) from error
-    return {
+    semantic_projection = decode_semantic_v3_bytes(
+        ("\n".join(semantic_lines) + "\n").encode("ascii"),
+        plan, request, transcript, closure,
+    )
+    semantic_completion = {
+        "schema": 1,
+        "kind": protocol.SEMANTIC_COMPLETION_KIND,
+        "status": protocol.SEMANTIC_COMPLETE_STATUS,
+        "role": plan["role"],
+        "reference_ordinal": plan["reference_ordinal"],
+        "nonce_kind": plan["nonce_kind"],
+        "session_nonce": plan["session_nonce"],
+        "boundary_id": plan["boundary_id"],
+        "plan": protocol.content_record(plan),
+        "request": protocol.content_record(request),
+        "transcript": protocol.content_record(transcript),
+        "theorem_count": len(protocol.FINAL_THEOREM_NAMES),
+        "dependency_count": len(protocol.FINAL_THEOREM_NAMES),
+        "ordered_theorem_name_sha256": protocol.canonical_sha256(
+            list(protocol.FINAL_THEOREM_NAMES)
+        ),
+        "semantic_projection": protocol.content_record(semantic_projection),
+        "approved_reference_present": False,
+        "dependency_history_is_kernel_trace": False,
+        "pft_used": False,
+        "s2_s3_evidence": False,
+    }
+    try:
+        protocol.validate_semantic_completion_observation(
+            semantic_completion, plan, request, transcript,
+            semantic_projection,
+        )
+    except protocol.ProtocolError as error:
+        raise OutputProtocolError(
+            f"rederived semantic completion is invalid: {error}"
+        ) from error
+    result = {
         "schema": protocol.RAW_PROTOCOL_SCHEMA,
-        "kind": INCOMPLETE_SOURCE_REDERIVATION_KIND,
+        "kind": FINAL_SOURCE_REDERIVATION_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],
         "nonce_kind": plan["nonce_kind"],
@@ -949,8 +1026,8 @@ def rederive_raw_source_observations(
         "process_result": {"exit_code": 0, "timed_out": False},
         "transcript": transcript,
         "native_execution_closure": closure,
-        "semantic_projection": None,
-        "semantic_completion_observation": None,
+        "semantic_projection": semantic_projection,
+        "semantic_completion_observation": semantic_completion,
         "cross_runtime_coverage": None,
         "semantic_status": SEMANTIC_GRAMMAR_STATUS,
         "coverage_status": COVERAGE_GRAMMAR_STATUS,
@@ -963,3 +1040,10 @@ def rederive_raw_source_observations(
         "s3_eligible": False,
         "s2_s3_evidence": False,
     }
+    try:
+        protocol.validate_source_rederivation(result, plan, request)
+    except protocol.ProtocolError as error:
+        raise OutputProtocolError(
+            f"rederived pristine source closure is invalid: {error}"
+        ) from error
+    return result

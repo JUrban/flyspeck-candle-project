@@ -171,6 +171,7 @@ def producer_lines(bundle: dict) -> list[str]:
             lines.extend(lp_line(item) for item in transcript["lp_successes"]["records"])
         lines.append(action_line(record))
     lines.extend(event_line(event) for event in events[bindings["final_ledger_count"]:])
+    lines.extend(semantic_lines(plan))
     lines.append(marker_line(
         protocol.MARKER_CONTRACT["session_complete"],
         plan["session_nonce"],
@@ -236,7 +237,7 @@ class PristineOutputParserTests(unittest.TestCase):
         with context:
             self.parse(lines)
 
-    def test_producer_shaped_bytes_rederive_only_raw_source_evidence(self) -> None:
+    def test_producer_shaped_bytes_rederive_complete_unapproved_source_evidence(self) -> None:
         result = self.parse()
         stdout_record = {
             "bytes": len(self.stdout),
@@ -251,10 +252,7 @@ class PristineOutputParserTests(unittest.TestCase):
         for artifact in (result, transcript, closure):
             self.assertEqual(artifact["schema"], protocol.RAW_PROTOCOL_SCHEMA)
             self.assertTrue(artifact["kind"].endswith("-v3"))
-        self.assertEqual(
-            result["kind"], protocol.INCOMPLETE_SOURCE_REDERIVATION_KIND,
-        )
-        self.assertNotEqual(result["kind"], protocol.SOURCE_REDERIVATION_KIND)
+        self.assertEqual(result["kind"], protocol.SOURCE_REDERIVATION_KIND)
         self.assertIs(
             protocol.validate_raw_transcript(
                 transcript, self.plan, self.request,
@@ -272,12 +270,30 @@ class PristineOutputParserTests(unittest.TestCase):
         self.assertEqual(closure["loader_event_count"], 302)
         self.assertEqual(closure["loader_ledger_artifact"], stdout_record)
         self.assertEqual(closure["lp_success_artifact"], stdout_record)
-        self.assertIsNone(result["semantic_projection"])
-        self.assertIsNone(result["semantic_completion_observation"])
+        direct = protocol._direct_protocol()
+        self.assertIs(
+            direct.validate_semantic_projection(result["semantic_projection"]),
+            result["semantic_projection"],
+        )
+        self.assertIs(
+            protocol.validate_semantic_completion_observation(
+                result["semantic_completion_observation"], self.plan,
+                self.request, transcript, result["semantic_projection"],
+            ), result["semantic_completion_observation"],
+        )
+        canonical = protocol.canonical_json_bytes(result)
+        self.assertEqual(
+            protocol.validate_canonical_source_rederivation_bytes(
+                canonical, self.plan, self.request,
+            ), result,
+        )
         self.assertIsNone(result["cross_runtime_coverage"])
         self.assertEqual(
-            result["semantic_status"],
-            "decoder-available-not-integrated-into-source-stream",
+            result["semantic_status"], "complete-observed-unapproved",
+        )
+        self.assertEqual(
+            result["coverage_status"],
+            "not-derived-requires-authenticated-inventory-and-generated-inputs",
         )
         for field in (
             "candidate_included", "approval_included", "promotion_allowed",
@@ -298,6 +314,76 @@ class PristineOutputParserTests(unittest.TestCase):
         trailing = copy.deepcopy(self.lines)
         trailing.append("ordinary trailing output")
         self.assert_rejects(trailing, "nonterminal session-complete")
+
+    def test_final_source_rederivation_validator_rejects_nested_splices_and_types(self) -> None:
+        result = self.parse()
+
+        def splice_projection_serializer(item: dict) -> None:
+            item["semantic_projection"]["serializer"]["sha256"] = "0" * 64
+            item["semantic_completion_observation"]["semantic_projection"] = (
+                protocol.content_record(item["semantic_projection"])
+            )
+
+        mutations = (
+            ("schema bool", lambda item: item.update(schema=True)),
+            ("extra top-level", lambda item: item.update(extra=False)),
+            ("diagnostic relabel", lambda item: item.update(
+                kind=protocol.INCOMPLETE_SOURCE_REDERIVATION_KIND,
+            )),
+            ("coverage object", lambda item: item.update(
+                cross_runtime_coverage={},
+            )),
+            ("semantic status", lambda item: item.update(
+                semantic_status="observed",
+            )),
+            ("candidate", lambda item: item.update(candidate_included=True)),
+            ("stdout bool bytes", lambda item: item["stdout"].update(bytes=True)),
+            ("exit bool", lambda item: item["process_result"].update(
+                exit_code=False,
+            )),
+            ("transcript schema bool", lambda item: item["transcript"].update(
+                schema=True,
+            )),
+            ("native count float", lambda item: item[
+                "native_execution_closure"
+            ].update(loader_event_count=302.0)),
+            ("semantic theorem count bool", lambda item: item[
+                "semantic_projection"
+            ]["theorems"][0].update(global_axiom_count=True)),
+            ("completion theorem count bool", lambda item: item[
+                "semantic_completion_observation"
+            ].update(theorem_count=True)),
+            ("completion extra", lambda item: item[
+                "semantic_completion_observation"
+            ].update(extra=False)),
+            ("completion projection splice", lambda item: item[
+                "semantic_completion_observation"
+            ]["semantic_projection"].update(sha256="0" * 64)),
+            ("projection/native serializer splice", splice_projection_serializer),
+        )
+        for label, mutate in mutations:
+            forged = copy.deepcopy(result)
+            mutate(forged)
+            with self.subTest(label=label), self.assertRaises(
+                protocol.ProtocolError,
+            ):
+                protocol.validate_source_rederivation(
+                    forged, self.plan, self.request,
+                )
+
+        canonical = protocol.canonical_json_bytes(result)
+        with self.assertRaisesRegex(protocol.ProtocolError, "immutable bytes"):
+            protocol.validate_canonical_source_rederivation_bytes(
+                bytearray(canonical), self.plan, self.request,
+            )
+        with self.assertRaisesRegex(protocol.ProtocolError, "not canonical"):
+            protocol.validate_canonical_source_rederivation_bytes(
+                protocol.canonical_value_bytes(result), self.plan, self.request,
+            )
+        with self.assertRaisesRegex(protocol.ProtocolError, "duplicate JSON key"):
+            protocol.validate_canonical_source_rederivation_bytes(
+                b'{"schema":3,"schema":3}\n', self.plan, self.request,
+            )
 
     def test_process_result_bytes_and_stderr_are_exact(self) -> None:
         cases = (
@@ -371,7 +457,10 @@ class PristineOutputParserTests(unittest.TestCase):
                 self.parse(forged)
 
         benign = copy.deepcopy(self.lines)
-        benign.insert(complete_index, "ordinary notpft diagnostic")
+        semantic_index = marker_indices(
+            benign, protocol.MARKER_CONTRACT["semantic_observation"],
+        )[0]
+        benign.insert(semantic_index, "ordinary notpft diagnostic")
         self.assertEqual(
             self.parse(benign)["authentication_status"], "not-authenticated",
         )
@@ -505,23 +594,29 @@ class PristineOutputParserTests(unittest.TestCase):
             self.assert_rejects(duplicate)
 
     def test_unknown_semantic_and_success_like_lines_fail_closed(self) -> None:
-        complete_index = marker_indices(
-            self.lines, protocol.MARKER_CONTRACT["session_complete"],
+        semantic_index = marker_indices(
+            self.lines, protocol.MARKER_CONTRACT["semantic_observation"],
         )[0]
         hostile_lines = (
-            protocol.MARKER_CONTRACT["semantic_observation"] +
-            "\t" + self.plan["session_nonce"],
-            "CANDLE_PRISTINE_DIRECT_SEMANTIC_V1\t" + self.plan["session_nonce"],
-            "CANDLE_FINGERPRINT_V2\t00",
-            "CANDLE_UNKNOWN_SUCCESS_V99\t1",
-            "  SUCCESS: forged reference",
-            "ERROR: caught exception",
+            (
+                protocol.MARKER_CONTRACT["semantic_observation"] +
+                "\t" + self.plan["session_nonce"],
+                "semantic session",
+            ),
+            (
+                "CANDLE_PRISTINE_DIRECT_SEMANTIC_V1\t" +
+                self.plan["session_nonce"], "stdout line",
+            ),
+            ("CANDLE_FINGERPRINT_V2\t00", "stdout line"),
+            ("CANDLE_UNKNOWN_SUCCESS_V99\t1", "stdout line"),
+            ("  SUCCESS: forged reference", "stdout line"),
+            ("ERROR: caught exception", "stdout line"),
         )
-        for line in hostile_lines:
+        for line, pattern in hostile_lines:
             forged = copy.deepcopy(self.lines)
-            forged.insert(complete_index, line)
+            forged.insert(semantic_index, line)
             with self.subTest(line=line):
-                self.assert_rejects(forged, "stdout line")
+                self.assert_rejects(forged, pattern)
 
     def test_pure_semantic_v3_decoder_derives_exact_common_projection(self) -> None:
         lines = semantic_lines(self.plan)
@@ -740,13 +835,51 @@ class PristineOutputParserTests(unittest.TestCase):
         )
         self.assertNotIn("approved_reference_present", changed)
 
-    def test_semantic_v3_lines_remain_rejected_by_unintegrated_source_parser(self) -> None:
-        lines = copy.deepcopy(self.lines)
-        complete_index = marker_indices(
-            lines, protocol.MARKER_CONTRACT["session_complete"],
-        )[0]
-        lines[complete_index:complete_index] = semantic_lines(self.plan)
-        self.assert_rejects(lines, "unsupported success-like stdout line")
+    def test_integrated_semantic_session_rejects_boundary_and_interruption_attacks(self) -> None:
+        marker = protocol.MARKER_CONTRACT["semantic_observation"]
+        indices = marker_indices(self.lines, marker)
+        self.assertEqual(len(indices), 10)
+        mutations: list[tuple[str, list[str], str]] = []
+
+        missing = copy.deepcopy(self.lines)
+        missing.pop(indices[0])
+        mutations.append(("missing", missing, "semantic session"))
+
+        duplicate = copy.deepcopy(self.lines)
+        duplicate.insert(indices[-1] + 1, duplicate[indices[-1]])
+        mutations.append(("duplicate", duplicate, "more than ten"))
+
+        reordered = copy.deepcopy(self.lines)
+        reordered[indices[0]], reordered[indices[1]] = (
+            reordered[indices[1]], reordered[indices[0]],
+        )
+        mutations.append(("reordered", reordered, "theorem order"))
+
+        ordinary = copy.deepcopy(self.lines)
+        ordinary.insert(indices[3] + 1, "ordinary semantic interruption")
+        mutations.append(("ordinary interruption", ordinary, "ordinary stdout interrupts"))
+
+        native = copy.deepcopy(self.lines)
+        native.insert(indices[3] + 1, next(
+            line for line in native
+            if line.startswith(protocol.MARKER_CONTRACT["native_load"] + "\t")
+        ))
+        mutations.append(("marker interruption", native, "protocol marker interrupts"))
+
+        early = copy.deepcopy(self.lines)
+        block = early[indices[0]:indices[-1] + 1]
+        del early[indices[0]:indices[-1] + 1]
+        post_indices = [
+            index for index, line in enumerate(early)
+            if line.startswith(protocol.MARKER_CONTRACT["native_load"] + "\t") and
+            line.split("\t")[3] == "post-action"
+        ]
+        early[post_indices[-1]:post_indices[-1]] = block
+        mutations.append(("before serializer", early, "exact final-target/serializer"))
+
+        for label, lines, pattern in mutations:
+            with self.subTest(label=label):
+                self.assert_rejects(lines, pattern)
 
     def test_native_marker_is_request_bound_and_v2_wire_rejects(self) -> None:
         native = protocol.MARKER_CONTRACT["native_load"]
