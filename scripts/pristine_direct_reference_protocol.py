@@ -10,11 +10,13 @@ calling this protocol.
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
 import math
 from pathlib import PurePosixPath
 import re
+import struct
 from types import ModuleType
 from typing import Any, Callable
 
@@ -327,6 +329,13 @@ V4_BUILD_FILTER_POLICY = (
 V4_BUILD_FILTER_ERRNO = 1
 V4_BUILD_FILTER_CLONE_SYSCALL = 56
 V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E820000
+V4_BUILD_FILTER_AUDIT_ARCH = 0xC000003E
+V4_BUILD_FILTER_INSTRUCTION_COUNT = 100
+V4_BUILD_FILTER_INSTRUCTIONS_BYTES = 800
+V4_BUILD_FILTER_DECODED_RULE_COUNT = 48
+V4_BUILD_FILTER_RET_KILL_PROCESS = 0x80000000
+V4_BUILD_FILTER_RET_ERRNO = 0x00050001
+V4_BUILD_FILTER_RET_ALLOW = 0x7FFF0000
 V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (29, "shmget"),
     (30, "shmat"),
@@ -1064,6 +1073,119 @@ def enumerate_isolated_native_build_root_v1(
     require(total_bytes <= V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES,
             "V4 native build root total bytes exceed cap")
     return entries
+
+
+def enumerate_isolated_native_build_filter_v1() -> dict[str, Any]:
+    load_word_absolute = 0x20
+    jump_equal = 0x15
+    jump_mask_nonzero = 0x45
+    return_constant = 0x06
+    instructions: list[dict[str, int]] = []
+
+    def emit(code: int, jump_true: int, jump_false: int, constant: int) -> None:
+        instructions.append({
+            "index": len(instructions),
+            "code": code,
+            "jt": jump_true,
+            "jf": jump_false,
+            "k": constant,
+        })
+
+    emit(load_word_absolute, 0, 0, 4)
+    emit(jump_equal, 1, 0, V4_BUILD_FILTER_AUDIT_ARCH)
+    emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_KILL_PROCESS)
+    emit(load_word_absolute, 0, 0, 0)
+
+    denied = dict(V4_BUILD_FILTER_DENIED_SYSCALLS)
+    for syscall_number in sorted((*denied, V4_BUILD_FILTER_CLONE_SYSCALL)):
+        if syscall_number == V4_BUILD_FILTER_CLONE_SYSCALL:
+            emit(jump_equal, 0, 4, syscall_number)
+            emit(load_word_absolute, 0, 0, 16)
+            emit(
+                jump_mask_nonzero, 0, 1,
+                V4_BUILD_FILTER_CLONE_NAMESPACE_MASK,
+            )
+            emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_ERRNO)
+            emit(load_word_absolute, 0, 0, 0)
+        else:
+            emit(jump_equal, 0, 1, syscall_number)
+            emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_ERRNO)
+    emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_ALLOW)
+
+    require(
+        len(instructions) == V4_BUILD_FILTER_INSTRUCTION_COUNT,
+        "V4 native build filter instruction-count mismatch",
+    )
+    for instruction in instructions:
+        if instruction["code"] in {jump_equal, jump_mask_nonzero}:
+            for jump in (instruction["jt"], instruction["jf"]):
+                require(
+                    instruction["index"] + 1 + jump < len(instructions),
+                    "V4 native build filter jump escapes program",
+                )
+    payload = b"".join(
+        struct.pack(
+            "<HBBI", instruction["code"], instruction["jt"],
+            instruction["jf"], instruction["k"],
+        )
+        for instruction in instructions
+    )
+    require(
+        len(payload) == V4_BUILD_FILTER_INSTRUCTIONS_BYTES,
+        "V4 native build filter payload-size mismatch",
+    )
+
+    decoded_policy: list[dict[str, Any]] = [{
+        "index": 0,
+        "architecture": "not-linux-x86-64",
+        "syscall_number": -1,
+        "argument_policy": [],
+        "decision": "kill-process",
+        "ret_data": 0,
+    }]
+    for syscall_number in sorted((*denied, V4_BUILD_FILTER_CLONE_SYSCALL)):
+        argument_policy: list[dict[str, Any]] = []
+        if syscall_number == V4_BUILD_FILTER_CLONE_SYSCALL:
+            argument_policy.append({
+                "index": 0,
+                "argument_index": 0,
+                "operation": "masked-nonzero",
+                "mask": V4_BUILD_FILTER_CLONE_NAMESPACE_MASK,
+                "value": None,
+            })
+        decoded_policy.append({
+            "index": len(decoded_policy),
+            "architecture": "linux-x86-64",
+            "syscall_number": syscall_number,
+            "argument_policy": argument_policy,
+            "decision": "errno",
+            "ret_data": V4_BUILD_FILTER_ERRNO,
+        })
+    decoded_policy.append({
+        "index": len(decoded_policy),
+        "architecture": "linux-x86-64",
+        "syscall_number": -1,
+        "argument_policy": [],
+        "decision": "allow",
+        "ret_data": 0,
+    })
+    require(
+        len(decoded_policy) == V4_BUILD_FILTER_DECODED_RULE_COUNT,
+        "V4 native build filter decoded-rule-count mismatch",
+    )
+    return {
+        "schema": V4_BUILD_FILTER_SCHEMA,
+        "kind": V4_BUILD_FILTER_KIND,
+        "architecture": "linux-x86-64",
+        "audit_arch": V4_BUILD_FILTER_AUDIT_ARCH,
+        "instruction_count": len(instructions),
+        "instructions_bytes": len(payload),
+        "instructions_sha256": hashlib.sha256(payload).hexdigest(),
+        "instructions_payload_base64": base64.b64encode(payload).decode("ascii"),
+        "decoded_rule_count": len(decoded_policy),
+        "decoded_policy": decoded_policy,
+        "policy_sha256": canonical_sha256(decoded_policy),
+    }
 
 
 def _repository_record(value: object, label: str) -> dict[str, Any]:

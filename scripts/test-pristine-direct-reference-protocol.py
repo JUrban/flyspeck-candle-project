@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import importlib.util
@@ -9,6 +10,7 @@ import json
 import math
 from pathlib import Path
 import sys
+import struct
 import unittest
 from unittest import mock
 
@@ -920,10 +922,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 163)
+        self.assertEqual(len(values), 170)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "4fbdbccc7318a958a37ce9a40e4d3c4fa23c8531409c2dbe292cf46547f30d0b",
+            "44e4d2197d7db3b940665ba61a75338395e3ca6b24aaae226103b5d4b7b146a8",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1282,6 +1284,76 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.enumerate_isolated_native_build_root_v1(
                 compiler, linker, prefixed_oversize, inputs,
             )
+
+    def test_v4_isolated_native_build_filter_enumerator(self) -> None:
+        authority = subject.enumerate_isolated_native_build_filter_v1()
+        self.assertEqual(set(authority), {
+            "schema", "kind", "architecture", "audit_arch",
+            "instruction_count", "instructions_bytes", "instructions_sha256",
+            "instructions_payload_base64", "decoded_rule_count",
+            "decoded_policy", "policy_sha256",
+        })
+        self.assertEqual(
+            authority["instruction_count"],
+            subject.V4_BUILD_FILTER_INSTRUCTION_COUNT,
+        )
+        self.assertEqual(
+            authority["decoded_rule_count"],
+            subject.V4_BUILD_FILTER_DECODED_RULE_COUNT,
+        )
+        payload = base64.b64decode(
+            authority["instructions_payload_base64"], validate=True,
+        )
+        self.assertEqual(len(payload), subject.V4_BUILD_FILTER_INSTRUCTIONS_BYTES)
+        self.assertEqual(
+            hashlib.sha256(payload).hexdigest(),
+            authority["instructions_sha256"],
+        )
+        instructions = [
+            struct.unpack("<HBBI", payload[offset:offset + 8])
+            for offset in range(0, len(payload), 8)
+        ]
+        self.assertEqual(instructions[0], (0x20, 0, 0, 4))
+        self.assertEqual(
+            instructions[1],
+            (0x15, 1, 0, subject.V4_BUILD_FILTER_AUDIT_ARCH),
+        )
+        self.assertEqual(
+            instructions[-1],
+            (0x06, 0, 0, subject.V4_BUILD_FILTER_RET_ALLOW),
+        )
+        decoded = authority["decoded_policy"]
+        self.assertEqual(decoded[0]["decision"], "kill-process")
+        self.assertEqual(decoded[-1]["decision"], "allow")
+        syscall_rules = {
+            record["syscall_number"]: record
+            for record in decoded[1:-1]
+        }
+        self.assertEqual(
+            set(syscall_rules),
+            {
+                number
+                for number, _ in subject.V4_BUILD_FILTER_DENIED_SYSCALLS
+            } | {subject.V4_BUILD_FILTER_CLONE_SYSCALL},
+        )
+        self.assertEqual(
+            syscall_rules[subject.V4_BUILD_FILTER_CLONE_SYSCALL][
+                "argument_policy"
+            ],
+            [{
+                "index": 0,
+                "argument_index": 0,
+                "operation": "masked-nonzero",
+                "mask": subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK,
+                "value": None,
+            }],
+        )
+        self.assertEqual(
+            authority["policy_sha256"], subject.canonical_sha256(decoded),
+        )
+        self.assertEqual(
+            subject.enumerate_isolated_native_build_filter_v1(), authority,
+        )
 
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
