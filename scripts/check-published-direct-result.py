@@ -962,62 +962,6 @@ def build_schema6_capture_result(
     return capture
 
 
-def _assemble_compiled_comparison_descriptor(
-    protocol: Any,
-    arguments: argparse.Namespace,
-    capture: dict[str, Any],
-    receipt: dict[str, Any],
-    checker_relative: str,
-    authenticated_sources: dict[str, bytes],
-) -> dict[str, Any]:
-    """Assemble output only after the enclosing CLI authenticates raw state."""
-    source_inventory = [
-        {"path": relative, **data_record(data)}
-        for relative, data in sorted(authenticated_sources.items())
-    ]
-    matching_entrypoints = [
-        record for record in source_inventory
-        if record["path"] == checker_relative
-    ]
-    require(len(matching_entrypoints) == 1,
-            "compiled comparison consumer entrypoint is not authenticated")
-    entrypoint = matching_entrypoints[0]
-    candidate_authority = {
-        "policy": protocol.COMPARISON_CANDIDATE_AUTHORITY_POLICY,
-        "authenticator": protocol.COMPILED_COMPARISON_AUTHENTICATOR,
-        "project_commit": arguments.project_head,
-        "runtime_commit": arguments.candle_head,
-        "entrypoint": entrypoint,
-        "sources": source_inventory,
-    }
-    descriptor = {
-        "schema": 1,
-        "kind": protocol.AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND,
-        "role": protocol.COMPILED_COMPARISON_ROLE,
-        "ordinal": 0,
-        "candidate": data_record(protocol.canonical_json_bytes(capture)),
-        "authenticated_nonce": {
-            "kind": protocol.COMPILED_COMPARISON_NONCE_KIND,
-            "value": receipt["attempt_nonce"],
-        },
-        "authenticated_plan": capture["authenticated_plan"],
-        "semantic_projection": capture["semantic_projection"],
-        "coverage_projection": capture["coverage_projection"],
-        "candidate_authority": candidate_authority,
-        "pft_used": False,
-    }
-    protocol._validate_authenticated_comparison_descriptor(
-        descriptor, role=protocol.COMPILED_COMPARISON_ROLE, ordinal=0,
-    )
-    require(
-        descriptor["candidate_authority"]["entrypoint"] == entrypoint and
-        descriptor["candidate_authority"]["sources"] == source_inventory and
-        descriptor["pft_used"] is False,
-        "compiled comparison descriptor differs from exact consumer",
-    )
-    return descriptor
-
-
 def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
     require(dict(os.environ) == CONSUMER_ENVIRONMENT,
             "consumer requires exact PATH=/usr/bin:/bin and LC_ALL=C.UTF-8 environment")
@@ -1240,13 +1184,62 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
             )
             schema6_output = capture
             if arguments.comparison_candidate:
-                descriptor = _assemble_compiled_comparison_descriptor(
-                    project_protocol, arguments, capture, receipt,
-                    checker_relative, final_consumer_sources,
+                source_inventory = [
+                    {"path": relative, **data_record(data)}
+                    for relative, data in sorted(final_consumer_sources.items())
+                ]
+                entrypoint = {
+                    "path": checker_relative, **data_record(checker),
+                }
+                require(entrypoint in source_inventory,
+                        "compiled consumer entrypoint is not authenticated")
+                candidate_policy = (
+                    project_protocol.COMPARISON_CANDIDATE_AUTHORITY_POLICY
                 )
-                require(descriptor["candidate_authority"]["entrypoint"] == {
-                            "path": checker_relative, **data_record(checker),
-                        }, "compiled descriptor entrypoint changed")
+                candidate_authenticator = (
+                    project_protocol.COMPILED_COMPARISON_AUTHENTICATOR
+                )
+                descriptor_kind = (
+                    project_protocol.AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND
+                )
+                candidate_authority = {
+                    "policy": candidate_policy,
+                    "authenticator": candidate_authenticator,
+                    "project_commit": arguments.project_head,
+                    "runtime_commit": arguments.candle_head,
+                    "entrypoint": entrypoint,
+                    "sources": source_inventory,
+                }
+                descriptor = {
+                    "schema": 1,
+                    "kind": descriptor_kind,
+                    "role": project_protocol.COMPILED_COMPARISON_ROLE,
+                    "ordinal": 0,
+                    "candidate": data_record(
+                        project_protocol.canonical_json_bytes(capture),
+                    ),
+                    "authenticated_nonce": {
+                        "kind": (
+                            project_protocol.COMPILED_COMPARISON_NONCE_KIND
+                        ),
+                        "value": receipt["attempt_nonce"],
+                    },
+                    "authenticated_plan": capture["authenticated_plan"],
+                    "semantic_projection": capture["semantic_projection"],
+                    "coverage_projection": capture["coverage_projection"],
+                    "candidate_authority": candidate_authority,
+                    "pft_used": False,
+                }
+                project_protocol._validate_authenticated_comparison_descriptor(
+                    descriptor,
+                    role=project_protocol.COMPILED_COMPARISON_ROLE,
+                    ordinal=0,
+                )
+                require(
+                    descriptor["candidate_authority"] == candidate_authority and
+                    descriptor["pft_used"] is False,
+                    "compiled descriptor differs from authenticated inputs",
+                )
                 schema6_output = descriptor
     finally:
         lock.close()
