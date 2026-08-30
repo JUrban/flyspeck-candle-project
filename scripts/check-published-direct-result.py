@@ -2,8 +2,9 @@
 """Independently revalidate one retained direct Flyspeck stratum result.
 
 This consumer never promotes a result to S1, S2, or S3.  It establishes only
-that a completed schema-5 diagnostic receipt still matches its exact current
-Candle/Flyspeck/plan/link authority and retained snapshot/transcript bytes.
+that a completed schema-5 receipt, or an explicitly requested schema-6
+receipt, still matches its exact current Candle/Flyspeck/plan/link authority
+and retained snapshot/transcript bytes.
 """
 
 from __future__ import annotations
@@ -578,7 +579,7 @@ def validate_closed_result_tree(
         del data
     retained_receipt = stable_file_bytes(result_root / "receipt.json", "direct receipt")
     require(retained_receipt == receipt_data == controller.json_bytes(receipt),
-            "direct receipt bytes are not exact canonical schema-5 JSON")
+            "direct receipt bytes are not exact canonical JSON")
     require(stat.S_IMODE((result_root / "receipt.json").stat(
                 follow_symlinks=False,
             ).st_mode) == 0o444,
@@ -594,12 +595,14 @@ def validate_current_bindings(
     controller: Any, receipt: dict[str, Any], prepared: dict[str, Any],
     candle_root: Path, linked: dict[str, Any], boundary: str,
     candle_head: str, cakeml_head: str, hol4_head: str,
+    evidence_schema: int = 5,
 ) -> None:
     inputs = receipt.get("inputs")
     require(isinstance(inputs, dict) and
             set(inputs) == controller.DIRECT_INPUT_FIELDS,
             "published direct result has malformed input closure")
-    require(receipt.get("schema") == 5 and
+    require(evidence_schema in (5, 6) and
+            receipt.get("schema") == evidence_schema and
             receipt.get("kind") == "candle-flyspeck-compiled-stratum-attempt" and
             receipt.get("state") == "completed" and
             receipt.get("validation_error") is None and
@@ -1004,6 +1007,7 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
             controller, receipt, prepared, candle_root, linked,
             arguments.boundary, arguments.candle_head,
             arguments.cakeml_head, arguments.hol4_head,
+            arguments.evidence_schema,
         )
         require(receipt.get("runtime_lock") == lock.record,
                 "published direct result lock differs from held runtime lock")
@@ -1031,7 +1035,11 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
             result_fd_root / "attempt.json", "published initial attempt",
         )
         attempt = decode_object(attempt_data, "published initial attempt")
-        initial_fields = controller.DIRECT_V5_ATTEMPT_FIELDS
+        initial_fields = (
+            controller.DIRECT_V6_ATTEMPT_FIELDS
+            if arguments.evidence_schema == 6 else
+            controller.DIRECT_V5_ATTEMPT_FIELDS
+        )
         initial_projection = {field: receipt[field] for field in initial_fields}
         initial_projection["state"] = "running"
         require(attempt == initial_projection and
@@ -1044,7 +1052,12 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
         controller.validate_runtime_snapshot(snapshot, result_root)
         runtime_path = result_root / "snapshot/candle/candle/build/cake"
         log_path = result_root / "candle.log"
-        controller.validate_direct_evidence_v5_artifact(
+        validate_evidence = (
+            controller.validate_direct_evidence_v6_artifact
+            if arguments.evidence_schema == 6 else
+            controller.validate_direct_evidence_v5_artifact
+        )
+        validate_evidence(
             receipt, receipt=True, log_path=log_path,
             runtime_executable_path=runtime_path,
         )
@@ -1146,6 +1159,9 @@ def main() -> None:
     parser.add_argument("--max-cpu-seconds", type=int, required=True)
     parser.add_argument("--max-address-space-gib", type=int, required=True)
     parser.add_argument("--max-output-file-gib", type=int, required=True)
+    parser.add_argument(
+        "--evidence-schema", type=int, choices=(5, 6), default=5,
+    )
     parser.add_argument("--cml-heap-size")
     parser.add_argument("--cml-stack-size")
     arguments = parser.parse_args()
