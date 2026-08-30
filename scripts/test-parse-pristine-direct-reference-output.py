@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import importlib._bootstrap_external as bootstrap_external
 import importlib.util
 from pathlib import Path
 import sys
@@ -515,11 +516,26 @@ class PristineOutputParserTests(unittest.TestCase):
                 (root / relative).write_bytes(source.read_bytes())
             cache = scripts / "__pycache__"
             cache.mkdir()
-            (cache / "parse-pristine-direct-reference-output.pyc").write_bytes(
+            parser_cache = Path(importlib.util.cache_from_source(
+                str(root / protocol.OUTPUT_PARSER_PATH)
+            ))
+            parser_cache.write_bytes(
                 b"hostile bytecode must not execute"
             )
-            (cache / "direct_release_protocol.cpython-311.pyc").write_bytes(
-                b"hostile permissive projection bytecode must not execute"
+            direct_source = root / protocol.DIRECT_PROTOCOL_PATH
+            direct_stat = direct_source.stat()
+            hostile_code = compile(
+                "raise RuntimeError('hostile PFT projection bytecode ran')\n",
+                str(direct_source), "exec",
+            )
+            direct_cache = Path(importlib.util.cache_from_source(
+                str(direct_source)
+            ))
+            direct_cache.write_bytes(
+                bootstrap_external._code_to_timestamp_pyc(
+                    hostile_code, int(direct_stat.st_mtime),
+                    direct_stat.st_size,
+                )
             )
             plan = copy.deepcopy(self.plan)
             plan["authority"]["repositories"]["project"]["path"] = str(root)
