@@ -306,12 +306,12 @@ V4_BUILD_RUNTIME_INPUT_ROLES = (
     "runtime-data",
 )
 V4_BUILD_RUNTIME_INPUT_MIN = 1
-V4_BUILD_INPUT_CLOSURE_SCHEMA = 1
+V4_BUILD_INPUT_CLOSURE_SCHEMA = 2
 V4_BUILD_INPUT_CLOSURE_KIND = (
-    "candle-flyspeck-isolated-native-build-input-closure-v1"
+    "candle-flyspeck-isolated-native-build-input-closure-v2"
 )
 V4_BUILD_INPUT_CLOSURE_POLICY = (
-    "outside-parent-held-pivot-root-exhaustive-input-tree-v1"
+    "outside-parent-held-descriptor-chroot-exhaustive-input-tree-v2"
 )
 V4_BUILD_INPUT_CLOSURE_ENTRY_MAX = 196_608
 V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES = 1_073_741_824
@@ -328,14 +328,13 @@ V4_BUILD_INPUT_CLOSURE_OBSERVED_ENTRY_FIELDS = (
 V4_BUILD_READONLY_DIRECTORY_MODE = 16_749
 V4_BUILD_SOURCE_DIRECTORY = "candle-source"
 V4_BUILD_OUTPUT_DIRECTORY = "candle-output"
-V4_BUILD_OLD_ROOT_DIRECTORY = ".candle-old-root"
 V4_BUILD_ROOT_DERIVATION_MAX_BYTES = 33_554_432
-V4_BUILD_FILTER_SCHEMA = 5
+V4_BUILD_FILTER_SCHEMA = 6
 V4_BUILD_FILTER_KIND = (
-    "candle-flyspeck-isolated-native-build-seccomp-filter-v5"
+    "candle-flyspeck-isolated-native-build-seccomp-filter-v6"
 )
 V4_BUILD_FILTER_POLICY = (
-    "isolated-native-build-post-pivot-deny-escape-network-ipc-transfer-v5"
+    "isolated-native-build-post-chroot-deny-escape-network-ipc-transfer-v6"
 )
 V4_BUILD_FILTER_ERRNO = 1
 V4_BUILD_FILTER_CLONE_SYSCALL = 56
@@ -417,12 +416,12 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
 V4_BUILD_FILTER_ENOSYS_SYSCALLS = (
     (435, "clone3"),
 )
-V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 5
+V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 6
 V4_BUILD_EXECUTION_OBSERVATION_KIND = (
-    "candle-flyspeck-isolated-native-build-execution-observation-v5"
+    "candle-flyspeck-isolated-native-build-execution-observation-v6"
 )
 V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
-    "outside-parent-all-task-source-consumption-and-output-chronology-v5"
+    "outside-parent-all-task-source-consumption-and-output-chronology-v6"
 )
 V4_BUILD_EXECUTION_TASK_MAX = 4_096
 V4_BUILD_EXECUTION_EVENT_MAX = 131_072
@@ -449,7 +448,7 @@ V4_BUILD_INITIAL_STATE_CAPTURE_BOUNDARY = (
     "held-interrupt-stop-after-id-maps-before-builder-gate-release-v1"
 )
 V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN = (
-    "candle-flyspeck-v4-initial-state-seed-v3"
+    "candle-flyspeck-v4-initial-state-seed-v4"
 )
 V4_BUILD_INITIAL_STATE_DIGEST_PREIMAGE = (
     "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
@@ -787,13 +786,13 @@ V4_BUILD_SETUP_REPLAY_STATE_FIELDS = (
     "fs_state", "mount_graph", "credentials", "task_control_state",
 )
 V4_BUILD_SETUP_STATE_DIGEST_DOMAIN = (
-    "candle-flyspeck-v4-setup-replay-state-v3"
+    "candle-flyspeck-v4-setup-replay-state-v4"
 )
 V4_BUILD_SETUP_STATE_DIGEST_PREIMAGE = (
     "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
 )
 V4_BUILD_SETUP_POLICY = (
-    "derived-pre-filter-builder-setup-deny-all-other-v4"
+    "derived-pre-filter-builder-setup-deny-all-other-v5"
 )
 V4_BUILD_SETUP_SEQUENCE_FIELDS = (
     "index", "role", "syscall_numbers", "argument_policy",
@@ -803,26 +802,24 @@ V4_BUILD_SETUP_SEQUENCE = (
      "mount-slash-null-ms-rec-private-0x44000-null-exact"),
     (1, "enter-held-input-root", (81,),
      "fchdir-exact-inherited-input-root-fd-generation"),
-    (2, "pivot-into-input-root", (155,),
-     "pivot-root-dot-dot-candle-old-root-exact"),
+    (2, "chroot-into-input-root", (161,),
+     "chroot-dot-after-fchdir-held-input-root-exact"),
     (3, "enter-new-root", (80,), "chdir-slash-exact"),
-    (4, "detach-old-root", (166,),
-     "umount2-slash-dot-candle-old-root-mnt-detach-exact"),
-    (5, "select-mapped-gid", (119,), "setresgid-zero-zero-zero-exact"),
-    (6, "select-mapped-uid", (117,), "setresuid-zero-zero-zero-exact"),
-    (7, "install-build-signal-mask", (14,),
+    (4, "select-mapped-gid", (119,), "setresgid-zero-zero-zero-exact"),
+    (5, "select-mapped-uid", (117,), "setresuid-zero-zero-zero-exact"),
+    (6, "install-build-signal-mask", (14,),
      "rt-sigprocmask-sig-setmask-empty-null-oldset-size-8-exact"),
-    (8, "clear-ambient-capabilities", (157,),
+    (7, "clear-ambient-capabilities", (157,),
      "prctl-pr-cap-ambient-clear-all-zero-zero-zero-exact"),
-    (9, "drop-capability-bounding-set", (157,),
+    (8, "drop-capability-bounding-set", (157,),
      "prctl-pr-capbset-drop-each-profile-cap-descending-exact"),
-    (10, "drop-capabilities", (126,),
+    (9, "drop-capabilities", (126,),
      "capset-v3-zero-effective-permitted-inheritable-exact"),
-    (11, "close-setup-descriptors", (3,),
+    (10, "close-setup-descriptors", (3,),
      "close-each-derived-setup-fd-once-descending-exact"),
-    (12, "set-no-new-privileges", (157,),
+    (11, "set-no-new-privileges", (157,),
      "prctl-pr-set-no-new-privs-one-zero-zero-zero-exact"),
-    (13, "install-build-filter", (317,),
+    (12, "install-build-filter", (317,),
      "seccomp-set-mode-filter-zero-exact-authority-program"),
 )
 V4_BUILD_SETUP_CREDENTIAL_TARGETS = (
@@ -1219,16 +1216,6 @@ V4_BUILD_FS_TRANSITION_FIELDS = {
         "after_generation", "affected_mount_count", "affected_mount_ids",
         "old_propagations", "new_propagations",
     ),
-    "root-pivot": (
-        "kind", "index", "fs_state_id", "before_generation",
-        "after_generation", "old_root_identity", "new_root_identity",
-        "put_old_identity", "mount_namespace_identity",
-    ),
-    "mount-detach": (
-        "kind", "index", "mount_namespace_identity", "before_generation",
-        "after_generation", "detached_mount_count", "detached_mount_ids",
-        "target_identity", "flags",
-    ),
     "mount-namespace-create": (
         "kind", "index", "task_index", "source_mount_namespace_identity",
         "source_generation", "child_mount_namespace_identity",
@@ -1390,15 +1377,11 @@ V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY = (
      ("exact-values", 1), _v4_cardinality_spec((1,)),
      _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
      _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
-    ("pivot-into-input-root", 155, "path-entry", "scalar-exit",
-     ("exact-values", 1), _v4_cardinality_spec((2,)),
-     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
-     _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
-    ("enter-new-root", 80, "path-entry", "scalar-exit",
+    ("chroot-into-input-root", 161, "path-entry", "scalar-exit",
      ("exact-values", 1), _v4_cardinality_spec((1,)),
      _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
      _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
-    ("detach-old-root", 166, "path-entry", "scalar-exit",
+    ("enter-new-root", 80, "path-entry", "scalar-exit",
      ("exact-values", 1), _v4_cardinality_spec((1,)),
      _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
      _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
@@ -2628,7 +2611,6 @@ def _validate_v4_native_build_runtime_inputs(value: object) -> list[dict[str, An
         require(path.split("/", 1)[0] not in {
                     V4_BUILD_SOURCE_DIRECTORY,
                     V4_BUILD_OUTPUT_DIRECTORY,
-                    V4_BUILD_OLD_ROOT_DIRECTORY,
                 }, f"reserved {record_label} content path")
         require(is_int(content.get("bytes")) and
                 0 < content["bytes"] <=
@@ -2652,7 +2634,7 @@ def _validate_v4_native_build_runtime_inputs(value: object) -> list[dict[str, An
     return value
 
 
-def enumerate_isolated_native_build_root_v1(
+def enumerate_isolated_native_build_root_v2(
     compiler: object, linker: object, source_tree: object,
     runtime_inputs: object,
 ) -> list[dict[str, Any]]:
@@ -2690,7 +2672,6 @@ def enumerate_isolated_native_build_root_v1(
         require(relative.split("/", 1)[0] not in {
                     V4_BUILD_SOURCE_DIRECTORY,
                     V4_BUILD_OUTPUT_DIRECTORY,
-                    V4_BUILD_OLD_ROOT_DIRECTORY,
                 }, f"reserved {role} resolved path")
         add_file(
             relative,
@@ -2770,7 +2751,6 @@ def enumerate_isolated_native_build_root_v1(
             node["file"] = file_record
 
     insert_path(V4_BUILD_OUTPUT_DIRECTORY, None)
-    insert_path(V4_BUILD_OLD_ROOT_DIRECTORY, None)
     insert_path(V4_BUILD_SOURCE_DIRECTORY, None)
     for relative, file_record in files.items():
         insert_path(relative, file_record)
@@ -2810,7 +2790,7 @@ def enumerate_isolated_native_build_root_v1(
     return entries
 
 
-def enumerate_isolated_native_build_filter_v5() -> dict[str, Any]:
+def enumerate_isolated_native_build_filter_v6() -> dict[str, Any]:
     load_word_absolute = 0x20
     jump_equal = 0x15
     jump_mask_nonzero = 0x45
@@ -2987,7 +2967,7 @@ def validate_isolated_native_build_filter(value: object) -> dict[str, Any]:
     _require_v4_exact_json_types(value, label)
     require(type(value) is dict, f"malformed {label}")
     require_exact_json(
-        value, enumerate_isolated_native_build_filter_v5(), label,
+        value, enumerate_isolated_native_build_filter_v6(), label,
     )
     return value
 

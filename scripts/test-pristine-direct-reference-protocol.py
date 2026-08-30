@@ -920,8 +920,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "PTRACE_O_TRACEEXIT",
             "PTRACE_O_EXITKILL",
         ))
-        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 5)
-        self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 5)
+        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 6)
+        self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 6)
+        self.assertEqual(subject.V4_BUILD_INPUT_CLOSURE_SCHEMA, 2)
         self.assertEqual(subject.V4_BUILD_SYSCALL_DISPOSITION_SCHEMA, 4)
         self.assertNotIn(
             "max_fds", subject.V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS,
@@ -937,6 +938,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         ))
         self.assertFalse(hasattr(
             subject, "enumerate_isolated_native_build_filter_v4",
+        ))
+        self.assertFalse(hasattr(
+            subject, "enumerate_isolated_native_build_filter_v5",
         ))
         self.assertTrue({
             "paired_event_index", "object_edges", "fd_transitions",
@@ -1175,7 +1179,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertIn("clone-newuser", securebits_policy[3])
         self.assertEqual(
             subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
-            "candle-flyspeck-v4-initial-state-seed-v3",
+            "candle-flyspeck-v4-initial-state-seed-v4",
         )
         self.assertEqual(
             subject.V4_BUILD_INITIAL_STATE_DIGEST_PREIMAGE,
@@ -1251,6 +1255,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertEqual(subject.V4_BUILD_SETUP_SEQUENCE[-1][1],
                          "install-build-filter")
+        setup_roles = tuple(row[1] for row in subject.V4_BUILD_SETUP_SEQUENCE)
+        self.assertIn("chroot-into-input-root", setup_roles)
+        self.assertNotIn("pivot-into-input-root", setup_roles)
+        self.assertNotIn("detach-old-root", setup_roles)
+        self.assertNotIn("root-pivot", subject.V4_BUILD_FS_TRANSITION_FIELDS)
+        self.assertNotIn("mount-detach", subject.V4_BUILD_FS_TRANSITION_FIELDS)
         self.assertEqual(
             tuple(row[0] for row in subject.V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY),
             tuple(step[1] for step in subject.V4_BUILD_SETUP_SEQUENCE),
@@ -1396,12 +1406,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             (
                 subject.V4_BUILD_INITIAL_STATE_DIGEST_FIELDS,
                 subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
-                "0c7f554c9c60a312a6a18aa9cf72518131369c5fbbf66ef75aeb3a416642cf0d",
+                "38fb170870e5ba9dc08fd325369c68b5a7a12a9bb3fe1c55b0a5b2cf95428160",
             ),
             (
                 subject.V4_BUILD_SETUP_REPLAY_STATE_FIELDS,
                 subject.V4_BUILD_SETUP_STATE_DIGEST_DOMAIN,
-                "ffdd6648208c484bfdcf38bae8acaebd583850e305a2dff5a330bb25776263b9",
+                "93a7fc5bd7105e9b49de6ec1f0f612bc60d176b9b3ca3d2b1d7838a68da14063",
             ),
         )
         for fields, domain, expected in fixtures:
@@ -1440,10 +1450,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 378)
+        self.assertEqual(len(values), 377)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "3de9f7e37f67511100b060f57d1708e2023c2a674b80a415b4ac9452eb87089b",
+            "80e4c4fb9065ad45612b5d8fc1d7bc489aba6f22a9fc7b4f5345e0c8913fd139",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1644,6 +1654,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 subject.classify_isolated_native_build_runtime_input_v1(path)
 
     def test_v4_isolated_native_build_root_enumerator(self) -> None:
+        self.assertFalse(hasattr(
+            subject, "enumerate_isolated_native_build_root_v1",
+        ))
         compiler = {
             "argument_path": "/usr/bin/cc",
             "resolved_path": "/usr/bin/cc",
@@ -1709,20 +1722,17 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 },
             },
         ]
-        entries = subject.enumerate_isolated_native_build_root_v1(
+        entries = subject.enumerate_isolated_native_build_root_v2(
             compiler, linker, source_tree, inputs,
         )
         self.assertEqual(
             [entry["index"] for entry in entries], list(range(len(entries))),
         )
         by_path = {entry["relative"]: entry for entry in entries}
+        self.assertFalse(hasattr(subject, "V4_BUILD_OLD_ROOT_DIRECTORY"))
         self.assertEqual(
             by_path[subject.V4_BUILD_OUTPUT_DIRECTORY]["mode"],
             subject.V4_DIRECTORY_0700_MODE,
-        )
-        self.assertEqual(
-            by_path[subject.V4_BUILD_OLD_ROOT_DIRECTORY]["mode"],
-            subject.V4_BUILD_READONLY_DIRECTORY_MODE,
         )
         self.assertEqual(by_path["usr/bin/cc"]["mode"], 0o100555)
         self.assertEqual(
@@ -1764,9 +1774,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 ),
             ),
             (
-                "runtime/old-root collision",
+                "runtime/source-root collision",
                 lambda c, l, s, items: items[0]["content"].update(
-                    path=".candle-old-root/helper",
+                    path="candle-source/helper",
                 ),
             ),
             (
@@ -1793,11 +1803,11 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             with self.subTest(label=label), self.assertRaises(
                 subject.ProtocolError,
             ):
-                subject.enumerate_isolated_native_build_root_v1(*forged)
+                subject.enumerate_isolated_native_build_root_v2(*forged)
 
         forged_inputs = type("Inputs", (list,), {})(copy.deepcopy(inputs))
         with self.assertRaises(subject.ProtocolError):
-            subject.enumerate_isolated_native_build_root_v1(
+            subject.enumerate_isolated_native_build_root_v2(
                 compiler, linker, source_tree, forged_inputs,
             )
 
@@ -1809,7 +1819,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             prefixed_oversize["files"],
         )
         with self.assertRaises(subject.ProtocolError):
-            subject.enumerate_isolated_native_build_root_v1(
+            subject.enumerate_isolated_native_build_root_v2(
                 compiler, linker, prefixed_oversize, inputs,
             )
 
@@ -1819,25 +1829,25 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         with mock.patch.object(
             subject, "V4_BUILD_INPUT_CLOSURE_ENTRY_MAX", 16,
         ), self.assertRaisesRegex(subject.ProtocolError, "entry count"):
-            subject.enumerate_isolated_native_build_root_v1(
+            subject.enumerate_isolated_native_build_root_v2(
                 deep_compiler, linker, source_tree, inputs,
             )
         with mock.patch.object(
             subject, "V4_BUILD_ROOT_DERIVATION_MAX_BYTES", 50,
         ), self.assertRaisesRegex(subject.ProtocolError, "derivation work"):
-            subject.enumerate_isolated_native_build_root_v1(
+            subject.enumerate_isolated_native_build_root_v2(
                 compiler, linker, source_tree, inputs,
             )
 
     def test_v4_isolated_native_build_filter_enumerator(self) -> None:
-        authority = subject.enumerate_isolated_native_build_filter_v5()
+        authority = subject.enumerate_isolated_native_build_filter_v6()
         self.assertEqual(set(authority), {
             "schema", "kind", "policy", "architecture", "audit_arch",
             "instruction_count", "instructions_bytes", "instructions_sha256",
             "instructions_payload_base64", "decoded_rule_count",
             "decoded_policy", "policy_sha256",
         })
-        self.assertEqual(authority["schema"], 5)
+        self.assertEqual(authority["schema"], 6)
         self.assertEqual(authority["kind"], subject.V4_BUILD_FILTER_KIND)
         self.assertEqual(authority["policy"], subject.V4_BUILD_FILTER_POLICY)
         self.assertEqual(
@@ -1917,7 +1927,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "10d3cb1cfed09d14413f01066a71180359b9252f04daa131978b370d94460ebb",
         )
         self.assertEqual(
-            subject.enumerate_isolated_native_build_filter_v5(), authority,
+            subject.enumerate_isolated_native_build_filter_v6(), authority,
         )
         self.assertIs(
             subject.validate_isolated_native_build_filter(authority), authority,
