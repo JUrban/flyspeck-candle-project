@@ -1032,12 +1032,20 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 item["authority"]
             )
 
-        def use_boolean_expected_bytes(item, candidate_arguments):
-            item["authority"]["reviewer_sources"][0]["bytes"] = True
-            item["authority"]["reviewer_entrypoint"]["bytes"] = True
+        def use_coercible_expected_bytes(
+            item, candidate_arguments, replacement,
+        ):
+            item["authority"]["reviewer_sources"][0]["bytes"] = 1
+            item["authority"]["reviewer_entrypoint"]["bytes"] = 1
             candidate_arguments["expected_authority"] = copy.deepcopy(
                 item["authority"]
             )
+            candidate_arguments["expected_authority"][
+                "reviewer_sources"
+            ][0]["bytes"] = replacement
+            candidate_arguments["expected_authority"][
+                "reviewer_entrypoint"
+            ]["bytes"] = replacement
 
         cases = (
             ("claim", lambda item, args: item.update(
@@ -1070,7 +1078,10 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("PFT source", inject_pft_source),
             ("dependent reviewer", remove_authority_independence),
             ("path-hidden identical reviewer", hide_identical_entrypoint_content),
-            ("boolean expected bytes", use_boolean_expected_bytes),
+            ("boolean expected bytes", lambda item, args:
+             use_coercible_expected_bytes(item, args, True)),
+            ("float expected bytes", lambda item, args:
+             use_coercible_expected_bytes(item, args, 1.0)),
             ("boolean plan bytes", lambda item, args: item[
                 "authenticated_plan"
             ].update(bytes=True)),
