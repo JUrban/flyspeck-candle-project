@@ -874,6 +874,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             "reviewer_sources": [source("scripts/reviewer.py", "5")],
             "reviewer_entrypoint": source("scripts/reviewer.py", "5"),
             "compiled_producer_project_commit": "6" * 40,
+            "compiled_runtime_commit": "b" * 40,
             "compiled_consumer_sources": [
                 source("scripts/compiled-consumer.py", "6"),
             ],
@@ -881,6 +882,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 "scripts/compiled-consumer.py", "6",
             ),
             "reference_producer_project_commit": "7" * 40,
+            "reference_runtime_commit": "c" * 40,
             "reference_validator_sources": [
                 source("scripts/reference-validator.py", "7"),
             ],
@@ -921,11 +923,11 @@ class DirectReleaseProtocolTests(unittest.TestCase):
 
         def candidate_authority(role, index):
             compiled = role == subject.COMPILED_COMPARISON_ROLE
-            authority_byte = ("8", "9", "a")[index]
-            runtime_byte = ("b", "c", "d")[index]
+            authority_byte = "6" if compiled else "7"
+            runtime_byte = "b" if compiled else "c"
             entrypoint = source(
-                ("scripts/compiled-schema6-authenticator.py" if compiled else
-                 f"scripts/reference-authenticator-{index}.py"),
+                ("scripts/compiled-consumer.py" if compiled else
+                 "scripts/reference-validator.py"),
                 authority_byte,
             )
             return {
@@ -1018,6 +1020,18 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 item["authority"]
             )
 
+        def hide_identical_entrypoint_content(item, candidate_arguments):
+            reviewer = item["authority"]["reviewer_entrypoint"]
+            compiled = item["authority"]["compiled_producer_entrypoint"]
+            for field in ("bytes", "sha256", "md5"):
+                reviewer[field] = compiled[field]
+                item["authority"]["reviewer_sources"][0][field] = (
+                    compiled[field]
+                )
+            candidate_arguments["expected_authority"] = copy.deepcopy(
+                item["authority"]
+            )
+
         def use_boolean_expected_bytes(item, candidate_arguments):
             item["authority"]["reviewer_sources"][0]["bytes"] = True
             item["authority"]["reviewer_entrypoint"]["bytes"] = True
@@ -1055,6 +1069,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ].update(reviewer_project_commit="b" * 40)),
             ("PFT source", inject_pft_source),
             ("dependent reviewer", remove_authority_independence),
+            ("path-hidden identical reviewer", hide_identical_entrypoint_content),
             ("boolean expected bytes", use_boolean_expected_bytes),
             ("boolean plan bytes", lambda item, args: item[
                 "authenticated_plan"
@@ -1068,6 +1083,12 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("float descriptor bytes", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][1]["candidate"].update(bytes=103.0)),
+            ("compiled authority drift", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][0]["candidate_authority"].update(runtime_commit="d" * 40)),
+            ("reference authority drift", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][2]["candidate_authority"].update(runtime_commit="d" * 40)),
             ("semantic mismatch", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][2]["semantic_projection"]["theorems"][0].update(

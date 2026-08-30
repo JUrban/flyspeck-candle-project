@@ -1360,9 +1360,11 @@ def _validate_comparison_authority(value: object) -> dict[str, Any]:
     fields = {
         "policy", "reviewer_project_commit", "reviewer_sources",
         "reviewer_entrypoint",
-        "compiled_producer_project_commit", "compiled_consumer_sources",
+        "compiled_producer_project_commit", "compiled_runtime_commit",
+        "compiled_consumer_sources",
         "compiled_producer_entrypoint",
-        "reference_producer_project_commit", "reference_validator_sources",
+        "reference_producer_project_commit", "reference_runtime_commit",
+        "reference_validator_sources",
         "reference_producer_entrypoint",
     }
     require(isinstance(value, dict) and set(value) == fields and
@@ -1370,7 +1372,8 @@ def _validate_comparison_authority(value: object) -> dict[str, Any]:
             "malformed direct comparison authority")
     for field in (
         "reviewer_project_commit", "compiled_producer_project_commit",
-        "reference_producer_project_commit",
+        "reference_producer_project_commit", "compiled_runtime_commit",
+        "reference_runtime_commit",
     ):
         _hex(value.get(field), re.compile(r"[0-9a-f]{40}"),
              f"direct comparison authority {field}")
@@ -1400,7 +1403,11 @@ def _validate_comparison_authority(value: object) -> dict[str, Any]:
                     for source in inventory),
                 f"direct comparison {field} is absent from its source inventory")
         entrypoints.append(entrypoint)
-    require(len({canonical_value_bytes(item) for item in entrypoints}) == 3,
+    entrypoint_contents = [{
+        field: item[field] for field in ("bytes", "sha256", "md5")
+    } for item in entrypoints]
+    require(len({canonical_value_bytes(item)
+                 for item in entrypoint_contents}) == 3,
             "direct comparison reviewer and producer entrypoints are not independent")
     return value
 
@@ -1604,6 +1611,29 @@ def validate_unapproved_direct_comparison_fixture(
             "descriptors")
     require(_same_canonical_value(authority, expected),
             "direct comparison differs from authenticated reviewer authority")
+    compiled_authority = {
+        "policy": COMPARISON_CANDIDATE_AUTHORITY_POLICY,
+        "authenticator": COMPILED_COMPARISON_AUTHENTICATOR,
+        "project_commit": authority["compiled_producer_project_commit"],
+        "runtime_commit": authority["compiled_runtime_commit"],
+        "entrypoint": authority["compiled_producer_entrypoint"],
+        "sources": authority["compiled_consumer_sources"],
+    }
+    reference_authority = {
+        "policy": COMPARISON_CANDIDATE_AUTHORITY_POLICY,
+        "authenticator": REFERENCE_COMPARISON_AUTHENTICATOR,
+        "project_commit": authority["reference_producer_project_commit"],
+        "runtime_commit": authority["reference_runtime_commit"],
+        "entrypoint": authority["reference_producer_entrypoint"],
+        "sources": authority["reference_validator_sources"],
+    }
+    require(_same_canonical_value(
+                compiled_descriptor["candidate_authority"],
+                compiled_authority,
+            ) and all(_same_canonical_value(
+                item["candidate_authority"], reference_authority,
+            ) for item in reference_descriptors),
+            "candidate authorities differ from recorded producer authority")
     require(all(_same_canonical_value(item["semantic_projection"], semantic)
                 for item in descriptors) and
             all(_same_canonical_value(item["coverage_projection"], coverage)
