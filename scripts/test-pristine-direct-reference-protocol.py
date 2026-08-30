@@ -1964,6 +1964,17 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 initial_fs, mount_graph, input_identity, 17,
             ),
             (
+                edges,
+                {
+                    **fd_table,
+                    "fds": [{**fds[0], "access_mode": "wrong-access"}],
+                    "ordered_fd_sha256": subject.canonical_sha256([
+                        {**fds[0], "access_mode": "wrong-access"},
+                    ]),
+                },
+                descriptions, initial_fs, mount_graph, input_identity, 17,
+            ),
+            (
                 edges, fd_table, descriptions, initial_fs,
                 {
                     **mount_graph,
