@@ -71,16 +71,16 @@ AUTHENTICATED_CAPTURE_POLICY = (
 )
 COMPILED_DIRECT_CANDIDATE_KIND = AUTHENTICATED_CAPTURE_KIND
 INDEPENDENT_COMPARISON_KIND = (
-    "candle-flyspeck-independent-direct-comparison-v1"
+    "candle-flyspeck-independent-direct-comparison-v2"
 )
 INDEPENDENT_COMPARISON_POLICY = (
-    "one-compiled-plus-two-pristine-clean-reference-exact-projections-v1"
+    "one-compiled-plus-two-pristine-semantic-and-cross-coverage-v2"
 )
 COMPARISON_AUTHORITY_POLICY = (
     "independent-entrypoints-exact-commits-and-source-inventories-v2"
 )
 AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND = (
-    "candle-flyspeck-authenticated-comparison-candidate-v1"
+    "candle-flyspeck-authenticated-comparison-candidate-v2"
 )
 COMPARISON_CANDIDATE_AUTHORITY_POLICY = (
     "candidate-authenticator-exact-entrypoint-and-sources-v1"
@@ -2174,13 +2174,21 @@ def _validate_candidate_authority(
 def _validate_authenticated_comparison_descriptor(
     value: object, *, role: str, ordinal: int,
 ) -> dict[str, Any]:
-    fields = {
+    common_fields = {
         "schema", "kind", "role", "ordinal", "candidate",
         "authenticated_nonce", "authenticated_plan", "semantic_projection",
-        "coverage_projection", "candidate_authority", "pft_used",
+        "cross_runtime_coverage_projection", "candidate_authority", "pft_used",
     }
+    require(role in {COMPILED_COMPARISON_ROLE, REFERENCE_COMPARISON_ROLE},
+            "unknown authenticated comparison candidate role")
+    role_fields = (
+        {"compiled_coverage_projection"}
+        if role == COMPILED_COMPARISON_ROLE
+        else {"reference_execution_closure"}
+    )
+    fields = common_fields | role_fields
     require(isinstance(value, dict) and set(value) == fields and
-            type(value.get("schema")) is int and value["schema"] == 1 and
+            type(value.get("schema")) is int and value["schema"] == 2 and
             value.get("kind") == AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND and
             value.get("role") == role and
             type(value.get("ordinal")) is int and
@@ -2203,7 +2211,16 @@ def _validate_authenticated_comparison_descriptor(
     _hex(nonce.get("value"), nonce_pattern,
          "authenticated comparison candidate nonce")
     validate_semantic_projection(value.get("semantic_projection"))
-    validate_coverage_projection(value.get("coverage_projection"))
+    validate_cross_runtime_coverage_projection(
+        value.get("cross_runtime_coverage_projection")
+    )
+    if role == COMPILED_COMPARISON_ROLE:
+        validate_coverage_projection(value.get("compiled_coverage_projection"))
+    else:
+        _validate_content_record(
+            value.get("reference_execution_closure"),
+            "authenticated reference execution closure",
+        )
     _validate_candidate_authority(value.get("candidate_authority"), role)
     return value
 
@@ -2220,25 +2237,26 @@ def validate_unapproved_direct_comparison_fixture(
     production caller must first replay the compiled consumer and future
     pristine-reference validators from retained raw bundles.  Each authenticator
     must then emit one indivisible descriptor binding its candidate, nonce,
-    plan, two projections, and candidate-specific authority.
+    plan, common projections, role-specific evidence, and candidate authority.
     """
     fields = {
         "schema", "kind", "policy", "boundary_id", "action_count",
         "authenticated_plan", "compiled_candidate", "reference_candidates",
-        "semantic_projection", "coverage_projection", "authority",
+        "semantic_projection", "cross_runtime_coverage_projection",
+        "compiled_coverage_projection", "authority",
         "comparison_status", "promotion_allowed", "approval_included",
         "direct_s2_execution_approved", "direct_s3_coverage_approved",
         "v1_3_s3_release_approved", "pft_used", "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
-            type(value.get("schema")) is int and value["schema"] == 1 and
+            type(value.get("schema")) is int and value["schema"] == 2 and
             value.get("kind") == INDEPENDENT_COMPARISON_KIND and
             value.get("policy") == INDEPENDENT_COMPARISON_POLICY and
             value.get("boundary_id") == FINAL_BOUNDARY_ID and
             type(value.get("action_count")) is int and
             value["action_count"] == FINAL_ACTION_COUNT and
             value.get("comparison_status") ==
-            "three-way-exact-match-unapproved" and
+            "three-way-semantic-and-cross-runtime-coverage-match-unapproved" and
             value.get("promotion_allowed") is False and
             value.get("approval_included") is False and
             value.get("direct_s2_execution_approved") is False and
@@ -2264,9 +2282,11 @@ def validate_unapproved_direct_comparison_fixture(
             "direct comparison requires exactly two reference candidates")
     reference_records = []
     reference_nonces = []
+    reference_execution_closures = []
     for index, reference in enumerate(references, start=1):
         require(isinstance(reference, dict) and set(reference) == {
                     "ordinal", "candidate", "session_nonce",
+                    "execution_closure",
                 } and type(reference.get("ordinal")) is int and
                 reference["ordinal"] == index,
                 f"malformed direct reference candidate: {index}")
@@ -2277,19 +2297,28 @@ def validate_unapproved_direct_comparison_fixture(
             reference.get("session_nonce"), HEX64,
             f"direct reference candidate nonce: {index}",
         ))
+        reference_execution_closures.append(_validate_content_record(
+            reference.get("execution_closure"),
+            f"direct reference execution closure: {index}",
+        ))
     candidate_digests = [
         compiled_record["sha256"],
         *(record["sha256"] for record in reference_records),
     ]
     require(len(set(candidate_digests)) == 3 and
-            len(set(reference_nonces)) == 2,
-            "direct comparison candidates or reference nonces are not distinct")
+            len(set(reference_nonces)) == 2 and
+            len({record["sha256"]
+                 for record in reference_execution_closures}) == 2,
+            "direct comparison candidates, reference nonces, or reference "
+            "closures are not distinct")
     authority = _validate_comparison_authority(value.get("authority"))
     expected = _validate_comparison_authority(expected_authority)
     semantic = value.get("semantic_projection")
-    coverage = value.get("coverage_projection")
+    cross_runtime_coverage = value.get("cross_runtime_coverage_projection")
+    compiled_coverage = value.get("compiled_coverage_projection")
     validate_semantic_projection(semantic)
-    validate_coverage_projection(coverage)
+    validate_cross_runtime_coverage_projection(cross_runtime_coverage)
+    validate_coverage_projection(compiled_coverage)
 
     require(isinstance(authenticated_candidate_descriptors, (list, tuple)) and
             len(authenticated_candidate_descriptors) == 3,
@@ -2329,6 +2358,12 @@ def validate_unapproved_direct_comparison_fixture(
             all(nonce == descriptor["authenticated_nonce"]["value"]
                 for nonce, descriptor in zip(
                     reference_nonces, reference_descriptors, strict=True,
+                )) and
+            all(_same_canonical_value(closure,
+                                      descriptor["reference_execution_closure"])
+                for closure, descriptor in zip(
+                    reference_execution_closures, reference_descriptors,
+                    strict=True,
                 )),
             "direct comparison differs from authenticated candidate "
             "descriptors")
@@ -2359,9 +2394,15 @@ def validate_unapproved_direct_comparison_fixture(
             "candidate authorities differ from recorded producer authority")
     require(all(_same_canonical_value(item["semantic_projection"], semantic)
                 for item in descriptors) and
-            all(_same_canonical_value(item["coverage_projection"], coverage)
-                for item in descriptors),
-            "direct candidates do not have exact three-way projection equality")
+            all(_same_canonical_value(
+                    item["cross_runtime_coverage_projection"],
+                    cross_runtime_coverage,
+                ) for item in descriptors) and
+            _same_canonical_value(
+                compiled_descriptor["compiled_coverage_projection"],
+                compiled_coverage,
+            ),
+            "direct candidates do not have role-correct projection equality")
     return value
 
 

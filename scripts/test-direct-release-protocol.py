@@ -1351,6 +1351,12 @@ class DirectReleaseProtocolTests(unittest.TestCase):
     def test_unapproved_three_way_comparison_fixture_is_exact(self) -> None:
         semantic = subject.project_authenticated_semantic_observations(*fixture())
         coverage = coverage_fixture()
+        schema6_receipt, schema6_plan = schema6_fixture()
+        cross_runtime_coverage = (
+            subject.cross_runtime_coverage_projection_from_schema6(
+                schema6_receipt, schema6_plan,
+            )
+        )
         content = lambda byte, length: {
             "bytes": length,
             "sha256": byte * 64,
@@ -1359,6 +1365,9 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         plan_record = content("1", 101)
         compiled_record = content("2", 102)
         reference_records = [content("3", 103), content("4", 104)]
+        reference_execution_closures = [
+            content("d", 105), content("e", 106),
+        ]
         source = lambda path, byte: {
             "path": path, "bytes": 10,
             "sha256": byte * 64, "md5": byte * 32,
@@ -1386,7 +1395,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ),
         }
         comparison = {
-            "schema": 1,
+            "schema": 2,
             "kind": subject.INDEPENDENT_COMPARISON_KIND,
             "policy": subject.INDEPENDENT_COMPARISON_POLICY,
             "boundary_id": subject.FINAL_BOUNDARY_ID,
@@ -1399,14 +1408,18 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             "reference_candidates": [{
                 "ordinal": 1, "candidate": reference_records[0],
                 "session_nonce": "9" * 64,
+                "execution_closure": reference_execution_closures[0],
             }, {
                 "ordinal": 2, "candidate": reference_records[1],
                 "session_nonce": "a" * 64,
+                "execution_closure": reference_execution_closures[1],
             }],
             "semantic_projection": semantic,
-            "coverage_projection": coverage,
+            "cross_runtime_coverage_projection": cross_runtime_coverage,
+            "compiled_coverage_projection": coverage,
             "authority": authority,
-            "comparison_status": "three-way-exact-match-unapproved",
+            "comparison_status":
+                "three-way-semantic-and-cross-runtime-coverage-match-unapproved",
             "promotion_allowed": False,
             "approval_included": False,
             "direct_s2_execution_approved": False,
@@ -1446,8 +1459,8 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 subject.COMPILED_COMPARISON_ROLE
                 if compiled else subject.REFERENCE_COMPARISON_ROLE
             )
-            descriptors.append({
-                "schema": 1,
+            descriptor = {
+                "schema": 2,
                 "kind": subject.AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND,
                 "role": role,
                 "ordinal": index,
@@ -1463,10 +1476,21 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 },
                 "authenticated_plan": copy.deepcopy(plan_record),
                 "semantic_projection": copy.deepcopy(semantic),
-                "coverage_projection": copy.deepcopy(coverage),
+                "cross_runtime_coverage_projection": copy.deepcopy(
+                    cross_runtime_coverage
+                ),
                 "candidate_authority": candidate_authority(role, index),
                 "pft_used": False,
-            })
+            }
+            if compiled:
+                descriptor["compiled_coverage_projection"] = copy.deepcopy(
+                    coverage
+                )
+            else:
+                descriptor["reference_execution_closure"] = copy.deepcopy(
+                    reference_execution_closures[index - 1]
+                )
+            descriptors.append(descriptor)
         arguments = {
             "authenticated_candidate_descriptors": descriptors,
             "expected_authority": authority,
@@ -1487,12 +1511,12 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             )
 
         def change_coverage(_item, candidate_arguments):
-            action_events = candidate_arguments[
+            actions = candidate_arguments[
                 "authenticated_candidate_descriptors"
-            ][2]["coverage_projection"]["action_events"]
-            action_events["records"][0]["source_sha256"] = "0" * 64
-            action_events["ordered_record_sha256"] = subject.canonical_sha256(
-                action_events["records"]
+            ][2]["cross_runtime_coverage_projection"]["actions"]
+            actions["records"][0]["original_sha256"] = "0" * 64
+            actions["ordered_record_sha256"] = subject.canonical_sha256(
+                actions["records"]
             )
 
         def inject_pft_source(item, candidate_arguments):
@@ -1558,12 +1582,32 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("candidate descriptor splice", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][0].update(candidate=copy.deepcopy(reference_records[0]))),
+            ("compiled role omits detailed coverage", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][0].pop("compiled_coverage_projection")),
+            ("compiled role carries reference closure", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][0].update(reference_execution_closure=content("f", 107))),
+            ("reference role carries compiled coverage", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][1].update(compiled_coverage_projection=copy.deepcopy(coverage))),
+            ("reference role omits closure", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][1].pop("reference_execution_closure")),
             ("candidate plan splice", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][1].update(authenticated_plan=content("e", 105))),
             ("candidate nonce splice", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][2]["authenticated_nonce"].update(value="b" * 64)),
+            ("reference closure splice", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][2].update(reference_execution_closure=content("f", 107))),
+            ("duplicate reference closure", lambda item, args: item[
+                "reference_candidates"
+            ][1].update(execution_closure=copy.deepcopy(
+                reference_execution_closures[0]
+            ))),
             ("candidate PFT bit", lambda item, args: args[
                 "authenticated_candidate_descriptors"
             ][1].update(pft_used=True)),
@@ -1600,6 +1644,11 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ][2]["semantic_projection"]["theorems"][0].update(
                 theorem_sha256="0" * 64,
             )),
+            ("compiled coverage mismatch", lambda item, args: args[
+                "authenticated_candidate_descriptors"
+            ][0]["compiled_coverage_projection"]["action_events"][
+                "records"
+            ][0].update(source_sha256="0" * 64)),
             ("coverage mismatch", change_coverage),
         )
         for label, mutate in cases:

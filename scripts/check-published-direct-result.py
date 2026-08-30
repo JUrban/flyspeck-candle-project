@@ -1211,7 +1211,7 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
                     "sources": source_inventory,
                 }
                 descriptor = {
-                    "schema": 1,
+                    "schema": 2,
                     "kind": descriptor_kind,
                     "role": project_protocol.COMPILED_COMPARISON_ROLE,
                     "ordinal": 0,
@@ -1226,7 +1226,10 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
                     },
                     "authenticated_plan": capture["authenticated_plan"],
                     "semantic_projection": capture["semantic_projection"],
-                    "coverage_projection": capture["coverage_projection"],
+                    "cross_runtime_coverage_projection":
+                        capture["cross_runtime_coverage_projection"],
+                    "compiled_coverage_projection":
+                        capture["coverage_projection"],
                     "candidate_authority": candidate_authority,
                     "pft_used": False,
                 }

@@ -179,7 +179,8 @@ class PublishedDirectResultTests(unittest.TestCase):
             {
                 "schema", "kind", "role", "ordinal", "candidate",
                 "authenticated_nonce", "authenticated_plan",
-                "semantic_projection", "coverage_projection",
+                "semantic_projection", "cross_runtime_coverage_projection",
+                "compiled_coverage_projection",
                 "candidate_authority", "pft_used",
             },
         )
@@ -196,6 +197,7 @@ class PublishedDirectResultTests(unittest.TestCase):
             "receipt['attempt_nonce']",
             "capture['authenticated_plan']",
             "capture['semantic_projection']",
+            "capture['cross_runtime_coverage_projection']",
             "capture['coverage_projection']",
             "'candidate_authority': candidate_authority",
             "'pft_used': False",
