@@ -445,7 +445,8 @@ V4_BUILD_EVENT_KINDS = (
 )
 V4_BUILD_EVENT_NONNULL_FIELDS = {
     "namespace-clone": (
-        "subject_task_identity", "ptrace_event_message", "task_transition",
+        "actor_task_identity", "subject_task_identity",
+        "ptrace_event_message", "task_transition",
     ),
     "initial-stop": (
         "subject_task_identity", "raw_wait_status", "reinject_signal",
@@ -496,13 +497,16 @@ V4_BUILD_EVENT_NONNULL_FIELDS = {
         "subject_task_identity", "raw_wait_status", "task_transition",
     ),
     "pre-output-walk": (
-        "root_entry_index", "fd_generation", "object_edge",
+        "actor_task_identity", "root_entry_index", "fd_generation",
+        "object_edge",
     ),
     "post-output-walk": (
-        "root_entry_index", "fd_generation", "object_edge",
+        "actor_task_identity", "root_entry_index", "fd_generation",
+        "object_edge",
     ),
     "output-hash-barrier": (
-        "root_entry_index", "fd_generation", "object_edge",
+        "actor_task_identity", "root_entry_index", "fd_generation",
+        "object_edge",
     ),
 }
 V4_BUILD_OUTPUT_ROLES = (
@@ -629,6 +633,8 @@ V4_AUTHORITY_OBJECT_READ_MAX_BYTES = 33_554_433
 V4_FIXED_SOURCE_MAX_BYTES = 16_777_216
 V4_STARTUP_DESIGN_MAX_BYTES = 1_048_576
 V4_AUTHORITY_CAPSULE_DECODED_MAX_BYTES = 437_256_192
+V4_EXACT_JSON_TYPE_NODE_MAX = 262_144
+V4_EXACT_JSON_TYPE_DEPTH_MAX = 64
 V4_REQUEST_RESULT_PAYLOAD_MAX_BYTES = 67_108_864
 V4_REQUEST_RESULT_HEADER_BYTES = 38
 V4_COLLECTION_RECORD_MAX_BYTES = 67_108_864
@@ -1362,19 +1368,37 @@ def enumerate_isolated_native_build_filter_v1() -> dict[str, Any]:
 
 
 def _require_v4_exact_json_types(value: object, label: str) -> None:
-    if value is None or type(value) in {bool, int, str}:
-        return
-    if type(value) is list:
-        for index, item in enumerate(value):
-            _require_v4_exact_json_types(item, f"{label}[{index}]")
-        return
-    if type(value) is dict:
-        require(all(type(key) is str for key in value),
-                f"malformed {label} key type")
-        for key, item in value.items():
-            _require_v4_exact_json_types(item, f"{label}.{key}")
-        return
-    raise ProtocolError(f"malformed {label} JSON type")
+    stack = [(value, label, 0)]
+    node_count = 1
+    while stack:
+        item, item_label, depth = stack.pop()
+        require(depth <= V4_EXACT_JSON_TYPE_DEPTH_MAX,
+                f"{label} JSON depth exceeds cap")
+        if item is None or type(item) in {bool, int, str}:
+            continue
+        if type(item) is list:
+            child_count = len(item)
+            require(
+                node_count + child_count <= V4_EXACT_JSON_TYPE_NODE_MAX,
+                f"{label} JSON node count exceeds cap",
+            )
+            node_count += child_count
+            for index, child in enumerate(item):
+                stack.append((child, f"{item_label}[{index}]", depth + 1))
+            continue
+        if type(item) is dict:
+            require(all(type(key) is str for key in item),
+                    f"malformed {item_label} key type")
+            child_count = len(item)
+            require(
+                node_count + child_count <= V4_EXACT_JSON_TYPE_NODE_MAX,
+                f"{label} JSON node count exceeds cap",
+            )
+            node_count += child_count
+            for key, child in item.items():
+                stack.append((child, f"{item_label}.{key}", depth + 1))
+            continue
+        raise ProtocolError(f"malformed {item_label} JSON type")
 
 
 def validate_isolated_native_build_filter(value: object) -> dict[str, Any]:

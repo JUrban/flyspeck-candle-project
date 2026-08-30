@@ -923,10 +923,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 177)
+        self.assertEqual(len(values), 179)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "e29c9d345451feefcf2d739cd3345701ebe593bf17890d9936b4f2f315eefd7d",
+            "64d12dcd484cd20053553366545872ae89e220de19e28a9120219fb289cfbe9a",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1410,6 +1410,28 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 subject.ProtocolError,
             ):
                 subject.validate_isolated_native_build_filter(forge)
+        deeply_nested: object = None
+        for _ in range(subject.V4_EXACT_JSON_TYPE_DEPTH_MAX + 1):
+            deeply_nested = [deeply_nested]
+        with self.assertRaisesRegex(subject.ProtocolError, "depth exceeds cap"):
+            subject.validate_isolated_native_build_filter({
+                **authority, "decoded_policy": deeply_nested,
+            })
+        cyclic: list[object] = []
+        cyclic.append(cyclic)
+        with self.assertRaisesRegex(subject.ProtocolError, "depth exceeds cap"):
+            subject.validate_isolated_native_build_filter({
+                **authority, "decoded_policy": cyclic,
+            })
+        with self.assertRaisesRegex(
+            subject.ProtocolError, "node count exceeds cap",
+        ):
+            subject.validate_isolated_native_build_filter({
+                **authority,
+                "decoded_policy": (
+                    [None] * subject.V4_EXACT_JSON_TYPE_NODE_MAX
+                ),
+            })
 
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
