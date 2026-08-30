@@ -178,6 +178,7 @@ def make_authority(
                 "path": "candle/fingerprint.ml",
                 "bytes": 101,
                 "sha256": semantic["serializer"]["sha256"],
+                "md5": "b" * 32,
             },
             "final_target": {
                 "path": "candle/flyspeck_l2_target.ml",
@@ -392,7 +393,7 @@ def make_transcript(
     cursor += 1
     events.append(make_loader_event(
         cursor, "post-action", None, subject.SERIALIZER_SOURCE,
-        serializer["bytes"], serializer["sha256"], "b" * 32,
+        serializer["bytes"], serializer["sha256"], serializer["md5"],
         plan["session_nonce"],
     ))
     actions = {
@@ -815,6 +816,18 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 )
             rehash_events(item)
 
+        def reverse_bootstrap_anchors(item: dict) -> None:
+            hol_light, strictbuild = item["loader_events"][:2]
+            for field in ("logical_source", "basename", "bytes", "sha256", "md5"):
+                hol_light[field], strictbuild[field] = (
+                    strictbuild[field], hol_light[field]
+                )
+            rehash_events(item)
+
+        def mutate_serializer_md5(item: dict) -> None:
+            item["loader_events"][-1]["md5"] = "c" * 32
+            rehash_events(item)
+
         mutations = [
             ("transcript splice", lambda item: item["transcript"].update(
                 sha256="0" * 64
@@ -833,7 +846,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 session_nonce="0" * 64
             )),
             ("missing post event", lambda item: item["loader_events"].pop()),
+            ("reversed bootstrap anchors", reverse_bootstrap_anchors),
             ("reversed final observations", reverse_final_observations),
+            ("serializer MD5", mutate_serializer_md5),
             ("LP stream", lambda item: item["lp_successes"]["records"][0].update(
                 successful_deserialization_count=0
             )),

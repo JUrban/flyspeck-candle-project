@@ -400,8 +400,20 @@ def _validate_authority(value: object) -> dict[str, Any]:
                 "action_plan", "source_inventory", "generated_inputs",
                 "serializer", "final_target",
             }, "malformed pristine reference input authority")
-    for name, record in inputs.items():
+    for name in ("action_plan", "source_inventory", "generated_inputs",
+                 "final_target"):
+        record = inputs[name]
         _named_content_record(record, f"{name} input")
+    serializer = inputs["serializer"]
+    require(isinstance(serializer, dict) and set(serializer) == {
+                "path", "bytes", "sha256", "md5",
+            }, "malformed serializer input")
+    _safe_relative(serializer.get("path"), "serializer input path")
+    _content_record(
+        {"bytes": serializer.get("bytes"), "sha256": serializer.get("sha256")},
+        "serializer input",
+    )
+    _hex(serializer.get("md5"), HEX32, "serializer input MD5")
     require(inputs["serializer"]["path"] == "candle/fingerprint.ml" and
             inputs["final_target"]["path"] ==
             "candle/flyspeck_l2_target.ml",
@@ -807,6 +819,12 @@ def validate_native_execution_closure(
             all(event["phase"] == "post-action" and
                 event["action_index"] is None for event in events[final:]),
             "native loader bootstrap/post-action phase mismatch")
+    bootstrap_keys = [event["logical_source"] for event in events[:initial]]
+    require(HOL_LIGHT_SOURCE in bootstrap_keys and
+            STRICTBUILD_SOURCE in bootstrap_keys and
+            bootstrap_keys.index(HOL_LIGHT_SOURCE) <
+            bootstrap_keys.index(STRICTBUILD_SOURCE),
+            "native bootstrap lacks ordered HOL Light/strictbuild anchors")
 
     plan_actions = plan["actions"]["records"]
     for index, (binding, action) in enumerate(zip(
@@ -850,6 +868,9 @@ def validate_native_execution_closure(
         require(event["bytes"] == claimed["bytes"] and
                 event["sha256"] == claimed["sha256"],
                 f"native {input_name} differs from authority")
+        if input_name == "serializer":
+            require(event["md5"] == claimed["md5"],
+                    "native serializer MD5 differs from authority")
 
     lp_successes = _validate_lp_successes(value.get("lp_successes"), plan)
     require(lp_successes == transcript["lp_successes"],
