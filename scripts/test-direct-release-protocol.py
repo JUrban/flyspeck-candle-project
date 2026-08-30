@@ -1271,6 +1271,9 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("semantic projection", lambda item: item[
                 "semantic_projection"
             ]["theorems"][0].update(theorem_sha256="0" * 64)),
+            ("cross-runtime projection", lambda item: item[
+                "cross_runtime_coverage_projection"
+            ]["actions"]["records"][0].update(original_sha256="0" * 64)),
             ("approval", lambda item: item.update(approval_included=True)),
             ("direct S2", lambda item: item.update(
                 direct_s2_execution_approved=True,

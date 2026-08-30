@@ -64,10 +64,10 @@ CROSS_RUNTIME_EXECUTION_SELECTION_SEMANTICS = (
     "bind-candle-plan-selection-without-cross-runtime-execution-claim-v1"
 )
 AUTHENTICATED_CAPTURE_KIND = (
-    "candle-flyspeck-authenticated-direct-schema6-capture-v1"
+    "candle-flyspeck-authenticated-direct-schema6-capture-v2"
 )
 AUTHENTICATED_CAPTURE_POLICY = (
-    "descriptor-held-schema6-revalidation-and-content-bound-projection-v1"
+    "descriptor-held-schema6-revalidation-and-content-bound-projections-v2"
 )
 COMPILED_DIRECT_CANDIDATE_KIND = AUTHENTICATED_CAPTURE_KIND
 INDEPENDENT_COMPARISON_KIND = (
@@ -1940,6 +1940,7 @@ def validate_authenticated_schema6_capture(
     fields = {
         "schema", "kind", "boundary_id", "action_count", "receipt",
         "authenticated_plan", "semantic_projection", "coverage_projection",
+        "cross_runtime_coverage_projection",
         "authority", "promotion", "approval_included",
         "direct_s2_execution_approved", "direct_s3_coverage_approved",
         "v1_3_s3_release_approved", "pft_used", "s2_s3_evidence",
@@ -1970,6 +1971,9 @@ def validate_authenticated_schema6_capture(
         _hex(record.get("md5"), HEX32, f"direct capture {field} MD5")
     validate_semantic_projection(value.get("semantic_projection"))
     validate_coverage_projection(value.get("coverage_projection"))
+    validate_cross_runtime_coverage_projection(
+        value.get("cross_runtime_coverage_projection")
+    )
     authority = _validate_capture_authority(value.get("authority"))
     expected = _validate_capture_authority(expected_authority)
 
@@ -1990,8 +1994,13 @@ def validate_authenticated_schema6_capture(
     coverage = coverage_projection_from_schema6(
         receipt, authenticated_plan,
     )
+    cross_runtime_coverage = cross_runtime_coverage_projection_from_schema6(
+        receipt, authenticated_plan,
+    )
     require(value["semantic_projection"] == semantic and
-            value["coverage_projection"] == coverage,
+            value["coverage_projection"] == coverage and
+            value["cross_runtime_coverage_projection"] ==
+            cross_runtime_coverage,
             "direct capture projections differ from bound source content")
     return value
 
@@ -2018,6 +2027,10 @@ def build_authenticated_schema6_capture(
         "coverage_projection": coverage_projection_from_schema6(
             receipt, authenticated_plan,
         ),
+        "cross_runtime_coverage_projection":
+            cross_runtime_coverage_projection_from_schema6(
+                receipt, authenticated_plan,
+            ),
         "authority": authority,
         "promotion": False,
         "approval_included": False,
