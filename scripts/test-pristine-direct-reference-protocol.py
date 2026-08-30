@@ -2995,10 +2995,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 384)
+        self.assertEqual(len(values), 391)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "d45871ad16dd89b25f215daef29bb76c42b092a920580962aebffb6ddaec5990",
+            "21b21b662966fe57eccd045e599e705b68d2f1e0d32b5d9fba3d0a6411c3b13d",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -3480,6 +3480,20 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         compiler["version"] = "mutated caller"
         self.assertEqual(snapshot["compiler"]["version"], "cc fixture")
         compiler["version"] = "cc fixture"
+        linker["version"] = "mutated caller"
+        source_tree["files"][0]["relative"] = "mutated.c"
+        runtime_inputs[0]["content"]["path"] = "include/mutated.h"
+        self.assertEqual(snapshot["linker"]["version"], "ld fixture")
+        self.assertEqual(
+            snapshot["source_tree"]["files"][0]["relative"], "main.c",
+        )
+        self.assertEqual(
+            snapshot["runtime_inputs"][0]["content"]["path"],
+            "include/runtime.h",
+        )
+        linker["version"] = "ld fixture"
+        source_tree["files"][0]["relative"] = "main.c"
+        runtime_inputs[0]["content"]["path"] = "include/runtime.h"
         detached = copy.deepcopy(authority)
         detached_snapshot = (
             subject.validate_v4_build_input_closure_entry_authority(
@@ -3496,14 +3510,18 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "parent",
         )
 
-        file_index = next(
+        file_indices = [
             entry["index"] for entry in entries
             if entry["object_type"] == "ordinary-file"
-        )
-        directory_index = next(
+        ]
+        directory_indices = [
             entry["index"] for entry in entries
             if entry["object_type"] == "directory"
-        )
+        ]
+        self.assertGreaterEqual(len(file_indices), 2)
+        self.assertGreaterEqual(len(directory_indices), 2)
+        file_index = file_indices[0]
+        directory_index = directory_indices[0]
 
         def hostile(mutator: object, *, rehash: bool = True) -> dict[str, object]:
             value = copy.deepcopy(authority)
@@ -3513,6 +3531,14 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                     value["entries"],
                 )
             return value
+
+        def duplicate_stable_object(
+            value: dict[str, object], source_index: int, target_index: int,
+        ) -> None:
+            source = value["entries"][source_index]
+            target = value["entries"][target_index]
+            for field in ("mount_id", "st_dev", "st_ino"):
+                target[field] = source[field]
 
         mutations = (
             lambda value: value.update(entry_count=True),
@@ -3552,6 +3578,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ),
             lambda value: value["entries"][directory_index].update(
                 stable_generation=0,
+            ),
+            lambda value: duplicate_stable_object(
+                value, file_indices[0], file_indices[1],
+            ),
+            lambda value: duplicate_stable_object(
+                value, directory_indices[0], directory_indices[1],
             ),
             lambda value: value.update(compiler_entry_index=True),
             lambda value: value.update(
@@ -3604,12 +3636,128 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 compiler, linker, source_tree, runtime_inputs, entry_subclass,
             )
 
+        real_bounded_digest = subject._v4_bounded_compact_canonical_digest
+        raced = copy.deepcopy(authority)
+        digest_calls = 0
+
+        def mutate_between_frozen_captures(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 1:
+                raced["entries"][0]["parent_descriptor_identity"][
+                    "fixture"
+                ] = "raced"
+                raced["ordered_entry_sha256"] = subject.canonical_sha256(
+                    raced["entries"],
+                )
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_between_frozen_captures,
+        ), self.assertRaisesRegex(subject.ProtocolError, "changed while freezing"):
+            subject.validate_v4_build_input_closure_entry_authority(
+                compiler, linker, source_tree, runtime_inputs, raced,
+            )
+
+        post_freeze = copy.deepcopy(authority)
+        digest_calls = 0
+
+        def mutate_caller_after_frozen_digest(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 2:
+                post_freeze["entries"][0]["parent_descriptor_identity"][
+                    "fixture"
+                ] = "late caller mutation"
+                post_freeze["ordered_entry_sha256"] = subject.canonical_sha256(
+                    post_freeze["entries"],
+                )
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_caller_after_frozen_digest,
+        ):
+            stable_snapshot = (
+                subject.validate_v4_build_input_closure_entry_authority(
+                    compiler, linker, source_tree, runtime_inputs, post_freeze,
+                )
+            )
+        self.assertEqual(
+            post_freeze["entries"][0]["parent_descriptor_identity"]["fixture"],
+            "late caller mutation",
+        )
+        self.assertEqual(
+            stable_snapshot["entry_authority"]["entries"][0][
+                "parent_descriptor_identity"
+            ]["fixture"],
+            "parent",
+        )
+
+        oversized_version = copy.deepcopy(compiler)
+        oversized_version["version"] = "v" * 9
+        with mock.patch.object(
+            subject, "V4_BUILD_EXECUTABLE_VERSION_MAX_BYTES", 8,
+        ), self.assertRaisesRegex(subject.ProtocolError, "version"):
+            subject.validate_v4_build_input_closure_entry_authority(
+                oversized_version, linker, source_tree, runtime_inputs,
+                authority,
+            )
+
+        def identity_authority(identity: object) -> dict[str, object]:
+            value = copy.deepcopy(authority)
+            value["entries"][0]["parent_descriptor_identity"] = identity
+            value["ordered_entry_sha256"] = subject.canonical_sha256(
+                value["entries"],
+            )
+            return value
+
+        nested_identity: object = "terminal"
+        for _ in range(subject.V4_EXACT_JSON_TYPE_DEPTH_MAX + 1):
+            nested_identity = [nested_identity]
+        preflight_cases = (
+            identity_authority(nested_identity),
+            identity_authority({"k" * 256: 0}),
+            identity_authority("s" * 4_097),
+            identity_authority(10 ** subject.JSON_INTEGER_MAX_DIGITS),
+            identity_authority("\ud800"),
+        )
+        for malformed in preflight_cases:
+            with self.subTest(preflight=malformed), mock.patch.object(
+                subject, "_v4_bounded_compact_canonical_digest",
+                side_effect=AssertionError("encoding reached before preflight"),
+            ), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_input_closure_entry_authority(
+                    compiler, linker, source_tree, runtime_inputs, malformed,
+                )
+
         encoded_authority = subject.canonical_value_bytes(authority)
+        encoded_graph = subject.canonical_value_bytes({
+            "compiler": compiler,
+            "linker": linker,
+            "source_tree": source_tree,
+            "runtime_inputs": runtime_inputs,
+            "entry_authority": authority,
+        })
         cap_cases = (
             ("V4_BUILD_INPUT_CLOSURE_ENTRY_MAX", len(entries) - 1),
             ("V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES", 100),
             ("V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES", total_file_bytes - 1),
             ("V4_AUTHORITY_OBJECT_MAX_BYTES", len(encoded_authority) - 1),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_NODE_MAX", 10),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_CONTAINER_MAX", 5),
+            (
+                "V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES",
+                len(encoded_graph) - 1,
+            ),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_FRAGMENT_MAX_BYTES", 10),
         )
         for constant, cap in cap_cases:
             with self.subTest(constant=constant), mock.patch.object(
