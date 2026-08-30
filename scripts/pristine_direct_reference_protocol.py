@@ -273,6 +273,43 @@ V4_SOURCE_REDERIVATION_PREIMAGE_KIND = (
 )
 
 V4_NATIVE_SOURCE_TREE_KIND = "candle-flyspeck-native-source-tree-v1"
+V4_NATIVE_SOURCE_TREE_SCHEMA = 1
+V4_NATIVE_SOURCE_TREE_ROOT_POLICY = (
+    "held-root-no-follow-safe-relative-files-v1"
+)
+V4_NATIVE_SOURCE_TREE_ROLES = (
+    "attempt-supervisor",
+    "request-generation-python",
+    "collection-python",
+    "dash-runtime",
+)
+V4_SAFE_RELATIVE_MAX_BYTES = 4_096
+V4_SAFE_PATH_COMPONENT_MAX_BYTES = 255
+V4_SOURCE_TREE_DATA_MODE = 33_060
+V4_SOURCE_TREE_EXECUTABLE_MODE = 33_133
+V4_REGULAR_0600_MODE = 33_152
+V4_REGULAR_0444_MODE = 33_060
+V4_DIRECTORY_0700_MODE = 16_832
+V4_ORDERED_LIST_ENCODING = "compact-canonical-json-list-v1"
+V4_TRACE_CHUNK_DIGEST_DOMAIN = "CANDLE_V4_TRACE_CHUNKS_V1"
+V4_TRACE_RECORD_DIGEST_DOMAIN = "CANDLE_V4_TRACE_RECORDS_V1"
+V4_BUILD_RUNTIME_INPUT_ROLES = (
+    "compiler-runtime",
+    "linker-runtime",
+    "header",
+    "startup-object",
+    "linker-script",
+    "static-library",
+    "shared-library",
+    "dynamic-loader",
+    "runtime-data",
+)
+V4_RUNTIME_MEMBER_ROLES = (
+    "python-standard-library",
+    "python-native-extension",
+    "elf-library",
+    "runtime-data",
+)
 V4_NATIVE_BUILD_RECEIPT_KIND = (
     "candle-flyspeck-isolated-native-build-receipt-v1"
 )
@@ -303,11 +340,20 @@ V4_POSITIONAL_REQUEST_BINDING_POLICY = (
 V4_EMPTY_STDIN_BINDING_KIND = (
     "candle-flyspeck-pristine-empty-stdin-binding-v1"
 )
+V4_EMPTY_STDIN_BINDING_POLICY = (
+    "trace-joined-supervisor-closed-pipe-eof-v1"
+)
 V4_SOURCE_CONSUMPTION_JOINS_KIND = (
     "candle-flyspeck-pristine-source-consumption-joins-v1"
 )
+V4_SOURCE_CONSUMPTION_JOINS_POLICY = (
+    "stock-ledger-private-object-content-join-v1"
+)
 V4_LP_DESERIALIZER_JOINS_KIND = (
     "candle-flyspeck-pristine-lp-deserializer-joins-v1"
+)
+V4_LP_DESERIALIZER_JOINS_POLICY = (
+    "successful-deserializer-private-object-marker-join-v1"
 )
 V4_LP_WRAPPER_CONTRACT = "original-deserializer-return-before-marker-v1"
 V4_NAMESPACE_REVALIDATION_KIND = "candle-flyspeck-v4-namespace-revalidation-v1"

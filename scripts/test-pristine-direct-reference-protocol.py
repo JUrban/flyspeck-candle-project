@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import importlib.util
+import json
 import math
 from pathlib import Path
 import sys
@@ -861,6 +862,33 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "approval_included", "pft_used", "s2_eligible", "s3_eligible",
             "s2_s3_evidence",
         }))
+
+    def test_complete_v4_constant_table_fingerprint(self) -> None:
+        def normalize(value: object) -> object:
+            if isinstance(value, frozenset):
+                return {"frozenset": sorted(normalize(item) for item in value)}
+            if isinstance(value, tuple):
+                return {"tuple": [normalize(item) for item in value]}
+            if isinstance(value, dict):
+                return {
+                    key: normalize(item)
+                    for key, item in sorted(value.items())
+                }
+            return value
+
+        values = {
+            name: normalize(getattr(subject, name))
+            for name in dir(subject)
+            if name.startswith("V4_") and name.isupper()
+        }
+        encoded = json.dumps(
+            values, sort_keys=True, separators=(",", ":"), allow_nan=False,
+        ).encode()
+        self.assertEqual(len(values), 139)
+        self.assertEqual(
+            hashlib.sha256(encoded).hexdigest(),
+            "4e5da349f39c4d60cd2fad6bc2fbb38f8c9f9d5473b87d471cddcb47598062de",
+        )
 
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
