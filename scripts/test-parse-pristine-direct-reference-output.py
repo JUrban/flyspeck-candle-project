@@ -720,6 +720,14 @@ class PristineOutputParserTests(unittest.TestCase):
             ):
                 subject._read_frame(b"536870912:x", 0, "hostile payload")
 
+        with mock.patch("builtins.int", side_effect=AssertionError(
+            "integer conversion must not run before remaining-byte rejection",
+        )):
+            with self.assertRaisesRegex(
+                subject.OutputProtocolError, "frame exceeds remaining bytes",
+            ):
+                subject._read_frame(b"2:x", 0, "small missing payload")
+
     def test_well_formed_dependency_substitution_is_only_raw_projection_drift(self) -> None:
         baseline = semantic_lines(self.plan)
         original = self.decode_semantic(baseline)
