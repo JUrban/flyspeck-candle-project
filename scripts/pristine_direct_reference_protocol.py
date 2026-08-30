@@ -43,6 +43,16 @@ INCOMPLETE_SOURCE_REDERIVATION_KIND = (
 SEMANTIC_COMPLETION_KIND = (
     "candle-flyspeck-pristine-direct-semantic-completion-observation-v1"
 )
+SEMANTIC_COMPLETE_STATUS = "complete-observed-unapproved"
+COVERAGE_INCOMPLETE_STATUS = (
+    "not-derived-requires-authenticated-inventory-and-generated-inputs"
+)
+FINAL_THEOREM_NAMES = (
+    "Linear_programming_results.linear_programming_results_th",
+    "Mk_all_ineq.the_nonlinear_inequalities",
+    "The_kepler_conjecture.tame_nonlinear_imp_kepler_conjecture",
+    "Candle_flyspeck_l2.tame_imp_kepler_conjecture",
+)
 AUTHORITY_POLICY = (
     "exact-clean-project-hol-light-flyspeck-runtime-tool-and-input-authority-v3"
 )
@@ -983,6 +993,8 @@ def _direct_protocol() -> ModuleType:
             REFERENCE_ROLE and
             getattr(module, "REFERENCE_COMPARISON_NONCE_KIND", None) ==
             REFERENCE_NONCE_KIND and
+            tuple(getattr(module, "FINAL_THEOREM_NAMES", ())) ==
+            FINAL_THEOREM_NAMES and
             isinstance(getattr(module, "CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS", None),
                        tuple) and
             all(type(item) is str for item in
@@ -991,6 +1003,158 @@ def _direct_protocol() -> ModuleType:
             CANDLE_ONLY_REFERENCE_EXCLUSIONS,
             "incompatible direct-release protocol sibling")
     return module
+
+
+def validate_semantic_completion_observation(
+    value: object, plan: object, request: object, transcript: object,
+    semantic_projection: object,
+) -> dict[str, Any]:
+    plan = validate_raw_plan(plan)
+    request = validate_raw_request(request, plan)
+    transcript = validate_raw_transcript(transcript, plan, request)
+    direct = _direct_protocol()
+    try:
+        semantic_projection = direct.validate_semantic_projection(
+            semantic_projection,
+        )
+    except direct.ProtocolError as error:
+        raise ProtocolError(
+            f"invalid pristine semantic projection: {error}"
+        ) from error
+    fields = {
+        "schema", "kind", "status", "role", "reference_ordinal",
+        "nonce_kind", "session_nonce", "boundary_id", "plan", "request",
+        "transcript", "theorem_count", "dependency_count",
+        "ordered_theorem_name_sha256", "semantic_projection",
+        "approved_reference_present", "dependency_history_is_kernel_trace",
+        "pft_used", "s2_s3_evidence",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            is_int(value.get("schema")) and value["schema"] == 1 and
+            value.get("kind") == SEMANTIC_COMPLETION_KIND and
+            value.get("status") == SEMANTIC_COMPLETE_STATUS and
+            is_int(value.get("theorem_count")) and
+            value["theorem_count"] == len(FINAL_THEOREM_NAMES) and
+            is_int(value.get("dependency_count")) and
+            value["dependency_count"] == len(FINAL_THEOREM_NAMES) and
+            value.get("ordered_theorem_name_sha256") ==
+            canonical_sha256(list(FINAL_THEOREM_NAMES)) and
+            value.get("approved_reference_present") is False and
+            value.get("dependency_history_is_kernel_trace") is False and
+            value.get("pft_used") is False and
+            value.get("s2_s3_evidence") is False,
+            "malformed or overclaiming pristine semantic completion observation")
+    _validate_role_nonce(value, "pristine semantic completion observation")
+    _same_run(value, plan, "pristine semantic completion observation")
+    for field, expected in (
+        ("plan", content_record(plan)),
+        ("request", content_record(request)),
+        ("transcript", content_record(transcript)),
+        ("semantic_projection", content_record(semantic_projection)),
+    ):
+        require_exact_json(
+            value.get(field), expected,
+            f"pristine semantic completion {field} content",
+        )
+    return value
+
+
+def validate_source_rederivation(
+    value: object, plan: object, request: object,
+) -> dict[str, Any]:
+    plan = validate_raw_plan(plan)
+    request = validate_raw_request(request, plan)
+    fields = {
+        "schema", "kind", "role", "reference_ordinal", "nonce_kind",
+        "session_nonce", "boundary_id", "plan", "request", "stdout",
+        "stderr", "process_result", "transcript", "native_execution_closure",
+        "semantic_projection", "semantic_completion_observation",
+        "cross_runtime_coverage", "semantic_status", "coverage_status",
+        "authentication_status", "candidate_included", "approval_included",
+        "promotion_allowed", "pft_used", "s2_eligible", "s3_eligible",
+        "s2_s3_evidence",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            is_int(value.get("schema")) and
+            value["schema"] == RAW_PROTOCOL_SCHEMA and
+            value.get("kind") == SOURCE_REDERIVATION_KIND and
+            value.get("semantic_status") == SEMANTIC_COMPLETE_STATUS and
+            value.get("coverage_status") == COVERAGE_INCOMPLETE_STATUS and
+            value.get("cross_runtime_coverage") is None and
+            value.get("authentication_status") == "not-authenticated" and
+            value.get("candidate_included") is False and
+            value.get("approval_included") is False and
+            value.get("promotion_allowed") is False and
+            value.get("pft_used") is False and
+            value.get("s2_eligible") is False and
+            value.get("s3_eligible") is False and
+            value.get("s2_s3_evidence") is False,
+            "malformed or overclaiming pristine source rederivation")
+    _validate_role_nonce(value, "pristine source rederivation")
+    _same_run(value, plan, "pristine source rederivation")
+    require_exact_json(
+        value.get("plan"), content_record(plan),
+        "pristine source rederivation plan content",
+    )
+    require_exact_json(
+        value.get("request"), content_record(request),
+        "pristine source rederivation request content",
+    )
+    stdout = _content_record(
+        value.get("stdout"), "source-rederivation stdout",
+    )
+    stderr = _content_record(
+        value.get("stderr"), "source-rederivation stderr", allow_empty=True,
+    )
+    require(stdout["bytes"] <= plan["retained_stdout_max_bytes"] and
+            stderr["bytes"] == plan["retained_stderr_max_bytes"],
+            "source-rederivation output content exceeds retained caps")
+    process_result = value.get("process_result")
+    require(isinstance(process_result, dict) and set(process_result) == {
+                "exit_code", "timed_out",
+            } and is_int(process_result.get("exit_code")) and
+            process_result["exit_code"] == 0 and
+            process_result.get("timed_out") is False,
+            "source-rederivation process result is not exact success")
+    transcript = validate_raw_transcript(
+        value.get("transcript"), plan, request,
+    )
+    require_exact_json(
+        stdout, transcript["stdout"],
+        "source-rederivation stdout versus transcript",
+    )
+    require_exact_json(
+        stderr, transcript["stderr"],
+        "source-rederivation stderr versus transcript",
+    )
+    require(process_result["exit_code"] == transcript["exit_code"] and
+            process_result["timed_out"] is transcript["timed_out"],
+            "source-rederivation process result differs from transcript")
+    native_closure = validate_native_execution_closure(
+        value.get("native_execution_closure"), plan, request, transcript,
+    )
+    direct = _direct_protocol()
+    try:
+        semantic_projection = direct.validate_semantic_projection(
+            value.get("semantic_projection"),
+        )
+    except direct.ProtocolError as error:
+        raise ProtocolError(
+            f"invalid source-rederivation semantic projection: {error}"
+        ) from error
+    serializer_event = native_closure["loader_events"][-1]
+    require(
+        semantic_projection["serializer"] == {
+            "path": serializer_event["logical_source"].partition(":")[2],
+            "sha256": serializer_event["sha256"],
+        },
+        "source-rederivation semantic serializer differs from native closure",
+    )
+    validate_semantic_completion_observation(
+        value.get("semantic_completion_observation"), plan, request,
+        transcript, semantic_projection,
+    )
+    return value
 
 
 def validate_raw_candidate(
@@ -1063,6 +1227,15 @@ def validate_canonical_native_closure_bytes(
         lambda value: validate_native_execution_closure(
             value, plan, request, transcript,
         ),
+    )
+
+
+def validate_canonical_source_rederivation_bytes(
+    data: bytes, plan: object, request: object,
+) -> dict[str, Any]:
+    return validate_canonical_bytes(
+        data, "pristine source rederivation",
+        lambda value: validate_source_rederivation(value, plan, request),
     )
 
 
