@@ -2496,6 +2496,131 @@ def validate_v4_build_rseq_registration(value: object) -> dict[str, Any]:
     return result
 
 
+def validate_v4_build_credentials(
+    value: object, cap_last_cap: object,
+) -> dict[str, Any]:
+    label = "V4 build credentials"
+    result = _v4_exact_dict(value, V4_BUILD_INITIAL_CREDENTIAL_FIELDS, label)
+    for field in (
+        "real_uid", "effective_uid", "saved_uid", "fsuid", "real_gid",
+        "effective_gid", "saved_gid", "fsgid",
+    ):
+        _v4_uint(result.get(field), 32, f"{label} {field}")
+    validate_v4_build_supplementary_groups(result.get("supplementary_groups"))
+    securebits = _v4_uint(result.get("securebits"), 32, f"{label} securebits")
+    require(securebits & ~0xFF == 0, f"unknown {label} securebits")
+    validate_v4_build_capability_sets(result.get("capability_sets"), cap_last_cap)
+    require(result.get("no_new_privileges") in {0, 1},
+            f"malformed {label} no-new-privileges")
+    require(result.get("seccomp_mode") in {0, 2},
+            f"malformed {label} seccomp mode")
+    require(
+        is_int(result.get("seccomp_filter_count")) and
+        0 <= result["seccomp_filter_count"] <= V4_SECCOMP_INSTRUCTION_MAX and
+        (
+            (result["seccomp_mode"] == 0 and
+             result["seccomp_filter_count"] == 0) or
+            (result["seccomp_mode"] == 2 and
+             result["seccomp_filter_count"] > 0)
+        ),
+        f"malformed {label} seccomp state",
+    )
+    return result
+
+
+def validate_v4_build_task_control_state(value: object) -> dict[str, Any]:
+    label = "V4 build task-control state"
+    result = _v4_exact_dict(
+        value, V4_BUILD_INITIAL_TASK_CONTROL_STATE_FIELDS, label,
+    )
+    dispositions = result.get("signal_dispositions")
+    require(
+        result.get("signal_disposition_count") ==
+        V4_BUILD_SIGNAL_DISPOSITION_COUNT and
+        type(dispositions) is list and
+        len(dispositions) == V4_BUILD_SIGNAL_DISPOSITION_COUNT,
+        f"malformed {label} signal-disposition count/list",
+    )
+    for index, disposition in enumerate(dispositions):
+        item_label = f"{label} signal disposition {index}"
+        item = _v4_exact_dict(
+            disposition, V4_BUILD_INITIAL_SIGNAL_DISPOSITION_FIELDS, item_label,
+        )
+        require(item.get("signal_number") == index + 1,
+                f"malformed {item_label} number")
+        validate_v4_build_signal_action(item.get("action"))
+    require(
+        type(result.get("signal_disposition_sha256")) is str and
+        result["signal_disposition_sha256"] == canonical_sha256(dispositions),
+        f"{label} signal-disposition digest mismatch",
+    )
+    validate_v4_build_signal_set(result.get("blocked_signal_set"), blocked=True)
+    validate_v4_build_signal_set(result.get("pending_signal_set"))
+    validate_v4_build_signal_altstack(result.get("signal_altstack"))
+    _v4_uint(result.get("fs_base"), 64, f"{label} fs_base")
+    _v4_uint(result.get("gs_base"), 64, f"{label} gs_base")
+    clear_child_tid = result.get("clear_child_tid")
+    require(clear_child_tid is None or is_int(clear_child_tid),
+            f"malformed {label} clear_child_tid type")
+    if clear_child_tid is not None:
+        _v4_uint(clear_child_tid, 64, f"{label} clear_child_tid")
+    validate_v4_build_robust_list_registration(
+        result.get("robust_list_registration"),
+    )
+    validate_v4_build_rseq_registration(result.get("rseq_registration"))
+    personality = _v4_uint(result.get("personality"), 32,
+                           f"{label} personality")
+    require(
+        personality & V4_BUILD_PERSONALITY_STICKY_TIMEOUTS == 0,
+        f"unsupported {label} STICKY_TIMEOUTS personality",
+    )
+    return result
+
+
+def validate_v4_build_capability_sets_change(
+    value: object, cap_last_cap: object,
+    expected_changed_sets: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    label = "V4 build capability-sets change"
+    result = _v4_exact_dict(
+        value, V4_BUILD_TASK_TRANSITION_FIELDS["capability-sets-change"], label,
+    )
+    require(result.get("kind") == "capability-sets-change" and
+            is_int(result.get("index")) and result["index"] >= 0 and
+            is_int(result.get("task_index")) and result["task_index"] >= 0,
+            f"malformed {label} identity")
+    changed_sets = result.get("changed_sets")
+    require(
+        type(changed_sets) is list and changed_sets and
+        all(type(item) is str for item in changed_sets),
+        f"malformed {label} changed-set list",
+    )
+    canonical = [
+        name for name in V4_BUILD_CAPABILITY_SET_NAMES if name in changed_sets
+    ]
+    require(changed_sets == canonical,
+            f"unordered, duplicate or unknown {label} changed-set list")
+    if expected_changed_sets is not None:
+        require(
+            type(expected_changed_sets) is tuple and
+            changed_sets == list(expected_changed_sets),
+            f"unexpected {label} changed-set list",
+        )
+    before = validate_v4_build_capability_sets(
+        result.get("before_capability_sets"), cap_last_cap,
+    )
+    after = validate_v4_build_capability_sets(
+        result.get("after_capability_sets"), cap_last_cap,
+    )
+    actual_changed = [
+        name for name in V4_BUILD_CAPABILITY_SET_NAMES
+        if canonical_value_bytes(before[name]) != canonical_value_bytes(after[name])
+    ]
+    require(actual_changed == changed_sets,
+            f"{label} names do not equal changed values")
+    return result
+
+
 def require_exact_json(value: Any, expected: Any, label: str) -> None:
     try:
         value_bytes = canonical_value_bytes(value)

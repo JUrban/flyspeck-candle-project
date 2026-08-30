@@ -1734,7 +1734,111 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "enter-held-input-root", input_edge, setup_root_identity,
                 input_root_identity, input_root_fd_generation,
             )
+    def test_v4_credentials_task_control_and_capset_transition(self) -> None:
+        empty_digest = subject.canonical_sha256([])
+        empty_cap = {
+            "cap_last_cap": 40, "count": 0, "capabilities": [],
+            "ordered_capability_sha256": empty_digest,
+        }
+        empty_caps = {
+            name: copy.deepcopy(empty_cap)
+            for name in subject.V4_BUILD_CAPABILITY_SET_NAMES
+        }
+        credentials = {
+            "real_uid": 0, "effective_uid": 0, "saved_uid": 0, "fsuid": 0,
+            "real_gid": 0, "effective_gid": 0, "saved_gid": 0, "fsgid": 0,
+            "supplementary_groups": {
+                "count": 0, "gids": [], "ordered_gid_sha256": empty_digest,
+            },
+            "securebits": 0, "capability_sets": empty_caps,
+            "no_new_privileges": 1, "seccomp_mode": 2,
+            "seccomp_filter_count": 1,
+        }
+        self.assertIs(
+            subject.validate_v4_build_credentials(credentials, 40), credentials,
+        )
+        for bad in (
+            {**credentials, "real_uid": True},
+            {**credentials, "securebits": 0x100},
+            {**credentials, "seccomp_mode": 0, "seccomp_filter_count": 1},
+        ):
+            with self.subTest(credentials=bad), self.assertRaises(
+                subject.ProtocolError
+            ):
+                subject.validate_v4_build_credentials(bad, 40)
 
+        empty_signal_set = {
+            "raw_u64": 0, "count": 0, "signals": [],
+            "ordered_signal_sha256": empty_digest,
+        }
+        action = {
+            "handler": 0, "flags": 0, "restorer": 0,
+            "mask": empty_signal_set,
+        }
+        dispositions = [
+            {"signal_number": signal_number, "action": copy.deepcopy(action)}
+            for signal_number in range(1, 65)
+        ]
+        task_control = {
+            "signal_disposition_count": 64,
+            "signal_dispositions": dispositions,
+            "signal_disposition_sha256": subject.canonical_sha256(dispositions),
+            "blocked_signal_set": empty_signal_set,
+            "pending_signal_set": copy.deepcopy(empty_signal_set),
+            "signal_altstack": {"sp": 0, "flags": 2, "size": 0},
+            "fs_base": 0, "gs_base": 0, "clear_child_tid": None,
+            "robust_list_registration": {
+                "registered": False, "head": None, "length": 0,
+            },
+            "rseq_registration": {
+                "registered": False, "address": None, "length": 0,
+                "flags": 0, "signature": 0,
+            },
+            "personality": 0,
+        }
+        self.assertIs(
+            subject.validate_v4_build_task_control_state(task_control),
+            task_control,
+        )
+        for bad in (
+            {**task_control, "signal_disposition_count": True},
+            {**task_control, "signal_disposition_sha256": "0" * 64},
+            {
+                **task_control,
+                "personality": subject.V4_BUILD_PERSONALITY_STICKY_TIMEOUTS,
+            },
+        ):
+            with self.subTest(task_control=bad), self.assertRaises(
+                subject.ProtocolError
+            ):
+                subject.validate_v4_build_task_control_state(bad)
+
+        enabled_cap = {
+            "cap_last_cap": 40, "count": 1, "capabilities": [0],
+            "ordered_capability_sha256": subject.canonical_sha256([0]),
+        }
+        before_caps = copy.deepcopy(empty_caps)
+        after_caps = copy.deepcopy(empty_caps)
+        after_caps["effective"] = enabled_cap
+        change = {
+            "kind": "capability-sets-change", "index": 0, "task_index": 0,
+            "changed_sets": ["effective"],
+            "before_capability_sets": before_caps,
+            "after_capability_sets": after_caps,
+        }
+        self.assertIs(
+            subject.validate_v4_build_capability_sets_change(
+                change, 40, ("effective",),
+            ),
+            change,
+        )
+        for bad in (
+            {**change, "changed_sets": ["permitted"]},
+            {**change, "changed_sets": ["effective", "effective"]},
+            {**change, "index": True},
+        ):
+            with self.subTest(change=bad), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_capability_sets_change(bad, 40)
     def test_complete_v4_constant_table_fingerprint(self) -> None:
         def normalize(value: object) -> object:
             if isinstance(value, frozenset):
