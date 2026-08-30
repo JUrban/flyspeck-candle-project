@@ -92,6 +92,23 @@ def common_projections() -> tuple[dict, dict]:
         logical = next(record for record in closure["records"]
                        if record["key"] == old_key)
         logical["key"] = new_key
+    for new_key in (subject.HOL_LIGHT_SOURCE, subject.STRICTBUILD_SOURCE):
+        source = next(
+            record for record in inventory["records"]
+            if record["key"].startswith("flyspeck:fixture/extra-")
+        )
+        repository, path = new_key.split(":", 1)
+        source.update(key=new_key, repository=repository, path=path)
+        closure["records"].append({
+            "index": len(closure["records"]),
+            "key": new_key,
+            "original_bytes": source["original_bytes"],
+            "original_sha256": source["original_sha256"],
+            "original_md5": source["original_md5"],
+            "candle_plan_execution_selection": copy.deepcopy(
+                source["candle_plan_execution_selection"]
+            ),
+        })
     coverage["actions"]["ordered_record_sha256"] = subject.canonical_sha256(
         coverage["actions"]["records"]
     )
@@ -99,6 +116,7 @@ def common_projections() -> tuple[dict, dict]:
         container["records"].sort(key=lambda record: record["key"])
         for index, record in enumerate(container["records"]):
             record["index"] = index
+        container["record_count"] = len(container["records"])
         container["ordered_record_sha256"] = subject.canonical_sha256(
             container["records"]
         )
@@ -117,11 +135,11 @@ def make_authority(
         "policy": subject.AUTHORITY_POLICY,
         "producer": {
             "entrypoint": named(
-                "scripts/collect-pristine-direct-reference.py",
+                subject.PRODUCER_ENTRYPOINT_PATH,
                 f"collector-{authority_seed}",
             ),
             "protocol": named(
-                "scripts/pristine_direct_reference_protocol.py",
+                subject.PROTOCOL_PATH,
                 f"protocol-{authority_seed}",
             ),
         },
@@ -311,19 +329,34 @@ def PurePathName(key: str) -> str:
     return key.partition(":")[2].rsplit("/", 1)[-1]
 
 
-def make_transcript(plan: dict, request: dict) -> tuple[dict, list[dict]]:
+def make_transcript(
+    plan: dict, request: dict, coverage: dict,
+) -> tuple[dict, list[dict]]:
+    inventory = {
+        record["key"]: record for record in
+        coverage["original_source_inventory"]["records"]
+    }
     events = [
         make_loader_event(
             0, "bootstrap", None, subject.HOL_LIGHT_SOURCE,
-            10, hash_text("hol.ml"), hashlib.md5(
-                b"hol.ml", usedforsecurity=False,
-            ).hexdigest(), plan["session_nonce"],
+            inventory[subject.HOL_LIGHT_SOURCE]["original_bytes"],
+            inventory[subject.HOL_LIGHT_SOURCE]["original_sha256"],
+            inventory[subject.HOL_LIGHT_SOURCE]["original_md5"],
+            plan["session_nonce"],
         ),
         make_loader_event(
             1, "bootstrap", None, subject.STRICTBUILD_SOURCE,
-            11, hash_text("strictbuild"), hashlib.md5(
-                b"strictbuild", usedforsecurity=False,
-            ).hexdigest(), plan["session_nonce"],
+            inventory[subject.STRICTBUILD_SOURCE]["original_bytes"],
+            inventory[subject.STRICTBUILD_SOURCE]["original_sha256"],
+            inventory[subject.STRICTBUILD_SOURCE]["original_md5"],
+            plan["session_nonce"],
+        ),
+        make_loader_event(
+            2, "bootstrap", None, "flyspeck:b.hl",
+            inventory["flyspeck:b.hl"]["original_bytes"],
+            inventory["flyspeck:b.hl"]["original_sha256"],
+            inventory["flyspeck:b.hl"]["original_md5"],
+            plan["session_nonce"],
         ),
     ]
     completions = []
@@ -352,7 +385,8 @@ def make_transcript(plan: dict, request: dict) -> tuple[dict, list[dict]]:
     serializer = plan["authority"]["inputs"]["serializer"]
     events.append(make_loader_event(
         cursor, "post-action", None, subject.FINAL_TARGET_SOURCE,
-        final["bytes"], final["sha256"], "a" * 32,
+        final["bytes"], final["sha256"],
+        inventory[subject.FINAL_TARGET_SOURCE]["original_md5"],
         plan["session_nonce"],
     ))
     cursor += 1
@@ -364,8 +398,8 @@ def make_transcript(plan: dict, request: dict) -> tuple[dict, list[dict]]:
     actions = {
         "record_count": len(completions),
         "ordered_record_sha256": subject.canonical_sha256(completions),
-        "initial_ledger_count": 2,
-        "final_ledger_count": 2 + subject.FINAL_ACTION_COUNT,
+        "initial_ledger_count": 3,
+        "final_ledger_count": 3 + subject.FINAL_ACTION_COUNT,
         "records": completions,
     }
     transcript = {
@@ -420,7 +454,7 @@ def make_closure(
         "loader_event_count": len(events),
         "ordered_loader_event_sha256": subject.canonical_sha256(events),
         "loader_events": events,
-        "pre_action_event_count": 2,
+        "pre_action_event_count": 3,
         "post_action_event_count": len(events) - final,
         "action_bindings": copy.deepcopy(transcript["action_completions"]),
         "lp_success_artifact": content(
@@ -488,7 +522,7 @@ def bundle_fixture(
         ordinal, nonce, semantic, coverage, authority_seed=authority_seed,
     )
     request = make_request(plan)
-    transcript, events = make_transcript(plan, request)
+    transcript, events = make_transcript(plan, request, coverage)
     closure = make_closure(plan, request, transcript, events)
     candidate = make_candidate(
         plan, request, transcript, closure, semantic, coverage,
@@ -607,6 +641,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "PFT authority path",
                 lambda item: item["authority"]["producer"]["entrypoint"].update(
                     path="scripts/pft-collector.py"
+                ),
+            ),
+            (
+                "arbitrary producer path",
+                lambda item: item["authority"]["producer"]["entrypoint"].update(
+                    path="scripts/arbitrary-reference-producer.py"
                 ),
             ),
             (
@@ -847,6 +887,29 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 bundle["candidate"], bundle["plan"], bundle["request"],
                 bundle["transcript"], bundle["native_execution_closure"],
                 semantic, bundle["cross_runtime_coverage"],
+            )
+
+        closure = copy.deepcopy(bundle["native_execution_closure"])
+        nested = next(
+            event for event in closure["loader_events"]
+            if event["logical_source"] == "flyspeck:b.hl"
+        )
+        nested["logical_source"] = "flyspeck:fixture/unexpected-native.hl"
+        nested["basename"] = "unexpected-native.hl"
+        closure["ordered_loader_event_sha256"] = subject.canonical_sha256(
+            closure["loader_events"]
+        )
+        candidate = copy.deepcopy(bundle["candidate"])
+        candidate["artifacts"]["native_execution_closure"] = (
+            subject.content_record(closure)
+        )
+        with self.assertRaisesRegex(
+            subject.ProtocolError, "native logical closure differs",
+        ):
+            subject.validate_raw_candidate(
+                candidate, bundle["plan"], bundle["request"],
+                bundle["transcript"], closure, bundle["semantic_projection"],
+                bundle["cross_runtime_coverage"],
             )
 
     def test_pair_requires_exact_ordinals_distinct_nonce_and_shared_authority(self) -> None:

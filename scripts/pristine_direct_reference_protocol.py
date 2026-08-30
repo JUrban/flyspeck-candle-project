@@ -54,6 +54,8 @@ ENVIRONMENT_POLICY = (
     "fresh-sanitized-single-thread-reference-process-serialization-key-absent-v1"
 )
 SERIALIZATION_ENVIRONMENT_KEY = "FLYSPECK_SERIALIZATION"
+PRODUCER_ENTRYPOINT_PATH = "scripts/collect-pristine-direct-reference.py"
+PROTOCOL_PATH = "scripts/pristine_direct_reference_protocol.py"
 LP_WRAPPER_AFTER_ACTION_INDEX = 177
 LP_VERIFY_ACTION_INDEX = 183
 LP_CONSUMER_ACTION_INDEX = 184
@@ -374,8 +376,9 @@ def _validate_authority(value: object) -> dict[str, Any]:
             }, "malformed pristine reference producer authority")
     _named_content_record(producer.get("entrypoint"), "producer entrypoint")
     protocol = _named_content_record(producer.get("protocol"), "producer protocol")
-    require(protocol["path"] == "scripts/pristine_direct_reference_protocol.py",
-            "pristine reference protocol path mismatch")
+    require(producer["entrypoint"]["path"] == PRODUCER_ENTRYPOINT_PATH and
+            protocol["path"] == PROTOCOL_PATH,
+            "pristine reference producer/protocol path mismatch")
 
     repositories = value.get("repositories")
     require(isinstance(repositories, dict) and set(repositories) == {
@@ -705,7 +708,7 @@ def _validate_loader_events(
 ) -> list[dict[str, Any]]:
     require(isinstance(value, list) and value,
             "pristine native loader ledger is empty")
-    identities: set[tuple[str, str]] = set()
+    identities: set[str] = set()
     fields = {
         "index", "session_nonce", "phase", "action_index", "logical_source",
         "basename", "bytes", "sha256", "md5",
@@ -726,10 +729,9 @@ def _validate_loader_events(
                       f"native loader event SHA-256: {index}")
         md5 = _hex(record.get("md5"), HEX32,
                    f"native loader event MD5: {index}")
-        identity = (key, md5)
-        require(identity not in identities,
+        require(key not in identities,
                 f"duplicate pristine native loader identity: {index}")
-        identities.add(identity)
+        identities.add(key)
         action_index = record.get("action_index")
         if record["phase"] == "action":
             require(is_int(action_index) and 0 <= action_index < FINAL_ACTION_COUNT,
@@ -942,6 +944,30 @@ def _bind_plan_to_common_projections(
             "pristine final-target authority differs from common coverage")
 
 
+def _bind_native_closure_to_common_coverage(
+    native_closure: dict[str, Any], coverage_projection: dict[str, Any],
+) -> None:
+    expected_records = coverage_projection[
+        "selected_logical_source_closure"
+    ]["records"]
+    expected = {record["key"]: record for record in expected_records}
+    observed_events = [
+        event for event in native_closure["loader_events"]
+        if event["logical_source"] != SERIALIZER_SOURCE
+    ]
+    observed = {event["logical_source"]: event for event in observed_events}
+    require(len(observed) == len(observed_events) and
+            set(observed) == set(expected),
+            "pristine native logical closure differs from common coverage")
+    for key, record in expected.items():
+        event = observed[key]
+        require(event["bytes"] == record["original_bytes"] and
+                event["sha256"] == record["original_sha256"] and
+                event["md5"] == record["original_md5"],
+                f"pristine native logical content differs from common coverage: "
+                f"{key}")
+
+
 def validate_raw_candidate(
     value: object, plan: object, request: object, transcript: object,
     native_closure: object, semantic_projection: object,
@@ -956,6 +982,9 @@ def validate_raw_candidate(
     _validate_common_projections(semantic_projection, coverage_projection)
     _bind_plan_to_common_projections(
         plan, semantic_projection, coverage_projection,
+    )
+    _bind_native_closure_to_common_coverage(
+        native_closure, coverage_projection,
     )
     fields = {
         "schema", "kind", "role", "reference_ordinal", "nonce_kind",
