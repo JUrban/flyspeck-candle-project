@@ -1818,12 +1818,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             edges, fd_table, descriptions, initial_fs, mount_graph,
             input_identity, 17,
         )
-        with self.assertRaises(TypeError):
-            authority["input_root_edge"]["index"] = 999
-        with self.assertRaises(TypeError):
-            authority["input_root_open_description"] = {"malformed": True}
-        with self.assertRaises(TypeError):
-            authority._payload_bytes = b"{}"
+        with self.assertRaises(AttributeError):
+            getattr(subject, "_V4RootAuthorityContext")({})
+        with self.assertRaises((AttributeError, TypeError)):
+            object.__setattr__(authority, "_payload_bytes", b"{}")
 
         input_setup_edge = (
             subject.enumerate_isolated_native_build_setup_root_edge_v1(
@@ -2082,6 +2080,33 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.validate_v4_build_setup_root_observation(
                 observations[1], forged_authority,
             )
+        mutated_index_authority = copy.deepcopy(authority)
+        mutated_index_edges = mutated_index_authority[
+            "initial_object_edges"
+        ]["entries"]
+        mutated_index_edges[1]["index"] = 999
+        mutated_index_authority["initial_object_edges"][
+            "ordered_entry_sha256"
+        ] = subject.canonical_sha256(mutated_index_edges)
+        mutated_ofd_authority = copy.deepcopy(authority)
+        mutated_ofd_authority["open_descriptions"] = {"malformed": True}
+        forged_selector_authority = copy.deepcopy(authority)
+        forged_selector_edges = forged_selector_authority[
+            "initial_object_edges"
+        ]["entries"]
+        forged_selector_edges[1]["authority_role"] = "PFT:detached-authority"
+        forged_selector_edges[1]["authority_index"] = 999
+        forged_selector_authority["initial_object_edges"][
+            "ordered_entry_sha256"
+        ] = subject.canonical_sha256(forged_selector_edges)
+        for hostile_authority in (
+            mutated_index_authority, mutated_ofd_authority,
+            forged_selector_authority,
+        ):
+            with self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_setup_root_observation(
+                    observations[1], hostile_authority,
+                )
         with self.assertRaises(subject.ProtocolError):
             subject.validate_v4_build_event_object_edges(
                 [input_setup_edge], phase="post-filter",

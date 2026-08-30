@@ -2880,37 +2880,18 @@ def _validate_v4_initial_fd_ofd_roots(
     return input_fds[0], input_description
 
 
-class _V4RootAuthorityContext:
-    """Immutable, module-minted authority snapshot for setup leaf validators."""
-
-    __slots__ = ("__payload_bytes",)
-
-    def __init__(self, payload: dict[str, Any]) -> None:
-        object.__setattr__(
-            self, "_V4RootAuthorityContext__payload_bytes",
-            canonical_value_bytes(payload),
-        )
-
-    def __setattr__(self, name: str, value: object) -> None:
-        del name, value
-        raise TypeError("V4 root-authority context is immutable")
-
-    def _decode(self) -> dict[str, Any]:
-        try:
-            value = json.loads(self.__payload_bytes)
-        except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as error:
-            raise ProtocolError(
-                f"malformed opaque V4 root-authority context: {error}"
-            ) from error
-        require(type(value) is dict, "malformed opaque V4 root-authority context")
-        return value
+_v4_root_authority_input_fields = (
+    "initial_object_edges", "fd_table", "open_descriptions", "fs_state",
+    "builder_mount_graph", "input_root_identity",
+    "input_root_fd_generation",
+)
 
 
-def validate_v4_build_initial_root_authority(
+def _derive_v4_build_initial_root_authority(
     initial_object_edges: object, fd_table: object, open_descriptions: object,
     fs_state: object, builder_mount_graph: object,
     input_root_identity: object, input_root_fd_generation: object,
-) -> _V4RootAuthorityContext:
+) -> dict[str, Any]:
     label = "V4 initial root authority"
     _require_v4_exact_json_types(
         [initial_object_edges, fd_table, open_descriptions, fs_state,
@@ -2959,7 +2940,7 @@ def validate_v4_build_initial_root_authority(
         fd_table, open_descriptions, edges, input_root,
         input_root_fd_generation,
     )
-    return _V4RootAuthorityContext({
+    return {
         "setup_root_edge": setup_root,
         "input_root_edge": input_root,
         "input_root_fd": input_fd,
@@ -2971,7 +2952,23 @@ def validate_v4_build_initial_root_authority(
             "mount_namespace_identity"
         ],
         "builder_mount_generation": builder_mount_graph["generation"],
-    })
+    }
+
+
+def validate_v4_build_initial_root_authority(
+    initial_object_edges: object, fd_table: object, open_descriptions: object,
+    fs_state: object, builder_mount_graph: object,
+    input_root_identity: object, input_root_fd_generation: object,
+) -> dict[str, Any]:
+    """Validate and snapshot every input needed to rederive setup authority."""
+    values = (
+        initial_object_edges, fd_table, open_descriptions, fs_state,
+        builder_mount_graph, input_root_identity, input_root_fd_generation,
+    )
+    _derive_v4_build_initial_root_authority(*values)
+    return json.loads(canonical_value_bytes(dict(zip(
+        _v4_root_authority_input_fields, values, strict=True,
+    ))))
 
 
 def _validate_v4_event_object_edge(
@@ -3034,20 +3031,12 @@ def _validate_v4_event_object_edge(
 
 
 def _validate_v4_root_authority_context(value: object) -> dict[str, Any]:
-    fields = {
-        "setup_root_edge", "input_root_edge", "input_root_fd",
-        "input_root_open_description", "initial_fs_state",
-        "builder_mount_root", "builder_mounts",
-        "builder_mount_namespace_identity",
-        "builder_mount_generation",
-    }
-    require(type(value) is _V4RootAuthorityContext,
-            "V4 root-authority context was not minted by its validator")
-    result = value._decode()
-    _require_v4_exact_json_types(result, "opaque V4 root-authority context")
-    require(set(result) == fields,
-            "malformed V4 root-authority context")
-    return result
+    label = "V4 root-authority input snapshot"
+    _require_v4_exact_json_types(value, label)
+    result = _v4_exact_dict(value, _v4_root_authority_input_fields, label)
+    return _derive_v4_build_initial_root_authority(*(
+        result[field] for field in _v4_root_authority_input_fields
+    ))
 
 
 def validate_v4_build_event_object_edges(
