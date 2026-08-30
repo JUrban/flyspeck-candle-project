@@ -2577,34 +2577,34 @@ def validate_v4_build_task_control_state(value: object) -> dict[str, Any]:
     return result
 
 
-def validate_v4_build_capability_sets_change(
+def validate_v4_build_capability_sets_update(
     value: object, cap_last_cap: object,
-    expected_changed_sets: tuple[str, ...] | None = None,
+    expected_target_sets: tuple[str, ...] | None = None,
 ) -> dict[str, Any]:
-    label = "V4 build capability-sets change"
+    label = "V4 build capability-sets update"
     result = _v4_exact_dict(
-        value, V4_BUILD_TASK_TRANSITION_FIELDS["capability-sets-change"], label,
+        value, V4_BUILD_TASK_TRANSITION_FIELDS["capability-sets-update"], label,
     )
-    require(result.get("kind") == "capability-sets-change" and
+    require(result.get("kind") == "capability-sets-update" and
             is_int(result.get("index")) and result["index"] >= 0 and
             is_int(result.get("task_index")) and result["task_index"] >= 0,
             f"malformed {label} identity")
-    changed_sets = result.get("changed_sets")
+    target_sets = result.get("target_sets")
     require(
-        type(changed_sets) is list and changed_sets and
-        all(type(item) is str for item in changed_sets),
-        f"malformed {label} changed-set list",
+        type(target_sets) is list and target_sets and
+        all(type(item) is str for item in target_sets),
+        f"malformed {label} target-set list",
     )
     canonical = [
-        name for name in V4_BUILD_CAPABILITY_SET_NAMES if name in changed_sets
+        name for name in V4_BUILD_CAPABILITY_SET_NAMES if name in target_sets
     ]
-    require(changed_sets == canonical,
-            f"unordered, duplicate or unknown {label} changed-set list")
-    if expected_changed_sets is not None:
+    require(target_sets == canonical,
+            f"unordered, duplicate or unknown {label} target-set list")
+    if expected_target_sets is not None:
         require(
-            type(expected_changed_sets) is tuple and
-            changed_sets == list(expected_changed_sets),
-            f"unexpected {label} changed-set list",
+            type(expected_target_sets) is tuple and
+            target_sets == list(expected_target_sets),
+            f"unexpected {label} target-set list",
         )
     before = validate_v4_build_capability_sets(
         result.get("before_capability_sets"), cap_last_cap,
@@ -2612,12 +2612,23 @@ def validate_v4_build_capability_sets_change(
     after = validate_v4_build_capability_sets(
         result.get("after_capability_sets"), cap_last_cap,
     )
-    actual_changed = [
-        name for name in V4_BUILD_CAPABILITY_SET_NAMES
-        if canonical_value_bytes(before[name]) != canonical_value_bytes(after[name])
-    ]
-    require(actual_changed == changed_sets,
-            f"{label} names do not equal changed values")
+    target_set = set(target_sets)
+    require(
+        all(
+            name in target_set or canonical_value_bytes(before[name]) ==
+            canonical_value_bytes(after[name])
+            for name in V4_BUILD_CAPABILITY_SET_NAMES
+        ),
+        f"untargeted {label} member changed",
+    )
+    idempotent = result.get("idempotent")
+    require(type(idempotent) is bool, f"malformed {label} idempotent flag")
+    all_targets_unchanged = all(
+        canonical_value_bytes(before[name]) == canonical_value_bytes(after[name])
+        for name in target_sets
+    )
+    require(idempotent is all_targets_unchanged,
+            f"wrong {label} idempotent flag")
     return result
 
 

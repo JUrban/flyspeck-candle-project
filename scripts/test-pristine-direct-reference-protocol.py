@@ -1820,25 +1820,40 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         before_caps = copy.deepcopy(empty_caps)
         after_caps = copy.deepcopy(empty_caps)
         after_caps["effective"] = enabled_cap
-        change = {
-            "kind": "capability-sets-change", "index": 0, "task_index": 0,
-            "changed_sets": ["effective"],
+        update = {
+            "kind": "capability-sets-update", "index": 0, "task_index": 0,
+            "target_sets": ["effective"],
             "before_capability_sets": before_caps,
             "after_capability_sets": after_caps,
+            "idempotent": False,
         }
         self.assertIs(
-            subject.validate_v4_build_capability_sets_change(
-                change, 40, ("effective",),
+            subject.validate_v4_build_capability_sets_update(
+                update, 40, ("effective",),
             ),
-            change,
+            update,
+        )
+        idempotent = {
+            **update,
+            "after_capability_sets": copy.deepcopy(before_caps),
+            "idempotent": True,
+        }
+        self.assertIs(
+            subject.validate_v4_build_capability_sets_update(
+                idempotent, 40, ("effective",),
+            ),
+            idempotent,
         )
         for bad in (
-            {**change, "changed_sets": ["permitted"]},
-            {**change, "changed_sets": ["effective", "effective"]},
-            {**change, "index": True},
+            {**update, "target_sets": ["permitted"]},
+            {**update, "target_sets": ["effective", "effective"]},
+            {**update, "idempotent": True},
+            {**idempotent, "idempotent": False},
+            {**update, "index": True},
         ):
-            with self.subTest(change=bad), self.assertRaises(subject.ProtocolError):
-                subject.validate_v4_build_capability_sets_change(bad, 40)
+            with self.subTest(update=bad), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_capability_sets_update(bad, 40)
+
     def test_complete_v4_constant_table_fingerprint(self) -> None:
         def normalize(value: object) -> object:
             if isinstance(value, frozenset):
