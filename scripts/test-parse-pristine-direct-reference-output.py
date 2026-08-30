@@ -371,6 +371,23 @@ class PristineOutputParserTests(unittest.TestCase):
                     forged, self.plan, self.request,
                 )
 
+        forged = copy.deepcopy(result)
+        forged["stderr"]["sha256"] = "0" * 64
+        forged["transcript"]["stderr"]["sha256"] = "0" * 64
+        transcript_record = protocol.content_record(forged["transcript"])
+        forged["native_execution_closure"]["transcript"] = transcript_record
+        forged["semantic_completion_observation"]["transcript"] = (
+            transcript_record
+        )
+        with self.assertRaisesRegex(protocol.ProtocolError, "stderr"):
+            protocol.validate_source_rederivation(
+                forged, self.plan, self.request,
+            )
+        with self.assertRaisesRegex(protocol.ProtocolError, "stderr"):
+            protocol.validate_canonical_source_rederivation_bytes(
+                protocol.canonical_json_bytes(forged), self.plan, self.request,
+            )
+
         canonical = protocol.canonical_json_bytes(result)
         with self.assertRaisesRegex(protocol.ProtocolError, "immutable bytes"):
             protocol.validate_canonical_source_rederivation_bytes(
