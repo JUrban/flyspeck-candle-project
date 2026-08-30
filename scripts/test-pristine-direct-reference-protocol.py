@@ -2995,10 +2995,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 397)
+        self.assertEqual(len(values), 407)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "edcfd93fa2d2dd5e5064813a01562b33f57562bb3a106db717e439de88033760",
+            "858334c76c74870f21c67d439287a26b09e9b1ea01ff0540d5ffccca7f89117b",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -3576,6 +3576,282 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ), self.assertRaises(subject.ProtocolError):
                 subject.validate_v4_build_input_closure_header_filter(
                     authority,
+                )
+
+    def test_v4_output_root_prewalk_observation_is_closed_and_unjoined(
+        self,
+    ) -> None:
+        observation = {
+            "schema": subject.V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_SCHEMA,
+            "kind": subject.V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_KIND,
+            "policy": subject.V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_POLICY,
+            "capture_boundary": (
+                subject.V4_BUILD_OUTPUT_ROOT_PREWALK_CAPTURE_BOUNDARY
+            ),
+            "observer_task_identity": {"pid": 99, "start_ticks": 901},
+            "builder_task_identity": {"pid": 101, "start_ticks": 1_001},
+            "initial_object_edge_index": 2,
+            "parent_fd_index": 0,
+            "parent_open_description_index": 0,
+            "output_root_entry_index": 3,
+            "mount_namespace_identity": {"fixture": "parent-mount-namespace"},
+            "mount_namespace_generation": 7,
+            "held_directory_identity": {
+                "root_identity": {"fixture": "output-root"},
+                "root_fd_generation": 41,
+                "fd": 10,
+                "fd_generation": 41,
+                "open_description_id": 51,
+                "open_description_generation": 3,
+                "parent_descriptor_identity": {
+                    "fixture": "input-root-walk-descriptor",
+                },
+                "mount_id": 202,
+                "st_dev": 8,
+                "st_ino": 77,
+                "stable_generation": 4,
+            },
+            "walk_policy": subject.V4_BUILD_OUTPUT_ROOT_PREWALK_WALK_POLICY,
+            "pre_entry_count": 0,
+            "pre_entries": [],
+            "pre_ordered_entry_sha256": (
+                subject.V4_BUILD_OUTPUT_ROOT_PREWALK_EMPTY_ORDERED_ENTRY_SHA256
+            ),
+            "status": subject.V4_BUILD_OUTPUT_ROOT_PREWALK_STATUS,
+        }
+        snapshot = subject.validate_v4_build_output_root_prewalk_observation(
+            observation,
+        )
+        self.assertEqual(snapshot, observation)
+        self.assertIsNot(snapshot, observation)
+        self.assertIsNot(
+            snapshot["held_directory_identity"],
+            observation["held_directory_identity"],
+        )
+        observation["held_directory_identity"]["st_ino"] = 999
+        observation["pre_entries"].append({"late": "mutation"})
+        self.assertEqual(snapshot["held_directory_identity"]["st_ino"], 77)
+        self.assertEqual(snapshot["pre_entries"], [])
+        observation["held_directory_identity"]["st_ino"] = 77
+        observation["pre_entries"] = []
+
+        real_bounded_digest = subject._v4_bounded_compact_canonical_digest
+        raced = copy.deepcopy(observation)
+        digest_calls = 0
+
+        def mutate_between_frozen_captures(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 1:
+                raced["parent_fd_index"] = 1
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_between_frozen_captures,
+        ), self.assertRaisesRegex(subject.ProtocolError, "changed while freezing"):
+            subject.validate_v4_build_output_root_prewalk_observation(raced)
+
+        post_freeze = copy.deepcopy(observation)
+        digest_calls = 0
+
+        def mutate_after_second_frozen_digest(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 2:
+                post_freeze["status"] = "late caller mutation"
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_after_second_frozen_digest,
+        ):
+            stable_snapshot = (
+                subject.validate_v4_build_output_root_prewalk_observation(
+                    post_freeze,
+                )
+            )
+        self.assertEqual(post_freeze["status"], "late caller mutation")
+        self.assertEqual(
+            stable_snapshot["status"],
+            subject.V4_BUILD_OUTPUT_ROOT_PREWALK_STATUS,
+        )
+
+        def hostile(mutator: object) -> dict[str, object]:
+            value = copy.deepcopy(observation)
+            mutator(value)
+            return value
+
+        mutations = [
+            lambda value, field=field: value.pop(field)
+            for field in subject.V4_BUILD_OUTPUT_ROOT_PREWALK_FIELDS
+        ]
+        mutations.extend((
+            lambda value: value.update(extra=False),
+            lambda value: value.update(schema=True),
+            lambda value: value.update(schema=2),
+            lambda value: value.update(kind=None),
+            lambda value: value.update(kind="wrong-kind"),
+            lambda value: value.update(policy=False),
+            lambda value: value.update(policy="wrong-policy"),
+            lambda value: value.update(capture_boundary=False),
+            lambda value: value.update(capture_boundary="wrong-boundary"),
+            lambda value: value.update(walk_policy=False),
+            lambda value: value.update(walk_policy="follow-symlinks"),
+            lambda value: value.update(status=True),
+            lambda value: value.update(status="complete"),
+            lambda value: value.update(observer_task_identity={
+                "pid": 101, "start_ticks": 1_001,
+            }),
+            lambda value: value["builder_task_identity"].update(pid=True),
+            lambda value: value.update(initial_object_edge_index=False),
+            lambda value: value.update(initial_object_edge_index=-1),
+            lambda value: value.update(initial_object_edge_index=(
+                subject.V4_BUILD_INPUT_CLOSURE_ENTRY_MAX
+            )),
+            lambda value: value.update(parent_fd_index=True),
+            lambda value: value.update(parent_fd_index=(
+                subject.V4_BUILD_FD_PER_TABLE_MAX
+            )),
+            lambda value: value.update(parent_open_description_index=False),
+            lambda value: value.update(parent_open_description_index=(
+                subject.V4_BUILD_FD_PER_TABLE_MAX
+            )),
+            lambda value: value.update(output_root_entry_index=True),
+            lambda value: value.update(output_root_entry_index=(
+                subject.V4_BUILD_INPUT_CLOSURE_ENTRY_MAX
+            )),
+            lambda value: value.update(mount_namespace_identity={}),
+            lambda value: value.update(mount_namespace_identity=[]),
+            lambda value: value.update(mount_namespace_generation=True),
+            lambda value: value.update(mount_namespace_generation=0),
+            lambda value: value.update(held_directory_identity=None),
+            lambda value: value["held_directory_identity"].update(extra=0),
+            lambda value: value["held_directory_identity"].pop("mount_id"),
+            lambda value: value["held_directory_identity"].update(
+                root_identity={},
+            ),
+            lambda value: value["held_directory_identity"].update(
+                root_identity=[],
+            ),
+            lambda value: value["held_directory_identity"].update(
+                parent_descriptor_identity={},
+            ),
+            lambda value: value["held_directory_identity"].update(
+                parent_descriptor_identity=[],
+            ),
+            lambda value: value["held_directory_identity"].update(
+                root_fd_generation=True,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                root_fd_generation=0,
+            ),
+            lambda value: value["held_directory_identity"].update(fd=True),
+            lambda value: value["held_directory_identity"].update(
+                fd=subject.V4_BUILD_FD_PER_TABLE_MAX,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                fd_generation=False,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                fd_generation=42,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                open_description_id=True,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                open_description_id=0,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                open_description_generation=False,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                open_description_generation=0,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                mount_id=True,
+            ),
+            lambda value: value["held_directory_identity"].update(mount_id=0),
+            lambda value: value["held_directory_identity"].update(st_dev=True),
+            lambda value: value["held_directory_identity"].update(st_dev=-1),
+            lambda value: value["held_directory_identity"].update(st_ino=True),
+            lambda value: value["held_directory_identity"].update(st_ino=0),
+            lambda value: value["held_directory_identity"].update(
+                stable_generation=True,
+            ),
+            lambda value: value["held_directory_identity"].update(
+                stable_generation=0,
+            ),
+            lambda value: value.update(pre_entry_count=False),
+            lambda value: value.update(pre_entry_count=1),
+            lambda value: value.update(pre_entries=()),
+            lambda value: value.update(pre_entries=[{"relative": "x"}]),
+            lambda value: value.update(pre_ordered_entry_sha256=False),
+            lambda value: value.update(pre_ordered_entry_sha256="0" * 64),
+        ))
+        for index, mutation in enumerate(mutations):
+            forged = hostile(mutation)
+            with self.subTest(mutation=index), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_output_root_prewalk_observation(
+                    forged,
+                )
+
+        outer_subclass = type("Prewalk", (dict,), {})(observation)
+        held_subclass = copy.deepcopy(observation)
+        held_subclass["held_directory_identity"] = type(
+            "HeldDirectory", (dict,), {},
+        )(held_subclass["held_directory_identity"])
+        namespace_subclass = copy.deepcopy(observation)
+        namespace_subclass["mount_namespace_identity"] = type(
+            "MountNamespace", (dict,), {},
+        )(namespace_subclass["mount_namespace_identity"])
+        entries_subclass = copy.deepcopy(observation)
+        entries_subclass["pre_entries"] = type("Entries", (list,), {})([])
+        for malformed in (
+            outer_subclass, held_subclass, namespace_subclass, entries_subclass,
+        ):
+            with self.subTest(subclass=type(malformed)), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_output_root_prewalk_observation(
+                    malformed,
+                )
+
+        cyclic = copy.deepcopy(observation)
+        cyclic_identity: dict[str, object] = {}
+        cyclic_identity["cycle"] = cyclic_identity
+        cyclic["held_directory_identity"]["root_identity"] = cyclic_identity
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=AssertionError("encoding reached before preflight"),
+        ), self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_output_root_prewalk_observation(cyclic)
+
+        encoded = subject.canonical_value_bytes(observation)
+        cap_cases = (
+            ("V4_BUILD_OUTPUT_ROOT_PREWALK_MAX_BYTES", len(encoded) - 1),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_NODE_MAX", 10),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_CONTAINER_MAX", 10),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_STRING_MAX_BYTES", 8),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_KEY_MAX_BYTES", 5),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_FRAGMENT_MAX_BYTES", 3),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES", 64),
+            ("JSON_INTEGER_MAX_DIGITS", 2),
+        )
+        for constant, cap in cap_cases:
+            with self.subTest(constant=constant), mock.patch.object(
+                subject, constant, cap,
+            ), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_output_root_prewalk_observation(
+                    observation,
                 )
 
     def test_v4_input_closure_task_identities_rejects_hostile_splices(

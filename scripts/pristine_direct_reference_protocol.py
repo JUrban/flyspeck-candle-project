@@ -341,6 +341,42 @@ V4_BUILD_INPUT_CLOSURE_TASK_IDENTITIES_FIELDS = (
 V4_BUILD_INPUT_CLOSURE_HEADER_FILTER_FIELDS = (
     "schema", "kind", "policy", "build_filter",
 )
+V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_SCHEMA = 1
+V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_KIND = (
+    "candle-flyspeck-isolated-native-build-output-root-prewalk-"
+    "observation-v1"
+)
+V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_POLICY = (
+    "outside-parent-held-directory-descriptor-rooted-no-follow-empty-walk-v1"
+)
+V4_BUILD_OUTPUT_ROOT_PREWALK_CAPTURE_BOUNDARY = (
+    "after-input-closure-walk-before-filter-install-v1"
+)
+V4_BUILD_OUTPUT_ROOT_PREWALK_WALK_POLICY = (
+    "held-directory-fd-no-follow-deterministic-preorder-v1"
+)
+V4_BUILD_OUTPUT_ROOT_PREWALK_STATUS = (
+    "structural-input-only-no-producer-receipt-or-authority-claim"
+)
+V4_BUILD_OUTPUT_ROOT_PREWALK_MAX_BYTES = 65_536
+V4_BUILD_OUTPUT_ROOT_PREWALK_FIELDS = (
+    "schema", "kind", "policy", "capture_boundary",
+    "observer_task_identity", "builder_task_identity",
+    "initial_object_edge_index", "parent_fd_index",
+    "parent_open_description_index", "output_root_entry_index",
+    "mount_namespace_identity", "mount_namespace_generation",
+    "held_directory_identity", "walk_policy", "pre_entry_count",
+    "pre_entries", "pre_ordered_entry_sha256", "status",
+)
+V4_BUILD_OUTPUT_ROOT_PREWALK_HELD_DIRECTORY_IDENTITY_FIELDS = (
+    "root_identity", "root_fd_generation", "fd", "fd_generation",
+    "open_description_id", "open_description_generation",
+    "parent_descriptor_identity", "mount_id", "st_dev", "st_ino",
+    "stable_generation",
+)
+V4_BUILD_OUTPUT_ROOT_PREWALK_EMPTY_ORDERED_ENTRY_SHA256 = (
+    "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+)
 V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS = (
     "index", "relative", "object_type", "mode", "bytes", "sha256",
     "selector", "st_nlink", "parent_descriptor_identity", "mount_id",
@@ -4971,6 +5007,137 @@ def validate_v4_build_input_closure_task_identities(
     require(
         builder_identity != observer_identity,
         f"equal {label}",
+    )
+    return result
+
+
+def validate_v4_build_output_root_prewalk_observation(
+    value: object,
+) -> dict[str, Any]:
+    """Validate a structural, unjoined outside-parent pre-walk record."""
+    label = "V4 native build output-root pre-walk observation"
+    first_frozen = _v4_resource_checked_json_graph(value, label)
+    first_size, first_digest = _v4_bounded_compact_canonical_digest(
+        first_frozen, V4_BUILD_OUTPUT_ROOT_PREWALK_MAX_BYTES, label,
+    )
+    frozen = _v4_resource_checked_json_graph(value, label)
+    frozen_size, frozen_digest = _v4_bounded_compact_canonical_digest(
+        frozen, V4_BUILD_OUTPUT_ROOT_PREWALK_MAX_BYTES, label,
+    )
+    require(
+        (frozen_size, frozen_digest) == (first_size, first_digest),
+        f"{label} changed while freezing",
+    )
+    result = _v4_exact_dict(
+        frozen, V4_BUILD_OUTPUT_ROOT_PREWALK_FIELDS, label,
+    )
+    require(
+        is_int(result.get("schema")) and
+        result["schema"] == V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_SCHEMA and
+        type(result.get("kind")) is str and
+        result["kind"] == V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_KIND and
+        type(result.get("policy")) is str and
+        result["policy"] == V4_BUILD_OUTPUT_ROOT_PREWALK_OBSERVATION_POLICY and
+        type(result.get("capture_boundary")) is str and
+        result["capture_boundary"] ==
+        V4_BUILD_OUTPUT_ROOT_PREWALK_CAPTURE_BOUNDARY and
+        type(result.get("walk_policy")) is str and
+        result["walk_policy"] == V4_BUILD_OUTPUT_ROOT_PREWALK_WALK_POLICY and
+        type(result.get("status")) is str and
+        result["status"] == V4_BUILD_OUTPUT_ROOT_PREWALK_STATUS,
+        f"wrong {label} identity or policy",
+    )
+    validate_v4_build_input_closure_task_identities({
+        "builder_task_identity": result.get("builder_task_identity"),
+        "observer_task_identity": result.get("observer_task_identity"),
+    })
+
+    edge_index = _v4_uint(
+        result.get("initial_object_edge_index"), 32,
+        f"{label} initial object-edge index",
+    )
+    fd_index = _v4_uint(
+        result.get("parent_fd_index"), 32, f"{label} parent FD index",
+    )
+    ofd_index = _v4_uint(
+        result.get("parent_open_description_index"), 32,
+        f"{label} parent OFD index",
+    )
+    entry_index = _v4_uint(
+        result.get("output_root_entry_index"), 32,
+        f"{label} output-root entry index",
+    )
+    require(
+        edge_index < V4_BUILD_INPUT_CLOSURE_ENTRY_MAX and
+        fd_index < V4_BUILD_FD_PER_TABLE_MAX and
+        ofd_index < V4_BUILD_FD_PER_TABLE_MAX and
+        entry_index < V4_BUILD_INPUT_CLOSURE_ENTRY_MAX,
+        f"over-cap {label} reference",
+    )
+
+    mount_namespace_identity = result.get("mount_namespace_identity")
+    mount_namespace_generation = _v4_uint(
+        result.get("mount_namespace_generation"), 64,
+        f"{label} mount namespace generation",
+    )
+    require(
+        type(mount_namespace_identity) is dict and
+        bool(mount_namespace_identity) and mount_namespace_generation > 0,
+        f"malformed {label} mount namespace identity",
+    )
+
+    held = _v4_exact_dict(
+        result.get("held_directory_identity"),
+        V4_BUILD_OUTPUT_ROOT_PREWALK_HELD_DIRECTORY_IDENTITY_FIELDS,
+        f"{label} held-directory identity",
+    )
+    root_fd_generation = _v4_uint(
+        held.get("root_fd_generation"), 64,
+        f"{label} root FD generation",
+    )
+    fd_generation = _v4_uint(
+        held.get("fd_generation"), 64, f"{label} FD generation",
+    )
+    fd = _v4_uint(held.get("fd"), 32, f"{label} held FD")
+    open_description_id = _v4_uint(
+        held.get("open_description_id"), 64,
+        f"{label} open-description ID",
+    )
+    open_description_generation = _v4_uint(
+        held.get("open_description_generation"), 64,
+        f"{label} open-description generation",
+    )
+    mount_id = _v4_uint(
+        held.get("mount_id"), 32, f"{label} mount ID",
+    )
+    _v4_uint(held.get("st_dev"), 64, f"{label} st_dev")
+    st_ino = _v4_uint(held.get("st_ino"), 64, f"{label} st_ino")
+    stable_generation = _v4_uint(
+        held.get("stable_generation"), 64,
+        f"{label} stable generation",
+    )
+    require(
+        type(held.get("root_identity")) is dict and
+        bool(held["root_identity"]) and
+        type(held.get("parent_descriptor_identity")) is dict and
+        bool(held["parent_descriptor_identity"]) and
+        0 < root_fd_generation == fd_generation and
+        fd < V4_BUILD_FD_PER_TABLE_MAX and open_description_id > 0 and
+        open_description_generation > 0 and mount_id > 0 and st_ino > 0 and
+        stable_generation > 0,
+        f"malformed {label} held-directory identity",
+    )
+
+    pre_entries = result.get("pre_entries")
+    require(
+        is_int(result.get("pre_entry_count")) and
+        result["pre_entry_count"] == 0 and
+        type(pre_entries) is list and pre_entries == [] and
+        type(result.get("pre_ordered_entry_sha256")) is str and
+        result["pre_ordered_entry_sha256"] ==
+        V4_BUILD_OUTPUT_ROOT_PREWALK_EMPTY_ORDERED_ENTRY_SHA256 and
+        result["pre_ordered_entry_sha256"] == canonical_sha256(pre_entries),
+        f"nonempty or malformed {label} result",
     )
     return result
 
