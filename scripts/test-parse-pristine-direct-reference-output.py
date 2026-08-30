@@ -43,7 +43,7 @@ def marker_line(marker: str, *fields: object) -> str:
 
 def event_line(event: dict) -> str:
     return marker_line(
-        subject.NATIVE_LOAD_MARKER,
+        protocol.MARKER_CONTRACT["native_load"],
         event["session_nonce"],
         event["index"],
         event["phase"],
@@ -235,7 +235,7 @@ class PristineOutputParserTests(unittest.TestCase):
             "\u202e",     # bidi override / format control
             "\u2028",     # Unicode line separator
             "\u2029",     # Unicode paragraph separator
-            "\u00e9",     # printable non-ASCII is outside the v1 alphabet
+            "\u00e9",     # printable non-ASCII is outside the v2 alphabet
         )
         for character in hostile_characters:
             forged = copy.deepcopy(self.lines)
@@ -339,7 +339,9 @@ class PristineOutputParserTests(unittest.TestCase):
                 self.assert_rejects(mutation)
 
     def test_native_loader_rejects_missing_duplicate_reorder_and_selected_tamper(self) -> None:
-        indices = marker_indices(self.lines, subject.NATIVE_LOAD_MARKER)
+        indices = marker_indices(
+            self.lines, protocol.MARKER_CONTRACT["native_load"],
+        )
         action_event = next(
             index for index in indices
             if self.lines[index].split("\t")[3] == "action"
@@ -373,7 +375,9 @@ class PristineOutputParserTests(unittest.TestCase):
     def test_already_loaded_outcome_is_rederived_not_claimed(self) -> None:
         lines = copy.deepcopy(self.lines)
         action_event_index = next(
-            index for index in marker_indices(lines, subject.NATIVE_LOAD_MARKER)
+            index for index in marker_indices(
+                lines, protocol.MARKER_CONTRACT["native_load"],
+            )
             if lines[index].split("\t")[3:5] == ["action", "0"]
         )
         lines[action_event_index] = replace_field(
@@ -411,6 +415,8 @@ class PristineOutputParserTests(unittest.TestCase):
             self.lines, protocol.MARKER_CONTRACT["session_complete"],
         )[0]
         hostile_lines = (
+            protocol.MARKER_CONTRACT["semantic_observation"] +
+            "\t" + self.plan["session_nonce"],
             "CANDLE_PRISTINE_DIRECT_SEMANTIC_V1\t" + self.plan["session_nonce"],
             "CANDLE_FINGERPRINT_V2\t00",
             "CANDLE_UNKNOWN_SUCCESS_V99\t1",
@@ -422,6 +428,46 @@ class PristineOutputParserTests(unittest.TestCase):
             forged.insert(complete_index, line)
             with self.subTest(line=line):
                 self.assert_rejects(forged, "stdout line")
+
+    def test_native_marker_is_request_bound_and_v1_wire_rejects(self) -> None:
+        native = protocol.MARKER_CONTRACT["native_load"]
+        self.assertEqual(
+            self.request["marker_contract"]["native_load"], native,
+        )
+        forged = [
+            line.replace(
+                native, "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V1", 1,
+            ) if line.startswith(native + "\t") else line
+            for line in self.lines
+        ]
+        self.assert_rejects(forged, "unsupported success-like")
+
+    def test_executing_parser_bytes_must_match_plan_authority(self) -> None:
+        expected = fixture_module.named_file(protocol.OUTPUT_PARSER_PATH)
+        self.assertEqual(
+            self.plan["authority"]["producer"]["output_parser"], expected,
+        )
+        plan = copy.deepcopy(self.plan)
+        plan["authority"]["producer"]["output_parser"]["sha256"] = "0" * 64
+        request = fixture_module.make_request(plan)
+        with self.assertRaisesRegex(
+            subject.OutputProtocolError,
+            "executing output parser differs from plan authority",
+        ):
+            self.parse(plan=plan, request=request)
+
+    def test_incompatible_protocol_sibling_fails_closed(self) -> None:
+        sibling = subject._protocol()
+        original = sibling.RAW_PROTOCOL_SCHEMA
+        try:
+            sibling.RAW_PROTOCOL_SCHEMA = 1
+            with self.assertRaisesRegex(
+                subject.OutputProtocolError, "incompatible.*sibling",
+            ):
+                self.parse()
+        finally:
+            sibling.RAW_PROTOCOL_SCHEMA = original
+        self.assertIs(subject._protocol(), sibling)
 
     def test_complete_counts_and_marker_shape_are_exact(self) -> None:
         complete = marker_indices(

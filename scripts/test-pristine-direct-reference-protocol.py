@@ -46,6 +46,15 @@ def named_value(path: str, value: object) -> dict[str, object]:
     return {"path": path, **subject.content_record(value)}
 
 
+def named_file(path: str) -> dict[str, object]:
+    data = Path(__file__).parent.parent.joinpath(path).read_bytes()
+    return {
+        "path": path,
+        "bytes": len(data),
+        "sha256": hashlib.sha256(data).hexdigest(),
+    }
+
+
 def executable(path: str, text: str) -> dict[str, object]:
     return {
         "argument_path": path,
@@ -142,6 +151,7 @@ def make_authority(
                 subject.PROTOCOL_PATH,
                 f"protocol-{authority_seed}",
             ),
+            "output_parser": named_file(subject.OUTPUT_PARSER_PATH),
         },
         "repositories": {
             "project": {
@@ -226,7 +236,7 @@ def make_plan(
         "records": lp_records,
     }
     plan = {
-        "schema": 1,
+        "schema": subject.RAW_PROTOCOL_SCHEMA,
         "kind": subject.PLAN_KIND,
         "role": subject.REFERENCE_ROLE,
         "reference_ordinal": ordinal,
@@ -258,7 +268,7 @@ def make_plan(
 
 def make_request(plan: dict) -> dict:
     return {
-        "schema": 1,
+        "schema": subject.RAW_PROTOCOL_SCHEMA,
         "kind": subject.REQUEST_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],
@@ -404,7 +414,7 @@ def make_transcript(
         "records": completions,
     }
     transcript = {
-        "schema": 1,
+        "schema": subject.RAW_PROTOCOL_SCHEMA,
         "kind": subject.TRANSCRIPT_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],
@@ -435,7 +445,7 @@ def make_closure(
 ) -> dict:
     final = transcript["action_completions"]["final_ledger_count"]
     return {
-        "schema": 1,
+        "schema": subject.RAW_PROTOCOL_SCHEMA,
         "kind": subject.NATIVE_CLOSURE_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],
@@ -476,7 +486,7 @@ def make_candidate(
     semantic: dict, coverage: dict,
 ) -> dict:
     return {
-        "schema": 1,
+        "schema": subject.RAW_PROTOCOL_SCHEMA,
         "kind": subject.RAW_CANDIDATE_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],
@@ -548,6 +558,16 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
     def test_valid_bundle_is_strictly_unapproved(self) -> None:
         bundle = copy.deepcopy(self.bundle)
         self.assertIs(subject.validate_reference_bundle(bundle), bundle)
+        self.assertEqual(bundle["plan"]["schema"], subject.RAW_PROTOCOL_SCHEMA)
+        self.assertEqual(bundle["request"]["schema"], subject.RAW_PROTOCOL_SCHEMA)
+        self.assertEqual(
+            bundle["plan"]["authority"]["producer"]["output_parser"],
+            named_file(subject.OUTPUT_PARSER_PATH),
+        )
+        self.assertEqual(
+            bundle["request"]["marker_contract"]["native_load"],
+            subject.MARKER_CONTRACT["native_load"],
+        )
         candidate = bundle["candidate"]
         self.assertEqual(candidate["authentication_status"], "not-authenticated")
         for field in (
@@ -613,8 +633,53 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             subject.canonical_json_bytes({"value": math.nan})
 
+    def test_schema_v1_artifact_chain_is_disjoint_and_rejected(self) -> None:
+        bundle = self.bundle
+        cases = (
+            ("plan", subject.validate_raw_plan, ()),
+            ("request", subject.validate_raw_request, (bundle["plan"],)),
+            (
+                "transcript", subject.validate_raw_transcript,
+                (bundle["plan"], bundle["request"]),
+            ),
+            (
+                "native_execution_closure",
+                subject.validate_native_execution_closure,
+                (bundle["plan"], bundle["request"], bundle["transcript"]),
+            ),
+            (
+                "candidate", subject.validate_raw_candidate,
+                (
+                    bundle["plan"], bundle["request"], bundle["transcript"],
+                    bundle["native_execution_closure"],
+                    bundle["semantic_projection"],
+                    bundle["cross_runtime_coverage"],
+                ),
+            ),
+        )
+        for name, validator, dependencies in cases:
+            for field in ("schema", "kind"):
+                forged = copy.deepcopy(bundle[name])
+                if field == "schema":
+                    forged[field] = 1
+                else:
+                    self.assertTrue(forged[field].endswith("-v2"))
+                    forged[field] = forged[field][:-1] + "1"
+                with self.subTest(name=name, field=field), self.assertRaises(
+                    subject.ProtocolError,
+                ):
+                    validator(forged, *dependencies)
+
     def test_plan_rejects_type_role_environment_action_and_lp_attacks(self) -> None:
         mutations = (
+            ("schema v1", lambda item: item.update(schema=1)),
+            (
+                "authority policy v1",
+                lambda item: item["authority"].update(
+                    policy="exact-clean-project-hol-light-flyspeck-runtime-"
+                    "tool-and-input-authority-v1"
+                ),
+            ),
             ("bool schema", lambda item: item.update(schema=True)),
             ("float schema", lambda item: item.update(schema=1.0)),
             ("bad ordinal", lambda item: item.update(reference_ordinal=3)),
@@ -648,6 +713,22 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "arbitrary producer path",
                 lambda item: item["authority"]["producer"]["entrypoint"].update(
                     path="scripts/arbitrary-reference-producer.py"
+                ),
+            ),
+            (
+                "missing output parser authority",
+                lambda item: item["authority"]["producer"].pop("output_parser"),
+            ),
+            (
+                "output parser path drift",
+                lambda item: item["authority"]["producer"]["output_parser"].update(
+                    path="scripts/other-output-parser.py"
+                ),
+            ),
+            (
+                "output parser bool bytes",
+                lambda item: item["authority"]["producer"]["output_parser"].update(
+                    bytes=True
                 ),
             ),
             (
@@ -695,6 +776,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
     def test_request_rejects_splices_and_entrypoint_drift(self) -> None:
         plan = self.bundle["plan"]
         mutations = (
+            ("schema v1", lambda item: item.update(schema=1)),
             ("plan content", lambda item: item["plan"].update(sha256="0" * 64)),
             ("nonce", lambda item: item.update(session_nonce="2" * 64)),
             (
@@ -710,6 +792,16 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ("action bool", lambda item: item.update(action_count=True)),
             ("checkpoint", lambda item: item.update(process_state_checkpoint={})),
             ("approval", lambda item: item.update(approval_included=True)),
+            (
+                "missing native marker",
+                lambda item: item["marker_contract"].pop("native_load"),
+            ),
+            (
+                "v1 native marker",
+                lambda item: item["marker_contract"].update(
+                    native_load="CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V1"
+                ),
+            ),
             ("extra", lambda item: item.update(extra=False)),
         )
         for label, mutate in mutations:

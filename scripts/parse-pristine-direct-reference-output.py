@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 """Pure byte parser for pristine direct-reference source observations.
 
-This module consumes immutable stdout/stderr bytes and already validated v1
+This module consumes immutable stdout/stderr bytes and already validated v2
 plan/request values.  It constructs the raw transcript and native execution
 closure; it never accepts those projections as inputs.
 
@@ -14,10 +14,9 @@ Wire lines are UTF-8, LF terminated, and tab delimited.  Decimal fields use
 ``LP_SUCCESS nonce raw-index action input-index class relative bytes sha count``
 ``REFERENCE_COMPLETE nonce boundary action-count lp-count loader-count``
 
-The symbolic names come from the validated request marker contract except for
-``CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V1``, which this parser defines as the
-native-loader observation marker.  The prose above uses spaces only for
-readability; the wire separator is one tab.
+Every symbolic name, including the native-loader observation marker, comes
+from the validated request marker contract.  The prose above uses spaces only
+for readability; the wire separator is one tab.
 
 No exact pristine dependency-history/semantic marker grammar exists yet.
 Accordingly this parser rejects semantic, fingerprint, and other unknown
@@ -36,9 +35,33 @@ from typing import Any
 
 
 SOURCE_REDERIVATION_KIND = (
-    "candle-flyspeck-pristine-direct-raw-source-rederivation-v1"
+    "candle-flyspeck-pristine-direct-raw-source-rederivation-v2"
 )
-NATIVE_LOAD_MARKER = "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V1"
+EXPECTED_RAW_PROTOCOL_SCHEMA = 2
+EXPECTED_PLAN_KIND = "candle-flyspeck-pristine-direct-reference-raw-plan-v2"
+EXPECTED_REQUEST_KIND = "candle-flyspeck-pristine-direct-reference-request-v2"
+EXPECTED_TRANSCRIPT_KIND = (
+    "candle-flyspeck-pristine-direct-reference-transcript-v2"
+)
+EXPECTED_NATIVE_CLOSURE_KIND = (
+    "candle-flyspeck-pristine-direct-native-execution-closure-v2"
+)
+EXPECTED_MARKER_PROTOCOL = (
+    "candle-flyspeck-pristine-direct-reference-markers-v2"
+)
+EXPECTED_OUTPUT_PARSER_PATH = (
+    "scripts/parse-pristine-direct-reference-output.py"
+)
+EXPECTED_MARKER_CONTRACT = {
+    "protocol": EXPECTED_MARKER_PROTOCOL,
+    "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V2",
+    "native_load": "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V2",
+    "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V2",
+    "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V2",
+    "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V2",
+    "session_complete": "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V2",
+    "nonce_in_every_marker": True,
+}
 SEMANTIC_GRAMMAR_STATUS = (
     "not-parsed-exact-pristine-semantic-marker-grammar-absent"
 )
@@ -69,7 +92,44 @@ def require(condition: bool, message: str) -> None:
         raise OutputProtocolError(message)
 
 
+try:
+    _EXECUTING_SOURCE_BYTES = Path(__file__).read_bytes()
+except OSError as error:
+    raise OutputProtocolError(
+        f"cannot capture executing output parser source: {error}"
+    ) from error
+
+
 _PROTOCOL: ModuleType | None = None
+
+
+def _require_compatible_protocol(module: ModuleType) -> None:
+    contract = getattr(module, "MARKER_CONTRACT", None)
+    require(getattr(module, "RAW_PROTOCOL_SCHEMA", None) ==
+            EXPECTED_RAW_PROTOCOL_SCHEMA and
+            getattr(module, "PLAN_KIND", None) == EXPECTED_PLAN_KIND and
+            getattr(module, "REQUEST_KIND", None) == EXPECTED_REQUEST_KIND and
+            getattr(module, "TRANSCRIPT_KIND", None) ==
+            EXPECTED_TRANSCRIPT_KIND and
+            getattr(module, "NATIVE_CLOSURE_KIND", None) ==
+            EXPECTED_NATIVE_CLOSURE_KIND and
+            getattr(module, "MARKER_PROTOCOL", None) ==
+            EXPECTED_MARKER_PROTOCOL and
+            getattr(module, "OUTPUT_PARSER_PATH", None) ==
+            EXPECTED_OUTPUT_PARSER_PATH and
+            contract == EXPECTED_MARKER_CONTRACT and
+            getattr(module, "FINAL_ACTION_COUNT", None) == 297 and
+            getattr(module, "FINAL_BOUNDARY_ID", None) ==
+            "07-final_assembly-through-296" and
+            getattr(module, "LP_CONSUMER_ACTION_INDEX", None) == 184 and
+            getattr(module, "LP_SUCCESS_KIND", None) ==
+            "candle-flyspeck-pristine-direct-lp-success-stream-v1" and
+            getattr(module, "LP_ORDER", None) == "raw-success-marker-order-v1" and
+            getattr(module, "LOADER_LEDGER_POLICY", None) ==
+            "stock-hol-light-loaded-files-success-ledger-canonical-source-map-v1" and
+            getattr(module, "LOADER_LEDGER_ORDER", None) ==
+            "per-phase-new-loaded-files-delta-reversed-to-success-order-v1",
+            "incompatible pristine-reference protocol sibling")
 
 
 def _protocol() -> ModuleType:
@@ -84,12 +144,22 @@ def _protocol() -> ModuleType:
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         _PROTOCOL = module
+    _require_compatible_protocol(_PROTOCOL)
     return _PROTOCOL
 
 
 def byte_content_record(data: bytes, label: str) -> dict[str, object]:
     require(type(data) is bytes, f"{label} is not immutable bytes")
     return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+
+
+def _executing_parser_source_record(protocol: ModuleType) -> dict[str, object]:
+    return {
+        "path": protocol.OUTPUT_PARSER_PATH,
+        **byte_content_record(
+            _EXECUTING_SOURCE_BYTES, "executing output parser source",
+        ),
+    }
 
 
 def _decimal(value: str, label: str) -> int:
@@ -177,7 +247,7 @@ def _parse_source_lines(
     allowed = {
         markers["session_start"], markers["action_complete"],
         markers["lp_success"], markers["session_complete"],
-        NATIVE_LOAD_MARKER,
+        markers["native_load"],
     }
     nonce = plan["session_nonce"]
     started = False
@@ -218,7 +288,7 @@ def _parse_source_lines(
             continue
 
         require(started, "observation marker precedes session start")
-        if marker_name == NATIVE_LOAD_MARKER:
+        if marker_name == markers["native_load"]:
             fields = _exact_fields(line, 10, "native-load")
             require(fields[1] == nonce, "mixed nonce in native-load marker")
             event_index = _decimal(fields[2], "native-load event index")
@@ -374,6 +444,9 @@ def rederive_raw_source_observations(
         request = protocol.validate_raw_request(request, plan)
     except protocol.ProtocolError as error:
         raise OutputProtocolError(f"invalid pristine input: {error}") from error
+    require(plan["authority"]["producer"]["output_parser"] ==
+            _executing_parser_source_record(protocol),
+            "executing output parser differs from plan authority")
     require(isinstance(process_result, dict) and set(process_result) == {
                 "exit_code", "timed_out",
             } and type(process_result.get("exit_code")) is int and
@@ -387,7 +460,7 @@ def rederive_raw_source_observations(
         stdout, plan, request,
     )
     transcript = {
-        "schema": 1,
+        "schema": protocol.RAW_PROTOCOL_SCHEMA,
         "kind": protocol.TRANSCRIPT_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],
@@ -418,7 +491,7 @@ def rederive_raw_source_observations(
         ) from error
     final = action_completions["final_ledger_count"]
     closure = {
-        "schema": 1,
+        "schema": protocol.RAW_PROTOCOL_SCHEMA,
         "kind": protocol.NATIVE_CLOSURE_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],
@@ -433,7 +506,7 @@ def rederive_raw_source_observations(
         "loader_parentage_observed": False,
         "loader_cache_outcomes_observed": False,
         # Both observation classes are emitted into and content-bound by the
-        # same immutable stdout marker stream in this v1 parser.
+        # same immutable stdout marker stream in this v2 parser.
         "loader_ledger_artifact": stdout_record,
         "loader_event_count": len(events),
         "ordered_loader_event_sha256": protocol.canonical_sha256(events),
@@ -459,7 +532,7 @@ def rederive_raw_source_observations(
             f"rederived pristine native closure is invalid: {error}"
         ) from error
     return {
-        "schema": 1,
+        "schema": protocol.RAW_PROTOCOL_SCHEMA,
         "kind": SOURCE_REDERIVATION_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],

@@ -21,20 +21,21 @@ from typing import Any, Callable
 
 FINAL_BOUNDARY_ID = "07-final_assembly-through-296"
 FINAL_ACTION_COUNT = 297
+RAW_PROTOCOL_SCHEMA = 2
 REFERENCE_ROLE = "pristine-clean-reference"
 REFERENCE_ORDINALS = (1, 2)
 REFERENCE_NONCE_KIND = "reference-session-nonce-v1"
-PLAN_KIND = "candle-flyspeck-pristine-direct-reference-raw-plan-v1"
-REQUEST_KIND = "candle-flyspeck-pristine-direct-reference-request-v1"
-TRANSCRIPT_KIND = "candle-flyspeck-pristine-direct-reference-transcript-v1"
+PLAN_KIND = "candle-flyspeck-pristine-direct-reference-raw-plan-v2"
+REQUEST_KIND = "candle-flyspeck-pristine-direct-reference-request-v2"
+TRANSCRIPT_KIND = "candle-flyspeck-pristine-direct-reference-transcript-v2"
 NATIVE_CLOSURE_KIND = (
-    "candle-flyspeck-pristine-direct-native-execution-closure-v1"
+    "candle-flyspeck-pristine-direct-native-execution-closure-v2"
 )
 RAW_CANDIDATE_KIND = (
-    "candle-flyspeck-pristine-direct-reference-raw-candidate-v1"
+    "candle-flyspeck-pristine-direct-reference-raw-candidate-v2"
 )
 AUTHORITY_POLICY = (
-    "exact-clean-project-hol-light-flyspeck-runtime-tool-and-input-authority-v1"
+    "exact-clean-project-hol-light-flyspeck-runtime-tool-and-input-authority-v2"
 )
 ACTION_POLICY = "authenticated-original-build-sequence-full-v1"
 EXECUTION_SELECTION_SEMANTICS = (
@@ -49,13 +50,14 @@ LOADER_LEDGER_POLICY = (
 LOADER_LEDGER_ORDER = (
     "per-phase-new-loaded-files-delta-reversed-to-success-order-v1"
 )
-MARKER_PROTOCOL = "candle-flyspeck-pristine-direct-reference-markers-v1"
+MARKER_PROTOCOL = "candle-flyspeck-pristine-direct-reference-markers-v2"
 ENVIRONMENT_POLICY = (
     "fresh-sanitized-single-thread-reference-process-serialization-key-absent-v1"
 )
 SERIALIZATION_ENVIRONMENT_KEY = "FLYSPECK_SERIALIZATION"
 PRODUCER_ENTRYPOINT_PATH = "scripts/collect-pristine-direct-reference.py"
 PROTOCOL_PATH = "scripts/pristine_direct_reference_protocol.py"
+OUTPUT_PARSER_PATH = "scripts/parse-pristine-direct-reference-output.py"
 LP_WRAPPER_AFTER_ACTION_INDEX = 177
 LP_VERIFY_ACTION_INDEX = 183
 LP_CONSUMER_ACTION_INDEX = 184
@@ -135,11 +137,12 @@ ENTRYPOINT_SEQUENCE = (
 )
 MARKER_CONTRACT = {
     "protocol": MARKER_PROTOCOL,
-    "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V1",
-    "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V1",
-    "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V1",
-    "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V1",
-    "session_complete": "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V1",
+    "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V2",
+    "native_load": "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V2",
+    "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V2",
+    "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V2",
+    "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V2",
+    "session_complete": "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V2",
     "nonce_in_every_marker": True,
 }
 
@@ -372,13 +375,17 @@ def _validate_authority(value: object) -> dict[str, Any]:
             "malformed pristine reference authority")
     producer = value.get("producer")
     require(isinstance(producer, dict) and set(producer) == {
-                "entrypoint", "protocol",
+                "entrypoint", "protocol", "output_parser",
             }, "malformed pristine reference producer authority")
     _named_content_record(producer.get("entrypoint"), "producer entrypoint")
     protocol = _named_content_record(producer.get("protocol"), "producer protocol")
+    output_parser = _named_content_record(
+        producer.get("output_parser"), "producer output parser",
+    )
     require(producer["entrypoint"]["path"] == PRODUCER_ENTRYPOINT_PATH and
-            protocol["path"] == PROTOCOL_PATH,
-            "pristine reference producer/protocol path mismatch")
+            protocol["path"] == PROTOCOL_PATH and
+            output_parser["path"] == OUTPUT_PARSER_PATH,
+            "pristine reference producer/protocol/parser path mismatch")
 
     repositories = value.get("repositories")
     require(isinstance(repositories, dict) and set(repositories) == {
@@ -517,7 +524,8 @@ def validate_raw_plan(value: object) -> dict[str, Any]:
         "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
-            is_int(value.get("schema")) and value["schema"] == 1 and
+            is_int(value.get("schema")) and
+            value["schema"] == RAW_PROTOCOL_SCHEMA and
             value.get("kind") == PLAN_KIND and
             value.get("boundary_id") == FINAL_BOUNDARY_ID and
             value.get("fresh_process_replay_from_action_zero") is True and
@@ -561,7 +569,8 @@ def validate_raw_request(value: object, plan: object) -> dict[str, Any]:
         "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
-            is_int(value.get("schema")) and value["schema"] == 1 and
+            is_int(value.get("schema")) and
+            value["schema"] == RAW_PROTOCOL_SCHEMA and
             value.get("kind") == REQUEST_KIND and
             is_int(value.get("action_count")) and
             value["action_count"] == FINAL_ACTION_COUNT and
@@ -691,7 +700,8 @@ def validate_raw_transcript(
         "approval_included", "pft_used", "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
-            is_int(value.get("schema")) and value["schema"] == 1 and
+            is_int(value.get("schema")) and
+            value["schema"] == RAW_PROTOCOL_SCHEMA and
             value.get("kind") == TRANSCRIPT_KIND and
             value.get("marker_protocol") == MARKER_PROTOCOL and
             is_int(value.get("exit_code")) and value["exit_code"] == 0 and
@@ -772,7 +782,8 @@ def validate_native_execution_closure(
         "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
-            is_int(value.get("schema")) and value["schema"] == 1 and
+            is_int(value.get("schema")) and
+            value["schema"] == RAW_PROTOCOL_SCHEMA and
             value.get("kind") == NATIVE_CLOSURE_KIND and
             value.get("loader_policy") == LOADER_LEDGER_POLICY and
             value.get("loader_order") == LOADER_LEDGER_ORDER and
@@ -1019,7 +1030,8 @@ def validate_raw_candidate(
         "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
-            is_int(value.get("schema")) and value["schema"] == 1 and
+            is_int(value.get("schema")) and
+            value["schema"] == RAW_PROTOCOL_SCHEMA and
             value.get("kind") == RAW_CANDIDATE_KIND and
             value.get("status") == "complete-unapproved" and
             value.get("authentication_status") == "not-authenticated" and
