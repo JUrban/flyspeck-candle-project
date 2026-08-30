@@ -920,7 +920,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "PTRACE_O_TRACEEXIT",
             "PTRACE_O_EXITKILL",
         ))
-        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 4)
+        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 5)
         self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 5)
         self.assertEqual(subject.V4_BUILD_SYSCALL_DISPOSITION_SCHEMA, 4)
         self.assertNotIn(
@@ -1175,7 +1175,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertIn("clone-newuser", securebits_policy[3])
         self.assertEqual(
             subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
-            "candle-flyspeck-v4-initial-state-seed-v2",
+            "candle-flyspeck-v4-initial-state-seed-v3",
         )
         self.assertEqual(
             subject.V4_BUILD_INITIAL_STATE_DIGEST_PREIMAGE,
@@ -1211,10 +1211,8 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertIn(
             "mount-namespace-create", subject.V4_BUILD_FS_TRANSITION_FIELDS,
         )
-        self.assertEqual(
-            subject.V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS[-2:],
-            ("propagation", "user_namespace_locked"),
-        )
+        self.assertEqual(subject.V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS[-1],
+                         "propagation")
         self.assertIn(
             "mountinfo_payload_base64",
             subject.V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS,
@@ -1225,6 +1223,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertIn("nsfs", subject.V4_BUILD_MOUNT_NAMESPACE_FILE_POLICY)
         self.assertIn("shared-to-slave", subject.V4_BUILD_MOUNT_USERNS_COPY_POLICY)
+        self.assertIn(
+            "not-authority", subject.V4_BUILD_MOUNT_INTERNAL_LOCK_POLICY,
+        )
         self.assertIn(
             "only-null-normalized-parent",
             subject.V4_BUILD_MOUNT_ROOT_PARENT_POLICY,
@@ -1395,12 +1396,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             (
                 subject.V4_BUILD_INITIAL_STATE_DIGEST_FIELDS,
                 subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
-                "bb40e16801e82b82d79b448967fc665ab998355fe61a2067f3006ddf5fce2ef1",
+                "0c7f554c9c60a312a6a18aa9cf72518131369c5fbbf66ef75aeb3a416642cf0d",
             ),
             (
                 subject.V4_BUILD_SETUP_REPLAY_STATE_FIELDS,
                 subject.V4_BUILD_SETUP_STATE_DIGEST_DOMAIN,
-                "83218cf241caf0f5fac3cc50030de1f56eec683c00e436d33a3a47323ebfef62",
+                "ffdd6648208c484bfdcf38bae8acaebd583850e305a2dff5a330bb25776263b9",
             ),
         )
         for fields, domain, expected in fixtures:
@@ -1442,7 +1443,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertEqual(len(values), 378)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "7a41529006e36858f38da8bf88361a72997f7d53e64288bd15e1b239a5182184",
+            "3de9f7e37f67511100b060f57d1708e2023c2a674b80a415b4ac9452eb87089b",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:

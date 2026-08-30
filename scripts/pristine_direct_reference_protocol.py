@@ -417,12 +417,12 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
 V4_BUILD_FILTER_ENOSYS_SYSCALLS = (
     (435, "clone3"),
 )
-V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 4
+V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 5
 V4_BUILD_EXECUTION_OBSERVATION_KIND = (
-    "candle-flyspeck-isolated-native-build-execution-observation-v4"
+    "candle-flyspeck-isolated-native-build-execution-observation-v5"
 )
 V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
-    "outside-parent-all-task-source-consumption-and-output-chronology-v4"
+    "outside-parent-all-task-source-consumption-and-output-chronology-v5"
 )
 V4_BUILD_EXECUTION_TASK_MAX = 4_096
 V4_BUILD_EXECUTION_EVENT_MAX = 131_072
@@ -449,7 +449,7 @@ V4_BUILD_INITIAL_STATE_CAPTURE_BOUNDARY = (
     "held-interrupt-stop-after-id-maps-before-builder-gate-release-v1"
 )
 V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN = (
-    "candle-flyspeck-v4-initial-state-seed-v2"
+    "candle-flyspeck-v4-initial-state-seed-v3"
 )
 V4_BUILD_INITIAL_STATE_DIGEST_PREIMAGE = (
     "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
@@ -513,7 +513,7 @@ V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS = (
     "mountpoint_identity", "device_major", "device_minor",
     "root_bytes_base64", "mountpoint_bytes_base64", "filesystem_type",
     "mount_source_bytes_base64", "flags", "super_options",
-    "optional_fields", "propagation", "user_namespace_locked",
+    "optional_fields", "propagation",
 )
 V4_BUILD_MOUNT_CLONE_FIELDS = (
     "index", "source_mount_id", "child_mount_id",
@@ -524,7 +524,6 @@ V4_BUILD_MOUNT_CLONE_FIELDS = (
     "mount_source_bytes_base64", "flags", "super_options",
     "source_optional_fields", "child_optional_fields",
     "source_propagation", "child_propagation",
-    "source_user_namespace_locked", "child_user_namespace_locked",
     "source_parent_mount_id", "child_parent_mount_id",
 )
 V4_BUILD_MOUNT_PROPAGATION_FIELDS = (
@@ -548,7 +547,7 @@ V4_BUILD_MOUNT_NAMESPACE_FILE_POLICY = (
     "reject-source-nsfs-or-mountpoint-rooted-at-proc-namespace-file-v1"
 )
 V4_BUILD_MOUNT_USERNS_COPY_POLICY = (
-    "linux-copy-mnt-ns-shared-to-slave-lock-tree-no-namespace-files-v1"
+    "linux-copy-mnt-ns-visible-shared-to-slave-no-namespace-files-v2"
 )
 V4_BUILD_MOUNT_PROPAGATION_COPY_POLICY = (
     ("private", "private"),
@@ -557,8 +556,8 @@ V4_BUILD_MOUNT_PROPAGATION_COPY_POLICY = (
     ("shared-slave", "slave-same-source-shared-group-as-master"),
     ("unbindable", "unbindable"),
 )
-V4_BUILD_MOUNT_USERNS_LOCK_POLICY = (
-    "every-child-mount-true-every-clone-row-child-true-exact-v1"
+V4_BUILD_MOUNT_INTERNAL_LOCK_POLICY = (
+    "not-authority-unobservable-mnt-expire-and-lock-bits-never-relied-on-v1"
 )
 V4_BUILD_INITIAL_CREDENTIAL_FIELDS = (
     "real_uid", "effective_uid", "saved_uid", "fsuid", "real_gid",
@@ -788,13 +787,13 @@ V4_BUILD_SETUP_REPLAY_STATE_FIELDS = (
     "fs_state", "mount_graph", "credentials", "task_control_state",
 )
 V4_BUILD_SETUP_STATE_DIGEST_DOMAIN = (
-    "candle-flyspeck-v4-setup-replay-state-v2"
+    "candle-flyspeck-v4-setup-replay-state-v3"
 )
 V4_BUILD_SETUP_STATE_DIGEST_PREIMAGE = (
     "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
 )
 V4_BUILD_SETUP_POLICY = (
-    "derived-pre-filter-builder-setup-deny-all-other-v3"
+    "derived-pre-filter-builder-setup-deny-all-other-v4"
 )
 V4_BUILD_SETUP_SEQUENCE_FIELDS = (
     "index", "role", "syscall_numbers", "argument_policy",
