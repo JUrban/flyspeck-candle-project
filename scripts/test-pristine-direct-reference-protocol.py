@@ -565,6 +565,15 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
     def test_v3_core_artifacts_validate_but_candidate_and_bundle_fail_closed(self) -> None:
         bundle = copy.deepcopy(self.bundle)
         self.assertIs(subject.validate_raw_plan(bundle["plan"]), bundle["plan"])
+        unbounded_v3 = copy.deepcopy(bundle["plan"])
+        unbounded_v3["authority"]["producer"]["output_parser"]["bytes"] = 10**20
+        self.assertIs(subject.validate_raw_plan(unbounded_v3), unbounded_v3)
+        self.assertEqual(
+            subject.validate_canonical_raw_plan_bytes(
+                subject.canonical_json_bytes(unbounded_v3),
+            ),
+            unbounded_v3,
+        )
         self.assertIs(
             subject.validate_raw_request(bundle["request"], bundle["plan"]),
             bundle["request"],
@@ -938,6 +947,8 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 subject.ProtocolError,
             ):
                 subject.validate_canonical_native_source_tree_bytes(payload)
+        with self.assertRaises(subject.ProtocolError):
+            subject.decode_object(b'{"x":1e999}', "hostile exponent")
         with self.assertRaisesRegex(subject.ProtocolError, "not canonical"):
             subject.validate_canonical_native_source_tree_bytes(
                 subject.canonical_value_bytes(tree),

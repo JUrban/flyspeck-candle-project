@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import PurePosixPath
 import re
 from types import ModuleType
@@ -527,21 +528,33 @@ def _reject_nonfinite(value: str) -> None:
     raise ProtocolError(f"non-finite JSON number: {value}")
 
 
-def _bounded_json_integer(value: str) -> int:
+def _bounded_json_integer(value: str, max_digits: int) -> int:
     digits = value[1:] if value.startswith("-") else value
     require(
-        1 <= len(digits) <= JSON_INTEGER_MAX_DIGITS,
+        1 <= len(digits) <= max_digits,
         "JSON integer exceeds decimal digit cap",
     )
     return int(value)
 
 
-def decode_object(data: bytes, label: str) -> dict[str, Any]:
+def _finite_json_float(value: str) -> float:
+    result = float(value)
+    require(math.isfinite(result), "non-finite JSON number")
+    return result
+
+
+def decode_object(
+    data: bytes, label: str, *, integer_max_digits: int | None = None,
+) -> dict[str, Any]:
     try:
         value = json.loads(
             data.decode("utf-8", errors="strict"),
             object_pairs_hook=_reject_duplicate_keys,
-            parse_int=_bounded_json_integer,
+            parse_int=(
+                int if integer_max_digits is None else
+                lambda item: _bounded_json_integer(item, integer_max_digits)
+            ),
+            parse_float=_finite_json_float,
             parse_constant=_reject_nonfinite,
         )
     except ProtocolError:
@@ -554,10 +567,13 @@ def decode_object(data: bytes, label: str) -> dict[str, Any]:
 
 
 def validate_canonical_bytes(
-    data: bytes, label: str, validator: Callable[[object], dict[str, Any]],
+    data: bytes, label: str, validator: Callable[[object], dict[str, Any]], *,
+    integer_max_digits: int | None = None,
 ) -> dict[str, Any]:
     require(type(data) is bytes, f"{label} is not immutable bytes")
-    value = decode_object(data, label)
+    value = decode_object(
+        data, label, integer_max_digits=integer_max_digits,
+    )
     try:
         canonical = canonical_json_bytes(value)
     except ProtocolError:
@@ -747,7 +763,10 @@ def validate_canonical_native_source_tree_bytes(data: bytes) -> dict[str, Any]:
     require(type(data) is bytes, f"{label} is not immutable bytes")
     require(len(data) <= V4_AUTHORITY_OBJECT_MAX_BYTES,
             f"{label} exceeds retained cap")
-    return validate_canonical_bytes(data, label, validate_native_source_tree)
+    return validate_canonical_bytes(
+        data, label, validate_native_source_tree,
+        integer_max_digits=JSON_INTEGER_MAX_DIGITS,
+    )
 
 
 def _repository_record(value: object, label: str) -> dict[str, Any]:
