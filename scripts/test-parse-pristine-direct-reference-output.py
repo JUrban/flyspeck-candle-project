@@ -166,6 +166,9 @@ class PristineOutputParserTests(unittest.TestCase):
         })
         transcript = result["transcript"]
         closure = result["native_execution_closure"]
+        for artifact in (result, transcript, closure):
+            self.assertEqual(artifact["schema"], protocol.RAW_PROTOCOL_SCHEMA)
+            self.assertTrue(artifact["kind"].endswith("-v2"))
         self.assertIs(
             protocol.validate_raw_transcript(
                 transcript, self.plan, self.request,
