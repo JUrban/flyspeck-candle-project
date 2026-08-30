@@ -18,11 +18,12 @@ Every symbolic name, including the native-loader observation marker, comes
 from the validated request marker contract.  The prose above uses spaces only
 for readability; the wire separator is one tab.
 
-This migration slice includes a bounded pure decoder for the exact semantic-v3
-wire forms.  The source-stream state machine does not consume those forms yet;
-it therefore rejects semantic markers and emits an explicitly incomplete,
-noncandidate source rederivation.  Its result is raw, unauthenticated,
-unapproved, and ineligible for S2/S3.
+This module includes a bounded pure decoder for the exact semantic-v3 wire
+forms.  The source-stream state machine consumes exactly ten consecutive forms
+at the final boundary and rederives the nonce-free semantic projection plus a
+run-bound completion observation.  The resulting source rederivation remains
+raw, unauthenticated, unapproved, noncandidate, and ineligible for S2/S3;
+cross-runtime coverage is not derived here.
 
 Trusted activation and the injected modules below are private plumbing, not an
 in-process security boundary.  A future collector must run the separately
