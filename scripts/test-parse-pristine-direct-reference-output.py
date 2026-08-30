@@ -866,6 +866,19 @@ class PristineOutputParserTests(unittest.TestCase):
         ))
         mutations.append(("marker interruption", native, "protocol marker interrupts"))
 
+        for label, marker_name in (
+            ("action interruption", "action_complete"),
+            ("LP interruption", "lp_success"),
+        ):
+            interrupted = copy.deepcopy(self.lines)
+            interrupted.insert(indices[3] + 1, next(
+                line for line in interrupted
+                if line.startswith(
+                    protocol.MARKER_CONTRACT[marker_name] + "\t"
+                )
+            ))
+            mutations.append((label, interrupted, "protocol marker interrupts"))
+
         early = copy.deepcopy(self.lines)
         block = early[indices[0]:indices[-1] + 1]
         del early[indices[0]:indices[-1] + 1]
