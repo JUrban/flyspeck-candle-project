@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import json
 import os
@@ -131,6 +132,96 @@ class PublishedDirectResultTests(unittest.TestCase):
             subject.ResultError, "requires evidence schema 6",
         ):
             subject.main()
+
+    def test_inlined_descriptor_branch_follows_authenticated_postflight(self):
+        tree = ast.parse(SUBJECT_PATH.read_text())
+        function = next(
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and
+            node.name == "_validate_with_pins"
+        )
+        comparison_branch = next(
+            node for node in ast.walk(function)
+            if isinstance(node, ast.If) and
+            ast.unparse(node.test) == "arguments.comparison_candidate"
+        )
+        schema6_regions = [
+            node for node in ast.walk(function)
+            if isinstance(node, ast.If) and
+            ast.unparse(node.test) == "arguments.evidence_schema == 6" and
+            node.lineno < comparison_branch.lineno <= node.end_lineno
+        ]
+        self.assertEqual(len(schema6_regions), 1)
+        lock_regions = [
+            node for node in ast.walk(function)
+            if isinstance(node, ast.Try) and
+            node.lineno < comparison_branch.lineno <= node.end_lineno and
+            any(
+                isinstance(child, ast.Call) and
+                ast.unparse(child.func) == "lock.close"
+                for final in node.finalbody for child in ast.walk(final)
+            )
+        ]
+        self.assertEqual(len(lock_regions), 1)
+
+        assignments = {
+            node.targets[0].id: node
+            for node in comparison_branch.body
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and
+            isinstance(node.targets[0], ast.Name)
+        }
+        descriptor = assignments["descriptor"].value
+        authority = assignments["candidate_authority"].value
+        self.assertIsInstance(descriptor, ast.Dict)
+        self.assertIsInstance(authority, ast.Dict)
+        self.assertEqual(
+            {ast.literal_eval(key) for key in descriptor.keys},
+            {
+                "schema", "kind", "role", "ordinal", "candidate",
+                "authenticated_nonce", "authenticated_plan",
+                "semantic_projection", "coverage_projection",
+                "candidate_authority", "pft_used",
+            },
+        )
+        self.assertEqual(
+            {ast.literal_eval(key) for key in authority.keys},
+            {
+                "policy", "authenticator", "project_commit",
+                "runtime_commit", "entrypoint", "sources",
+            },
+        )
+        branch_source = ast.unparse(comparison_branch)
+        for required in (
+            "data_record(project_protocol.canonical_json_bytes(capture))",
+            "receipt['attempt_nonce']",
+            "capture['authenticated_plan']",
+            "capture['semantic_projection']",
+            "capture['coverage_projection']",
+            "'candidate_authority': candidate_authority",
+            "'pft_used': False",
+            "project_protocol._validate_authenticated_comparison_descriptor",
+        ):
+            self.assertIn(required, branch_source)
+
+        final_source_authentication = next(
+            node for node in ast.walk(function)
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 and
+            isinstance(node.targets[0], ast.Name) and
+            node.targets[0].id == "final_consumer_sources"
+        )
+        held_lock_checks = [
+            node for node in ast.walk(function)
+            if isinstance(node, ast.Call) and
+            ast.unparse(node.func) == "validate_held_runtime_lock" and
+            node.lineno < comparison_branch.lineno
+        ]
+        self.assertLess(
+            final_source_authentication.lineno, comparison_branch.lineno,
+        )
+        self.assertGreater(
+            max(node.lineno for node in held_lock_checks),
+            final_source_authentication.lineno,
+        )
 
     def test_duplicate_json_key_rejected(self):
         with self.assertRaisesRegex(subject.ResultError, "duplicate JSON key"):
