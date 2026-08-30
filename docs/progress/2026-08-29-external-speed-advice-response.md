@@ -101,27 +101,30 @@ note implies before the current canonical launch:
 - the translated `caml_parserProg` proof target completed in about 43m39s at
   32.9 GiB RSS;
 - a manifest-bound static audit classified all 12,700 qualified-uppercase
-  terminal occurrences and verified the exact 400-source selected graph; and
+  terminal occurrences as 12,449 theorem/value references, 249
+  constructor/exception references, and two module paths, and verified the
+  exact 400-source selected graph; and
 - parser, Dopen, inference/soundness, CV, and uppercase-value repairs were
   accumulated before restarting the canonical downstream chain.
 
-A reusable whole-corpus parse/infer diagnostic does not currently exist and is
-still worthwhile. It is not as simple as parsing 400 independent files: the
-selected HOL Light route uses
-directives, generated inputs, normalization contracts, and an incremental
-module/value environment. Inference is even more context-dependent. CakeML's
-generic `--print_sexp --skip_type_inference=true` route uses the CakeML
+A reusable whole-corpus parse-only diagnostic now exists at Candle `688d9d1`,
+with an exact 400-input materialization awaiting the new linked compiler.  A
+combined parse/infer diagnostic does not yet exist and remains worthwhile. It
+is not as simple as parsing 400 independent files: the selected HOL Light
+route uses directives, generated inputs, normalization contracts, and an
+incremental module/value environment. Inference is even more context-dependent.
+CakeML's generic `--print_sexp --skip_type_inference=true` route uses the CakeML
 `parse_prog` language, not Candle's OCaml parser, and is not a substitute.
 
-The safe medium-term implementation is a manifest/phrase-aware diagnostic
-around the translated OCaml parser `caml_parser$run`, explicitly non-promotable;
-pilot it on 20 exact source nodes before extending to all 400. A subsequent
-infer-only mode must preserve manifest action order, generated inputs,
-directives, and the incremental environment. Once a current linked compiler
-exists, use that diagnostic to expose latent baseline issues and run it before
-any subsequent bootstrap-triggering frontend edit. A linked old parser cannot
-validate a newly edited parser, so focused HOL parser/inference tests and the
-static feature audit remain the cheap pre-bootstrap gates for a new change.
+The implemented parser gate is a manifest/phrase-aware diagnostic around the
+translated OCaml parser `caml_parser$run`, explicitly non-promotable.  It runs a
+20-input pilot before the 400-input inventory.  A subsequent infer-only mode
+must preserve manifest action order, generated inputs, directives, and the
+incremental environment. Once a current linked compiler exists, use the parser
+diagnostic to expose latent baseline issues and run it before any subsequent
+bootstrap-triggering frontend edit. A linked old parser cannot validate a
+newly edited parser, so focused HOL parser/inference tests and the static
+feature audit remain the cheap pre-bootstrap gates for a new change.
 
 ### Dropping non-x64 architectures
 

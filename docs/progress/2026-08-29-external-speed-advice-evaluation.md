@@ -54,14 +54,16 @@ and sources instead.
   would destroy that comparison.
 - `cv_translator/cake_compile_heap` has two explicit prerequisites,
   `eval_cake_compile_x64Lib.uo` and `eval_cake_compile_arm8Lib.uo`.  This is a
-  real opportunity for two-job scheduling.  Later requested stages are already
-  x64-specific: `compiler64ProgTheory.uo`, `x64BootstrapTheory.uo`, and
-  `x64BootstrapProofTheory.uo`.
+  real opportunity for two-job scheduling.  `compiler64ProgTheory.uo` is not
+  x64-specific: it extends the generic translation through x64, ARM8, RISC-V,
+  and MIPS.  Only the subsequent `x64BootstrapTheory.uo` and
+  `x64BootstrapProofTheory.uo` requests are x64-specific.
 - The authenticated direct manifest has 297 ordered actions and 400 source
-  nodes.  The existing parser diagnostic is intentionally only a 20-node core
-  pilot.  Its own contract says the first-discovery traversal reaches 392
-  nodes and binds eight exclusions; an all-inventory diagnostic must therefore
-  select all 400 explicitly rather than relabeling the 392-node traversal.
+  nodes.  The parser diagnostic has both a 20-node core pilot and an explicit
+  400-node `all-inventory` profile.  Its contract says the first-discovery
+  traversal reaches 392 nodes and binds eight exclusions; the larger profile
+  therefore selects all 400 explicitly rather than relabeling the 392-node
+  traversal.
 - The cold serial `cake_compile_heap` stage completed in 1:42:57 with maximum
   RSS 6,399,540 KiB, 101% CPU, and zero swaps.  After the transition to
   `compiler64ProgTheory.uo`, total relevant project RSS remained roughly
@@ -73,8 +75,8 @@ and sources instead.
 ### Whole-corpus frontend gates — accept, highest priority
 
 Once the current proof-built diagnostic compiler is linked, run the existing
-20-node capability/pilot gate first, then add and run an explicit 400-node
-parser-only plan before authorizing another expensive bootstrap.  A later
+20-node capability/pilot gate first, then run the explicit 400-node parser-only
+plan before authorizing another expensive bootstrap.  A later
 parse-plus-inference diagnostic is useful only if its translated entrypoint
 can preserve an equally narrow, non-promotable claim boundary.  Neither gate
 is theorem or release evidence.
@@ -95,11 +97,11 @@ loader sites, 721 complete-line masks, six retained embedded expressions, and
 embedded expressions and no standalone action.  The focused suite passes 16
 tests and full lightweight Candle discovery passes 318 tests.
 
-This remains source-only and categorically nonpromotable.  The next runtime
-profile must materialize these exact bytes and require and retain exactly 400
-ordered parser attempts.  The existing pilot receipt is already hardened to
-exact attempt/transcript cardinality so the larger profile cannot inherit a
-zero-attempt or partial-attempt pass.
+The source audit remains source-only and categorically nonpromotable.  Candle
+`688d9d1` now implements the `all-inventory` runtime profile and its exact
+400-input materialization already exists.  Execution still awaits the new
+linked compiler.  Both profiles require exact attempt/transcript cardinality,
+so the larger profile cannot inherit a zero-attempt or partial-attempt pass.
 
 ### Batch frontend repairs — accept
 
