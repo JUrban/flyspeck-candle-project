@@ -944,7 +944,11 @@ def build_schema6_capture_result(
     )
     require(capture["receipt"] == data_record(receipt_data) and
             capture["authenticated_plan"] == data_record(plan_data) and
+            capture["promotion"] is False and
             capture["approval_included"] is False and
+            capture["direct_s2_execution_approved"] is False and
+            capture["direct_s3_coverage_approved"] is False and
+            capture["v1_3_s3_release_approved"] is False and
             capture["pft_used"] is False and
             capture["s2_s3_evidence"] is False,
             "schema-6 capture differs from held source bytes")

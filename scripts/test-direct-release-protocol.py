@@ -789,6 +789,10 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ), capture,
         )
         self.assertFalse(capture["approval_included"])
+        self.assertFalse(capture["promotion"])
+        self.assertFalse(capture["direct_s2_execution_approved"])
+        self.assertFalse(capture["direct_s3_coverage_approved"])
+        self.assertFalse(capture["v1_3_s3_release_approved"])
         self.assertFalse(capture["pft_used"])
         self.assertFalse(capture["s2_s3_evidence"])
 
@@ -800,6 +804,15 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 "semantic_projection"
             ]["theorems"][0].update(theorem_sha256="0" * 64)),
             ("approval", lambda item: item.update(approval_included=True)),
+            ("direct S2", lambda item: item.update(
+                direct_s2_execution_approved=True,
+            )),
+            ("direct S3", lambda item: item.update(
+                direct_s3_coverage_approved=True,
+            )),
+            ("release S3", lambda item: item.update(
+                v1_3_s3_release_approved=True,
+            )),
             ("PFT", lambda item: item.update(pft_used=True)),
             ("authority", lambda item: item["authority"].update(
                 flyspeck_commit="0" * 40,

@@ -1196,7 +1196,9 @@ def validate_authenticated_schema6_capture(
     fields = {
         "schema", "kind", "boundary_id", "action_count", "receipt",
         "authenticated_plan", "semantic_projection", "coverage_projection",
-        "authority", "approval_included", "pft_used", "s2_s3_evidence",
+        "authority", "promotion", "approval_included",
+        "direct_s2_execution_approved", "direct_s3_coverage_approved",
+        "v1_3_s3_release_approved", "pft_used", "s2_s3_evidence",
     }
     require(isinstance(value, dict) and set(value) == fields and
             type(value.get("schema")) is int and value["schema"] == 1 and
@@ -1204,7 +1206,11 @@ def validate_authenticated_schema6_capture(
             value.get("boundary_id") == FINAL_BOUNDARY_ID and
             type(value.get("action_count")) is int and
             value["action_count"] == FINAL_ACTION_COUNT and
+            value.get("promotion") is False and
             value.get("approval_included") is False and
+            value.get("direct_s2_execution_approved") is False and
+            value.get("direct_s3_coverage_approved") is False and
+            value.get("v1_3_s3_release_approved") is False and
             value.get("pft_used") is False and
             value.get("s2_s3_evidence") is False,
             "malformed direct authenticated schema-6 capture")
@@ -1266,7 +1272,11 @@ def build_authenticated_schema6_capture(
             receipt, authenticated_plan,
         ),
         "authority": authority,
+        "promotion": False,
         "approval_included": False,
+        "direct_s2_execution_approved": False,
+        "direct_s3_coverage_approved": False,
+        "v1_3_s3_release_approved": False,
         "pft_used": False,
         "s2_s3_evidence": False,
     }

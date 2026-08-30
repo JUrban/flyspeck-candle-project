@@ -69,7 +69,11 @@ class FakeCaptureProtocol:
             "authenticated_plan":
                 subject.data_record(cls.canonical_json_bytes(plan)),
             "authority": authority,
+            "promotion": False,
             "approval_included": False,
+            "direct_s2_execution_approved": False,
+            "direct_s3_coverage_approved": False,
+            "v1_3_s3_release_approved": False,
             "pft_used": False,
             "s2_s3_evidence": False,
         }
@@ -228,6 +232,9 @@ class PublishedDirectResultTests(unittest.TestCase):
             capture["authority"]["consumer_project_commit"], "1" * 40,
         )
         self.assertFalse(capture["approval_included"])
+        self.assertFalse(capture["direct_s2_execution_approved"])
+        self.assertFalse(capture["direct_s3_coverage_approved"])
+        self.assertFalse(capture["v1_3_s3_release_approved"])
         with self.assertRaisesRegex(subject.ResultError, "canonical JSON"):
             subject.build_schema6_capture_result(
                 FakeCaptureProtocol, arguments, receipt, plan,
