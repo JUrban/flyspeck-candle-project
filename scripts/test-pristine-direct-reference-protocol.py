@@ -1818,11 +1818,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             edges, fd_table, descriptions, initial_fs, mount_graph,
             input_identity, 17,
         )
-        self.assertEqual(authority["input_root_fd"]["fd"], 10)
-        self.assertEqual(
-            authority["builder_mount_root"]["mountpoint_identity"],
-            setup_identity,
-        )
+        with self.assertRaises(TypeError):
+            authority["input_root_edge"]["index"] = 999
+        with self.assertRaises(TypeError):
+            authority["input_root_open_description"] = {"malformed": True}
+        with self.assertRaises(TypeError):
+            authority._payload_bytes = b"{}"
 
         input_setup_edge = (
             subject.enumerate_isolated_native_build_setup_root_edge_v1(
@@ -1948,10 +1949,41 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             {**setup_edge, "index": 1, "st_ino": 44},
             {**input_edge, "index": 2},
         ]
+        detached_input = {
+            **input_edge, "authority_role": "PFT:detached-authority",
+            "authority_index": 999,
+        }
+        duplicate_ofds = list_container([
+            description,
+            {
+                **description, "index": 1, "object_edge_index": 0,
+                "descriptor_ref_count": 1,
+            },
+        ])
+        duplicate_ofd_fds = [
+            fds[0],
+            {
+                "index": 1, "fd": 11, "fd_generation": 18,
+                "cloexec": False, "access_mode": "read-search-only",
+                "open_description_index": 1,
+            },
+        ]
+        duplicate_ofd_fd_table = {
+            **fd_table, "fd_count": 2, "fds": duplicate_ofd_fds,
+            "ordered_fd_sha256": subject.canonical_sha256(duplicate_ofd_fds),
+        }
         hostile_authorities = (
             (
                 list_container(duplicate_setup), fd_table, descriptions,
                 initial_fs, mount_graph, input_identity, 17,
+            ),
+            (
+                list_container([setup_edge, detached_input]), fd_table,
+                descriptions, initial_fs, mount_graph, input_identity, 17,
+            ),
+            (
+                edges, duplicate_ofd_fd_table, duplicate_ofds, initial_fs,
+                mount_graph, input_identity, 17,
             ),
             (
                 edges, fd_table,
@@ -2005,13 +2037,27 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         wrong_fd["entry_capture"]["fd_generation"] = 18
         wrong_path = copy.deepcopy(observations[2])
         wrong_path["entry_capture"]["operands"][0]["payload_base64"] = "LwA="
+        bool_path_index = copy.deepcopy(observations[2])
+        bool_path_index["entry_capture"]["operands"][0]["index"] = False
+        bool_argument_index = copy.deepcopy(observations[0])
+        bool_argument_index["entry_capture"]["target_operand"][
+            "argument_index"
+        ] = True
+        bool_object_count = copy.deepcopy(observations[1])
+        bool_object_count["object_edge_count"] = True
+        bool_transition_count = copy.deepcopy(observations[1])
+        bool_transition_count["fs_transition_count"] = True
+        bool_transition_index = copy.deepcopy(observations[1])
+        bool_transition_index["fs_transitions"][0]["index"] = False
         missing_mount = copy.deepcopy(observations[0])
         missing_mount["fs_transitions"][0]["affected_mount_count"] = 0
         missing_mount["fs_transitions"][0]["affected_mount_ids"] = []
         missing_mount["fs_transitions"][0]["old_propagations"] = []
         missing_mount["fs_transitions"][0]["new_propagations"] = []
         for hostile in (
-            mixed_setup, replayed, wrong_fd, wrong_path, missing_mount,
+            mixed_setup, replayed, wrong_fd, wrong_path, bool_path_index,
+            bool_argument_index, bool_object_count, bool_transition_count,
+            bool_transition_index, missing_mount,
         ):
             with self.subTest(observation=hostile), self.assertRaises(
                 subject.ProtocolError,
@@ -2019,6 +2065,23 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 subject.validate_v4_build_setup_root_observation(
                     hostile, authority,
                 )
+        forged_authority = {
+            "setup_root_edge": setup_edge,
+            "input_root_edge": {**input_edge, "index": 999},
+            "input_root_fd": fds[0],
+            "input_root_open_description": {"malformed": True},
+            "initial_fs_state": initial_fs,
+            "builder_mount_root": mount,
+            "builder_mounts": [mount],
+            "builder_mount_namespace_identity": {
+                "fixture": "mount-namespace",
+            },
+            "builder_mount_generation": 1,
+        }
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_setup_root_observation(
+                observations[1], forged_authority,
+            )
         with self.assertRaises(subject.ProtocolError):
             subject.validate_v4_build_event_object_edges(
                 [input_setup_edge], phase="post-filter",
@@ -2059,7 +2122,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         for bad in (
             {**credentials, "real_uid": True},
+            {**credentials, "securebits": 1},
             {**credentials, "securebits": 0x100},
+            {**credentials, "no_new_privileges": True},
+            {**credentials, "seccomp_mode": False, "seccomp_filter_count": 0},
             {**credentials, "seccomp_mode": 0, "seccomp_filter_count": 1},
         ):
             with self.subTest(credentials=bad), self.assertRaises(
@@ -2100,13 +2166,26 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.validate_v4_build_task_control_state(task_control),
             task_control,
         )
+        bool_signal_number = copy.deepcopy(task_control)
+        bool_signal_number["signal_dispositions"][0]["signal_number"] = True
+        bool_signal_number["signal_disposition_sha256"] = (
+            subject.canonical_sha256(bool_signal_number["signal_dispositions"])
+        )
+        bool_robust_length = copy.deepcopy(task_control)
+        bool_robust_length["robust_list_registration"]["length"] = False
+        bool_rseq_flag = copy.deepcopy(task_control)
+        bool_rseq_flag["rseq_registration"]["flags"] = False
         for bad in (
             {**task_control, "signal_disposition_count": True},
             {**task_control, "signal_disposition_sha256": "0" * 64},
+            {**task_control, "personality": 1},
             {
                 **task_control,
                 "personality": subject.V4_BUILD_PERSONALITY_STICKY_TIMEOUTS,
             },
+            bool_signal_number,
+            bool_robust_length,
+            bool_rseq_flag,
         ):
             with self.subTest(task_control=bad), self.assertRaises(
                 subject.ProtocolError

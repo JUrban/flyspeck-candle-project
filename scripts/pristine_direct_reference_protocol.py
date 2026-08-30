@@ -2358,7 +2358,8 @@ def validate_v4_build_capability_set(
     result = _v4_exact_dict(value, V4_BUILD_CAPABILITY_SET_FIELDS, label)
     capabilities = result.get("capabilities")
     require(
-        result.get("cap_last_cap") == expected_last and
+        is_int(result.get("cap_last_cap")) and
+        result["cap_last_cap"] == expected_last and
         is_int(result.get("count")) and
         0 <= result["count"] <= expected_last + 1 and
         type(capabilities) is list and len(capabilities) == result["count"],
@@ -2466,10 +2467,12 @@ def validate_v4_build_robust_list_registration(value: object) -> dict[str, Any]:
             f"malformed {label} registration flag")
     if result["registered"]:
         head = _v4_uint(result.get("head"), 64, f"{label} head")
-        require(head > 0 and result.get("length") == 24,
+        length = _v4_uint(result.get("length"), 64, f"{label} length")
+        require(head > 0 and length == 24,
                 f"malformed registered {label}")
     else:
-        require(result.get("head") is None and result.get("length") == 0,
+        length = _v4_uint(result.get("length"), 64, f"{label} length")
+        require(result.get("head") is None and length == 0,
                 f"malformed unregistered {label}")
     return result
 
@@ -2479,18 +2482,20 @@ def validate_v4_build_rseq_registration(value: object) -> dict[str, Any]:
     result = _v4_exact_dict(value, V4_BUILD_RSEQ_REGISTRATION_FIELDS, label)
     require(type(result.get("registered")) is bool,
             f"malformed {label} registration flag")
+    length = _v4_uint(result.get("length"), 64, f"{label} length")
+    flags = _v4_uint(result.get("flags"), 32, f"{label} flags")
+    signature = _v4_uint(result.get("signature"), 32, f"{label} signature")
     if result["registered"]:
         address = _v4_uint(result.get("address"), 64, f"{label} address")
         require(
-            address > 0 and result.get("length") == 32 and
-            result.get("flags") == 0 and
-            result.get("signature") == 0x5305_3053,
+            address > 0 and length == 32 and flags == 0 and
+            signature == 0x5305_3053,
             f"malformed registered {label}",
         )
     else:
         require(
-            result.get("address") is None and result.get("length") == 0 and
-            result.get("flags") == 0 and result.get("signature") == 0,
+            result.get("address") is None and length == 0 and flags == 0 and
+            signature == 0,
             f"malformed unregistered {label}",
         )
     return result
@@ -2508,11 +2513,13 @@ def validate_v4_build_credentials(
         _v4_uint(result.get(field), 32, f"{label} {field}")
     validate_v4_build_supplementary_groups(result.get("supplementary_groups"))
     securebits = _v4_uint(result.get("securebits"), 32, f"{label} securebits")
-    require(securebits & ~0xFF == 0, f"unknown {label} securebits")
+    require(securebits == 0, f"nonzero {label} securebits")
     validate_v4_build_capability_sets(result.get("capability_sets"), cap_last_cap)
-    require(result.get("no_new_privileges") in {0, 1},
+    require(is_int(result.get("no_new_privileges")) and
+            result["no_new_privileges"] in {0, 1},
             f"malformed {label} no-new-privileges")
-    require(result.get("seccomp_mode") in {0, 2},
+    require(is_int(result.get("seccomp_mode")) and
+            result["seccomp_mode"] in {0, 2},
             f"malformed {label} seccomp mode")
     require(
         is_int(result.get("seccomp_filter_count")) and
@@ -2535,7 +2542,8 @@ def validate_v4_build_task_control_state(value: object) -> dict[str, Any]:
     )
     dispositions = result.get("signal_dispositions")
     require(
-        result.get("signal_disposition_count") ==
+        is_int(result.get("signal_disposition_count")) and
+        result["signal_disposition_count"] ==
         V4_BUILD_SIGNAL_DISPOSITION_COUNT and
         type(dispositions) is list and
         len(dispositions) == V4_BUILD_SIGNAL_DISPOSITION_COUNT,
@@ -2546,7 +2554,8 @@ def validate_v4_build_task_control_state(value: object) -> dict[str, Any]:
         item = _v4_exact_dict(
             disposition, V4_BUILD_INITIAL_SIGNAL_DISPOSITION_FIELDS, item_label,
         )
-        require(item.get("signal_number") == index + 1,
+        require(is_int(item.get("signal_number")) and
+                item["signal_number"] == index + 1,
                 f"malformed {item_label} number")
         validate_v4_build_signal_action(item.get("action"))
     require(
@@ -2570,10 +2579,7 @@ def validate_v4_build_task_control_state(value: object) -> dict[str, Any]:
     validate_v4_build_rseq_registration(result.get("rseq_registration"))
     personality = _v4_uint(result.get("personality"), 32,
                            f"{label} personality")
-    require(
-        personality & V4_BUILD_PERSONALITY_STICKY_TIMEOUTS == 0,
-        f"unsupported {label} STICKY_TIMEOUTS personality",
-    )
+    require(personality == 0, f"nonzero {label} personality")
     return result
 
 
@@ -2646,7 +2652,10 @@ def _validate_v4_indexed_list_container(
     )
     for index, entry in enumerate(entries):
         item = _v4_exact_dict(entry, entry_fields, f"{label} entry {index}")
-        require(item.get("index") == index, f"nonconsecutive {label} index")
+        require(
+            is_int(item.get("index")) and item["index"] == index,
+            f"nonconsecutive {label} index",
+        )
     require(
         type(result.get("ordered_entry_sha256")) is str and
         result["ordered_entry_sha256"] == canonical_sha256(entries),
@@ -2680,12 +2689,13 @@ def _validate_v4_initial_root_edge(
     require(edge.get("domain") == domain, f"wrong {label} domain")
     _validate_v4_root_stable_identity(edge, label)
     require(
-        edge.get("root_identity") == root_identity and
         edge.get("root_fd_generation") == root_fd_generation and
         edge.get("input_root_entry_index") is None and
         edge.get("stream_role") is None,
         f"wrong {label} root join",
     )
+    require_exact_json(edge.get("root_identity"), root_identity,
+                       f"{label} root identity")
     if domain == "setup-root":
         require(
             edge.get("authority_role") is None and
@@ -2696,11 +2706,11 @@ def _validate_v4_initial_root_edge(
         )
     else:
         require(
-            type(edge.get("authority_role")) is str and
-            bool(edge["authority_role"]) and
+            edge.get("authority_role") == "native-build-input-closure" and
             is_int(edge.get("authority_index")) and
-            edge["authority_index"] >= 0 and
+            edge["authority_index"] == 0 and
             edge.get("setup_role") is None and
+            is_int(edge.get("root_fd_generation")) and
             is_int(root_fd_generation) and root_fd_generation > 0,
             f"malformed {label} selectors",
         )
@@ -2728,7 +2738,7 @@ def _validate_v4_builder_mount_root(
             f"{label} entry {index}",
         )
         require(
-            item.get("index") == index and
+            is_int(item.get("index")) and item["index"] == index and
             is_int(item.get("mount_id")) and item["mount_id"] > 0 and
             item["mount_id"] not in mount_ids and
             is_int(item.get("raw_parent_mount_id")) and
@@ -2760,10 +2770,11 @@ def _validate_v4_builder_mount_root(
         f"{label} digest mismatch",
     )
     root = mounts[0]
-    require(
-        root["mount_id"] == setup_root_edge["mount_id"] and
-        root["mountpoint_identity"] == setup_root_edge["root_identity"],
-        f"{label} root does not join initial setup root",
+    require(root["mount_id"] == setup_root_edge["mount_id"],
+            f"{label} root mount id does not join initial setup root")
+    require_exact_json(
+        root["mountpoint_identity"], setup_root_edge["root_identity"],
+        f"{label} root mountpoint identity",
     )
     return root
 
@@ -2792,7 +2803,8 @@ def _validate_v4_initial_fd_ofd_roots(
             fd, V4_BUILD_INITIAL_FD_FIELDS, f"{table_label} entry {index}",
         )
         require(
-            item.get("index") == index and is_int(item.get("fd")) and
+            is_int(item.get("index")) and item["index"] == index and
+            is_int(item.get("fd")) and
             previous_fd < item["fd"] < 4_096 and
             is_int(item.get("fd_generation")) and
             item["fd_generation"] > 0 and
@@ -2823,11 +2835,13 @@ def _validate_v4_initial_fd_ofd_roots(
         require(fd["access_mode"] == description.get("access_mode"),
                 "V4 initial fd/OFD access mismatch")
         references[selected] += 1
+    open_description_ids: set[int] = set()
     for index, description in enumerate(descriptions):
         label = f"V4 initial open description {index}"
         require(
             is_int(description.get("open_description_id")) and
             description["open_description_id"] > 0 and
+            description["open_description_id"] not in open_description_ids and
             is_int(description.get("generation")) and
             description["generation"] > 0 and
             is_int(description.get("object_edge_index")) and
@@ -2837,10 +2851,12 @@ def _validate_v4_initial_fd_ofd_roots(
             is_int(description.get("status_flags")) and
             description["status_flags"] >= 0 and
             is_int(description.get("offset")) and description["offset"] >= 0 and
-            description.get("descriptor_ref_count") == references[index] and
+            is_int(description.get("descriptor_ref_count")) and
+            description["descriptor_ref_count"] == references[index] and
             references[index] > 0,
             f"malformed {label}",
         )
+        open_description_ids.add(description["open_description_id"])
         validate_v4_build_lock_state(description.get("lock_state"))
 
     input_description_indices = [
@@ -2864,11 +2880,37 @@ def _validate_v4_initial_fd_ofd_roots(
     return input_fds[0], input_description
 
 
+class _V4RootAuthorityContext:
+    """Immutable, module-minted authority snapshot for setup leaf validators."""
+
+    __slots__ = ("__payload_bytes",)
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        object.__setattr__(
+            self, "_V4RootAuthorityContext__payload_bytes",
+            canonical_value_bytes(payload),
+        )
+
+    def __setattr__(self, name: str, value: object) -> None:
+        del name, value
+        raise TypeError("V4 root-authority context is immutable")
+
+    def _decode(self) -> dict[str, Any]:
+        try:
+            value = json.loads(self.__payload_bytes)
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError) as error:
+            raise ProtocolError(
+                f"malformed opaque V4 root-authority context: {error}"
+            ) from error
+        require(type(value) is dict, "malformed opaque V4 root-authority context")
+        return value
+
+
 def validate_v4_build_initial_root_authority(
     initial_object_edges: object, fd_table: object, open_descriptions: object,
     fs_state: object, builder_mount_graph: object,
     input_root_identity: object, input_root_fd_generation: object,
-) -> dict[str, Any]:
+) -> _V4RootAuthorityContext:
     label = "V4 initial root authority"
     _require_v4_exact_json_types(
         [initial_object_edges, fd_table, open_descriptions, fs_state,
@@ -2917,7 +2959,7 @@ def validate_v4_build_initial_root_authority(
         fd_table, open_descriptions, edges, input_root,
         input_root_fd_generation,
     )
-    return {
+    return _V4RootAuthorityContext({
         "setup_root_edge": setup_root,
         "input_root_edge": input_root,
         "input_root_fd": input_fd,
@@ -2929,7 +2971,7 @@ def validate_v4_build_initial_root_authority(
             "mount_namespace_identity"
         ],
         "builder_mount_generation": builder_mount_graph["generation"],
-    }
+    })
 
 
 def _validate_v4_event_object_edge(
@@ -2937,7 +2979,8 @@ def _validate_v4_event_object_edge(
 ) -> dict[str, Any]:
     edge = _v4_exact_dict(value, V4_BUILD_OBJECT_EDGE_FIELDS, label)
     require(
-        edge.get("index") == index and edge.get("domain") in allowed_domains and
+        is_int(edge.get("index")) and edge["index"] == index and
+        edge.get("domain") in allowed_domains and
         type(edge.get("root_identity")) is dict and
         is_int(edge.get("root_fd_generation")) and
         edge["root_fd_generation"] > 0 and
@@ -2998,9 +3041,13 @@ def _validate_v4_root_authority_context(value: object) -> dict[str, Any]:
         "builder_mount_namespace_identity",
         "builder_mount_generation",
     }
-    require(type(value) is dict and set(value) == fields,
+    require(type(value) is _V4RootAuthorityContext,
+            "V4 root-authority context was not minted by its validator")
+    result = value._decode()
+    _require_v4_exact_json_types(result, "opaque V4 root-authority context")
+    require(set(result) == fields,
             "malformed V4 root-authority context")
-    return value
+    return result
 
 
 def validate_v4_build_event_object_edges(
@@ -3008,9 +3055,7 @@ def validate_v4_build_event_object_edges(
     root_authority: object = None,
 ) -> list[dict[str, Any]]:
     label = "V4 build event object edges"
-    _require_v4_exact_json_types(
-        [value, phase, setup_step_index, root_authority], label,
-    )
+    _require_v4_exact_json_types([value, phase, setup_step_index], label)
     require(type(value) is list and len(value) <= V4_BUILD_TRANSITION_PER_EVENT_MAX,
             f"malformed {label} list")
     if phase == "setup":
@@ -3092,8 +3137,8 @@ def _derive_v4_setup_root_fs_states(
         **states[-1], "cwd_identity": input_root,
         "generation": generation + 3,
     })
-    require(states[0]["root_identity"] == setup_root,
-            "V4 setup initial FS root drift")
+    require_exact_json(states[0]["root_identity"], setup_root,
+                       "V4 setup initial FS root")
     if step_index == 0:
         return states[0], states[0]
     return states[step_index - 1], states[step_index]
@@ -3112,8 +3157,9 @@ def _validate_v4_setup_path_operand(
     operand = _v4_exact_dict(value, V4_BUILD_PATH_OPERAND_FIELDS, label)
     payload = path.encode("ascii") + b"\x00"
     require(
-        operand.get("index") == 0 and
-        operand.get("argument_index") == argument_index and
+        is_int(operand.get("index")) and operand["index"] == 0 and
+        is_int(operand.get("argument_index")) and
+        operand["argument_index"] == argument_index and
         operand.get("dirfd_argument_index") is None and
         operand.get("dirfd") is None and
         operand.get("dirfd_generation") is None and
@@ -3133,7 +3179,7 @@ def validate_v4_build_setup_root_observation(
     value: object, root_authority: object,
 ) -> dict[str, Any]:
     label = "V4 build setup-root observation"
-    _require_v4_exact_json_types([value, root_authority], label)
+    _require_v4_exact_json_types(value, label)
     result = _v4_exact_dict(
         value, _v4_build_setup_root_observation_fields, label,
     )
@@ -3175,8 +3221,9 @@ def validate_v4_build_setup_root_observation(
     elif step_index == 1:
         input_fd = authority["input_root_fd"]
         require(
-            entry.get("fd") == input_fd["fd"] and
-            entry.get("fd_generation") == input_fd["fd_generation"] and
+            is_int(entry.get("fd")) and entry["fd"] == input_fd["fd"] and
+            is_int(entry.get("fd_generation")) and
+            entry["fd_generation"] == input_fd["fd_generation"] and
             entry.get("command") is None and
             entry.get("scalar_argument") is None and
             entry.get("pointed_argument") is None,
@@ -3184,7 +3231,8 @@ def validate_v4_build_setup_root_observation(
         )
     else:
         require(
-            entry.get("operand_count") == 1 and
+            is_int(entry.get("operand_count")) and
+            entry["operand_count"] == 1 and
             type(entry.get("operands")) is list and
             len(entry["operands"]) == 1 and
             entry.get("scalar_flags") is None and
@@ -3196,15 +3244,17 @@ def validate_v4_build_setup_root_observation(
             f"{label} path operand",
         )
     edges = result.get("object_edges")
-    require(result.get("object_edge_count") == 1 and type(edges) is list,
+    require(is_int(result.get("object_edge_count")) and
+            result["object_edge_count"] == 1 and type(edges) is list,
             f"wrong {label} object-edge count")
     validate_v4_build_event_object_edges(
         edges, phase="setup", setup_step_index=step_index,
-        root_authority=authority,
+        root_authority=root_authority,
     )
     transitions = result.get("fs_transitions")
     require(
-        result.get("fs_transition_count") == 1 and
+        is_int(result.get("fs_transition_count")) and
+        result["fs_transition_count"] == 1 and
         type(transitions) is list and len(transitions) == 1,
         f"wrong {label} FS-transition count",
     )
@@ -3236,23 +3286,34 @@ def validate_v4_build_setup_root_observation(
         }
         require(
             transition.get("kind") == "mount-propagation-change" and
-            transition.get("index") == 0 and
-            transition.get("mount_namespace_identity") ==
-            authority["builder_mount_namespace_identity"] and
-            transition.get("before_generation") ==
+            is_int(transition.get("index")) and transition["index"] == 0 and
+            is_int(transition.get("before_generation")) and
+            transition["before_generation"] ==
             authority["builder_mount_generation"] and
-            transition.get("after_generation") ==
+            is_int(transition.get("after_generation")) and
+            transition["after_generation"] ==
             authority["builder_mount_generation"] + 1 and
             is_int(transition.get("affected_mount_count")) and
             type(affected) is list and
+            all(is_int(mount_id) and mount_id > 0 for mount_id in affected) and
             len(affected) == transition["affected_mount_count"] and
             affected == expected_affected and
             edge["mount_id"] in affected and
-            transition.get("old_propagations") == expected_old and
-            transition.get("new_propagations") == [
-                private_propagation for _ in builder_mounts
-            ],
+            type(transition.get("old_propagations")) is list and
+            type(transition.get("new_propagations")) is list,
             f"wrong {label} mount transition join",
+        )
+        require_exact_json(
+            transition["mount_namespace_identity"],
+            authority["builder_mount_namespace_identity"],
+            f"{label} mount namespace identity",
+        )
+        require_exact_json(transition["old_propagations"], expected_old,
+                           f"{label} old propagations")
+        require_exact_json(
+            transition["new_propagations"],
+            [private_propagation for _ in builder_mounts],
+            f"{label} new propagations",
         )
     else:
         transition_kind = (
@@ -3264,12 +3325,15 @@ def validate_v4_build_setup_root_observation(
         )
         require(
             transition.get("kind") == transition_kind and
-            transition.get("index") == 0 and
+            is_int(transition.get("index")) and transition["index"] == 0 and
             is_int(transition.get("fs_state_id")) and
             transition["fs_state_id"] > 0 and
-            transition.get("before_generation") == before["generation"] and
-            transition.get("after_generation") == after["generation"] and
-            transition.get("object_edge_index") == 0,
+            is_int(transition.get("before_generation")) and
+            transition["before_generation"] == before["generation"] and
+            is_int(transition.get("after_generation")) and
+            transition["after_generation"] == after["generation"] and
+            is_int(transition.get("object_edge_index")) and
+            transition["object_edge_index"] == 0,
             f"wrong {label} FS transition join",
         )
     return result
