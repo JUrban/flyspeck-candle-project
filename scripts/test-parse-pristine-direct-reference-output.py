@@ -371,6 +371,22 @@ class PristineOutputParserTests(unittest.TestCase):
                     forged, self.plan, self.request,
                 )
 
+        for label, stdout_sha256 in (
+            ("false empty stdout digest", "0" * 64),
+            ("exact empty stdout digest", hashlib.sha256(b"").hexdigest()),
+        ):
+            transcript = copy.deepcopy(result["transcript"])
+            transcript["stdout"] = {
+                "bytes": 0,
+                "sha256": stdout_sha256,
+            }
+            with self.subTest(label=label), self.assertRaisesRegex(
+                protocol.ProtocolError, "stdout",
+            ):
+                protocol.validate_raw_transcript(
+                    transcript, self.plan, self.request,
+                )
+
         forged = copy.deepcopy(result)
         forged["stderr"]["sha256"] = "0" * 64
         forged["transcript"]["stderr"]["sha256"] = "0" * 64
