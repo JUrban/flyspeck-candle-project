@@ -286,6 +286,7 @@ def schema6_fixture() -> tuple[dict, dict]:
     }
     action_keys = [
         ("flyspeck:jHOLLight/caml/ssreflect.hl" if index == 126 else
+         "flyspeck:formal_graph/archive/archive_all.ml" if index == 154 else
          "flyspeck:formal_lp/hypermap/verify_all.hl" if index == 183 else
          f"flyspeck:text_formalization/fixture/action-{index:03d}.hl")
         for index in range(subject.FINAL_ACTION_COUNT)
@@ -357,6 +358,7 @@ def schema6_fixture() -> tuple[dict, dict]:
             "selected_source": key,
             "target": (
                 "../jHOLLight/caml/ssreflect.hl" if index == 126 else
+                "../formal_graph/archive/archive_all.ml" if index == 154 else
                 "../formal_lp/hypermap/verify_all.hl" if index == 183 else
                 f"fixture/action-{index:03d}.hl"
             ),
@@ -853,6 +855,10 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         self.assertEqual(
             projection["actions"]["records"][183]["target"],
             "../formal_lp/hypermap/verify_all.hl",
+        )
+        self.assertEqual(
+            projection["actions"]["records"][154]["target"],
+            "../formal_graph/archive/archive_all.ml",
         )
         action_keys = {
             record["selected_source"]
