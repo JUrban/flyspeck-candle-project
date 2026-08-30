@@ -897,9 +897,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "PTRACE_O_EXITKILL",
         ))
         self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 2)
-        self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 2)
+        self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 3)
         self.assertFalse(hasattr(
             subject, "enumerate_isolated_native_build_filter_v1",
+        ))
+        self.assertFalse(hasattr(
+            subject, "enumerate_isolated_native_build_filter_v2",
         ))
         self.assertTrue({
             "paired_event_index", "object_edges", "fd_transitions",
@@ -920,7 +923,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             {
                 "scalar-entry", "path-entry", "exec-entry", "fd-io-entry",
                 "mapping-entry", "fd-control-entry", "task-create-entry",
-                "seccomp-install-entry", "query-entry",
+                "seccomp-install-entry", "query-entry", "mount-entry",
             },
         )
         self.assertIn("query-exit", subject.V4_BUILD_EXIT_CAPTURE_FIELDS)
@@ -934,6 +937,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "builder-create", "observer-attached-stop", "child-create",
                 "child-attached-stop", "vfork-hold", "vfork-release",
                 "group-listen", "exec-image", "exit-stop", "wait-consumed",
+                "credential-change", "capability-change",
+                "no-new-privileges-change", "seccomp-change",
+                "signal-disposition-change", "signal-mask-change",
+                "signal-altstack-change", "tls-base-change",
+                "child-tid-registration-change", "robust-list-change",
+                "rseq-registration-change", "tracee-wait-consume",
             },
         )
         self.assertEqual(
@@ -970,15 +979,28 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             item[0] for item in subject.V4_BUILD_STATELESS_ALLOWED_SYSCALLS
         }
         exec_numbers = {item[0] for item in subject.V4_BUILD_EXEC_SYSCALLS}
+        control_numbers = {
+            item[0] for item in subject.V4_BUILD_CONTROL_OPERATION_CAPTURE_POLICY
+        }
         nonreturning_numbers = {
             item[0] for item in subject.V4_BUILD_NONRETURNING_SYSCALLS
         }
         self.assertFalse(modeled_numbers & stateless_numbers)
         self.assertFalse(modeled_numbers & exec_numbers)
+        self.assertFalse(modeled_numbers & control_numbers)
         self.assertFalse(modeled_numbers & nonreturning_numbers)
         self.assertFalse(stateless_numbers & exec_numbers)
+        self.assertFalse(stateless_numbers & control_numbers)
         self.assertFalse(stateless_numbers & nonreturning_numbers)
         self.assertFalse(exec_numbers & nonreturning_numbers)
+        self.assertFalse(control_numbers & nonreturning_numbers)
+        self.assertEqual(
+            control_numbers, {13, 14, 61, 73, 131, 158, 218, 273, 334},
+        )
+        self.assertEqual(
+            {item[0] for item in subject.V4_BUILD_REJECTED_CONTROL_SYSCALLS},
+            {15, 62, 202, 234},
+        )
         self.assertEqual(nonreturning_numbers, {60, 231})
         self.assertTrue({0, 3, 8, 17, 19, 28, 32, 33, 72, 80, 81, 95,
                          217, 292, 295, 327, 436}.issubset(modeled_numbers))
@@ -1005,12 +1027,44 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertIn(277, stateless_numbers)
         self.assertNotIn(60, stateless_numbers)
         self.assertNotIn(231, stateless_numbers)
+        for table in (
+            subject.V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY,
+            subject.V4_BUILD_CONTROL_OPERATION_CAPTURE_POLICY,
+        ):
+            for row in table:
+                for regions in (row[5], row[6]):
+                    for region in regions:
+                        self.assertEqual(
+                            len(region),
+                            len(subject.V4_BUILD_QUERY_ABI_REGION_POLICY_FIELDS),
+                        )
+                        self.assertIn(
+                            region[2], subject.V4_BUILD_QUERY_ABI_LENGTH_KINDS,
+                        )
+                        self.assertIn(
+                            region[4], subject.V4_BUILD_QUERY_ABI_CONDITIONS,
+                        )
+                        self.assertIn(
+                            region[5],
+                            subject.V4_BUILD_QUERY_ABI_POST_LENGTH_KINDS,
+                        )
+        for _, input_regions, output_regions in (
+            subject.V4_BUILD_SETUP_QUERY_REGION_POLICY
+        ):
+            for region in input_regions + output_regions:
+                self.assertEqual(
+                    len(region),
+                    len(subject.V4_BUILD_QUERY_ABI_REGION_POLICY_FIELDS),
+                )
         for table, cardinality_start in (
             (subject.V4_BUILD_OUTPUT_OPERATION_CAPTURE_POLICY, 4),
             (subject.V4_BUILD_STATE_OPERATION_CAPTURE_POLICY, 4),
             (subject.V4_BUILD_PTRACE_EVENT_TRANSITION_POLICY, 1),
-            (subject.V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY, 6),
+            (subject.V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY, 7),
+            (subject.V4_BUILD_CONTROL_OPERATION_CAPTURE_POLICY, 7),
             (subject.V4_BUILD_NONRETURNING_CAPTURE_POLICY, 4),
+            (subject.V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY, 5),
+            (subject.V4_BUILD_STATE_CHANGING_FAILURE_POLICY, 4),
         ):
             for row in table:
                 for cardinality in row[cardinality_start:]:
@@ -1049,10 +1103,25 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertEqual(
             subject.V4_BUILD_INITIAL_STATE_CAPTURE_BOUNDARY,
-            "after-clone-return-before-builder-gate-release-v1",
+            "held-interrupt-stop-after-id-maps-before-builder-gate-release-v1",
         )
         self.assertIn(
             "initial_object_edges", subject.V4_BUILD_INITIAL_STATE_SEED_FIELDS,
+        )
+        self.assertIn(
+            "builder_interrupt_stop_event_index",
+            subject.V4_BUILD_INITIAL_STATE_SEED_FIELDS,
+        )
+        self.assertIn(
+            "securebits", subject.V4_BUILD_INITIAL_CREDENTIAL_FIELDS,
+        )
+        self.assertEqual(
+            {row[0] for row in subject.V4_BUILD_INITIAL_STATE_CONTAINER_POLICY},
+            {
+                "initial_object_edges", "parent_fd_table",
+                "parent_open_descriptions", "parent_mappings",
+                "parent_mount_graph",
+            },
         )
         self.assertEqual(subject.V4_BUILD_SETUP_FINAL_FDS, (0, 1, 2))
         self.assertEqual(len(subject.V4_BUILD_SETUP_SEQUENCE_FIELDS), 4)
@@ -1062,6 +1131,44 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertEqual(subject.V4_BUILD_SETUP_SEQUENCE[-1][1],
                          "install-build-filter")
+        self.assertEqual(
+            tuple(row[0] for row in subject.V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY),
+            tuple(step[1] for step in subject.V4_BUILD_SETUP_SEQUENCE),
+        )
+        for row in subject.V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY:
+            self.assertIn(
+                row[4][0], subject.V4_BUILD_SETUP_OCCURRENCE_SPEC_TAGS,
+            )
+        self.assertEqual(subject.V4_BUILD_MREMAP_ALLOWED_FLAGS, (0, 1, 3))
+        self.assertIn(4, subject.V4_BUILD_MREMAP_REJECTED_FLAGS)
+        self.assertEqual(
+            subject.V4_BUILD_RENAME_EQUAL_OPERAND_POLICY,
+            "reject-before-resume-v1",
+        )
+        self.assertEqual(
+            subject.V4_BUILD_STATE_CHANGING_FAILURE_POLICY[0][:3],
+            (3, "close", "negative-except-ebadf-after-valid-entry-fd"),
+        )
+        self.assertTrue(all(
+            row[4] != "all-unused-arguments-zero-or-pinned-scalar-abi-exact"
+            for row in subject.V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY
+        ))
+        self.assertEqual(
+            {
+                row[0]
+                for row in subject.V4_BUILD_SETUP_QUERY_REGION_POLICY
+            },
+            {
+                row[0]
+                for row in subject.V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY
+                if row[2] == "query-entry"
+            },
+        )
+        mremap = next(
+            row for row in subject.V4_BUILD_OUTPUT_OPERATION_CAPTURE_POLICY
+            if row[0] == 25
+        )
+        self.assertEqual(mremap[6], ("inclusive-range", 1, 2))
         self.assertEqual(
             subject.V4_BUILD_NETWORK_LOOPBACK_FIXED_FIELDS,
             {
@@ -1108,10 +1215,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 264)
+        self.assertEqual(len(values), 302)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "7a553c81f437cd47dbd871345bc0166e337ce6699b4d5098c04e3b3622dba500",
+            "7e1217d83397e2551ad45c9dfdd0f227e208c239f9ecbafc49d702f47dd12225",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1498,14 +1605,14 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             )
 
     def test_v4_isolated_native_build_filter_enumerator(self) -> None:
-        authority = subject.enumerate_isolated_native_build_filter_v2()
+        authority = subject.enumerate_isolated_native_build_filter_v3()
         self.assertEqual(set(authority), {
             "schema", "kind", "policy", "architecture", "audit_arch",
             "instruction_count", "instructions_bytes", "instructions_sha256",
             "instructions_payload_base64", "decoded_rule_count",
             "decoded_policy", "policy_sha256",
         })
-        self.assertEqual(authority["schema"], 2)
+        self.assertEqual(authority["schema"], 3)
         self.assertEqual(authority["kind"], subject.V4_BUILD_FILTER_KIND)
         self.assertEqual(authority["policy"], subject.V4_BUILD_FILTER_POLICY)
         self.assertEqual(
@@ -1584,7 +1691,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "a6a294301db6b55263a03df4222ab9397afb5ba5d11e0fc72974fd10ee76e660",
         )
         self.assertEqual(
-            subject.enumerate_isolated_native_build_filter_v2(), authority,
+            subject.enumerate_isolated_native_build_filter_v3(), authority,
         )
         self.assertIs(
             subject.validate_isolated_native_build_filter(authority), authority,

@@ -330,12 +330,12 @@ V4_BUILD_SOURCE_DIRECTORY = "candle-source"
 V4_BUILD_OUTPUT_DIRECTORY = "candle-output"
 V4_BUILD_OLD_ROOT_DIRECTORY = ".candle-old-root"
 V4_BUILD_ROOT_DERIVATION_MAX_BYTES = 33_554_432
-V4_BUILD_FILTER_SCHEMA = 2
+V4_BUILD_FILTER_SCHEMA = 3
 V4_BUILD_FILTER_KIND = (
-    "candle-flyspeck-isolated-native-build-seccomp-filter-v2"
+    "candle-flyspeck-isolated-native-build-seccomp-filter-v3"
 )
 V4_BUILD_FILTER_POLICY = (
-    "isolated-native-build-post-pivot-deny-escape-network-ipc-transfer-v2"
+    "isolated-native-build-post-pivot-deny-escape-network-ipc-transfer-v3"
 )
 V4_BUILD_FILTER_ERRNO = 1
 V4_BUILD_FILTER_CLONE_SYSCALL = 56
@@ -432,13 +432,36 @@ V4_NATIVE_BUILD_RECEIPT_MAX_BYTES = 134_217_728
 V4_NATIVE_BUILD_RECEIPT_READ_MAX_BYTES = 134_217_729
 V4_BUILD_INITIAL_STATE_SEED_FIELDS = (
     "capture_boundary", "observer_task_identity", "builder_task_identity",
+    "builder_interrupt_stop_event_index",
     "initial_object_edges", "parent_fd_table", "parent_open_descriptions",
     "parent_address_space", "parent_mappings", "parent_fs_state",
-    "builder_credentials", "gate_mapping_index", "inherited_fd_indices",
-    "ordered_state_sha256", "complete",
+    "parent_mount_graph", "builder_credentials", "builder_task_control_state",
+    "gate_mapping_index", "inherited_fd_indices", "ordered_state_sha256",
+    "complete",
 )
 V4_BUILD_INITIAL_STATE_CAPTURE_BOUNDARY = (
-    "after-clone-return-before-builder-gate-release-v1"
+    "held-interrupt-stop-after-id-maps-before-builder-gate-release-v1"
+)
+V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN = (
+    "candle-flyspeck-v4-initial-state-seed-v1"
+)
+V4_BUILD_INITIAL_STATE_DIGEST_FIELDS = (
+    "capture_boundary", "observer_task_identity", "builder_task_identity",
+    "builder_interrupt_stop_event_index", "initial_object_edges",
+    "parent_fd_table", "parent_open_descriptions", "parent_address_space",
+    "parent_mappings", "parent_fs_state", "parent_mount_graph",
+    "builder_credentials", "builder_task_control_state", "gate_mapping_index",
+    "inherited_fd_indices",
+)
+V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS = (
+    "count", "entries", "ordered_entry_sha256",
+)
+V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS = (
+    "table_id", "generation", "fd_count", "fds", "ordered_fd_sha256",
+)
+V4_BUILD_INITIAL_ADDRESS_SPACE_FIELDS = (
+    "address_space_id", "generation", "mapping_count", "mapping_indices",
+    "ordered_mapping_index_sha256",
 )
 V4_BUILD_INITIAL_OBJECT_EDGE_FIELDS = (
     "index", "domain", "authority_role", "authority_index",
@@ -457,7 +480,8 @@ V4_BUILD_INITIAL_FD_FIELDS = (
 )
 V4_BUILD_INITIAL_OPEN_DESCRIPTION_FIELDS = (
     "index", "open_description_id", "generation", "object_edge_index",
-    "access_mode", "status_flags", "offset", "descriptor_ref_count",
+    "access_mode", "status_flags", "offset", "lock_state",
+    "descriptor_ref_count",
 )
 V4_BUILD_INITIAL_MAPPING_FIELDS = (
     "index", "address", "length", "protection", "flags", "file_offset",
@@ -466,25 +490,72 @@ V4_BUILD_INITIAL_MAPPING_FIELDS = (
 V4_BUILD_INITIAL_FS_STATE_FIELDS = (
     "root_identity", "cwd_identity", "umask", "generation",
 )
+V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS = (
+    "mount_namespace_identity", "generation", "mount_count", "mounts",
+    "ordered_mount_sha256",
+)
+V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS = (
+    "index", "mount_id", "parent_mount_id", "root_identity",
+    "mountpoint_identity", "filesystem_type", "flags", "propagation",
+)
 V4_BUILD_INITIAL_CREDENTIAL_FIELDS = (
-    "real_uid", "effective_uid", "saved_uid", "real_gid", "effective_gid",
-    "saved_gid", "supplementary_gids", "effective_capabilities",
+    "real_uid", "effective_uid", "saved_uid", "fsuid", "real_gid",
+    "effective_gid", "saved_gid", "fsgid", "supplementary_gids",
+    "securebits", "effective_capabilities",
     "permitted_capabilities", "inheritable_capabilities",
     "ambient_capabilities", "bounding_capabilities", "no_new_privileges",
     "seccomp_mode", "seccomp_filter_count",
 )
+V4_BUILD_INITIAL_TASK_CONTROL_STATE_FIELDS = (
+    "signal_disposition_count", "signal_dispositions",
+    "signal_disposition_sha256", "blocked_signal_mask",
+    "pending_signal_mask", "signal_altstack", "fs_base", "gs_base",
+    "clear_child_tid", "robust_list_head",
+    "robust_list_length", "rseq_address", "rseq_length", "rseq_signature",
+)
+V4_BUILD_INITIAL_SIGNAL_DISPOSITION_FIELDS = (
+    "signal_number", "handler", "flags", "restorer", "mask",
+)
+V4_BUILD_PRECLONE_SIGNAL_PROFILE = (
+    "all-blockable-signals-blocked", "all-dispositions-default",
+    "no-pending-signals", "alternate-stack-disabled",
+)
+V4_BUILD_INITIAL_STATE_CONTAINER_POLICY_FIELDS = (
+    "field", "container_fields", "entry_fields", "max_entries",
+)
+V4_BUILD_MOUNT_GRAPH_MAX = 196_608
+V4_BUILD_INITIAL_STATE_CONTAINER_POLICY = (
+    ("initial_object_edges", V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
+     V4_BUILD_INITIAL_OBJECT_EDGE_FIELDS, V4_BUILD_INPUT_CLOSURE_ENTRY_MAX),
+    ("parent_fd_table", V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS,
+     V4_BUILD_INITIAL_FD_FIELDS, V4_BUILD_FD_PER_TABLE_MAX),
+    ("parent_open_descriptions", V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
+     V4_BUILD_INITIAL_OPEN_DESCRIPTION_FIELDS, V4_BUILD_FD_PER_TABLE_MAX),
+    ("parent_mappings", V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
+     V4_BUILD_INITIAL_MAPPING_FIELDS, V4_BUILD_VMA_PER_ADDRESS_SPACE_MAX),
+    ("parent_mount_graph", V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS,
+     V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS, V4_BUILD_MOUNT_GRAPH_MAX),
+)
 V4_BUILD_SETUP_PHASE_FIELDS = (
     "policy", "first_event_index", "filter_install_entry_event_index",
     "filter_install_exit_event_index", "step_count", "steps",
-    "ordered_step_sha256", "final_fd_indices", "final_mapping_indices",
+    "ordered_step_sha256", "final_replay_state",
+    "final_replay_state_sha256", "final_fd_indices", "final_mapping_indices",
     "final_fs_state", "final_supplementary_gids",
     "final_capability_sets", "no_new_privileges", "seccomp_mode",
     "seccomp_filter_count", "complete",
 )
 V4_BUILD_SETUP_STEP_FIELDS = (
     "index", "role", "syscall_numbers", "argument_policy",
-    "event_indices", "state_before_sha256", "state_after_sha256",
-    "complete",
+    "event_indices", "state_before", "state_before_sha256", "state_after",
+    "state_after_sha256", "complete",
+)
+V4_BUILD_SETUP_REPLAY_STATE_FIELDS = (
+    "fd_table", "open_descriptions", "address_space", "mappings",
+    "fs_state", "mount_graph", "credentials", "task_control_state",
+)
+V4_BUILD_SETUP_STATE_DIGEST_DOMAIN = (
+    "candle-flyspeck-v4-setup-replay-state-v1"
 )
 V4_BUILD_SETUP_POLICY = (
     "derived-pre-filter-builder-setup-deny-all-other-v1"
@@ -504,17 +575,19 @@ V4_BUILD_SETUP_SEQUENCE = (
      "umount2-slash-dot-candle-old-root-mnt-detach-exact"),
     (5, "select-mapped-gid", (119,), "setresgid-zero-zero-zero-exact"),
     (6, "select-mapped-uid", (117,), "setresuid-zero-zero-zero-exact"),
-    (7, "clear-ambient-capabilities", (157,),
+    (7, "install-build-signal-mask", (14,),
+     "rt-sigprocmask-sig-setmask-empty-null-oldset-size-8-exact"),
+    (8, "clear-ambient-capabilities", (157,),
      "prctl-pr-cap-ambient-clear-all-zero-zero-zero-exact"),
-    (8, "drop-capability-bounding-set", (157,),
+    (9, "drop-capability-bounding-set", (157,),
      "prctl-pr-capbset-drop-each-profile-cap-descending-exact"),
-    (9, "drop-capabilities", (126,),
+    (10, "drop-capabilities", (126,),
      "capset-v3-zero-effective-permitted-inheritable-exact"),
-    (10, "close-setup-descriptors", (3,),
+    (11, "close-setup-descriptors", (3,),
      "close-each-derived-setup-fd-once-descending-exact"),
-    (11, "set-no-new-privileges", (157,),
+    (12, "set-no-new-privileges", (157,),
      "prctl-pr-set-no-new-privs-one-zero-zero-zero-exact"),
-    (12, "install-build-filter", (317,),
+    (13, "install-build-filter", (317,),
      "seccomp-set-mode-filter-zero-exact-authority-program"),
 )
 V4_BUILD_SETUP_FINAL_FDS = (0, 1, 2)
@@ -699,6 +772,11 @@ V4_BUILD_ENTRY_CAPTURE_FIELDS = {
         "kind", "operation", "input_region_count", "input_regions",
         "peer_barrier_index",
     ),
+    "mount-entry": (
+        "kind", "operation", "source_operand", "target_operand",
+        "filesystem_type_operand", "flags", "data_region",
+        "peer_barrier_index",
+    ),
 }
 V4_BUILD_EXIT_CAPTURE_FIELDS = {
     "scalar-exit": ("kind", "operation"),
@@ -812,6 +890,10 @@ V4_BUILD_FD_TRANSITION_FIELDS = {
         "kind", "index", "open_description_id", "before_generation",
         "after_generation", "old_offset", "new_offset",
     ),
+    "open-description-lock-change": (
+        "kind", "index", "open_description_id", "before_generation",
+        "after_generation", "old_lock", "new_lock",
+    ),
     "fd-table-unshare": (
         "kind", "index", "task_index", "old_table_id", "new_table_id",
         "new_generation",
@@ -863,17 +945,33 @@ V4_BUILD_FS_TRANSITION_FIELDS = {
         "kind", "index", "fs_state_id", "before_generation",
         "after_generation", "old_umask", "new_umask",
     ),
+    "mount-propagation-change": (
+        "kind", "index", "mount_namespace_identity", "before_generation",
+        "after_generation", "affected_mount_count", "affected_mount_ids",
+        "old_propagations", "new_propagations",
+    ),
+    "root-pivot": (
+        "kind", "index", "fs_state_id", "before_generation",
+        "after_generation", "old_root_identity", "new_root_identity",
+        "put_old_identity", "mount_namespace_identity",
+    ),
+    "mount-detach": (
+        "kind", "index", "mount_namespace_identity", "before_generation",
+        "after_generation", "detached_mount_count", "detached_mount_ids",
+        "target_identity", "flags",
+    ),
 }
 V4_BUILD_TASK_TRANSITION_FIELDS = {
     "builder-create": (
         "kind", "index", "task_identity", "clone_flags", "gate_identity",
+        "initial_task_control_state",
     ),
     "observer-attached-stop": (
         "kind", "index", "task_index", "ptrace_options",
     ),
     "child-create": (
         "kind", "index", "parent_task_index", "child_task_index",
-        "creation_kind", "creation_event_index",
+        "creation_kind", "creation_event_index", "child_task_control_state",
     ),
     "child-attached-stop": (
         "kind", "index", "task_index", "initial_stop_event_index",
@@ -891,13 +989,57 @@ V4_BUILD_TASK_TRANSITION_FIELDS = {
     ),
     "exec-image": (
         "kind", "index", "old_task_identity", "new_task_identity",
-        "former_tid", "exec_entry_event_index",
+        "former_tid", "exec_entry_event_index", "old_task_control_state",
+        "new_task_control_state",
     ),
     "exit-stop": (
         "kind", "index", "task_index", "exit_message",
     ),
     "wait-consumed": (
         "kind", "index", "task_index", "raw_wait_status",
+    ),
+    "credential-change": (
+        "kind", "index", "task_index", "before_credentials",
+        "after_credentials", "changed_fields",
+    ),
+    "capability-change": (
+        "kind", "index", "task_index", "capability_set",
+        "before_capabilities", "after_capabilities",
+    ),
+    "no-new-privileges-change": (
+        "kind", "index", "task_index", "old_value", "new_value",
+    ),
+    "seccomp-change": (
+        "kind", "index", "task_index", "old_mode", "new_mode",
+        "old_filter_count", "new_filter_count", "filter_sha256",
+    ),
+    "signal-disposition-change": (
+        "kind", "index", "task_index", "signal_number", "old_action",
+        "new_action",
+    ),
+    "signal-mask-change": (
+        "kind", "index", "task_index", "old_mask", "new_mask",
+    ),
+    "signal-altstack-change": (
+        "kind", "index", "task_index", "old_stack", "new_stack",
+    ),
+    "tls-base-change": (
+        "kind", "index", "task_index", "register", "old_base", "new_base",
+    ),
+    "child-tid-registration-change": (
+        "kind", "index", "task_index", "old_address", "new_address",
+    ),
+    "robust-list-change": (
+        "kind", "index", "task_index", "old_head", "old_length",
+        "new_head", "new_length",
+    ),
+    "rseq-registration-change": (
+        "kind", "index", "task_index", "old_registration",
+        "new_registration",
+    ),
+    "tracee-wait-consume": (
+        "kind", "index", "task_index", "child_task_index",
+        "raw_wait_status", "wait_options",
     ),
 }
 V4_BUILD_OUTPUT_MUTATING_SYSCALLS = (
@@ -938,6 +1080,95 @@ def _v4_cardinality_spec(bounds: tuple[int, ...]) -> tuple[object, ...]:
     raise ValueError("malformed V4 cardinality bounds")
 
 
+V4_BUILD_SETUP_OCCURRENCE_SPEC_TAGS = (
+    "exact-values", "profile-derived-values", "seed-derived-values",
+)
+V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY_FIELDS = (
+    "role", "syscall_number", "entry_kind", "exit_kind",
+    "occurrence_spec", "object_edge_counts", "fd_transition_counts",
+    "mapping_transition_counts", "fs_transition_counts",
+    "task_transition_counts",
+)
+V4_BUILD_SETUP_QUERY_REGION_POLICY_FIELDS = (
+    "role", "input_region_policy", "output_region_policy",
+)
+V4_BUILD_SETUP_QUERY_REGION_POLICY = (
+    ("select-mapped-gid", (), ()),
+    ("select-mapped-uid", (), ()),
+    ("install-build-signal-mask",
+     ((1, "input", "fixed-bytes", 8, "always-nonnull", "same-as-entry"),),
+     ()),
+    ("clear-ambient-capabilities", (), ()),
+    ("drop-capability-bounding-set", (), ()),
+    ("drop-capabilities",
+     ((0, "input", "fixed-bytes", 8, "always-nonnull", "same-as-entry"),
+      (1, "input", "fixed-bytes", 24, "always-nonnull", "same-as-entry")),
+     ()),
+    ("set-no-new-privileges", (), ()),
+)
+V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY = (
+    ("private-mount-propagation", 165, "mount-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((1,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
+    ("enter-held-input-root", 81, "fd-control-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((1,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
+    ("pivot-into-input-root", 155, "path-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((2,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
+    ("enter-new-root", 80, "path-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((1,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
+    ("detach-old-root", 166, "path-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((1,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,)), _v4_cardinality_spec((0,))),
+    ("select-mapped-gid", 119, "query-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((1,))),
+    ("select-mapped-uid", 117, "query-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((1,))),
+    ("install-build-signal-mask", 14, "query-entry", "query-exit",
+     ("exact-values", 1), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((1,))),
+    ("clear-ambient-capabilities", 157, "query-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((1,))),
+    ("drop-capability-bounding-set", 157, "query-entry", "scalar-exit",
+     ("profile-derived-values", "cap_last_cap-plus-one"),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,))),
+    ("drop-capabilities", 126, "query-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((1,))),
+    ("close-setup-descriptors", 3, "fd-control-entry", "fd-state-exit",
+     ("seed-derived-values", "setup-fd-count"),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((1, 2)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,))),
+    ("set-no-new-privileges", 157, "query-entry", "scalar-exit",
+     ("exact-values", 1), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((1,))),
+    ("install-build-filter", 317, "seccomp-install-entry",
+     "seccomp-install-exit", ("exact-values", 1),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,))),
+)
+
+
 _V4_BUILD_OUTPUT_OPERATION_CAPTURE_POLICY_BOUNDS = (
     (1, "write", "fd-io-entry", "io-exit", (0, 1), (0, 1), (0,), (0,), (0,)),
     (2, "open", "path-entry", "open-exit", (1,), (2,), (0,), (0,), (0,)),
@@ -946,7 +1177,7 @@ _V4_BUILD_OUTPUT_OPERATION_CAPTURE_POLICY_BOUNDS = (
     (11, "munmap", "mapping-entry", "mapping-exit", (0, 1), (0,), (1,), (0,), (0,)),
     (18, "pwrite64", "fd-io-entry", "io-exit", (1,), (0,), (0,), (0,), (0,)),
     (20, "writev", "fd-io-entry", "io-exit", (0, 1), (0, 1), (0,), (0,), (0,)),
-    (25, "mremap", "mapping-entry", "mapping-exit", (0, 1), (0,), (1,), (0,), (0,)),
+    (25, "mremap", "mapping-entry", "mapping-exit", (0, 1), (0,), (1, 2), (0,), (0,)),
     (26, "msync", "mapping-entry", "mapping-exit", (0, 1), (0,), (0,), (0,), (0,)),
     (76, "truncate", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
     (77, "ftruncate", "fd-control-entry", "io-exit", (1,), (0,), (0,), (0,), (0,)),
@@ -1051,7 +1282,24 @@ V4_BUILD_MADVISE_REJECTED_ADVICE = (9,)
 V4_BUILD_CLOSE_RANGE_ALLOWED_FLAGS = (0, 4)
 V4_BUILD_CLOSE_RANGE_REJECTED_FLAGS = (2, 6)
 V4_BUILD_MMAP_FIXED_FLAG = 0x10
+V4_BUILD_MREMAP_ALLOWED_FLAGS = (0, 1, 3)
+V4_BUILD_MREMAP_REJECTED_FLAGS = (2, 4, 5, 6, 7)
 V4_BUILD_RENAMEAT2_ALLOWED_FLAGS = (0, 1)
+V4_BUILD_RENAME_EQUAL_OPERAND_POLICY = "reject-before-resume-v1"
+V4_BUILD_STATE_CHANGING_FAILURE_POLICY_FIELDS = (
+    "syscall_number", "operation", "return_class", "exit_kind",
+    "object_edge_counts", "fd_transition_counts",
+    "mapping_transition_counts", "fs_transition_counts",
+    "task_transition_counts",
+)
+V4_BUILD_STATE_CHANGING_FAILURE_POLICY = (
+    (
+        3, "close", "negative-except-ebadf-after-valid-entry-fd",
+        "fd-state-exit", _v4_cardinality_spec((0,)),
+        _v4_cardinality_spec((1, 2)), _v4_cardinality_spec((0,)),
+        _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+    ),
+)
 V4_BUILD_EXEC_SYSCALLS = (
     (59, "execve"),
     (322, "execveat"),
@@ -1059,6 +1307,90 @@ V4_BUILD_EXEC_SYSCALLS = (
 V4_BUILD_NONRETURNING_SYSCALLS = (
     (60, "exit"),
     (231, "exit_group"),
+)
+V4_BUILD_REJECTED_CONTROL_SYSCALLS = (
+    (15, "rt_sigreturn"),
+    (62, "kill"),
+    (202, "futex"),
+    (234, "tgkill"),
+)
+V4_BUILD_ARCH_PRCTL_ALLOWED_OPERATIONS = (
+    (0x1001, "ARCH_SET_GS"),
+    (0x1002, "ARCH_SET_FS"),
+    (0x1003, "ARCH_GET_FS"),
+    (0x1004, "ARCH_GET_GS"),
+)
+V4_BUILD_FLOCK_ALLOWED_OPERATIONS = (1, 2, 5, 6, 8)
+V4_BUILD_CONTROL_OPERATION_CAPTURE_POLICY_FIELDS = (
+    "syscall_number", "operation", "entry_kind", "exit_kind",
+    "argument_policy", "input_region_policy", "output_region_policy",
+    "object_edge_counts", "fd_transition_counts",
+    "mapping_transition_counts", "fs_transition_counts",
+    "task_transition_counts",
+)
+V4_BUILD_CONTROL_OPERATION_CAPTURE_POLICY = (
+    (13, "rt_sigaction", "query-entry", "query-exit",
+     "signal-1-through-64-act-oldact-sigsetsize-8-exact",
+     ((1, "input", "fixed-bytes", 32, "if-nonnull", "same-as-entry"),),
+     ((2, "output", "fixed-bytes", 32, "if-success-nonnull", "fixed"),),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0, 1))),
+    (14, "rt_sigprocmask", "query-entry", "query-exit",
+     "sig-block-unblock-setmask-set-oldset-sigsetsize-8-exact",
+     ((1, "input", "fixed-bytes", 8, "if-nonnull", "same-as-entry"),),
+     ((2, "output", "fixed-bytes", 8, "if-success-nonnull", "fixed"),),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0, 1))),
+    (61, "wait4", "query-entry", "query-exit",
+     "registered-child-or-minus-one-options-wnohang-wuntraced-wcontinued-exact",
+     (),
+     ((1, "output", "fixed-bytes", 4, "if-positive-return-nonnull", "fixed"),
+      (3, "output", "fixed-bytes", 144, "if-positive-return-nonnull", "fixed")),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0, 1))),
+    (73, "flock", "fd-control-entry", "scalar-exit",
+     "operation-in-v4-build-flock-allowed-operations-exact",
+     (), (),
+     _v4_cardinality_spec((1,)), _v4_cardinality_spec((1,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,))),
+    (131, "sigaltstack", "query-entry", "query-exit",
+     "nullable-new-and-old-stack-x86-64-stack-t-exact",
+     ((0, "input", "fixed-bytes", 24, "if-nonnull", "same-as-entry"),),
+     ((1, "output", "fixed-bytes", 24, "if-success-nonnull", "fixed"),),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0, 1))),
+    (158, "arch_prctl", "query-entry", "query-exit",
+     "operation-in-v4-build-arch-prctl-allowed-operations-exact",
+     (),
+     ((1, "output", "fixed-bytes", 8,
+       "if-success-nonnull-get-operation", "fixed"),),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0, 1))),
+    (218, "set_tid_address", "query-entry", "scalar-exit",
+     "clear-child-tid-pointer-exact", (), (),
+     _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((1,))),
+    (273, "set_robust_list", "query-entry", "scalar-exit",
+     "robust-list-head-pointer-length-24-exact",
+     ((0, "input", "fixed-bytes", 24, "always-nonnull", "same-as-entry"),),
+     (),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,))),
+    (334, "rseq", "query-entry", "scalar-exit",
+     "register-or-unregister-rseq-32-signature-0x53053053-exact",
+     ((0, "input", "fixed-bytes", 32, "if-nonnull", "same-as-entry"),),
+     ((0, "output", "fixed-bytes", 32, "if-success-nonnull", "fixed"),),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((0,)), _v4_cardinality_spec((0,)),
+     _v4_cardinality_spec((1,))),
 )
 V4_BUILD_PRCTL_ALLOWED_OPERATIONS = (
     (21, "PR_GET_SECCOMP"),
@@ -1071,19 +1403,13 @@ V4_BUILD_STATELESS_ALLOWED_SYSCALLS = (
     (5, "fstat"),
     (6, "lstat"),
     (7, "poll"),
-    (13, "rt_sigaction"),
-    (14, "rt_sigprocmask"),
-    (15, "rt_sigreturn"),
     (21, "access"),
     (23, "select"),
     (24, "sched_yield"),
     (27, "mincore"),
     (35, "nanosleep"),
     (39, "getpid"),
-    (61, "wait4"),
-    (62, "kill"),
     (63, "uname"),
-    (73, "flock"),
     (74, "fsync"),
     (75, "fdatasync"),
     (79, "getcwd"),
@@ -1102,38 +1428,162 @@ V4_BUILD_STATELESS_ALLOWED_SYSCALLS = (
     (118, "getresuid"),
     (120, "getresgid"),
     (121, "getpgid"),
-    (131, "sigaltstack"),
     (137, "statfs"),
     (138, "fstatfs"),
-    (158, "arch_prctl"),
     (186, "gettid"),
     (201, "time"),
-    (202, "futex"),
-    (218, "set_tid_address"),
     (228, "clock_gettime"),
     (229, "clock_getres"),
     (230, "clock_nanosleep"),
-    (234, "tgkill"),
     (262, "newfstatat"),
     (267, "readlinkat"),
     (271, "ppoll"),
-    (273, "set_robust_list"),
     (277, "sync_file_range"),
     (302, "prlimit64"),
     (318, "getrandom"),
     (332, "statx"),
-    (334, "rseq"),
     (439, "faccessat2"),
 )
 V4_BUILD_STATELESS_PATH_SYSCALLS = (
     4, 6, 21, 89, 137, 262, 267, 332, 439,
 )
 V4_BUILD_STATELESS_FD_SYSCALLS = (
-    5, 73, 74, 75, 138, 277,
+    5, 74, 75, 138, 277,
 )
+V4_BUILD_QUERY_ABI_REGION_POLICY_FIELDS = (
+    "argument_index", "direction", "length_kind", "length_value",
+    "condition", "post_length_kind",
+)
+V4_BUILD_QUERY_ABI_LENGTH_KINDS = (
+    "fixed-bytes", "argument-bytes", "nfds-times-pollfd-8",
+    "fdset-bytes-from-nfds", "pages-covered-by-range",
+)
+V4_BUILD_QUERY_ABI_CONDITIONS = (
+    "always-nonnull", "if-nonnull", "if-success-nonnull",
+    "if-eintr-nonnull", "if-nonnull-after-exit",
+    "if-positive-return-nonnull", "if-success-nonnull-get-operation",
+)
+V4_BUILD_QUERY_ABI_POST_LENGTH_KINDS = (
+    "same-as-entry", "fixed", "positive-return",
+    "positive-return-clipped-to-region",
+)
+V4_BUILD_CLOCK_NANOSLEEP_ALLOWED_FLAGS = (0, 1)
+V4_BUILD_NEWFSTATAT_ALLOWED_FLAGS = (0, 0x100, 0x1000, 0x1100)
+V4_BUILD_GETRANDOM_ALLOWED_FLAGS = (0, 1, 2, 3, 4, 5, 6, 7)
+V4_BUILD_FACCESSAT2_ALLOWED_FLAG_MASK = 0x1300
+_V4_QUERY_INPUT_REGION_POLICIES = {
+    7: ((0, "input", "nfds-times-pollfd-8", 1, "if-nonnull", "same-as-entry"),),
+    23: (
+        (1, "input", "fdset-bytes-from-nfds", 0, "if-nonnull", "same-as-entry"),
+        (2, "input", "fdset-bytes-from-nfds", 0, "if-nonnull", "same-as-entry"),
+        (3, "input", "fdset-bytes-from-nfds", 0, "if-nonnull", "same-as-entry"),
+        (4, "input", "fixed-bytes", 16, "if-nonnull", "same-as-entry"),
+    ),
+    35: ((0, "input", "fixed-bytes", 16, "always-nonnull", "same-as-entry"),),
+    230: ((2, "input", "fixed-bytes", 16, "always-nonnull", "same-as-entry"),),
+    271: (
+        (0, "input", "nfds-times-pollfd-8", 1, "if-nonnull", "same-as-entry"),
+        (2, "input", "fixed-bytes", 16, "if-nonnull", "same-as-entry"),
+        (3, "input", "argument-bytes", 4, "if-nonnull", "same-as-entry"),
+    ),
+}
+_V4_QUERY_OUTPUT_REGION_POLICIES = {
+    4: ((1, "output", "fixed-bytes", 144, "if-success-nonnull", "fixed"),),
+    5: ((1, "output", "fixed-bytes", 144, "if-success-nonnull", "fixed"),),
+    6: ((1, "output", "fixed-bytes", 144, "if-success-nonnull", "fixed"),),
+    7: ((0, "output", "nfds-times-pollfd-8", 1, "if-nonnull-after-exit", "same-as-entry"),),
+    23: (
+        (1, "output", "fdset-bytes-from-nfds", 0, "if-nonnull-after-exit", "same-as-entry"),
+        (2, "output", "fdset-bytes-from-nfds", 0, "if-nonnull-after-exit", "same-as-entry"),
+        (3, "output", "fdset-bytes-from-nfds", 0, "if-nonnull-after-exit", "same-as-entry"),
+        (4, "output", "fixed-bytes", 16, "if-nonnull-after-exit", "fixed"),
+    ),
+    27: ((2, "output", "pages-covered-by-range", (0, 1), "if-success-nonnull", "fixed"),),
+    35: ((1, "output", "fixed-bytes", 16, "if-eintr-nonnull", "fixed"),),
+    63: ((0, "output", "fixed-bytes", 390, "if-success-nonnull", "fixed"),),
+    79: ((0, "output", "argument-bytes", 1, "if-success-nonnull", "positive-return-clipped-to-region"),),
+    89: ((1, "output", "argument-bytes", 2, "if-success-nonnull", "positive-return-clipped-to-region"),),
+    96: (
+        (0, "output", "fixed-bytes", 16, "if-success-nonnull", "fixed"),
+        (1, "output", "fixed-bytes", 8, "if-success-nonnull", "fixed"),
+    ),
+    97: ((1, "output", "fixed-bytes", 16, "if-success-nonnull", "fixed"),),
+    98: ((1, "output", "fixed-bytes", 144, "if-success-nonnull", "fixed"),),
+    99: ((0, "output", "fixed-bytes", 112, "if-success-nonnull", "fixed"),),
+    100: ((0, "output", "fixed-bytes", 32, "if-success-nonnull", "fixed"),),
+    118: (
+        (0, "output", "fixed-bytes", 4, "if-success-nonnull", "fixed"),
+        (1, "output", "fixed-bytes", 4, "if-success-nonnull", "fixed"),
+        (2, "output", "fixed-bytes", 4, "if-success-nonnull", "fixed"),
+    ),
+    120: (
+        (0, "output", "fixed-bytes", 4, "if-success-nonnull", "fixed"),
+        (1, "output", "fixed-bytes", 4, "if-success-nonnull", "fixed"),
+        (2, "output", "fixed-bytes", 4, "if-success-nonnull", "fixed"),
+    ),
+    137: ((1, "output", "fixed-bytes", 120, "if-success-nonnull", "fixed"),),
+    138: ((1, "output", "fixed-bytes", 120, "if-success-nonnull", "fixed"),),
+    201: ((0, "output", "fixed-bytes", 8, "if-success-nonnull", "fixed"),),
+    228: ((1, "output", "fixed-bytes", 16, "if-success-nonnull", "fixed"),),
+    229: ((1, "output", "fixed-bytes", 16, "if-success-nonnull", "fixed"),),
+    230: ((3, "output", "fixed-bytes", 16, "if-eintr-nonnull", "fixed"),),
+    262: ((2, "output", "fixed-bytes", 144, "if-success-nonnull", "fixed"),),
+    267: ((2, "output", "argument-bytes", 3, "if-success-nonnull", "positive-return-clipped-to-region"),),
+    271: ((0, "output", "nfds-times-pollfd-8", 1, "if-nonnull-after-exit", "same-as-entry"),),
+    302: ((3, "output", "fixed-bytes", 16, "if-success-nonnull", "fixed"),),
+    318: ((0, "output", "argument-bytes", 1, "if-success-nonnull", "positive-return-clipped-to-region"),),
+    332: ((4, "output", "fixed-bytes", 256, "if-success-nonnull", "fixed"),),
+}
+_V4_STATELESS_ARGUMENT_POLICIES = {
+    4: "path-arg0-nul-stat-output-arg1-exact",
+    5: "live-fd-arg0-stat-output-arg1-exact",
+    6: "path-arg0-nul-lstat-output-arg1-exact",
+    7: "nfds-at-most-4096-timeout-signed-int-exact",
+    21: "path-arg0-nul-mode-subset-rwx-or-f-ok-exact",
+    23: "nfds-zero-through-4096-nullable-fdsets-and-timeval-exact",
+    24: "six-zero-arguments-exact",
+    27: "mapped-page-aligned-range-exact",
+    35: "valid-timespec-exact",
+    39: "six-zero-arguments-exact",
+    63: "nonnull-utsname-output-arg0-exact",
+    74: "live-fd-arg0-six-tail-zero-exact",
+    75: "live-fd-arg0-six-tail-zero-exact",
+    79: "nonnull-buffer-arg0-size-1-through-4096-exact",
+    89: "buffer-length-0-through-1048576-exact",
+    96: "nullable-timeval-and-timezone-exact",
+    97: "resource-selector-linux-x86-64-exact",
+    98: "who-selector-linux-x86-64-exact",
+    99: "nonnull-sysinfo-output-arg0-exact",
+    100: "nullable-tms-output-arg0-exact",
+    102: "six-zero-arguments-exact",
+    104: "six-zero-arguments-exact",
+    107: "six-zero-arguments-exact",
+    108: "six-zero-arguments-exact",
+    110: "six-zero-arguments-exact",
+    111: "six-zero-arguments-exact",
+    118: "three-nonnull-uid32-output-pointers-exact",
+    120: "three-nonnull-gid32-output-pointers-exact",
+    121: "registered-pid-or-zero-exact",
+    137: "path-arg0-nul-statfs-output-arg1-exact",
+    138: "live-fd-arg0-statfs-output-arg1-exact",
+    186: "six-zero-arguments-exact",
+    201: "nullable-time64-output-arg0-exact",
+    228: "clock-id-in-current-host-profile-exact",
+    229: "clock-id-in-current-host-profile-nullable-result-exact",
+    230: "clock-id-profile-flags-in-v4-clock-nanosleep-policy-exact",
+    262: "flags-in-v4-build-newfstatat-allowed-flags-exact",
+    267: "dirfd-path-buffer-length-0-through-1048576-exact",
+    271: "nfds-at-most-4096-timespec-sigmask-size-8-exact",
+    277: "live-fd-offset-and-length-u64-flags-zero-exact",
+    302: "query-only-null-new-limit-pointer-exact",
+    318: "length-0-through-1048576-flags-in-v4-getrandom-policy-exact",
+    332: "flags-at-symlink-nofollow-or-at-empty-path-mask-and-statx-mask-exact",
+    439: "mode-rwx-or-f-ok-flags-subset-0x1300-exact",
+}
 V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY_FIELDS = (
     "syscall_number", "operation", "entry_kind", "exit_kind",
-    "input_region_policy", "output_region_policy", "object_edge_counts",
+    "argument_policy", "input_region_policy", "output_region_policy",
+    "object_edge_counts",
     "fd_transition_counts", "mapping_transition_counts",
     "fs_transition_counts", "task_transition_counts",
 )
@@ -1148,8 +1598,11 @@ V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY = tuple(
             else "query-entry"
         ),
         "query-exit",
-        "pinned-linux-x86-64-kernel-read-regions-v1",
-        "pinned-linux-x86-64-kernel-written-regions-v1",
+        _V4_STATELESS_ARGUMENT_POLICIES.get(
+            number, "all-unused-arguments-zero-or-pinned-scalar-abi-exact",
+        ),
+        _V4_QUERY_INPUT_REGION_POLICIES.get(number, ()),
+        _V4_QUERY_OUTPUT_REGION_POLICIES.get(number, ()),
         _v4_cardinality_spec((0, 1))
         if number in (
             V4_BUILD_STATELESS_PATH_SYSCALLS
@@ -1179,7 +1632,7 @@ V4_BUILD_NONRETURNING_CAPTURE_POLICY = tuple(
     for number, operation in V4_BUILD_NONRETURNING_SYSCALLS
 )
 V4_BUILD_SYSCALL_DISPOSITION_POLICY = (
-    "allow-only-modeled-or-fixed-stateless-deny-all-other-native-v1"
+    "phase-split-allow-only-modeled-control-query-deny-all-other-native-v2"
 )
 V4_BUILD_REJECTED_OUTPUT_MUTATION_SYSCALLS = (
     (16, "ioctl"),
@@ -1956,7 +2409,7 @@ def enumerate_isolated_native_build_root_v1(
     return entries
 
 
-def enumerate_isolated_native_build_filter_v2() -> dict[str, Any]:
+def enumerate_isolated_native_build_filter_v3() -> dict[str, Any]:
     load_word_absolute = 0x20
     jump_equal = 0x15
     jump_mask_nonzero = 0x45
@@ -2125,7 +2578,7 @@ def validate_isolated_native_build_filter(value: object) -> dict[str, Any]:
     _require_v4_exact_json_types(value, label)
     require(type(value) is dict, f"malformed {label}")
     require_exact_json(
-        value, enumerate_isolated_native_build_filter_v2(), label,
+        value, enumerate_isolated_native_build_filter_v3(), label,
     )
     return value
 
