@@ -922,10 +922,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 170)
+        self.assertEqual(len(values), 171)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "44e4d2197d7db3b940665ba61a75338395e3ca6b24aaae226103b5d4b7b146a8",
+            "912ca96b325a4a00551d0f7c4d1b7d3b5754778e66ae88b986f97dda71ff317f",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1283,6 +1283,22 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         with self.assertRaises(subject.ProtocolError):
             subject.enumerate_isolated_native_build_root_v1(
                 compiler, linker, prefixed_oversize, inputs,
+            )
+
+        deep_compiler = copy.deepcopy(compiler)
+        deep_compiler["argument_path"] = "/" + "/".join(["a"] * 100) + "/cc"
+        deep_compiler["resolved_path"] = deep_compiler["argument_path"]
+        with mock.patch.object(
+            subject, "V4_BUILD_INPUT_CLOSURE_ENTRY_MAX", 16,
+        ), self.assertRaisesRegex(subject.ProtocolError, "entry count"):
+            subject.enumerate_isolated_native_build_root_v1(
+                deep_compiler, linker, source_tree, inputs,
+            )
+        with mock.patch.object(
+            subject, "V4_BUILD_ROOT_DERIVATION_MAX_BYTES", 50,
+        ), self.assertRaisesRegex(subject.ProtocolError, "derivation work"):
+            subject.enumerate_isolated_native_build_root_v1(
+                compiler, linker, source_tree, inputs,
             )
 
     def test_v4_isolated_native_build_filter_enumerator(self) -> None:

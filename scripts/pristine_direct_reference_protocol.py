@@ -319,6 +319,7 @@ V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES = 68_719_476_736
 V4_BUILD_READONLY_DIRECTORY_MODE = 16_749
 V4_BUILD_SOURCE_DIRECTORY = "candle-source"
 V4_BUILD_OUTPUT_DIRECTORY = "candle-output"
+V4_BUILD_ROOT_DERIVATION_MAX_BYTES = 33_554_432
 V4_BUILD_FILTER_SCHEMA = 1
 V4_BUILD_FILTER_KIND = (
     "candle-flyspeck-isolated-native-build-seccomp-filter-v1"
@@ -1032,23 +1033,78 @@ def enumerate_isolated_native_build_root_v1(
             {"kind": "build-runtime-input", "input_index": index},
         )
 
-    directories = {V4_BUILD_OUTPUT_DIRECTORY, V4_BUILD_SOURCE_DIRECTORY}
-    for relative in files:
+    total_bytes = sum(entry["bytes"] for entry in files.values())
+    require(total_bytes <= V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES,
+            "V4 native build root total bytes exceed cap")
+
+    def new_trie_node() -> dict[str, Any]:
+        return {"children": {}, "file": None, "explicit_directory": False}
+
+    trie = new_trie_node()
+    node_count = 0
+    derived_path_bytes = 0
+
+    def insert_path(
+        relative: str, file_record: dict[str, Any] | None,
+    ) -> None:
+        nonlocal node_count, derived_path_bytes
+        node = trie
+        prefix_bytes = 0
         components = relative.split("/")
-        for length in range(1, len(components)):
-            parent = "/".join(components[:length])
-            require(parent not in files,
-                    "ordinary file is an ancestor in V4 native build root")
-            directories.add(parent)
-        require(relative not in directories,
-                "directory collides with V4 native build root file")
+        for component_index, component in enumerate(components):
+            prefix_bytes += len(component.encode("ascii"))
+            if component_index:
+                prefix_bytes += 1
+            children = node["children"]
+            child = children.get(component)
+            if child is None:
+                require(
+                    node_count < V4_BUILD_INPUT_CLOSURE_ENTRY_MAX,
+                    "V4 native build root entry count exceeds cap",
+                )
+                require(
+                    derived_path_bytes + prefix_bytes <=
+                    V4_BUILD_ROOT_DERIVATION_MAX_BYTES,
+                    "V4 native build root derivation work exceeds cap",
+                )
+                child = new_trie_node()
+                children[component] = child
+                node_count += 1
+                derived_path_bytes += prefix_bytes
+            node = child
+            if component_index + 1 < len(components):
+                require(
+                    node["file"] is None,
+                    "ordinary file is an ancestor in V4 native build root",
+                )
+        if file_record is None:
+            require(node["file"] is None,
+                    "directory collides with V4 native build root file")
+            node["explicit_directory"] = True
+        else:
+            require(
+                node["file"] is None and not node["children"] and
+                not node["explicit_directory"],
+                "file collides with V4 native build root path",
+            )
+            node["file"] = file_record
+
+    insert_path(V4_BUILD_OUTPUT_DIRECTORY, None)
+    insert_path(V4_BUILD_SOURCE_DIRECTORY, None)
+    for relative, file_record in files.items():
+        insert_path(relative, file_record)
 
     entries: list[dict[str, Any]] = []
-    for relative in sorted(
-        directories | set(files), key=lambda item: tuple(item.split("/")),
-    ):
-        if relative in files:
-            entry = files[relative]
+    stack = [
+        (component, child)
+        for component, child in sorted(
+            trie["children"].items(), reverse=True,
+        )
+    ]
+    while stack:
+        relative, node = stack.pop()
+        if node["file"] is not None:
+            entry = node["file"]
         else:
             entry = {
                 "relative": relative,
@@ -1063,15 +1119,13 @@ def enumerate_isolated_native_build_root_v1(
                 "selector": None,
             }
         entries.append({"index": len(entries), **entry})
+        for component, child in sorted(
+            node["children"].items(), reverse=True,
+        ):
+            stack.append((f"{relative}/{component}", child))
 
-    require(4 <= len(entries) <= V4_BUILD_INPUT_CLOSURE_ENTRY_MAX,
-            "V4 native build root entry count exceeds cap")
-    total_bytes = sum(
-        entry["bytes"] for entry in entries
-        if entry["object_type"] == "ordinary-file"
-    )
-    require(total_bytes <= V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES,
-            "V4 native build root total bytes exceed cap")
+    require(4 <= len(entries) == node_count,
+            "V4 native build root entry count mismatch")
     return entries
 
 
