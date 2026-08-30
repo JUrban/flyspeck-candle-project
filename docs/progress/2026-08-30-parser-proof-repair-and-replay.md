@@ -392,3 +392,40 @@ At this checkpoint it has passed the repaired source-evaluation dependency and
 is traversing the remaining 93-theory static backlog.  This remains an active
 developer replay.  A final qualifying result still requires a new clean
 worktree and a fresh four-stage cold replay at the eventual final head.
+
+## Source-to-flat exact-domain frontier after warm attempt 002
+
+Warm attempt 002 is now sealed as failed development evidence.  Its immutable
+artifact is:
+
+`/project/flyspeck-candle-runs/cakeml-parser-dopen-warm-proof-77b769a99-attempt-002`
+
+The run exited 1 after `1:10:02`, used at most `2410580` KiB RSS, and recorded
+zero swaps.  All four reused stage-3 hashes were identical before and after
+the run.  The log SHA-256 is
+`4752aa07f9a147f395fa8e4cf018d6275ad71d4f45f558a04323bfa19e8f98b0` and
+the timing-record SHA-256 is
+`f39b9e7ec87df810e27f7eae7a5eeabc1dd3c5d20f540db8f64ae9ad1a1eff12`.
+
+The repaired source-evaluator theorem passed.  The replay then completed 43 of
+the 93 remaining theories, through `flat_elim`, before
+`source_to_flatProofScript.sml` failed while rebuilding `compile_correct`.
+The unsolved declaration case is `Dopen`: source evaluation successfully opens
+the named module, compilation emits no flat declarations, but the proof cannot
+recover the required flat environment relation after the open.
+
+This is not just a missing tactic branch.  The existing `global_env_inv` is a
+one-way lookup invariant, so the compiler namespace may contain names absent
+from the semantic namespace selected by `open_dec_env`.  Such extra names can
+also incorrectly shadow later outer bindings.  A sound repair therefore needs
+an exact environment-domain premise, its preservation through namespace open,
+and propagation through suspended dynamic-evaluation environments and the
+initial global environment.  The saved failing heap is retained at:
+
+`/project/worktrees/cakeml-flyspeck-runtime-stack-v13/compiler/backend/proofs/source_to_flatProof.compile_correct.dumpedheap`
+
+That proof repair is active on a separate development branch.  No admission,
+compiler qualification, Candle repin, or 20/400 gate is claimed from this
+failure.  The next warm replay will start only after the focused
+`source_to_flatProof` target passes at a committed CakeML head; final
+qualification still requires the clean cold four-stage replay.
