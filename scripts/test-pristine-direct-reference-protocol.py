@@ -879,6 +879,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "PTRACE_O_TRACEFORK",
             "PTRACE_O_TRACEVFORK",
             "PTRACE_O_TRACECLONE",
+            "PTRACE_O_TRACEVFORKDONE",
             "PTRACE_O_TRACEEXEC",
             "PTRACE_O_TRACEEXIT",
             "PTRACE_O_EXITKILL",
@@ -922,10 +923,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 171)
+        self.assertEqual(len(values), 175)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "912ca96b325a4a00551d0f7c4d1b7d3b5754778e66ae88b986f97dda71ff317f",
+            "3ba95b4332e45cceceaec0445046b21b250d44660babda9a38e41f4b83cc348f",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1335,15 +1336,24 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             (0x15, 1, 0, subject.V4_BUILD_FILTER_AUDIT_ARCH),
         )
         self.assertEqual(
+            instructions[4],
+            (0x45, 0, 1, subject.V4_BUILD_FILTER_X32_SYSCALL_BIT),
+        )
+        self.assertEqual(
+            instructions[5],
+            (0x06, 0, 0, subject.V4_BUILD_FILTER_RET_ENOSYS),
+        )
+        self.assertEqual(
             instructions[-1],
             (0x06, 0, 0, subject.V4_BUILD_FILTER_RET_ALLOW),
         )
         decoded = authority["decoded_policy"]
         self.assertEqual(decoded[0]["decision"], "kill-process")
+        self.assertEqual(decoded[1]["ret_data"], 38)
         self.assertEqual(decoded[-1]["decision"], "allow")
         syscall_rules = {
             record["syscall_number"]: record
-            for record in decoded[1:-1]
+            for record in decoded[1:-1] if record["syscall_number"] >= 0
         }
         self.assertEqual(
             set(syscall_rules),

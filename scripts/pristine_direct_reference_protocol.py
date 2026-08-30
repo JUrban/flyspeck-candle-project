@@ -331,11 +331,13 @@ V4_BUILD_FILTER_ERRNO = 1
 V4_BUILD_FILTER_CLONE_SYSCALL = 56
 V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E820000
 V4_BUILD_FILTER_AUDIT_ARCH = 0xC000003E
-V4_BUILD_FILTER_INSTRUCTION_COUNT = 100
-V4_BUILD_FILTER_INSTRUCTIONS_BYTES = 800
-V4_BUILD_FILTER_DECODED_RULE_COUNT = 48
+V4_BUILD_FILTER_X32_SYSCALL_BIT = 0x40000000
+V4_BUILD_FILTER_INSTRUCTION_COUNT = 122
+V4_BUILD_FILTER_INSTRUCTIONS_BYTES = 976
+V4_BUILD_FILTER_DECODED_RULE_COUNT = 59
 V4_BUILD_FILTER_RET_KILL_PROCESS = 0x80000000
 V4_BUILD_FILTER_RET_ERRNO = 0x00050001
+V4_BUILD_FILTER_RET_ENOSYS = 0x00050026
 V4_BUILD_FILTER_RET_ALLOW = 0x7FFF0000
 V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (29, "shmget"),
@@ -356,6 +358,11 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (161, "chroot"),
     (165, "mount"),
     (166, "umount2"),
+    (206, "io_setup"),
+    (207, "io_destroy"),
+    (208, "io_getevents"),
+    (209, "io_submit"),
+    (210, "io_cancel"),
     (220, "semtimedop"),
     (240, "mq_open"),
     (241, "mq_unlink"),
@@ -374,6 +381,11 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (310, "process_vm_readv"),
     (311, "process_vm_writev"),
     (321, "bpf"),
+    (323, "userfaultfd"),
+    (333, "io_pgetevents"),
+    (425, "io_uring_setup"),
+    (426, "io_uring_enter"),
+    (427, "io_uring_register"),
     (428, "open_tree"),
     (429, "move_mount"),
     (430, "fsopen"),
@@ -398,10 +410,93 @@ V4_BUILD_PTRACE_OPTIONS = (
     "PTRACE_O_TRACEFORK",
     "PTRACE_O_TRACEVFORK",
     "PTRACE_O_TRACECLONE",
+    "PTRACE_O_TRACEVFORKDONE",
     "PTRACE_O_TRACEEXEC",
     "PTRACE_O_TRACEEXIT",
     "PTRACE_O_EXITKILL",
 )
+V4_BUILD_EVENT_KINDS = (
+    "namespace-clone",
+    "initial-stop",
+    "interrupt-stop",
+    "signal-delivery-stop",
+    "group-stop",
+    "syscall-entry",
+    "syscall-exit",
+    "fork",
+    "vfork",
+    "clone",
+    "vfork-done",
+    "exec",
+    "exec-tid-rebase",
+    "exit",
+    "terminal-wait",
+    "pre-output-walk",
+    "post-output-walk",
+    "output-hash-barrier",
+)
+V4_BUILD_EVENT_NONNULL_FIELDS = {
+    "namespace-clone": (
+        "subject_task_identity", "ptrace_event_message", "task_transition",
+    ),
+    "initial-stop": (
+        "subject_task_identity", "raw_wait_status", "reinject_signal",
+        "task_transition",
+    ),
+    "interrupt-stop": (
+        "subject_task_identity", "raw_wait_status", "signal_number",
+        "reinject_signal",
+    ),
+    "signal-delivery-stop": (
+        "subject_task_identity", "raw_wait_status", "signal_number",
+        "siginfo", "reinject_signal",
+    ),
+    "group-stop": (
+        "subject_task_identity", "raw_wait_status", "signal_number",
+        "reinject_signal",
+    ),
+    "syscall-entry": (
+        "subject_task_identity", "syscall_number", "arguments",
+        "entry_capture",
+    ),
+    "syscall-exit": (
+        "subject_task_identity", "syscall_number", "return_value",
+        "exit_capture",
+    ),
+    "fork": (
+        "subject_task_identity", "ptrace_event_message", "task_transition",
+    ),
+    "vfork": (
+        "subject_task_identity", "ptrace_event_message", "task_transition",
+    ),
+    "clone": (
+        "subject_task_identity", "ptrace_event_message", "task_transition",
+    ),
+    "vfork-done": (
+        "subject_task_identity", "ptrace_event_message", "task_transition",
+    ),
+    "exec": (
+        "subject_task_identity", "ptrace_event_message", "task_transition",
+    ),
+    "exec-tid-rebase": (
+        "subject_task_identity", "ptrace_event_message", "task_transition",
+    ),
+    "exit": (
+        "subject_task_identity", "ptrace_event_message", "task_transition",
+    ),
+    "terminal-wait": (
+        "subject_task_identity", "raw_wait_status", "task_transition",
+    ),
+    "pre-output-walk": (
+        "root_entry_index", "fd_generation", "object_edge",
+    ),
+    "post-output-walk": (
+        "root_entry_index", "fd_generation", "object_edge",
+    ),
+    "output-hash-barrier": (
+        "root_entry_index", "fd_generation", "object_edge",
+    ),
+}
 V4_BUILD_OUTPUT_ROLES = (
     "target-executable",
     "intermediate-object",
@@ -1149,6 +1244,8 @@ def enumerate_isolated_native_build_filter_v1() -> dict[str, Any]:
     emit(jump_equal, 1, 0, V4_BUILD_FILTER_AUDIT_ARCH)
     emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_KILL_PROCESS)
     emit(load_word_absolute, 0, 0, 0)
+    emit(jump_mask_nonzero, 0, 1, V4_BUILD_FILTER_X32_SYSCALL_BIT)
+    emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_ENOSYS)
 
     denied = dict(V4_BUILD_FILTER_DENIED_SYSCALLS)
     for syscall_number in sorted((*denied, V4_BUILD_FILTER_CLONE_SYSCALL)):
@@ -1197,6 +1294,20 @@ def enumerate_isolated_native_build_filter_v1() -> dict[str, Any]:
         "decision": "kill-process",
         "ret_data": 0,
     }]
+    decoded_policy.append({
+        "index": len(decoded_policy),
+        "architecture": "linux-x86-64-x32-number",
+        "syscall_number": -1,
+        "argument_policy": [{
+            "index": 0,
+            "argument_index": -1,
+            "operation": "masked-nonzero",
+            "mask": V4_BUILD_FILTER_X32_SYSCALL_BIT,
+            "value": None,
+        }],
+        "decision": "errno",
+        "ret_data": 38,
+    })
     for syscall_number in sorted((*denied, V4_BUILD_FILTER_CLONE_SYSCALL)):
         argument_policy: list[dict[str, Any]] = []
         if syscall_number == V4_BUILD_FILTER_CLONE_SYSCALL:
