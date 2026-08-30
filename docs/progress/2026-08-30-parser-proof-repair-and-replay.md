@@ -340,3 +340,55 @@ HOL4 remains exact commit
 active under `-j1 --mt=1` and the `117964800` KiB address-space limit.  This
 is still development evidence, not compiler qualification; Candle remains on
 the prior compiler pin unless all four stages and the postflight gate pass.
+
+## Dopen reverse-dependency proof frontier at `77b769a99...`
+
+The `0e75b7e42...` replay completed the first three stages and failed normally
+in stage 4.  The exact receipts are:
+
+- stage 1: pass in `0:08.08`, maximum RSS `144508` KiB;
+- stage 2: pass in `4:51:01`, maximum RSS `47587112` KiB;
+- stage 3: pass in `1:02:38`, maximum RSS `80940752` KiB; and
+- stage 4: fail in `13:43.93`, maximum RSS `3355712` KiB.
+
+Every receipt records zero swaps.  The first stage-4 failure was the previously
+omitted `Dopen` case of `candle_prover_evaluate.evaluate_v_ok`; therefore the
+artifact remains immutable failed development evidence and does not authorize
+a compiler or Candle repin.
+
+Three proof-only CakeML checkpoints now close the discovered Dopen gaps:
+
+- `672e533bc` proves that opening a declaration environment preserves the
+  Candle `env_ok` invariant and discharges the `evaluate_v_ok` Dopen case;
+- `6436326ce` exports the environment-opening invariant and discharges the
+  corresponding `candle_basis_evaluate` case; and
+- `77b769a99` proves the source evaluator's environment relation is equivalent
+  to the exported namespace `nsAll2` relation, transports it through
+  `nsAll2_after_nsOpen`, and discharges `source_evalProof.eval_simulation`.
+
+Focused builds passed unchanged theorem statements: `candle_prover_evaluate`
+in about 2m10s, `candle_basis_evaluate` in about 1m21s,
+`candle_prover_semantics` in about 3m15s, and `source_evalProof` in 1m58s.  The
+last used maximum RSS `757320` KiB and zero swaps.  None of these proofs uses
+an admission, omitted proof, or new axiom.
+
+The first separately labelled warm reverse-dependency replay is retained at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-dopen-warm-proof-6436326ce-attempt-001`
+
+It preserved the exact stage-3 `cake.S`, configuration and x64-bootstrap
+theory hashes before and after the run, built through dependency 95 of the
+110-theory countdown, and then exposed the `source_evalProof` Dopen case.  It
+failed after `11:05.67`, maximum RSS `1410248` KiB, zero swaps.  Its receipt
+classifies it explicitly as a warm incremental regression, not qualification.
+
+After the focused `source_evalProof` pass, warm attempt 002 was launched at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-dopen-warm-proof-77b769a99-attempt-002`
+
+It is serial (`-j1 --mt=1`), capped at `117964800` KiB virtual address space,
+and hashes the same four reused stage-3 artifacts before and after execution.
+At this checkpoint it has passed the repaired source-evaluation dependency and
+is traversing the remaining 93-theory static backlog.  This remains an active
+developer replay.  A final qualifying result still requires a new clean
+worktree and a fresh four-stage cold replay at the eventual final head.
