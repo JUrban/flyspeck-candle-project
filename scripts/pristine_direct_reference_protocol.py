@@ -36,6 +36,10 @@ RAW_CANDIDATE_KIND = (
 SOURCE_REDERIVATION_KIND = (
     "candle-flyspeck-pristine-direct-raw-source-rederivation-v3"
 )
+INCOMPLETE_SOURCE_REDERIVATION_KIND = (
+    "candle-flyspeck-pristine-direct-incomplete-source-rederivation-"
+    "diagnostic-v3"
+)
 SEMANTIC_COMPLETION_KIND = (
     "candle-flyspeck-pristine-direct-semantic-completion-observation-v1"
 )
@@ -1067,10 +1071,7 @@ def validate_canonical_raw_candidate_bytes(
     native_closure: object, semantic_projection: object,
     coverage_projection: object,
 ) -> dict[str, Any]:
-    return validate_canonical_bytes(
-        data, "pristine raw candidate",
-        lambda value: validate_raw_candidate(
-            value, plan, request, transcript, native_closure,
-            semantic_projection, coverage_projection,
-        ),
+    raise ProtocolError(
+        "schema-v3 canonical raw candidate decoding is disabled until the "
+        "future held collector and descriptor-rooted terminal postflight"
     )

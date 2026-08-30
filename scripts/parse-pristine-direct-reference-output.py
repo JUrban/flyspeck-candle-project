@@ -39,7 +39,11 @@ from types import ModuleType
 from typing import Any
 
 
-SOURCE_REDERIVATION_KIND = (
+INCOMPLETE_SOURCE_REDERIVATION_KIND = (
+    "candle-flyspeck-pristine-direct-incomplete-source-rederivation-"
+    "diagnostic-v3"
+)
+FINAL_SOURCE_REDERIVATION_KIND = (
     "candle-flyspeck-pristine-direct-raw-source-rederivation-v3"
 )
 EXPECTED_RAW_PROTOCOL_SCHEMA = 3
@@ -77,6 +81,7 @@ CANONICAL_DECIMAL = re.compile(r"0|[1-9][0-9]*")
 MAX_CANONICAL_DECIMAL_DIGITS = 19
 MAX_FRAMED_DECIMAL_DIGITS = 9
 MAX_FRAMED_VALUE = 536870912
+MAX_FRAMED_VALUE_TOKEN = b"536870912"
 EXPECTED_FINAL_THEOREM_NAMES = (
     "Linear_programming_results.linear_programming_results_th",
     "Mk_all_ineq.the_nonlinear_inequalities",
@@ -170,7 +175,9 @@ def _require_compatible_protocol(module: ModuleType) -> None:
             getattr(module, "RETAINED_STDOUT_MAX_BYTES", None) == 536870912 and
             getattr(module, "RETAINED_STDERR_MAX_BYTES", None) == 0 and
             getattr(module, "SOURCE_REDERIVATION_KIND", None) ==
-            SOURCE_REDERIVATION_KIND and
+            FINAL_SOURCE_REDERIVATION_KIND and
+            getattr(module, "INCOMPLETE_SOURCE_REDERIVATION_KIND", None) ==
+            INCOMPLETE_SOURCE_REDERIVATION_KIND and
             getattr(module, "LP_CONSUMER_ACTION_INDEX", None) == 184 and
             getattr(module, "LP_SUCCESS_KIND", None) ==
             "candle-flyspeck-pristine-direct-lp-success-stream-v1" and
@@ -228,6 +235,47 @@ def _executing_direct_protocol_source_record(
     }
 
 
+def _trusted_plan_request(
+    plan: object, request: object, label: str,
+) -> tuple[ModuleType, dict[str, Any], dict[str, Any]]:
+    """Rebind every public parser operation to its loader activation."""
+
+    protocol = _protocol()
+    try:
+        validated_plan = protocol.validate_raw_plan(plan)
+        validated_request = protocol.validate_raw_request(
+            request, validated_plan,
+        )
+    except protocol.ProtocolError as error:
+        raise OutputProtocolError(f"invalid {label} input: {error}") from error
+    for authority_name, executing, authority_label in (
+        (
+            "output_parser", _executing_parser_source_record(protocol),
+            "executing output parser versus plan authority",
+        ),
+        (
+            "protocol", _executing_protocol_source_record(protocol),
+            "executing pristine protocol versus plan authority",
+        ),
+        (
+            "direct_release_protocol",
+            _executing_direct_protocol_source_record(protocol),
+            "executing direct-release protocol versus plan authority",
+        ),
+    ):
+        _require_exact_json(
+            validated_plan["authority"]["producer"][authority_name],
+            executing,
+            authority_label,
+        )
+    require(
+        validated_plan["authority"]["repositories"]["project"]["path"] ==
+        _TRUSTED_PROJECT_ROOT,
+        "trusted parser project root differs from plan authority",
+    )
+    return protocol, validated_plan, validated_request
+
+
 def _decimal(value: str, label: str) -> int:
     require(0 < len(value) <= MAX_CANONICAL_DECIMAL_DIGITS,
             f"overlong {label}")
@@ -272,10 +320,15 @@ def _framed_decimal(value: bytes, label: str) -> int:
             f"overlong {label}")
     require(all(48 <= byte <= 57 for byte in value) and
             (value == b"0" or value[0] != 48), f"noncanonical {label}")
+    require(len(value) < len(MAX_FRAMED_VALUE_TOKEN) or
+            (len(value) == len(MAX_FRAMED_VALUE_TOKEN) and
+             value <= MAX_FRAMED_VALUE_TOKEN), f"oversize {label}")
     try:
         result = int(value)
     except (ValueError, OverflowError) as error:
         raise OutputProtocolError(f"cannot convert {label}") from error
+    # Defense in depth; the exact lexical comparison above is the normative
+    # pre-conversion bound.
     require(result <= MAX_FRAMED_VALUE, f"oversize {label}")
     return result
 
@@ -290,7 +343,13 @@ def _read_frame(
     remaining = len(data) - payload_start
     require(length <= remaining, f"{label} frame exceeds remaining bytes")
     payload_end = payload_start + length
-    return data[payload_start:payload_end], payload_end
+    return _extract_bounded_payload(data, payload_start, payload_end), payload_end
+
+
+def _extract_bounded_payload(data: bytes, start: int, end: int) -> bytes:
+    """Slice only after the caller has proved the declared frame is present."""
+
+    return data[start:end]
 
 
 def _decode_node(data: bytes, label: str) -> tuple[bytes, list[bytes]]:
@@ -327,24 +386,35 @@ def _validate_list_node(data: bytes, count: int, label: str) -> None:
 
 
 def decode_semantic_v3_bytes(
-    data: bytes, plan: object, request: object,
+    data: bytes, plan: object, request: object, transcript: object,
+    native_closure: object,
 ) -> dict[str, Any]:
     """Decode exactly ten semantic-v3 lines into a nonce-free projection.
 
     This pure decoder establishes only byte grammar and internal equality.  It
     is intentionally not called by the source-stream parser in this migration
-    slice and cannot create a completion observation or raw candidate.
+    slice.  It requires the matching raw transcript/native closure solely to
+    bind the final serializer identity and cannot create a completion
+    observation or raw candidate.
     """
 
-    protocol = _protocol()
-    try:
-        plan = protocol.validate_raw_plan(plan)
-        request = protocol.validate_raw_request(request, plan)
-    except protocol.ProtocolError as error:
-        raise OutputProtocolError(f"invalid pristine semantic input: {error}") from error
+    protocol, plan, request = _trusted_plan_request(
+        plan, request, "pristine semantic",
+    )
     require(type(data) is bytes and
             len(data) <= plan["retained_stdout_max_bytes"],
             "semantic marker bytes exceed the exact retained stdout cap")
+    try:
+        transcript = protocol.validate_raw_transcript(
+            transcript, plan, request,
+        )
+        native_closure = protocol.validate_native_execution_closure(
+            native_closure, plan, request, transcript,
+        )
+    except protocol.ProtocolError as error:
+        raise OutputProtocolError(
+            f"invalid pristine semantic closure: {error}"
+        ) from error
     lines = _decode_lines(data, "pristine semantic marker stream", allow_empty=False)
     require(len(lines) == 10, "semantic marker stream is not exactly ten lines")
     marker = request["marker_contract"]["semantic_observation"]
@@ -478,12 +548,26 @@ def decode_semantic_v3_bytes(
             _decimal(fields[5], "semantic dependency count") == 4,
             "semantic completion identity/count mismatch")
 
+    serializer_event = native_closure["loader_events"][-1]
+    serializer_authority = plan["authority"]["inputs"]["serializer"]
+    require(
+        serializer_event["phase"] == "post-action" and
+        serializer_event["action_index"] is None and
+        serializer_event["logical_source"] == protocol.SERIALIZER_SOURCE and
+        serializer_event["bytes"] == serializer_authority["bytes"] and
+        serializer_event["sha256"] == serializer_authority["sha256"] and
+        serializer_event["md5"] == serializer_authority["md5"],
+        "semantic projection serializer is not the exact final native event",
+    )
+    serializer_path = serializer_event["logical_source"].partition(":")[2]
+    require(serializer_path == serializer_authority["path"],
+            "semantic projection serializer path differs from final native event")
     projection = {
         "schema": 1,
         "kind": direct.SEMANTIC_PROJECTION_KIND,
         "serializer": {
-            "path": plan["authority"]["inputs"]["serializer"]["path"],
-            "sha256": plan["authority"]["inputs"]["serializer"]["sha256"],
+            "path": serializer_path,
+            "sha256": serializer_event["sha256"],
         },
         "theorems": theorem_records,
         "post_state": post_state,
@@ -744,36 +828,15 @@ def rederive_raw_source_observations(
     success-looking line.
     """
 
-    protocol = _protocol()
-    try:
-        plan = protocol.validate_raw_plan(plan)
-        request = protocol.validate_raw_request(request, plan)
-    except protocol.ProtocolError as error:
-        raise OutputProtocolError(f"invalid pristine input: {error}") from error
+    protocol, plan, request = _trusted_plan_request(
+        plan, request, "pristine",
+    )
     require(type(stdout) is bytes and
             len(stdout) <= plan["retained_stdout_max_bytes"],
             "pristine reference stdout exceeds the exact retained-byte cap")
     require(type(stderr) is bytes and
             len(stderr) <= plan["retained_stderr_max_bytes"],
             "pristine reference stderr exceeds the exact retained-byte cap")
-    _require_exact_json(
-        plan["authority"]["producer"]["output_parser"],
-        _executing_parser_source_record(protocol),
-        "executing output parser versus plan authority",
-    )
-    _require_exact_json(
-        plan["authority"]["producer"]["protocol"],
-        _executing_protocol_source_record(protocol),
-        "executing pristine protocol versus plan authority",
-    )
-    _require_exact_json(
-        plan["authority"]["producer"]["direct_release_protocol"],
-        _executing_direct_protocol_source_record(protocol),
-        "executing direct-release protocol versus plan authority",
-    )
-    require(plan["authority"]["repositories"]["project"]["path"] ==
-            _TRUSTED_PROJECT_ROOT,
-            "trusted parser project root differs from plan authority")
     require(isinstance(process_result, dict) and set(process_result) == {
                 "exit_code", "timed_out",
             } and type(process_result.get("exit_code")) is int and
@@ -860,7 +923,7 @@ def rederive_raw_source_observations(
         ) from error
     return {
         "schema": protocol.RAW_PROTOCOL_SCHEMA,
-        "kind": SOURCE_REDERIVATION_KIND,
+        "kind": INCOMPLETE_SOURCE_REDERIVATION_KIND,
         "role": plan["role"],
         "reference_ordinal": plan["reference_ordinal"],
         "nonce_kind": plan["nonce_kind"],
