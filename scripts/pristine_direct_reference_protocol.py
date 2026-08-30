@@ -836,8 +836,9 @@ def validate_native_execution_closure(
 
     post_keys = [event["logical_source"] for event in events[final:]]
     require(post_keys.count(FINAL_TARGET_SOURCE) == 1 and
-            post_keys.count(SERIALIZER_SOURCE) == 1,
-            "native closure lacks exact final-target/serializer observations")
+            post_keys.count(SERIALIZER_SOURCE) == 1 and
+            post_keys[-2:] == [FINAL_TARGET_SOURCE, SERIALIZER_SOURCE],
+            "native closure lacks ordered final-target/serializer suffix")
     inputs = plan["authority"]["inputs"]
     by_key = {event["logical_source"]: event for event in events[final:]}
     for key, input_name in (

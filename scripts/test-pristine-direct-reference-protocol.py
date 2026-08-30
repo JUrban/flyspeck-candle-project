@@ -807,6 +807,14 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 item["loader_events"]
             )
 
+        def reverse_final_observations(item: dict) -> None:
+            final_target, serializer = item["loader_events"][-2:]
+            for field in ("logical_source", "basename", "bytes", "sha256", "md5"):
+                final_target[field], serializer[field] = (
+                    serializer[field], final_target[field]
+                )
+            rehash_events(item)
+
         mutations = [
             ("transcript splice", lambda item: item["transcript"].update(
                 sha256="0" * 64
@@ -825,6 +833,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 session_nonce="0" * 64
             )),
             ("missing post event", lambda item: item["loader_events"].pop()),
+            ("reversed final observations", reverse_final_observations),
             ("LP stream", lambda item: item["lp_successes"]["records"][0].update(
                 successful_deserialization_count=0
             )),
