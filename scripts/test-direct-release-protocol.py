@@ -285,7 +285,9 @@ def schema6_fixture() -> tuple[dict, dict]:
         for record in coverage["logical_source_coverage"]["records"]
     }
     action_keys = [
-        f"flyspeck:fixture/action-{index:03d}.hl"
+        ("flyspeck:jHOLLight/caml/ssreflect.hl" if index == 126 else
+         "flyspeck:formal_lp/hypermap/verify_all.hl" if index == 183 else
+         f"flyspeck:text_formalization/fixture/action-{index:03d}.hl")
         for index in range(subject.FINAL_ACTION_COUNT)
     ]
     source_keys = set(action_keys) | set(logical_by_key)
@@ -353,7 +355,11 @@ def schema6_fixture() -> tuple[dict, dict]:
         action = {
             "index": index,
             "selected_source": key,
-            "target": f"fixture/action-{index:03d}.hl",
+            "target": (
+                "../jHOLLight/caml/ssreflect.hl" if index == 126 else
+                "../formal_lp/hypermap/verify_all.hl" if index == 183 else
+                f"fixture/action-{index:03d}.hl"
+            ),
             "stratum": subject.ACTION_STRATA[index % len(subject.ACTION_STRATA)],
             "source_bytes": source["bytes"],
             "source_sha256": source["sha256"],
@@ -841,6 +847,23 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             projection["lp_certificate_consumption"]["record_count"], 39,
         )
         self.assertEqual(
+            projection["actions"]["records"][126]["target"],
+            "../jHOLLight/caml/ssreflect.hl",
+        )
+        self.assertEqual(
+            projection["actions"]["records"][183]["target"],
+            "../formal_lp/hypermap/verify_all.hl",
+        )
+        action_keys = {
+            record["selected_source"]
+            for record in projection["actions"]["records"]
+        }
+        logical_keys = {
+            record["key"] for record in
+            projection["selected_logical_source_closure"]["records"]
+        }
+        self.assertTrue(action_keys <= logical_keys)
+        self.assertEqual(
             projection["selected_logical_source_closure"]["records"][0][
                 "key"
             ],
@@ -911,6 +934,41 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 closure["records"]
             )
 
+        def omit_action_source_from_closure(item):
+            closure = item["selected_logical_source_closure"]
+            omitted = item["actions"]["records"][0]["selected_source"]
+            closure["records"] = [
+                record for record in closure["records"]
+                if record["key"] != omitted
+            ]
+            for index, record in enumerate(closure["records"]):
+                record["index"] = index
+            closure["record_count"] = len(closure["records"])
+            closure["ordered_record_sha256"] = subject.canonical_sha256(
+                closure["records"]
+            )
+
+        def duplicate_closure_source(item):
+            closure = item["selected_logical_source_closure"]
+            closure["records"].insert(1, copy.deepcopy(closure["records"][0]))
+            for index, record in enumerate(closure["records"]):
+                record["index"] = index
+            closure["record_count"] = len(closure["records"])
+            closure["ordered_record_sha256"] = subject.canonical_sha256(
+                closure["records"]
+            )
+
+        def reorder_closure_sources(item):
+            closure = item["selected_logical_source_closure"]
+            closure["records"][0], closure["records"][1] = (
+                closure["records"][1], closure["records"][0]
+            )
+            for index, record in enumerate(closure["records"]):
+                record["index"] = index
+            closure["ordered_record_sha256"] = subject.canonical_sha256(
+                closure["records"]
+            )
+
         def omit_lp(item):
             lp = item["lp_certificate_consumption"]
             lp["records"].pop()
@@ -946,6 +1004,9 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("missing source", omit_source),
             ("PFT source", inject_pft_source),
             ("copied Candle control", copy_candle_control),
+            ("action source omitted from closure", omit_action_source_from_closure),
+            ("duplicate closure source", duplicate_closure_source),
+            ("reordered closure source", reorder_closure_sources),
             ("missing LP", omit_lp),
             ("reordered LP", reorder_lp),
             ("duplicate LP success", lambda item: item[
@@ -955,10 +1016,130 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("hidden raw order", lambda item: item[
                 "lp_certificate_consumption"
             ].update(raw_order_retained_by_candidate=False)),
+            ("missing source completion", lambda item: item[
+                "mathematical_coverage"
+            ].update(source_closure_observed=False)),
+            ("missing LP completion", lambda item: item[
+                "mathematical_coverage"
+            ].update(lp_completed_observed=False)),
             ("missing nonlinear completion", lambda item: item[
                 "mathematical_coverage"
             ].update(nonlinear_completed_observed=False)),
+            ("missing final premises", lambda item: item[
+                "mathematical_coverage"
+            ].update(final_premises_completed_observed=False)),
+            ("missing final implication", lambda item: item[
+                "mathematical_coverage"
+            ].update(final_implication_completed_observed=False)),
+            ("pretended reference approval", lambda item: item[
+                "mathematical_coverage"
+            ].update(approved_reference_present=True)),
             ("PFT bit", lambda item: item.update(pft_used=True)),
+        )
+        for label, mutate in cases:
+            forged = copy.deepcopy(projection)
+            mutate(forged)
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_cross_runtime_coverage_projection(forged)
+
+    def test_cross_runtime_action_target_aliases_are_exact(self) -> None:
+        receipt, plan = schema6_fixture()
+        projection = subject.cross_runtime_coverage_projection_from_schema6(
+            receipt, plan,
+        )
+        for label, target in (
+            ("escape", "../../etc/passwd"),
+            ("embedded parent", "fixture/../action-126.hl"),
+            ("wrong alias", "../formal_lp/caml/ssreflect.hl"),
+            ("absolute", "/jHOLLight/caml/ssreflect.hl"),
+        ):
+            forged = copy.deepcopy(projection)
+            forged["actions"]["records"][126]["target"] = target
+            forged["actions"]["ordered_record_sha256"] = (
+                subject.canonical_sha256(forged["actions"]["records"])
+            )
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_cross_runtime_coverage_projection(forged)
+
+    def test_cross_runtime_coverage_v2_rejects_numeric_type_confusion(self) -> None:
+        receipt, plan = schema6_fixture()
+        projection = subject.cross_runtime_coverage_projection_from_schema6(
+            receipt, plan,
+        )
+        normalized_source_index = next(
+            index for index, record in enumerate(
+                projection["original_source_inventory"]["records"]
+            ) if record["candle_plan_execution_selection"]["mode"] ==
+            "candle-normalization-bound"
+        )
+        cases = (
+            ("top schema bool", lambda item: item.update(schema=True)),
+            ("completed float", lambda item: item.update(
+                completed_action_count=297.0,
+            )),
+            ("action count bool", lambda item: item["actions"].update(
+                record_count=True,
+            )),
+            ("action index bool", lambda item: item["actions"]["records"][0]
+             .update(index=True)),
+            ("action bytes bool", lambda item: item["actions"]["records"][0]
+             .update(original_bytes=True)),
+            ("inventory schema bool", lambda item: item[
+                "original_source_inventory"
+            ].update(schema=True)),
+            ("inventory count float", lambda item: item[
+                "original_source_inventory"
+            ].update(record_count=400.0)),
+            ("normalization count bool", lambda item: item[
+                "original_source_inventory"
+            ].update(normalization_binding_count=True)),
+            ("source index float", lambda item: item[
+                "original_source_inventory"
+            ]["records"][0].update(index=0.0)),
+            ("source bytes bool", lambda item: item[
+                "original_source_inventory"
+            ]["records"][0].update(original_bytes=True)),
+            ("normalized bytes bool", lambda item: item[
+                "original_source_inventory"
+            ]["records"][normalized_source_index][
+                "candle_plan_execution_selection"
+            ].update(normalized_bytes=True)),
+            ("operation count float", lambda item: item[
+                "original_source_inventory"
+            ]["records"][normalized_source_index][
+                "candle_plan_execution_selection"
+            ].update(operation_count=1.0)),
+            ("logical schema bool", lambda item: item[
+                "selected_logical_source_closure"
+            ].update(schema=True)),
+            ("logical count bool", lambda item: item[
+                "selected_logical_source_closure"
+            ].update(record_count=True)),
+            ("logical index bool", lambda item: item[
+                "selected_logical_source_closure"
+            ]["records"][0].update(index=True)),
+            ("logical bytes float", lambda item: item[
+                "selected_logical_source_closure"
+            ]["records"][0].update(original_bytes=1.0)),
+            ("LP schema bool", lambda item: item[
+                "lp_certificate_consumption"
+            ].update(schema=True)),
+            ("LP count float", lambda item: item[
+                "lp_certificate_consumption"
+            ].update(record_count=39.0)),
+            ("LP index bool", lambda item: item[
+                "lp_certificate_consumption"
+            ]["records"][0].update(index=True)),
+            ("LP bytes bool", lambda item: item[
+                "lp_certificate_consumption"
+            ]["records"][0].update(bytes=True)),
+            ("LP success bool", lambda item: item[
+                "lp_certificate_consumption"
+            ]["records"][0].update(successful_deserialization_count=True)),
         )
         for label, mutate in cases:
             forged = copy.deepcopy(projection)

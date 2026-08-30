@@ -444,6 +444,41 @@ def _safe_relative(value: object, label: str) -> str:
     return value
 
 
+def _validate_action_target_alias(
+    value: object, selected_source: object, label: str,
+) -> str:
+    """Resolve the exact Flyspeck build target lexical namespace.
+
+    Action targets are relative to ``text_formalization``.  The real ledger
+    contains one leading ``..`` for jHOLLight/formal_lp/formal_graph sources;
+    no second or embedded parent segment is part of the authenticated v1.3
+    target language.
+    """
+    require(isinstance(value, str) and value and "\\" not in value and
+            all(ord(character) >= 32 and character != "\x7f"
+                for character in value),
+            f"malformed {label}")
+    _no_pft_namespace(value, label)
+    path = Path(value)
+    parts = path.parts
+    require(not path.is_absolute() and path.as_posix() == value and parts and
+            all(part not in {"", "."} for part in parts) and
+            sum(part == ".." for part in parts) <= 1 and
+            (".." not in parts or parts[0] == ".."),
+            f"unsafe {label}")
+    resolved = ["text_formalization"]
+    for part in parts:
+        if part == "..":
+            require(len(resolved) == 1, f"unsafe {label}")
+            resolved.pop()
+        else:
+            resolved.append(part)
+    require(resolved and isinstance(selected_source, str) and
+            selected_source == f"flyspeck:{'/'.join(resolved)}",
+            f"{label} does not resolve to selected source")
+    return value
+
+
 def _no_pft_namespace(value: str, label: str) -> str:
     require(PFT_NAMESPACE.search(value) is None,
             f"PFT namespace is forbidden in {label}")
@@ -902,8 +937,10 @@ def _validate_cross_runtime_actions(value: object) -> dict[str, Any]:
             record.get("selected_source"),
             f"cross-runtime action selected source: {index}",
         )
-        _safe_relative(record.get("target"),
-                       f"cross-runtime action target: {index}")
+        _validate_action_target_alias(
+            record.get("target"), record.get("selected_source"),
+            f"cross-runtime action target: {index}",
+        )
         _hex(record.get("original_sha256"), HEX64,
              f"cross-runtime action source SHA-256: {index}")
         _hex(record.get("original_md5"), HEX32,
@@ -1174,9 +1211,13 @@ def validate_cross_runtime_coverage_projection(
                     )
                 ),
                 f"cross-runtime action differs from source inventory: {index}")
-    _validate_cross_runtime_logical_closure(
+    logical = _validate_cross_runtime_logical_closure(
         value.get("selected_logical_source_closure"), inventory,
     )
+    action_keys = {record["selected_source"] for record in actions["records"]}
+    logical_keys = {record["key"] for record in logical["records"]}
+    require(action_keys <= logical_keys,
+            "cross-runtime logical closure omits action sources")
     generated = _validate_generated_inputs(value.get("generated_inputs"))
     _validate_cross_runtime_mathematical_coverage(
         value.get("mathematical_coverage")
@@ -1706,8 +1747,10 @@ def cross_runtime_coverage_projection_from_schema6(
         _validate_logical_source_key(
             selected_source, f"authenticated plan action source: {index}",
         )
-        _safe_relative(action.get("target"),
-                       f"authenticated plan action target: {index}")
+        _validate_action_target_alias(
+            action.get("target"), selected_source,
+            f"authenticated plan action target: {index}",
+        )
         _hex(action.get("source_sha256"), HEX64,
              f"authenticated plan action SHA-256: {index}")
         _hex(action.get("source_md5"), HEX32,
@@ -1737,7 +1780,10 @@ def cross_runtime_coverage_projection_from_schema6(
             "completion_status": "completed-observed-unapproved",
         })
 
-    logical_records = []
+    logical_sources = {
+        action["selected_source"]: inventory_by_key[action["selected_source"]]
+        for action in action_records
+    }
     for logical in detailed["logical_source_coverage"]["records"]:
         if logical["classification"] in {
             "derivation-only-input", "generated-executed-control",
@@ -1760,13 +1806,19 @@ def cross_runtime_coverage_projection_from_schema6(
                             "id", "normalized_sha256", "normalized_md5",
                         )),
                     "cross-runtime logical normalization differs from plan")
+        logical_sources[source["key"]] = source
+    logical_records = []
+    for key in sorted(logical_sources):
+        source = logical_sources[key]
         logical_records.append({
             "index": len(logical_records),
             "key": source["key"],
             "original_bytes": source["original_bytes"],
             "original_sha256": source["original_sha256"],
             "original_md5": source["original_md5"],
-            "candle_plan_execution_selection": copy.deepcopy(selection),
+            "candle_plan_execution_selection": copy.deepcopy(
+                source["candle_plan_execution_selection"]
+            ),
         })
 
     canonical_lp_records = []
