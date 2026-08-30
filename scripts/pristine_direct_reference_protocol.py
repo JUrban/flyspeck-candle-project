@@ -324,6 +324,16 @@ V4_BUILD_INPUT_ENTRY_AUTHORITY_CONTAINER_MAX = 196_608
 V4_BUILD_INPUT_ENTRY_AUTHORITY_STRING_MAX_BYTES = 4_096
 V4_BUILD_INPUT_ENTRY_AUTHORITY_KEY_MAX_BYTES = 255
 V4_BUILD_INPUT_ENTRY_AUTHORITY_FRAGMENT_MAX_BYTES = 32_768
+V4_BUILD_INPUT_CLOSURE_INHERITED_FD_COUNT = 3
+V4_BUILD_INPUT_CLOSURE_INHERITED_FD_FIELDS = (
+    "fd", "role", "access_mode", "object_identity", "fd_generation",
+    "cloexec",
+)
+V4_BUILD_INPUT_CLOSURE_INHERITED_FD_LAYOUT = (
+    (0, "stdin-eof", "read-only"),
+    (1, "build-stdout", "write-only"),
+    (2, "build-stderr", "write-only"),
+)
 V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS = (
     "index", "relative", "object_type", "mode", "bytes", "sha256",
     "selector", "st_nlink", "parent_descriptor_identity", "mount_id",
@@ -4844,6 +4854,70 @@ def _v4_bounded_compact_canonical_digest(
     except (TypeError, ValueError) as error:
         raise ProtocolError(f"malformed {label}: {error}") from error
     return byte_count, digest.hexdigest()
+
+
+def validate_v4_build_input_closure_inherited_fds(
+    value: object,
+) -> dict[str, Any]:
+    """Validate and snapshot the structural builder inherited-FD authority."""
+    label = "V4 native build input-closure inherited FDs"
+    first_frozen = _v4_resource_checked_json_graph(value, label)
+    first_size, first_digest = _v4_bounded_compact_canonical_digest(
+        first_frozen, V4_AUTHORITY_OBJECT_MAX_BYTES, label,
+    )
+    frozen = _v4_resource_checked_json_graph(value, label)
+    frozen_size, frozen_digest = _v4_bounded_compact_canonical_digest(
+        frozen, V4_AUTHORITY_OBJECT_MAX_BYTES, label,
+    )
+    require(
+        (frozen_size, frozen_digest) == (first_size, first_digest),
+        f"{label} changed while freezing",
+    )
+    result = _v4_exact_dict(
+        frozen, ("inherited_fd_count", "inherited_fds"), label,
+    )
+    inherited_fds = result.get("inherited_fds")
+    require(
+        is_int(result.get("inherited_fd_count")) and
+        result["inherited_fd_count"] ==
+        V4_BUILD_INPUT_CLOSURE_INHERITED_FD_COUNT and
+        type(inherited_fds) is list and
+        len(inherited_fds) == V4_BUILD_INPUT_CLOSURE_INHERITED_FD_COUNT and
+        len(V4_BUILD_INPUT_CLOSURE_INHERITED_FD_LAYOUT) ==
+        V4_BUILD_INPUT_CLOSURE_INHERITED_FD_COUNT,
+        f"malformed {label} count/list",
+    )
+    encoded_identities: set[bytes] = set()
+    for index, expected in enumerate(
+        V4_BUILD_INPUT_CLOSURE_INHERITED_FD_LAYOUT,
+    ):
+        row_label = f"{label} row {index}"
+        row = _v4_exact_dict(
+            inherited_fds[index],
+            V4_BUILD_INPUT_CLOSURE_INHERITED_FD_FIELDS,
+            row_label,
+        )
+        fd, role, access_mode = expected
+        generation = _v4_uint(
+            row.get("fd_generation"), 64, f"{row_label} generation",
+        )
+        identity = row.get("object_identity")
+        require(
+            is_int(row.get("fd")) and row["fd"] == fd and
+            type(row.get("role")) is str and row["role"] == role and
+            type(row.get("access_mode")) is str and
+            row["access_mode"] == access_mode and
+            type(identity) is dict and generation > 0 and
+            type(row.get("cloexec")) is bool and not row["cloexec"],
+            f"malformed {row_label}",
+        )
+        identity_bytes = canonical_value_bytes(identity)
+        require(
+            identity_bytes not in encoded_identities,
+            f"duplicate {label} object identity",
+        )
+        encoded_identities.add(identity_bytes)
+    return result
 
 
 def validate_v4_build_input_closure_entry_authority(
