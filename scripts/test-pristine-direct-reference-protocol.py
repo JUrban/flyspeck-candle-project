@@ -2254,6 +2254,150 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 edges, table, bad_digest, [0, 1, 2],
             )
 
+    def test_v4_parent_address_space_closes_vmas_and_gate(self) -> None:
+        runtime_edge = {
+            "index": 0, "domain": "bootstrap-runtime",
+            "authority_role": "native-runtime-closure",
+            "authority_index": 0,
+            "root_identity": {"fixture": "runtime-root"},
+            "root_fd_generation": 7, "input_root_entry_index": None,
+            "stream_role": None, "setup_role": None,
+            "parent_descriptor_identity": {"fixture": "runtime-descriptor"},
+            "mount_id": 100, "st_dev": 8, "st_ino": 41,
+            "stable_generation": 2,
+            "resolved_relative": "bin/bootstrap-stub",
+            "symlink_decisions": [],
+        }
+        edges = {
+            "count": 1, "entries": [runtime_edge],
+            "ordered_entry_sha256": subject.canonical_sha256([runtime_edge]),
+        }
+        rows = [
+            {
+                "index": 0, "address": 0x1000, "length": 0x2000,
+                "protection": 5, "flags": 2, "file_offset": 0,
+                "object_edge_index": 0, "gate_mapping": False,
+            },
+            {
+                "index": 1, "address": 0x4000, "length": 0x1000,
+                "protection": 3, "flags": 0x22, "file_offset": 0,
+                "object_edge_index": None, "gate_mapping": False,
+            },
+            {
+                "index": 2, "address": 0x5000, "length": 0x1000,
+                "protection": 3, "flags": 0x21, "file_offset": 0,
+                "object_edge_index": None, "gate_mapping": True,
+            },
+        ]
+        mappings = {
+            "count": len(rows), "entries": rows,
+            "ordered_entry_sha256": subject.canonical_sha256(rows),
+        }
+        address_space = {
+            "address_space_id": 4, "generation": 6,
+            "mapping_count": len(rows), "mapping_indices": [0, 1, 2],
+            "ordered_mapping_index_sha256": subject.canonical_sha256(
+                [0, 1, 2],
+            ),
+        }
+        snapshot = subject.validate_v4_build_parent_address_space(
+            edges, address_space, mappings, 2,
+        )
+        self.assertEqual(snapshot["mappings"], mappings)
+        self.assertIsNot(snapshot["mappings"], mappings)
+        mappings["entries"][0]["address"] = 0x9000
+        self.assertEqual(snapshot["mappings"]["entries"][0]["address"], 0x1000)
+        mappings["entries"][0]["address"] = 0x1000
+
+        def mutated(
+            mutator: object,
+        ) -> tuple[dict[str, object], dict[str, object], dict[str, object], int]:
+            edge_value = copy.deepcopy(edges)
+            space_value = copy.deepcopy(address_space)
+            mapping_value = copy.deepcopy(mappings)
+            selector = [2]
+            mutator(edge_value, space_value, mapping_value, selector)
+            edge_value["ordered_entry_sha256"] = subject.canonical_sha256(
+                edge_value["entries"],
+            )
+            mapping_value["ordered_entry_sha256"] = subject.canonical_sha256(
+                mapping_value["entries"],
+            )
+            space_value["ordered_mapping_index_sha256"] = (
+                subject.canonical_sha256(space_value["mapping_indices"])
+            )
+            return edge_value, space_value, mapping_value, selector[0]
+
+        mutations = (
+            lambda e, s, m, g: s.update(address_space_id=True),
+            lambda e, s, m, g: s.update(generation=False),
+            lambda e, s, m, g: s.update(mapping_count=True),
+            lambda e, s, m, g: s.update(mapping_indices=[0, 2, 1]),
+            lambda e, s, m, g: s["mapping_indices"].__setitem__(0, False),
+            lambda e, s, m, g: m["entries"][0].update(index=False),
+            lambda e, s, m, g: m["entries"][0].update(address=True),
+            lambda e, s, m, g: m["entries"][0].update(length=0),
+            lambda e, s, m, g: m["entries"][0].update(length=0x1001),
+            lambda e, s, m, g: m["entries"][1].update(address=0x2000),
+            lambda e, s, m, g: m["entries"][0].update(protection=8),
+            lambda e, s, m, g: m["entries"][0].update(flags=3),
+            lambda e, s, m, g: m["entries"][0].update(flags=0),
+            lambda e, s, m, g: m["entries"][0].update(file_offset=True),
+            lambda e, s, m, g: m["entries"][0].update(file_offset=1),
+            lambda e, s, m, g: m["entries"][0].update(
+                object_edge_index=True,
+            ),
+            lambda e, s, m, g: m["entries"][0].update(
+                object_edge_index=1,
+            ),
+            lambda e, s, m, g: m["entries"][1].update(file_offset=0x1000),
+            lambda e, s, m, g: m["entries"][0].update(flags=0x22),
+            lambda e, s, m, g: m["entries"][0].update(gate_mapping=0),
+            lambda e, s, m, g: m["entries"][1].update(gate_mapping=True),
+            lambda e, s, m, g: g.__setitem__(0, True),
+            lambda e, s, m, g: g.__setitem__(0, 1),
+            lambda e, s, m, g: m["entries"][2].update(length=0x2000),
+            lambda e, s, m, g: m["entries"][2].update(protection=1),
+            lambda e, s, m, g: m["entries"][2].update(flags=1),
+            lambda e, s, m, g: m["entries"][2].update(
+                object_edge_index=0,
+            ),
+            lambda e, s, m, g: e["entries"][0].update(
+                domain="input-root-entry",
+            ),
+            lambda e, s, m, g: e["entries"][0].update(
+                resolved_relative="../bootstrap-stub",
+            ),
+            lambda e, s, m, g: e["entries"][0].update(
+                resolved_relative="pft/bootstrap-stub",
+            ),
+        )
+        for mutation in mutations:
+            hostile = mutated(mutation)
+            with self.subTest(hostile=hostile), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_parent_address_space(*hostile)
+
+        bad_mapping_digest = copy.deepcopy(mappings)
+        bad_mapping_digest["ordered_entry_sha256"] = "0" * 64
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_parent_address_space(
+                edges, address_space, bad_mapping_digest, 2,
+            )
+        bad_index_digest = copy.deepcopy(address_space)
+        bad_index_digest["ordered_mapping_index_sha256"] = "0" * 64
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_parent_address_space(
+                edges, bad_index_digest, mappings, 2,
+            )
+        with mock.patch.object(
+            subject, "V4_BUILD_VMA_PER_ADDRESS_SPACE_MAX", 2,
+        ), self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_parent_address_space(
+                edges, address_space, mappings, 2,
+            )
+
     def test_v4_mount_graph_and_clone_reject_hostile_splices(self) -> None:
         source_ids = [100, 110, 120, 130, 140]
         child_ids = [200, 210, 220, 230, 240]

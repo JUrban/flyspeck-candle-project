@@ -2791,6 +2791,159 @@ def validate_v4_build_parent_fd_state(
     }))
 
 
+def _validate_v4_bootstrap_mapping_edge(
+    edge: dict[str, Any], label: str,
+) -> None:
+    require(
+        edge.get("domain") == "bootstrap-runtime" and
+        type(edge.get("authority_role")) is str and
+        bool(edge["authority_role"]) and
+        is_int(edge.get("authority_index")) and
+        edge["authority_index"] >= 0 and
+        type(edge.get("root_identity")) is dict and
+        is_int(edge.get("root_fd_generation")) and
+        edge["root_fd_generation"] > 0 and
+        edge.get("input_root_entry_index") is None and
+        edge.get("stream_role") is None and
+        edge.get("setup_role") is None and
+        type(edge.get("parent_descriptor_identity")) is dict and
+        is_int(edge.get("mount_id")) and edge["mount_id"] > 0 and
+        is_int(edge.get("st_dev")) and edge["st_dev"] >= 0 and
+        is_int(edge.get("st_ino")) and edge["st_ino"] > 0 and
+        is_int(edge.get("stable_generation")) and
+        edge["stable_generation"] > 0 and
+        type(edge.get("symlink_decisions")) is list,
+        f"malformed {label} bootstrap object edge",
+    )
+    _printable(edge["authority_role"], f"{label} authority role")
+    _v4_source_tree_relative(
+        edge.get("resolved_relative"), f"{label} resolved relative",
+    )
+
+
+def _validate_v4_parent_address_space_mappings(
+    address_space: object, mappings: object,
+    initial_edges: list[dict[str, Any]], gate_mapping_index: object,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    space_label = "V4 initial address space"
+    space = _v4_exact_dict(
+        address_space, V4_BUILD_INITIAL_ADDRESS_SPACE_FIELDS, space_label,
+    )
+    mapping_indices = space.get("mapping_indices")
+    require(
+        is_int(space.get("address_space_id")) and
+        space["address_space_id"] > 0 and
+        is_int(space.get("generation")) and space["generation"] > 0 and
+        is_int(space.get("mapping_count")) and
+        1 <= space["mapping_count"] <= V4_BUILD_VMA_PER_ADDRESS_SPACE_MAX and
+        type(mapping_indices) is list and
+        mapping_indices == list(range(space["mapping_count"])) and
+        all(is_int(index) for index in mapping_indices) and
+        type(space.get("ordered_mapping_index_sha256")) is str and
+        space["ordered_mapping_index_sha256"] == canonical_sha256(
+            mapping_indices,
+        ),
+        f"malformed {space_label}",
+    )
+    rows = _validate_v4_indexed_list_container(
+        mappings, V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
+        V4_BUILD_INITIAL_MAPPING_FIELDS, V4_BUILD_VMA_PER_ADDRESS_SPACE_MAX,
+        "V4 initial mappings",
+    )
+    require(
+        len(rows) == space["mapping_count"],
+        "V4 address-space mapping count mismatch",
+    )
+    require(
+        is_int(gate_mapping_index) and 0 <= gate_mapping_index < len(rows),
+        "malformed V4 gate mapping index",
+    )
+
+    page_size = 4_096
+    map_shared = 0x01
+    map_private = 0x02
+    map_anonymous = 0x20
+    previous_end = 0
+    gate_rows: list[dict[str, Any]] = []
+    for index, mapping in enumerate(rows):
+        label = f"V4 initial mapping {index}"
+        address = _v4_uint(mapping.get("address"), 64, f"{label} address")
+        length = _v4_uint(mapping.get("length"), 64, f"{label} length")
+        protection = _v4_uint(
+            mapping.get("protection"), 32, f"{label} protection",
+        )
+        flags = _v4_uint(mapping.get("flags"), 64, f"{label} flags")
+        file_offset = _v4_uint(
+            mapping.get("file_offset"), 64, f"{label} file offset",
+        )
+        require(
+            address % page_size == 0 and length > 0 and
+            length % page_size == 0 and address + length <= (1 << 64) and
+            address >= previous_end,
+            f"malformed or overlapping {label} range",
+        )
+        previous_end = address + length
+        require(
+            protection & ~0x07 == 0 and
+            flags & (map_shared | map_private) in {map_shared, map_private},
+            f"malformed {label} mode/class",
+        )
+        object_edge_index = mapping.get("object_edge_index")
+        if object_edge_index is None:
+            require(file_offset == 0,
+                    f"anonymous {label} has nonzero file offset")
+        else:
+            require(
+                is_int(object_edge_index) and
+                0 <= object_edge_index < len(initial_edges) and
+                file_offset % page_size == 0 and
+                flags & map_anonymous == 0,
+                f"malformed file-backed {label}",
+            )
+            _validate_v4_bootstrap_mapping_edge(
+                initial_edges[object_edge_index], label,
+            )
+        require(type(mapping.get("gate_mapping")) is bool,
+                f"malformed {label} gate flag")
+        if mapping["gate_mapping"]:
+            gate_rows.append(mapping)
+
+    require(
+        len(gate_rows) == 1 and gate_rows[0]["index"] == gate_mapping_index,
+        "V4 gate mapping selector is not unique and exact",
+    )
+    gate = gate_rows[0]
+    require(
+        gate["length"] == page_size and gate["protection"] == 0x03 and
+        gate["flags"] == map_shared | map_anonymous and
+        gate["file_offset"] == 0 and gate["object_edge_index"] is None,
+        "malformed V4 shared anonymous gate mapping",
+    )
+    return space, rows
+
+
+def validate_v4_build_parent_address_space(
+    initial_object_edges: object, address_space: object, mappings: object,
+    gate_mapping_index: object,
+) -> dict[str, Any]:
+    """Validate and snapshot the complete parent address-space/VMA state."""
+    label = "V4 parent address space"
+    values = (
+        initial_object_edges, address_space, mappings, gate_mapping_index,
+    )
+    _require_v4_exact_json_types(list(values), label)
+    edges = _validate_v4_initial_object_edges(initial_object_edges)
+    _validate_v4_parent_address_space_mappings(
+        address_space, mappings, edges, gate_mapping_index,
+    )
+    return json.loads(canonical_value_bytes({
+        "initial_object_edges": initial_object_edges,
+        "address_space": address_space,
+        "mappings": mappings,
+        "gate_mapping_index": gate_mapping_index,
+    }))
+
+
 def _validate_v4_root_stable_identity(
     edge: dict[str, Any], label: str,
 ) -> None:
