@@ -28,6 +28,7 @@ assert DIRECT_SPEC is not None and DIRECT_SPEC.loader is not None
 direct_fixture = importlib.util.module_from_spec(DIRECT_SPEC)
 sys.modules[DIRECT_SPEC.name] = direct_fixture
 DIRECT_SPEC.loader.exec_module(direct_fixture)
+subject._DIRECT_PROTOCOL = direct_fixture.subject
 
 
 def hash_text(text: str) -> str:
@@ -149,6 +150,7 @@ def make_authority(
             ),
             "protocol": named_file(subject.PROTOCOL_PATH),
             "output_parser": named_file(subject.OUTPUT_PARSER_PATH),
+            "direct_release_protocol": named_file(subject.DIRECT_PROTOCOL_PATH),
         },
         "repositories": {
             "project": {
@@ -562,6 +564,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             named_file(subject.OUTPUT_PARSER_PATH),
         )
         self.assertEqual(
+            bundle["plan"]["authority"]["producer"]["direct_release_protocol"],
+            named_file(subject.DIRECT_PROTOCOL_PATH),
+        )
+        self.assertEqual(
             bundle["request"]["marker_contract"]["native_load"],
             subject.MARKER_CONTRACT["native_load"],
         )
@@ -673,10 +679,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         mutations = (
             ("schema v1", lambda item: item.update(schema=1)),
             (
-                "authority policy v1",
+                "authority policy v2",
                 lambda item: item["authority"].update(
                     policy="exact-clean-project-hol-light-flyspeck-runtime-"
-                    "tool-and-input-authority-v1"
+                    "tool-and-input-authority-v2"
                 ),
             ),
             ("bool schema", lambda item: item.update(schema=True)),
@@ -729,6 +735,24 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 lambda item: item["authority"]["producer"]["output_parser"].update(
                     bytes=True
                 ),
+            ),
+            (
+                "missing direct-release protocol authority",
+                lambda item: item["authority"]["producer"].pop(
+                    "direct_release_protocol"
+                ),
+            ),
+            (
+                "direct-release protocol path drift",
+                lambda item: item["authority"]["producer"]
+                ["direct_release_protocol"].update(
+                    path="scripts/permissive-direct-release-protocol.py"
+                ),
+            ),
+            (
+                "direct-release protocol bool bytes",
+                lambda item: item["authority"]["producer"]
+                ["direct_release_protocol"].update(bytes=True),
             ),
             (
                 "root repository path",

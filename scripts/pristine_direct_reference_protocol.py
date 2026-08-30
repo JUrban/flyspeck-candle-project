@@ -11,9 +11,8 @@ calling this protocol.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
-from pathlib import Path, PurePosixPath
+from pathlib import PurePosixPath
 import re
 from types import ModuleType
 from typing import Any, Callable
@@ -35,7 +34,7 @@ RAW_CANDIDATE_KIND = (
     "candle-flyspeck-pristine-direct-reference-raw-candidate-v2"
 )
 AUTHORITY_POLICY = (
-    "exact-clean-project-hol-light-flyspeck-runtime-tool-and-input-authority-v2"
+    "exact-clean-project-hol-light-flyspeck-runtime-tool-and-input-authority-v3"
 )
 ACTION_POLICY = "authenticated-original-build-sequence-full-v1"
 EXECUTION_SELECTION_SEMANTICS = (
@@ -58,6 +57,7 @@ SERIALIZATION_ENVIRONMENT_KEY = "FLYSPECK_SERIALIZATION"
 PRODUCER_ENTRYPOINT_PATH = "scripts/collect-pristine-direct-reference.py"
 PROTOCOL_PATH = "scripts/pristine_direct_reference_protocol.py"
 OUTPUT_PARSER_PATH = "scripts/parse-pristine-direct-reference-output.py"
+DIRECT_PROTOCOL_PATH = "scripts/direct_release_protocol.py"
 LP_WRAPPER_AFTER_ACTION_INDEX = 177
 LP_VERIFY_ACTION_INDEX = 183
 LP_CONSUMER_ACTION_INDEX = 184
@@ -386,16 +386,23 @@ def _validate_authority(value: object) -> dict[str, Any]:
     producer = value.get("producer")
     require(isinstance(producer, dict) and set(producer) == {
                 "entrypoint", "protocol", "output_parser",
+                "direct_release_protocol",
             }, "malformed pristine reference producer authority")
     _named_content_record(producer.get("entrypoint"), "producer entrypoint")
     protocol = _named_content_record(producer.get("protocol"), "producer protocol")
     output_parser = _named_content_record(
         producer.get("output_parser"), "producer output parser",
     )
+    direct_protocol = _named_content_record(
+        producer.get("direct_release_protocol"),
+        "producer direct-release protocol",
+    )
     require(producer["entrypoint"]["path"] == PRODUCER_ENTRYPOINT_PATH and
             protocol["path"] == PROTOCOL_PATH and
-            output_parser["path"] == OUTPUT_PARSER_PATH,
-            "pristine reference producer/protocol/parser path mismatch")
+            output_parser["path"] == OUTPUT_PARSER_PATH and
+            direct_protocol["path"] == DIRECT_PROTOCOL_PATH,
+            "pristine reference producer/protocol/parser/direct-protocol "
+            "path mismatch")
 
     repositories = value.get("repositories")
     require(isinstance(repositories, dict) and set(repositories) == {
@@ -927,29 +934,30 @@ def validate_native_execution_closure(
     return value
 
 
-_DIRECT_PROTOCOL: ModuleType | None = None
+_DIRECT_PROTOCOL: ModuleType | None = globals().get(
+    "_TRUSTED_DIRECT_PROTOCOL_MODULE_INPUT"
+)
 
 
 def _direct_protocol() -> ModuleType:
-    global _DIRECT_PROTOCOL
-    if _DIRECT_PROTOCOL is None:
-        path = Path(__file__).with_name("direct_release_protocol.py")
-        spec = importlib.util.spec_from_file_location(
-            "_pristine_reference_exact_direct_release_protocol", path,
-        )
-        require(spec is not None and spec.loader is not None,
-                "cannot load exact direct-release protocol sibling")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        require(module.FINAL_BOUNDARY_ID == FINAL_BOUNDARY_ID and
-                module.FINAL_ACTION_COUNT == FINAL_ACTION_COUNT and
-                module.REFERENCE_COMPARISON_ROLE == REFERENCE_ROLE and
-                module.REFERENCE_COMPARISON_NONCE_KIND == REFERENCE_NONCE_KIND and
-                tuple(module.CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS) ==
-                CANDLE_ONLY_REFERENCE_EXCLUSIONS,
-                "incompatible direct-release protocol sibling")
-        _DIRECT_PROTOCOL = module
-    return _DIRECT_PROTOCOL
+    module = _DIRECT_PROTOCOL
+    require(isinstance(module, ModuleType),
+            "trusted exact direct-release protocol activation is required")
+    require(type(getattr(module, "FINAL_ACTION_COUNT", None)) is int and
+            module.FINAL_ACTION_COUNT == FINAL_ACTION_COUNT and
+            getattr(module, "FINAL_BOUNDARY_ID", None) == FINAL_BOUNDARY_ID and
+            getattr(module, "REFERENCE_COMPARISON_ROLE", None) ==
+            REFERENCE_ROLE and
+            getattr(module, "REFERENCE_COMPARISON_NONCE_KIND", None) ==
+            REFERENCE_NONCE_KIND and
+            isinstance(getattr(module, "CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS", None),
+                       tuple) and
+            all(type(item) is str for item in
+                module.CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS) and
+            module.CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS ==
+            CANDLE_ONLY_REFERENCE_EXCLUSIONS,
+            "incompatible direct-release protocol sibling")
+    return module
 
 
 def _validate_common_projections(
