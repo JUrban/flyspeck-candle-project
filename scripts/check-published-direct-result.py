@@ -4,7 +4,8 @@
 This consumer never promotes a result to S1, S2, or S3.  It establishes only
 that a completed schema-5 receipt, or an explicitly requested schema-6
 receipt, still matches its exact current Candle/Flyspeck/plan/link authority
-and retained snapshot/transcript bytes.
+and retained snapshot/transcript bytes.  For schema 6, an explicit comparison
+mode emits the compiled candidate descriptor only after that full validation.
 """
 
 from __future__ import annotations
@@ -961,6 +962,62 @@ def build_schema6_capture_result(
     return capture
 
 
+def _assemble_compiled_comparison_descriptor(
+    protocol: Any,
+    arguments: argparse.Namespace,
+    capture: dict[str, Any],
+    receipt: dict[str, Any],
+    checker_relative: str,
+    authenticated_sources: dict[str, bytes],
+) -> dict[str, Any]:
+    """Assemble output only after the enclosing CLI authenticates raw state."""
+    source_inventory = [
+        {"path": relative, **data_record(data)}
+        for relative, data in sorted(authenticated_sources.items())
+    ]
+    matching_entrypoints = [
+        record for record in source_inventory
+        if record["path"] == checker_relative
+    ]
+    require(len(matching_entrypoints) == 1,
+            "compiled comparison consumer entrypoint is not authenticated")
+    entrypoint = matching_entrypoints[0]
+    candidate_authority = {
+        "policy": protocol.COMPARISON_CANDIDATE_AUTHORITY_POLICY,
+        "authenticator": protocol.COMPILED_COMPARISON_AUTHENTICATOR,
+        "project_commit": arguments.project_head,
+        "runtime_commit": arguments.candle_head,
+        "entrypoint": entrypoint,
+        "sources": source_inventory,
+    }
+    descriptor = {
+        "schema": 1,
+        "kind": protocol.AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND,
+        "role": protocol.COMPILED_COMPARISON_ROLE,
+        "ordinal": 0,
+        "candidate": data_record(protocol.canonical_json_bytes(capture)),
+        "authenticated_nonce": {
+            "kind": protocol.COMPILED_COMPARISON_NONCE_KIND,
+            "value": receipt["attempt_nonce"],
+        },
+        "authenticated_plan": capture["authenticated_plan"],
+        "semantic_projection": capture["semantic_projection"],
+        "coverage_projection": capture["coverage_projection"],
+        "candidate_authority": candidate_authority,
+        "pft_used": False,
+    }
+    protocol._validate_authenticated_comparison_descriptor(
+        descriptor, role=protocol.COMPILED_COMPARISON_ROLE, ordinal=0,
+    )
+    require(
+        descriptor["candidate_authority"]["entrypoint"] == entrypoint and
+        descriptor["candidate_authority"]["sources"] == source_inventory and
+        descriptor["pft_used"] is False,
+        "compiled comparison descriptor differs from exact consumer",
+    )
+    return descriptor
+
+
 def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
     require(dict(os.environ) == CONSUMER_ENVIRONMENT,
             "consumer requires exact PATH=/usr/bin:/bin and LC_ALL=C.UTF-8 environment")
@@ -1004,7 +1061,7 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
 
     plan_fd_root = Path(f"/proc/self/fd/{arguments._plan_fd}")
     result_fd_root = Path(f"/proc/self/fd/{arguments._result_fd}")
-    schema6_capture: dict[str, Any] | None = None
+    schema6_output: dict[str, Any] | None = None
     lock = controller.runtime_lock.acquire_build_lock(candle_root)
     try:
         validate_held_runtime_lock(lock, candle_root)
@@ -1177,15 +1234,25 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
             final_plan_data = stable_file_bytes(
                 plan_fd_root / "plan.json", "final captured direct plan",
             )
-            schema6_capture = build_schema6_capture_result(
+            capture = build_schema6_capture_result(
                 project_protocol, arguments, receipt, prepared_post["plan"],
                 receipt_data, final_plan_data,
             )
+            schema6_output = capture
+            if arguments.comparison_candidate:
+                descriptor = _assemble_compiled_comparison_descriptor(
+                    project_protocol, arguments, capture, receipt,
+                    checker_relative, final_consumer_sources,
+                )
+                require(descriptor["candidate_authority"]["entrypoint"] == {
+                            "path": checker_relative, **data_record(checker),
+                        }, "compiled descriptor entrypoint changed")
+                schema6_output = descriptor
     finally:
         lock.close()
 
-    if schema6_capture is not None:
-        return schema6_capture
+    if schema6_output is not None:
+        return schema6_output
     return build_gate_result(arguments, prepared, result_root)
 
 
@@ -1230,9 +1297,18 @@ def main() -> None:
     parser.add_argument(
         "--evidence-schema", type=int, choices=(5, 6), default=5,
     )
+    parser.add_argument(
+        "--comparison-candidate", action="store_true",
+        help=(
+            "emit the authenticated compiled comparison descriptor "
+            "(schema 6 only)"
+        ),
+    )
     parser.add_argument("--cml-heap-size")
     parser.add_argument("--cml-stack-size")
     arguments = parser.parse_args()
+    require(not arguments.comparison_candidate or arguments.evidence_schema == 6,
+            "compiled comparison candidate requires evidence schema 6")
     for value, label, length in (
         (arguments.project_head, "project head", 40),
         (arguments.candle_head, "Candle head", 40),

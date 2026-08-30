@@ -56,6 +56,11 @@ class FakeController:
 
 class FakeCaptureProtocol:
     AUTHENTICATED_CAPTURE_POLICY = "test-content-bound-capture-v1"
+    COMPARISON_CANDIDATE_AUTHORITY_POLICY = "test-candidate-authority-v1"
+    COMPILED_COMPARISON_AUTHENTICATOR = "test-compiled-consumer"
+    AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND = "test-comparison-candidate-v1"
+    COMPILED_COMPARISON_ROLE = "test-compiled-role"
+    COMPILED_COMPARISON_NONCE_KIND = "test-attempt-nonce-v1"
 
     @staticmethod
     def canonical_json_bytes(value):
@@ -69,6 +74,8 @@ class FakeCaptureProtocol:
             "receipt": subject.data_record(cls.canonical_json_bytes(receipt)),
             "authenticated_plan":
                 subject.data_record(cls.canonical_json_bytes(plan)),
+            "semantic_projection": {"test": "semantic"},
+            "coverage_projection": {"test": "coverage"},
             "authority": authority,
             "promotion": False,
             "approval_included": False,
@@ -78,6 +85,16 @@ class FakeCaptureProtocol:
             "pft_used": False,
             "s2_s3_evidence": False,
         }
+
+    @classmethod
+    def _validate_authenticated_comparison_descriptor(
+        cls, descriptor, *, role, ordinal,
+    ):
+        if (descriptor.get("kind") !=
+                cls.AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND or
+                role != cls.COMPILED_COMPARISON_ROLE or ordinal != 0):
+            raise ValueError("bad fake comparison descriptor")
+        return descriptor
 
 
 def make_record(data: bytes, *, path: str | None = None):
@@ -101,6 +118,32 @@ def restore_writable(root: Path) -> None:
 
 
 class PublishedDirectResultTests(unittest.TestCase):
+    def test_comparison_candidate_requires_schema6(self):
+        arguments = [
+            str(SUBJECT_PATH),
+            "--project-root", "/project",
+            "--project-head", "0" * 40,
+            "--plan-root", "/plan",
+            "--plan-sha256", "1" * 64,
+            "--result-root", "/result",
+            "--boundary", "boundary",
+            "--candle-root", "/candle",
+            "--candle-head", "2" * 40,
+            "--cakeml-head", "3" * 40,
+            "--hol4-head", "4" * 40,
+            "--flyspeck-root", "/flyspeck",
+            "--flyspeck-head", "5" * 40,
+            "--timeout-seconds", "1",
+            "--max-cpu-seconds", "1",
+            "--max-address-space-gib", "1",
+            "--max-output-file-gib", "1",
+            "--comparison-candidate",
+        ]
+        with mock.patch.object(sys, "argv", arguments), self.assertRaisesRegex(
+            subject.ResultError, "requires evidence schema 6",
+        ):
+            subject.main()
+
     def test_duplicate_json_key_rejected(self):
         with self.assertRaisesRegex(subject.ResultError, "duplicate JSON key"):
             subject.decode_object(b'{"schema":5,"schema":4}', "receipt")
@@ -265,6 +308,52 @@ class PublishedDirectResultTests(unittest.TestCase):
             subject.build_schema6_capture_result(
                 FakeCaptureProtocol, arguments, receipt, plan,
                 receipt_data + b" ", plan_data,
+            )
+
+    def test_compiled_descriptor_derives_its_authenticated_source_authority(
+        self,
+    ):
+        receipt = {"attempt_nonce": "9" * 32}
+        capture = {
+            "authenticated_plan": make_record(b"plan\n"),
+            "semantic_projection": {"test": "semantic"},
+            "coverage_projection": {"test": "coverage"},
+        }
+        arguments = types.SimpleNamespace(
+            project_head="1" * 40, candle_head="2" * 40,
+        )
+        sources = {
+            "scripts/direct_release_protocol.py": b"protocol\n",
+            "scripts/check-published-direct-result.py": b"consumer\n",
+        }
+        descriptor = subject._assemble_compiled_comparison_descriptor(
+            FakeCaptureProtocol, arguments, capture, receipt,
+            "scripts/check-published-direct-result.py", sources,
+        )
+        authority = descriptor["candidate_authority"]
+        self.assertEqual(authority["project_commit"], "1" * 40)
+        self.assertEqual(authority["runtime_commit"], "2" * 40)
+        self.assertEqual(
+            [record["path"] for record in authority["sources"]],
+            sorted(sources),
+        )
+        self.assertEqual(
+            authority["entrypoint"],
+            {
+                "path": "scripts/check-published-direct-result.py",
+                **subject.data_record(b"consumer\n"),
+            },
+        )
+        self.assertEqual(
+            descriptor["candidate"],
+            subject.data_record(FakeCaptureProtocol.canonical_json_bytes(capture)),
+        )
+        with self.assertRaisesRegex(
+            subject.ResultError, "entrypoint is not authenticated",
+        ):
+            subject._assemble_compiled_comparison_descriptor(
+                FakeCaptureProtocol, arguments, capture, receipt,
+                "scripts/not-the-consumer.py", sources,
             )
 
     def test_pinned_plan_rejects_extra_file_and_wrong_digest(self):
