@@ -33,6 +33,36 @@ DEPENDENCY_HISTORY_POLICY = (
 )
 SEMANTIC_PROJECTION_KIND = "candle-flyspeck-direct-semantic-projection-v1"
 COVERAGE_PROJECTION_KIND = "candle-flyspeck-direct-coverage-projection-v1"
+CROSS_RUNTIME_COVERAGE_KIND = (
+    "candle-flyspeck-cross-runtime-coverage-projection-v2"
+)
+CROSS_RUNTIME_ACTION_POLICY = (
+    "authenticated-plan-ordered-action-completion-v1"
+)
+CROSS_RUNTIME_SOURCE_INVENTORY_KIND = (
+    "candle-flyspeck-authenticated-original-source-inventory-v1"
+)
+CROSS_RUNTIME_SOURCE_INVENTORY_POLICY = (
+    "exact-400-plan-bindings-with-candle-selection-v1"
+)
+CROSS_RUNTIME_LOGICAL_CLOSURE_KIND = (
+    "candle-flyspeck-cross-runtime-selected-logical-closure-v1"
+)
+CROSS_RUNTIME_LOGICAL_CLOSURE_POLICY = (
+    "runtime-neutral-selected-source-identities-v1"
+)
+CROSS_RUNTIME_LP_CONSUMPTION_KIND = (
+    "candle-flyspeck-cross-runtime-lp-consumption-v2"
+)
+CROSS_RUNTIME_LP_CONSUMPTION_POLICY = (
+    "canonical-identity-exactly-once-successful-deserialization-v2"
+)
+CROSS_RUNTIME_LP_CONSUMPTION_ORDER = (
+    "canonical-relative-path-lexicographic-v1"
+)
+CROSS_RUNTIME_EXECUTION_SELECTION_SEMANTICS = (
+    "bind-candle-plan-selection-without-cross-runtime-execution-claim-v1"
+)
 AUTHENTICATED_CAPTURE_KIND = (
     "candle-flyspeck-authenticated-direct-schema6-capture-v1"
 )
@@ -98,6 +128,10 @@ SOURCE_TRACE_FINAL_ADDITIONAL_KEYS = (
     "control:fingerprint-serializer",
 )
 ACTION_OUTCOMES = ("load", "skip-ledger")
+ACTION_STRATA = (
+    "base", "arithmetic", "analysis", "geometry", "lp_support",
+    "nonlinear_support", "text_formalization", "final_assembly",
+)
 LOGICAL_SOURCE_CLASSIFICATIONS = (
     "derivation-only-input", "expected-nested-source",
     "generated-executed-control", "observed-nested-source",
@@ -808,6 +842,351 @@ def validate_coverage_projection(value: object) -> dict[str, Any]:
     return value
 
 
+def _validate_cross_runtime_execution_selection(
+    value: object, label: str,
+) -> dict[str, Any]:
+    require(isinstance(value, dict), f"malformed {label}")
+    if value.get("mode") == "original-source":
+        require(set(value) == {"mode"}, f"malformed {label}")
+        return value
+    fields = {
+        "mode", "id", "kind", "normalized_bytes", "normalized_sha256",
+        "normalized_md5", "operation_count",
+    }
+    require(set(value) == fields and
+            value.get("mode") == "candle-normalization-bound" and
+            value.get("kind") == "exact_bytes_replace_sequence" and
+            type(value.get("normalized_bytes")) is int and
+            value["normalized_bytes"] > 0 and
+            type(value.get("operation_count")) is int and
+            value["operation_count"] > 0,
+            f"malformed {label}")
+    _validate_printable_label(value.get("id"), f"{label} ID")
+    _hex(value.get("normalized_sha256"), HEX64,
+         f"{label} normalized SHA-256")
+    _hex(value.get("normalized_md5"), HEX32, f"{label} normalized MD5")
+    return value
+
+
+def _validate_cross_runtime_actions(value: object) -> dict[str, Any]:
+    fields = {
+        "policy", "selection_semantics", "record_count",
+        "ordered_record_sha256", "records",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            value.get("policy") == CROSS_RUNTIME_ACTION_POLICY and
+            value.get("selection_semantics") ==
+            CROSS_RUNTIME_EXECUTION_SELECTION_SEMANTICS and
+            type(value.get("record_count")) is int and
+            value["record_count"] == FINAL_ACTION_COUNT,
+            "malformed cross-runtime action completion")
+    records = value.get("records")
+    require(isinstance(records, list) and
+            len(records) == FINAL_ACTION_COUNT,
+            "cross-runtime action completion is not exactly 297 records")
+    for index, record in enumerate(records):
+        require(isinstance(record, dict) and set(record) == {
+                    "index", "selected_source", "target", "stratum",
+                    "original_bytes", "original_sha256", "original_md5",
+                    "candle_plan_execution_selection", "completion_status",
+                } and type(record.get("index")) is int and
+                record["index"] == index and
+                isinstance(record.get("selected_source"), str) and
+                type(record.get("original_bytes")) is int and
+                record["original_bytes"] > 0 and
+                record.get("stratum") in ACTION_STRATA and
+                record.get("completion_status") ==
+                "completed-observed-unapproved",
+                f"malformed cross-runtime action completion record: {index}")
+        _validate_logical_source_key(
+            record.get("selected_source"),
+            f"cross-runtime action selected source: {index}",
+        )
+        _safe_relative(record.get("target"),
+                       f"cross-runtime action target: {index}")
+        _hex(record.get("original_sha256"), HEX64,
+             f"cross-runtime action source SHA-256: {index}")
+        _hex(record.get("original_md5"), HEX32,
+             f"cross-runtime action source MD5: {index}")
+        _validate_cross_runtime_execution_selection(
+            record.get("candle_plan_execution_selection"),
+            f"cross-runtime action execution selection: {index}",
+        )
+    require(value.get("ordered_record_sha256") == canonical_sha256(records),
+            "cross-runtime action completion digest mismatch")
+    return value
+
+
+def _validate_cross_runtime_source_inventory(value: object) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "policy", "record_count",
+        "normalization_binding_count", "ordered_record_sha256", "records",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            type(value.get("schema")) is int and value["schema"] == 1 and
+            value.get("kind") == CROSS_RUNTIME_SOURCE_INVENTORY_KIND and
+            value.get("policy") == CROSS_RUNTIME_SOURCE_INVENTORY_POLICY and
+            type(value.get("record_count")) is int and
+            value["record_count"] == 400 and
+            type(value.get("normalization_binding_count")) is int and
+            0 < value["normalization_binding_count"] < 400,
+            "malformed cross-runtime original-source inventory")
+    records = value.get("records")
+    require(isinstance(records, list) and len(records) == 400,
+            "cross-runtime source inventory is not exactly 400 records")
+    previous_key: str | None = None
+    normalized_count = 0
+    normalization_ids: set[str] = set()
+    for index, record in enumerate(records):
+        require(isinstance(record, dict) and set(record) == {
+                    "index", "key", "repository", "path", "original_bytes",
+                    "original_sha256", "original_md5",
+                    "candle_plan_execution_selection",
+                } and type(record.get("index")) is int and
+                record["index"] == index and
+                record.get("repository") in {"candle", "flyspeck"} and
+                type(record.get("original_bytes")) is int and
+                record["original_bytes"] > 0,
+                f"malformed cross-runtime source record: {index}")
+        key = record.get("key")
+        require(isinstance(key, str),
+                f"malformed cross-runtime source key: {index}")
+        _validate_logical_source_key(key,
+                                     f"cross-runtime source key: {index}")
+        require(key.startswith(f"{record['repository']}:") and
+                (previous_key is None or previous_key < key),
+                f"cross-runtime source inventory order/namespace mismatch: "
+                f"{index}")
+        path = _safe_relative(record.get("path"),
+                              f"cross-runtime source path: {index}")
+        require(key == f"{record['repository']}:{path}",
+                f"cross-runtime source key/path mismatch: {index}")
+        previous_key = key
+        _hex(record.get("original_sha256"), HEX64,
+             f"cross-runtime source SHA-256: {index}")
+        _hex(record.get("original_md5"), HEX32,
+             f"cross-runtime source MD5: {index}")
+        selection = _validate_cross_runtime_execution_selection(
+            record.get("candle_plan_execution_selection"),
+            f"cross-runtime source execution selection: {index}",
+        )
+        if selection["mode"] == "candle-normalization-bound":
+            require(selection["id"] not in normalization_ids,
+                    f"duplicate cross-runtime normalization ID: {index}")
+            normalization_ids.add(selection["id"])
+            normalized_count += 1
+    require(normalized_count == value["normalization_binding_count"] and
+            value.get("ordered_record_sha256") == canonical_sha256(records),
+            "cross-runtime source inventory digest/count mismatch")
+    return value
+
+
+def _validate_cross_runtime_logical_closure(
+    value: object, source_inventory: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "policy", "order", "status", "record_count",
+        "ordered_record_sha256", "records",
+        "runtime_observation_retained_by_candidate",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            type(value.get("schema")) is int and value["schema"] == 1 and
+            value.get("kind") == CROSS_RUNTIME_LOGICAL_CLOSURE_KIND and
+            value.get("policy") == CROSS_RUNTIME_LOGICAL_CLOSURE_POLICY and
+            value.get("order") == SOURCE_CLOSURE_ORDER and
+            value.get("status") == "selected-closure-observed-unapproved" and
+            value.get("runtime_observation_retained_by_candidate") is True,
+            "malformed cross-runtime logical-source closure")
+    records = value.get("records")
+    require(isinstance(records, list) and records and
+            type(value.get("record_count")) is int and
+            value["record_count"] == len(records),
+            "malformed cross-runtime logical-source closure records")
+    inventory_by_key = {
+        record["key"]: record for record in source_inventory["records"]
+    }
+    previous_key: str | None = None
+    for index, record in enumerate(records):
+        require(isinstance(record, dict) and set(record) == {
+                    "index", "key", "original_bytes", "original_sha256",
+                    "original_md5", "candle_plan_execution_selection",
+                } and type(record.get("index")) is int and
+                record["index"] == index and
+                type(record.get("original_bytes")) is int and
+                record["original_bytes"] > 0 and
+                isinstance(record.get("key"), str),
+                f"malformed cross-runtime logical-source record: {index}")
+        key = record["key"]
+        _validate_logical_source_key(
+            key, f"cross-runtime logical-source key: {index}",
+        )
+        require(previous_key is None or previous_key < key,
+                f"cross-runtime logical-source keys are not canonical: {index}")
+        previous_key = key
+        _hex(record.get("original_sha256"), HEX64,
+             f"cross-runtime logical-source SHA-256: {index}")
+        _hex(record.get("original_md5"), HEX32,
+             f"cross-runtime logical-source MD5: {index}")
+        _validate_cross_runtime_execution_selection(
+            record.get("candle_plan_execution_selection"),
+            f"cross-runtime logical-source execution selection: {index}",
+        )
+        source = inventory_by_key.get(key)
+        require(source is not None and all(
+                    _same_canonical_value(record[field], source[field])
+                    for field in (
+                        "original_bytes", "original_sha256", "original_md5",
+                        "candle_plan_execution_selection",
+                    )
+                ),
+                f"cross-runtime logical source differs from inventory: {index}")
+    require(value.get("ordered_record_sha256") == canonical_sha256(records),
+            "cross-runtime logical-source closure digest mismatch")
+    return value
+
+
+def _validate_cross_runtime_mathematical_coverage(
+    value: object,
+) -> dict[str, Any]:
+    fields = {
+        "status", "structural_fingerprint_requests",
+        "dependency_history_requests", "source_closure_observed",
+        "lp_completed_observed", "nonlinear_completed_observed",
+        "final_premises_completed_observed",
+        "final_implication_completed_observed", "approved_reference_present",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            value.get("status") == "observed-uncompared" and
+            value.get("structural_fingerprint_requests") ==
+            list(FINAL_THEOREM_NAMES) and
+            value.get("dependency_history_requests") ==
+            list(FINAL_THEOREM_NAMES) and
+            value.get("source_closure_observed") is True and
+            value.get("lp_completed_observed") is True and
+            value.get("nonlinear_completed_observed") is True and
+            value.get("final_premises_completed_observed") is True and
+            value.get("final_implication_completed_observed") is True and
+            value.get("approved_reference_present") is False,
+            "malformed cross-runtime mathematical coverage")
+    return value
+
+
+def _validate_cross_runtime_lp_consumption(
+    value: object, generated_inputs: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "policy", "order", "status", "record_count",
+        "ordered_record_sha256", "records", "raw_order_retained_by_candidate",
+        "pft_used",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            type(value.get("schema")) is int and value["schema"] == 2 and
+            value.get("kind") == CROSS_RUNTIME_LP_CONSUMPTION_KIND and
+            value.get("policy") == CROSS_RUNTIME_LP_CONSUMPTION_POLICY and
+            value.get("order") == CROSS_RUNTIME_LP_CONSUMPTION_ORDER and
+            value.get("status") ==
+            "exactly-once-successful-deserialization-observed-unapproved" and
+            type(value.get("record_count")) is int and
+            value["record_count"] == 39 and
+            value.get("raw_order_retained_by_candidate") is True and
+            value.get("pft_used") is False,
+            "malformed cross-runtime LP-certificate consumption")
+    records = value.get("records")
+    require(isinstance(records, list) and len(records) == 39,
+            "cross-runtime LP consumption is not exactly 39 records")
+    previous_relative: str | None = None
+    identities: set[tuple[str, str, int, str]] = set()
+    prepared_count = 0
+    for index, record in enumerate(records):
+        require(isinstance(record, dict) and set(record) == {
+                    "index", "class", "relative", "bytes", "sha256",
+                    "successful_deserialization_count",
+                } and type(record.get("index")) is int and
+                record["index"] == index and
+                record.get("class") in {
+                    "lp-certificate", "lp-certificate-prepared",
+                } and type(record.get("bytes")) is int and
+                record["bytes"] > 0 and
+                type(record.get("successful_deserialization_count")) is int and
+                record["successful_deserialization_count"] == 1,
+                f"malformed cross-runtime LP consumption record: {index}")
+        relative = _safe_relative(
+            record.get("relative"),
+            f"cross-runtime LP consumption path: {index}",
+        )
+        require(previous_relative is None or previous_relative < relative,
+                f"cross-runtime LP consumption order mismatch: {index}")
+        previous_relative = relative
+        sha256 = _hex(record.get("sha256"), HEX64,
+                      f"cross-runtime LP consumption SHA-256: {index}")
+        identity = (record["class"], relative, record["bytes"], sha256)
+        require(identity not in identities,
+                f"duplicate cross-runtime LP consumption identity: {index}")
+        identities.add(identity)
+        prepared_count += record["class"] == "lp-certificate-prepared"
+    generated_identities = {
+        (record["class"], record["path"], record["bytes"], record["sha256"])
+        for record in generated_inputs["bindings"]
+        if record["class"] in {"lp-certificate", "lp-certificate-prepared"}
+    }
+    require(prepared_count == 1 and identities == generated_identities and
+            value.get("ordered_record_sha256") == canonical_sha256(records),
+            "cross-runtime LP consumption identity/digest mismatch")
+    return value
+
+
+def validate_cross_runtime_coverage_projection(
+    value: object,
+) -> dict[str, Any]:
+    """Validate only the disjoint facts comparable across all three runtimes."""
+    fields = {
+        "schema", "kind", "boundary_id", "completed_action_count", "actions",
+        "original_source_inventory", "selected_logical_source_closure",
+        "generated_inputs", "mathematical_coverage",
+        "lp_certificate_consumption", "pft_used",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            type(value.get("schema")) is int and value["schema"] == 2 and
+            value.get("kind") == CROSS_RUNTIME_COVERAGE_KIND and
+            value.get("boundary_id") == FINAL_BOUNDARY_ID and
+            type(value.get("completed_action_count")) is int and
+            value["completed_action_count"] == FINAL_ACTION_COUNT and
+            value.get("pft_used") is False,
+            "cross-runtime coverage projection identity or claim mismatch")
+    actions = _validate_cross_runtime_actions(value.get("actions"))
+    inventory = _validate_cross_runtime_source_inventory(
+        value.get("original_source_inventory")
+    )
+    inventory_by_key = {
+        record["key"]: record for record in inventory["records"]
+    }
+    for index, action in enumerate(actions["records"]):
+        source = inventory_by_key.get(action["selected_source"])
+        require(source is not None and all(
+                    _same_canonical_value(action[action_field],
+                                          source[source_field])
+                    for action_field, source_field in (
+                        ("original_bytes", "original_bytes"),
+                        ("original_sha256", "original_sha256"),
+                        ("original_md5", "original_md5"),
+                        ("candle_plan_execution_selection",
+                         "candle_plan_execution_selection"),
+                    )
+                ),
+                f"cross-runtime action differs from source inventory: {index}")
+    _validate_cross_runtime_logical_closure(
+        value.get("selected_logical_source_closure"), inventory,
+    )
+    generated = _validate_generated_inputs(value.get("generated_inputs"))
+    _validate_cross_runtime_mathematical_coverage(
+        value.get("mathematical_coverage")
+    )
+    _validate_cross_runtime_lp_consumption(
+        value.get("lp_certificate_consumption"), generated,
+    )
+    return value
+
+
 def coverage_projection_from_schema6(
     receipt: object, authenticated_plan: object,
 ) -> dict[str, Any]:
@@ -1202,6 +1581,270 @@ def coverage_projection_from_schema6(
         "pft_used": False,
     }
     return validate_coverage_projection(projection)
+
+
+def _cross_runtime_execution_selection_from_plan(
+    normalization: object, label: str,
+) -> dict[str, Any]:
+    if normalization is None:
+        return {"mode": "original-source"}
+    fields = {
+        "id", "kind", "normalized_bytes", "normalized_sha256",
+        "normalized_md5", "operation_count",
+    }
+    require(isinstance(normalization, dict) and set(normalization) == fields,
+            f"malformed {label}")
+    selection = {
+        "mode": "candle-normalization-bound",
+        **copy.deepcopy(normalization),
+    }
+    return _validate_cross_runtime_execution_selection(selection, label)
+
+
+def cross_runtime_coverage_projection_from_schema6(
+    receipt: object, authenticated_plan: object,
+) -> dict[str, Any]:
+    """Derive the disjoint common coverage value from authenticated schema 6.
+
+    Detailed loader events, cache behavior, raw LP event order, and Candle
+    control records deliberately remain only in coverage-v1.  This adapter
+    binds the Candle plan's normalization selection but does not claim that a
+    pristine reference runtime executes the normalized overlay.
+    """
+    detailed = coverage_projection_from_schema6(receipt, authenticated_plan)
+    require(isinstance(authenticated_plan, dict),
+            "malformed authenticated cross-runtime plan")
+
+    source_graph = authenticated_plan.get("source_graph")
+    require(isinstance(source_graph, dict) and set(source_graph) == {
+                "entry_count", "ordered_binding_sha256", "bindings",
+            } and type(source_graph.get("entry_count")) is int and
+            source_graph["entry_count"] == 400 and
+            isinstance(source_graph.get("bindings"), list) and
+            len(source_graph["bindings"]) == 400 and
+            source_graph.get("ordered_binding_sha256") ==
+            canonical_sha256(source_graph["bindings"]),
+            "authenticated plan lacks exact 400-node source graph")
+    inventory_records = []
+    inventory_by_key: dict[str, dict[str, Any]] = {}
+    previous_key: str | None = None
+    normalization_count = 0
+    for index, binding in enumerate(source_graph["bindings"]):
+        base_fields = {"key", "repository", "path", "bytes", "sha256", "md5"}
+        require(isinstance(binding, dict) and
+                frozenset(binding) in {
+                    frozenset(base_fields),
+                    frozenset({*base_fields, "execution_normalization"}),
+                } and binding.get("repository") in {"candle", "flyspeck"} and
+                type(binding.get("bytes")) is int and binding["bytes"] > 0 and
+                isinstance(binding.get("key"), str),
+                f"malformed authenticated plan source binding: {index}")
+        key = binding["key"]
+        _validate_logical_source_key(
+            key, f"authenticated plan source key: {index}",
+        )
+        path = _safe_relative(
+            binding.get("path"), f"authenticated plan source path: {index}",
+        )
+        require(key == f"{binding['repository']}:{path}" and
+                (previous_key is None or previous_key < key),
+                f"authenticated plan source graph is not canonical: {index}")
+        previous_key = key
+        _hex(binding.get("sha256"), HEX64,
+             f"authenticated plan source SHA-256: {index}")
+        _hex(binding.get("md5"), HEX32,
+             f"authenticated plan source MD5: {index}")
+        selection = _cross_runtime_execution_selection_from_plan(
+            binding.get("execution_normalization"),
+            f"authenticated plan source normalization: {index}",
+        )
+        normalization_count += (
+            selection["mode"] == "candle-normalization-bound"
+        )
+        projected = {
+            "index": index,
+            "key": key,
+            "repository": binding["repository"],
+            "path": path,
+            "original_bytes": binding["bytes"],
+            "original_sha256": binding["sha256"],
+            "original_md5": binding["md5"],
+            "candle_plan_execution_selection": selection,
+        }
+        inventory_records.append(projected)
+        inventory_by_key[key] = projected
+
+    plan_actions = authenticated_plan.get("actions")
+    require(isinstance(plan_actions, list) and
+            len(plan_actions) == FINAL_ACTION_COUNT and
+            authenticated_plan.get("ordered_action_sha256") ==
+            canonical_sha256(plan_actions),
+            "authenticated plan lacks exact ordered 297-action closure")
+    detailed_actions = detailed["action_events"]["records"]
+    action_records = []
+    for index, (action, observed) in enumerate(zip(
+        plan_actions, detailed_actions, strict=True,
+    )):
+        base_fields = {
+            "index", "selected_source", "target", "stratum", "source_bytes",
+            "source_sha256", "source_md5",
+        }
+        require(isinstance(action, dict) and frozenset(action) in {
+                    frozenset(base_fields),
+                    frozenset({*base_fields, "execution_normalization"}),
+                } and type(action.get("index")) is int and
+                action["index"] == index and
+                action.get("stratum") in ACTION_STRATA and
+                type(action.get("source_bytes")) is int and
+                action["source_bytes"] > 0 and
+                observed.get("index") == index and
+                observed.get("source_sha256") == action.get("source_sha256"),
+                f"authenticated plan/action observation mismatch: {index}")
+        selected_source = action.get("selected_source")
+        require(isinstance(selected_source, str),
+                f"malformed authenticated plan action source: {index}")
+        _validate_logical_source_key(
+            selected_source, f"authenticated plan action source: {index}",
+        )
+        _safe_relative(action.get("target"),
+                       f"authenticated plan action target: {index}")
+        _hex(action.get("source_sha256"), HEX64,
+             f"authenticated plan action SHA-256: {index}")
+        _hex(action.get("source_md5"), HEX32,
+             f"authenticated plan action MD5: {index}")
+        selection = _cross_runtime_execution_selection_from_plan(
+            action.get("execution_normalization"),
+            f"authenticated plan action normalization: {index}",
+        )
+        source = inventory_by_key.get(selected_source)
+        require(source is not None and
+                source["original_bytes"] == action["source_bytes"] and
+                source["original_sha256"] == action["source_sha256"] and
+                source["original_md5"] == action["source_md5"] and
+                _same_canonical_value(
+                    source["candle_plan_execution_selection"], selection,
+                ),
+                f"authenticated plan action differs from source graph: {index}")
+        action_records.append({
+            "index": index,
+            "selected_source": selected_source,
+            "target": action["target"],
+            "stratum": action["stratum"],
+            "original_bytes": action["source_bytes"],
+            "original_sha256": action["source_sha256"],
+            "original_md5": action["source_md5"],
+            "candle_plan_execution_selection": selection,
+            "completion_status": "completed-observed-unapproved",
+        })
+
+    logical_records = []
+    for logical in detailed["logical_source_coverage"]["records"]:
+        if logical["classification"] in {
+            "derivation-only-input", "generated-executed-control",
+        }:
+            continue
+        source = inventory_by_key.get(logical["key"])
+        require(source is not None and
+                source["original_sha256"] == logical["source_sha256"] and
+                source["original_md5"] == logical["source_md5"],
+                "cross-runtime logical source differs from authenticated plan")
+        logical_normalization = logical["execution_normalization"]
+        selection = source["candle_plan_execution_selection"]
+        if logical_normalization is None:
+            require(selection["mode"] == "original-source",
+                    "cross-runtime logical source omits plan normalization")
+        else:
+            require(selection["mode"] == "candle-normalization-bound" and
+                    all(logical_normalization[field] == selection[field]
+                        for field in (
+                            "id", "normalized_sha256", "normalized_md5",
+                        )),
+                    "cross-runtime logical normalization differs from plan")
+        logical_records.append({
+            "index": len(logical_records),
+            "key": source["key"],
+            "original_bytes": source["original_bytes"],
+            "original_sha256": source["original_sha256"],
+            "original_md5": source["original_md5"],
+            "candle_plan_execution_selection": copy.deepcopy(selection),
+        })
+
+    canonical_lp_records = []
+    detailed_lp_records = sorted(
+        detailed["lp_certificate_consumption"]["records"],
+        key=lambda record: record["relative"],
+    )
+    for index, record in enumerate(detailed_lp_records):
+        canonical_lp_records.append({
+            "index": index,
+            "class": record["class"],
+            "relative": record["relative"],
+            "bytes": record["bytes"],
+            "sha256": record["sha256"],
+            "successful_deserialization_count": 1,
+        })
+
+    projection = {
+        "schema": 2,
+        "kind": CROSS_RUNTIME_COVERAGE_KIND,
+        "boundary_id": FINAL_BOUNDARY_ID,
+        "completed_action_count": FINAL_ACTION_COUNT,
+        "actions": {
+            "policy": CROSS_RUNTIME_ACTION_POLICY,
+            "selection_semantics":
+                CROSS_RUNTIME_EXECUTION_SELECTION_SEMANTICS,
+            "record_count": len(action_records),
+            "ordered_record_sha256": canonical_sha256(action_records),
+            "records": action_records,
+        },
+        "original_source_inventory": {
+            "schema": 1,
+            "kind": CROSS_RUNTIME_SOURCE_INVENTORY_KIND,
+            "policy": CROSS_RUNTIME_SOURCE_INVENTORY_POLICY,
+            "record_count": len(inventory_records),
+            "normalization_binding_count": normalization_count,
+            "ordered_record_sha256": canonical_sha256(inventory_records),
+            "records": inventory_records,
+        },
+        "selected_logical_source_closure": {
+            "schema": 1,
+            "kind": CROSS_RUNTIME_LOGICAL_CLOSURE_KIND,
+            "policy": CROSS_RUNTIME_LOGICAL_CLOSURE_POLICY,
+            "order": SOURCE_CLOSURE_ORDER,
+            "status": "selected-closure-observed-unapproved",
+            "record_count": len(logical_records),
+            "ordered_record_sha256": canonical_sha256(logical_records),
+            "records": logical_records,
+            "runtime_observation_retained_by_candidate": True,
+        },
+        "generated_inputs": copy.deepcopy(detailed["generated_inputs"]),
+        "mathematical_coverage": {
+            "status": "observed-uncompared",
+            "structural_fingerprint_requests": list(FINAL_THEOREM_NAMES),
+            "dependency_history_requests": list(FINAL_THEOREM_NAMES),
+            "source_closure_observed": True,
+            "lp_completed_observed": True,
+            "nonlinear_completed_observed": True,
+            "final_premises_completed_observed": True,
+            "final_implication_completed_observed": True,
+            "approved_reference_present": False,
+        },
+        "lp_certificate_consumption": {
+            "schema": 2,
+            "kind": CROSS_RUNTIME_LP_CONSUMPTION_KIND,
+            "policy": CROSS_RUNTIME_LP_CONSUMPTION_POLICY,
+            "order": CROSS_RUNTIME_LP_CONSUMPTION_ORDER,
+            "status":
+                "exactly-once-successful-deserialization-observed-unapproved",
+            "record_count": len(canonical_lp_records),
+            "ordered_record_sha256": canonical_sha256(canonical_lp_records),
+            "records": canonical_lp_records,
+            "raw_order_retained_by_candidate": True,
+            "pft_used": False,
+        },
+        "pft_used": False,
+    }
+    return validate_cross_runtime_coverage_projection(projection)
 
 
 def coverage_projection_from_schema5(_schema5: object) -> dict[str, Any]:
@@ -1678,6 +2321,16 @@ def validate_canonical_coverage_projection_bytes(data: bytes) -> dict[str, Any]:
     return projection
 
 
+def validate_canonical_cross_runtime_coverage_projection_bytes(
+    data: bytes,
+) -> dict[str, Any]:
+    projection = decode_object(data, "cross-runtime coverage projection")
+    validate_cross_runtime_coverage_projection(projection)
+    require(data == canonical_json_bytes(projection),
+            "cross-runtime coverage projection is not canonical JSON")
+    return projection
+
+
 def validate_canonical_semantic_projection_bytes(data: bytes) -> dict[str, Any]:
     projection = decode_object(data, "semantic projection")
     validate_semantic_projection(projection)
@@ -1693,15 +2346,25 @@ def main() -> int:
     validate.add_argument("projection", type=Path)
     validate_coverage = subparsers.add_parser("validate-coverage")
     validate_coverage.add_argument("projection", type=Path)
+    validate_cross_runtime = subparsers.add_parser(
+        "validate-cross-runtime-coverage"
+    )
+    validate_cross_runtime.add_argument("projection", type=Path)
     arguments = parser.parse_args()
     try:
         data = arguments.projection.read_bytes()
         if arguments.command == "validate-semantic":
             validate_canonical_semantic_projection_bytes(data)
             print("direct semantic equality projection PASS: not an approval")
-        else:
+        elif arguments.command == "validate-coverage":
             validate_canonical_coverage_projection_bytes(data)
             print("direct coverage projection PASS: unapproved fixture protocol")
+        else:
+            validate_canonical_cross_runtime_coverage_projection_bytes(data)
+            print(
+                "cross-runtime coverage projection PASS: unapproved fixture "
+                "protocol"
+            )
     except (OSError, ProtocolError) as error:
         print(f"direct release protocol rejected: {error}", file=sys.stderr)
         return 1

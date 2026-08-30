@@ -280,10 +280,101 @@ def coverage_fixture() -> dict:
 def schema6_fixture() -> tuple[dict, dict]:
     coverage = coverage_fixture()
     nonce = "9" * 32
+    logical_by_key = {
+        record["key"]: record
+        for record in coverage["logical_source_coverage"]["records"]
+    }
+    action_keys = [
+        f"flyspeck:fixture/action-{index:03d}.hl"
+        for index in range(subject.FINAL_ACTION_COUNT)
+    ]
+    source_keys = set(action_keys) | set(logical_by_key)
+    extra_index = 0
+    while len(source_keys) < 400:
+        source_keys.add(f"flyspeck:fixture/extra-{extra_index:03d}.hl")
+        extra_index += 1
+    normalized_keys = {"flyspeck:b.hl", *action_keys[:17]}
+    source_bindings = []
+    for key in sorted(source_keys):
+        repository, path = key.split(":", 1)
+        if key in logical_by_key:
+            logical = logical_by_key[key]
+            source_sha256 = logical["source_sha256"]
+            source_md5 = logical["source_md5"]
+        elif key in action_keys:
+            action_index = action_keys.index(key)
+            source_sha256 = coverage["action_events"]["records"][
+                action_index
+            ]["source_sha256"]
+            source_md5 = f"{action_index % 15 + 1:x}" * 32
+        else:
+            encoded = key.encode()
+            source_sha256 = hashlib.sha256(encoded).hexdigest()
+            source_md5 = hashlib.md5(
+                encoded, usedforsecurity=False,
+            ).hexdigest()
+        binding = {
+            "key": key,
+            "repository": repository,
+            "path": path,
+            "bytes": len(key) + 1,
+            "sha256": source_sha256,
+            "md5": source_md5,
+        }
+        if key in normalized_keys:
+            if key == "flyspeck:b.hl":
+                logical_normalization = logical_by_key[key][
+                    "execution_normalization"
+                ]
+                assert logical_normalization is not None
+                normalization_id = logical_normalization["id"]
+                normalized_sha256 = logical_normalization[
+                    "normalized_sha256"
+                ]
+                normalized_md5 = logical_normalization["normalized_md5"]
+            else:
+                normalization_index = action_keys.index(key)
+                normalization_id = f"FIXTURE-NORM-{normalization_index:03d}"
+                normalized_sha256 = f"{normalization_index + 1:064x}"
+                normalized_md5 = f"{normalization_index + 1:032x}"
+            binding["execution_normalization"] = {
+                "id": normalization_id,
+                "kind": "exact_bytes_replace_sequence",
+                "normalized_bytes": binding["bytes"] + 1,
+                "normalized_sha256": normalized_sha256,
+                "normalized_md5": normalized_md5,
+                "operation_count": 1,
+            }
+        source_bindings.append(binding)
+    source_by_key = {binding["key"]: binding for binding in source_bindings}
+    plan_actions = []
+    for index, key in enumerate(action_keys):
+        source = source_by_key[key]
+        action = {
+            "index": index,
+            "selected_source": key,
+            "target": f"fixture/action-{index:03d}.hl",
+            "stratum": subject.ACTION_STRATA[index % len(subject.ACTION_STRATA)],
+            "source_bytes": source["bytes"],
+            "source_sha256": source["sha256"],
+            "source_md5": source["md5"],
+        }
+        if "execution_normalization" in source:
+            action["execution_normalization"] = copy.deepcopy(
+                source["execution_normalization"]
+            )
+        plan_actions.append(action)
     plan = {
         "schema": 1,
         "kind": "candle-flyspeck-cumulative-stratum-plan",
         "action_count": subject.FINAL_ACTION_COUNT,
+        "actions": plan_actions,
+        "ordered_action_sha256": subject.canonical_sha256(plan_actions),
+        "source_graph": {
+            "entry_count": len(source_bindings),
+            "ordered_binding_sha256": subject.canonical_sha256(source_bindings),
+            "bindings": source_bindings,
+        },
         "generated_inputs": copy.deepcopy(coverage["generated_inputs"]),
     }
     plan_bytes = subject.canonical_json_bytes(plan)
@@ -727,6 +818,180 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                     reject_nonce_and_binding_ids(nested)
 
         reject_nonce_and_binding_ids(projection)
+
+    def test_schema6_projects_disjoint_cross_runtime_coverage_v2(self) -> None:
+        receipt, plan = schema6_fixture()
+        projection = subject.cross_runtime_coverage_projection_from_schema6(
+            receipt, plan,
+        )
+        self.assertIs(
+            subject.validate_cross_runtime_coverage_projection(projection),
+            projection,
+        )
+        self.assertEqual(projection["actions"]["record_count"], 297)
+        self.assertEqual(
+            projection["original_source_inventory"]["record_count"], 400,
+        )
+        self.assertEqual(
+            projection["original_source_inventory"]
+            ["normalization_binding_count"],
+            18,
+        )
+        self.assertEqual(
+            projection["lp_certificate_consumption"]["record_count"], 39,
+        )
+        self.assertEqual(
+            projection["selected_logical_source_closure"]["records"][0][
+                "key"
+            ],
+            subject.LOGICAL_FINAL_TARGET_KEY,
+        )
+        projection_bytes = subject.canonical_json_bytes(projection)
+        self.assertEqual(
+            subject.validate_canonical_cross_runtime_coverage_projection_bytes(
+                projection_bytes
+            ),
+            projection,
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "not canonical"):
+            subject.validate_canonical_cross_runtime_coverage_projection_bytes(
+                subject.canonical_value_bytes(projection)
+            )
+        for forbidden in (
+            b'"nonce"', b'"binding_id"', b'"events"', b'"outcome"',
+            b'"physical_source_coverage"', b'"cache_before"', b'control:',
+            b'"ordered_nonce_free_event_sha256"',
+        ):
+            self.assertNotIn(forbidden, projection_bytes)
+
+    def test_cross_runtime_coverage_v2_rejects_hostile_mutations(self) -> None:
+        receipt, plan = schema6_fixture()
+        projection = subject.cross_runtime_coverage_projection_from_schema6(
+            receipt, plan,
+        )
+
+        def omit_action(item):
+            actions = item["actions"]
+            actions["records"].pop()
+            actions["record_count"] = len(actions["records"])
+            actions["ordered_record_sha256"] = subject.canonical_sha256(
+                actions["records"]
+            )
+
+        def reorder_actions(item):
+            actions = item["actions"]
+            actions["records"][0], actions["records"][1] = (
+                actions["records"][1], actions["records"][0]
+            )
+            actions["ordered_record_sha256"] = subject.canonical_sha256(
+                actions["records"]
+            )
+
+        def omit_source(item):
+            inventory = item["original_source_inventory"]
+            inventory["records"].pop()
+            inventory["record_count"] = len(inventory["records"])
+            inventory["ordered_record_sha256"] = subject.canonical_sha256(
+                inventory["records"]
+            )
+
+        def inject_pft_source(item):
+            inventory = item["original_source_inventory"]
+            record = inventory["records"][-1]
+            record["key"] = "flyspeck:fixture/pft-results.hl"
+            record["path"] = "fixture/pft-results.hl"
+            inventory["ordered_record_sha256"] = subject.canonical_sha256(
+                inventory["records"]
+            )
+
+        def copy_candle_control(item):
+            closure = item["selected_logical_source_closure"]
+            closure["records"][0]["key"] = "control:runtime-setup"
+            closure["ordered_record_sha256"] = subject.canonical_sha256(
+                closure["records"]
+            )
+
+        def omit_lp(item):
+            lp = item["lp_certificate_consumption"]
+            lp["records"].pop()
+            lp["record_count"] = len(lp["records"])
+            lp["ordered_record_sha256"] = subject.canonical_sha256(
+                lp["records"]
+            )
+
+        def reorder_lp(item):
+            lp = item["lp_certificate_consumption"]
+            lp["records"][0], lp["records"][1] = (
+                lp["records"][1], lp["records"][0]
+            )
+            lp["ordered_record_sha256"] = subject.canonical_sha256(
+                lp["records"]
+            )
+
+        def relabel_normalization(item):
+            inventory = item["original_source_inventory"]
+            normalized = next(
+                record for record in inventory["records"]
+                if record["candle_plan_execution_selection"]["mode"] ==
+                "candle-normalization-bound"
+            )
+            normalized["candle_plan_execution_selection"]["id"] = "RELABELLED"
+            inventory["ordered_record_sha256"] = subject.canonical_sha256(
+                inventory["records"]
+            )
+
+        cases = (
+            ("missing action", omit_action),
+            ("reordered action", reorder_actions),
+            ("missing source", omit_source),
+            ("PFT source", inject_pft_source),
+            ("copied Candle control", copy_candle_control),
+            ("missing LP", omit_lp),
+            ("reordered LP", reorder_lp),
+            ("duplicate LP success", lambda item: item[
+                "lp_certificate_consumption"
+            ]["records"][0].update(successful_deserialization_count=2)),
+            ("normalization relabel", relabel_normalization),
+            ("hidden raw order", lambda item: item[
+                "lp_certificate_consumption"
+            ].update(raw_order_retained_by_candidate=False)),
+            ("missing nonlinear completion", lambda item: item[
+                "mathematical_coverage"
+            ].update(nonlinear_completed_observed=False)),
+            ("PFT bit", lambda item: item.update(pft_used=True)),
+        )
+        for label, mutate in cases:
+            forged = copy.deepcopy(projection)
+            mutate(forged)
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_cross_runtime_coverage_projection(forged)
+
+    def test_cross_runtime_projection_rejects_raw_normalization_relabel(self) -> None:
+        receipt, plan = schema6_fixture()
+        logical = receipt["logical_source_closure"]
+        normalized = next(
+            record for record in logical["records"]
+            if record["key"] == "flyspeck:b.hl"
+        )
+        normalized["execution_normalization"]["id"] = "RELABELLED"
+        logical["ordered_record_sha256"] = subject.canonical_sha256(
+            logical["records"]
+        )
+        expected_logical = copy.deepcopy(logical)
+        del expected_logical["status"]
+        receipt["expected_logical_source_closure"] = expected_logical
+        receipt["semantic_coverage"][
+            "logical_source_observation_sha256"
+        ] = subject.canonical_sha256(logical)
+        with self.assertRaisesRegex(
+            subject.ProtocolError,
+            "normalization differs from plan",
+        ):
+            subject.cross_runtime_coverage_projection_from_schema6(
+                receipt, plan,
+            )
 
     def test_schema6_projection_rejects_plan_splice_and_overclaim(self) -> None:
         receipt, plan = schema6_fixture()
