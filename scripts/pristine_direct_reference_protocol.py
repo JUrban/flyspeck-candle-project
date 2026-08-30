@@ -795,7 +795,7 @@ def validate_raw_transcript(
         value.get("request"), content_record(request),
         "pristine reference transcript request content",
     )
-    _content_record(value.get("stdout"), "reference stdout", allow_empty=True)
+    _content_record(value.get("stdout"), "reference stdout")
     stderr = _content_record(
         value.get("stderr"), "reference stderr", allow_empty=True,
     )
