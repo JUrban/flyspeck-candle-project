@@ -2665,6 +2665,132 @@ def _validate_v4_indexed_list_container(
     return entries
 
 
+def _validate_v4_initial_object_edges(
+    value: object,
+) -> list[dict[str, Any]]:
+    edges = _validate_v4_indexed_list_container(
+        value, V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
+        V4_BUILD_INITIAL_OBJECT_EDGE_FIELDS, V4_BUILD_INPUT_CLOSURE_ENTRY_MAX,
+        "V4 initial object edges",
+    )
+    require(
+        all(edge.get("domain") in V4_BUILD_INITIAL_OBJECT_EDGE_DOMAINS
+            for edge in edges),
+        "unknown V4 initial object-edge domain",
+    )
+    return edges
+
+
+def _validate_v4_parent_fd_open_descriptions(
+    fd_table: object, open_descriptions: object,
+    initial_edges: list[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
+    table_label = "V4 initial fd table"
+    table = _v4_exact_dict(
+        fd_table, V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS, table_label,
+    )
+    fds = table.get("fds")
+    require(
+        is_int(table.get("table_id")) and table["table_id"] > 0 and
+        is_int(table.get("generation")) and table["generation"] > 0 and
+        is_int(table.get("fd_count")) and
+        0 <= table["fd_count"] <= V4_BUILD_FD_PER_TABLE_MAX and
+        type(fds) is list and len(fds) == table["fd_count"],
+        f"malformed {table_label} count/list",
+    )
+    previous_fd = -1
+    for index, fd in enumerate(fds):
+        item = _v4_exact_dict(
+            fd, V4_BUILD_INITIAL_FD_FIELDS, f"{table_label} entry {index}",
+        )
+        require(
+            is_int(item.get("index")) and item["index"] == index and
+            is_int(item.get("fd")) and
+            previous_fd < item["fd"] < V4_BUILD_FD_PER_TABLE_MAX and
+            is_int(item.get("fd_generation")) and
+            item["fd_generation"] > 0 and
+            type(item.get("cloexec")) is bool and
+            type(item.get("access_mode")) is str and
+            bool(item["access_mode"]) and
+            is_int(item.get("open_description_index")),
+            f"malformed {table_label} entry {index}",
+        )
+        previous_fd = item["fd"]
+    require(
+        type(table.get("ordered_fd_sha256")) is str and
+        table["ordered_fd_sha256"] == canonical_sha256(fds),
+        f"{table_label} digest mismatch",
+    )
+
+    descriptions = _validate_v4_indexed_list_container(
+        open_descriptions, V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
+        V4_BUILD_INITIAL_OPEN_DESCRIPTION_FIELDS, V4_BUILD_FD_PER_TABLE_MAX,
+        "V4 initial open descriptions",
+    )
+    references = [0] * len(descriptions)
+    for fd in fds:
+        selected = fd["open_description_index"]
+        require(0 <= selected < len(descriptions),
+                "V4 initial fd selects absent open description")
+        description = descriptions[selected]
+        require(fd["access_mode"] == description.get("access_mode"),
+                "V4 initial fd/OFD access mismatch")
+        references[selected] += 1
+    open_description_ids: set[int] = set()
+    for index, description in enumerate(descriptions):
+        label = f"V4 initial open description {index}"
+        require(
+            is_int(description.get("open_description_id")) and
+            description["open_description_id"] > 0 and
+            description["open_description_id"] not in open_description_ids and
+            is_int(description.get("generation")) and
+            description["generation"] > 0 and
+            is_int(description.get("object_edge_index")) and
+            0 <= description["object_edge_index"] < len(initial_edges) and
+            type(description.get("access_mode")) is str and
+            bool(description["access_mode"]) and
+            is_int(description.get("status_flags")) and
+            description["status_flags"] >= 0 and
+            is_int(description.get("offset")) and description["offset"] >= 0 and
+            is_int(description.get("descriptor_ref_count")) and
+            description["descriptor_ref_count"] == references[index] and
+            references[index] > 0,
+            f"malformed {label}",
+        )
+        open_description_ids.add(description["open_description_id"])
+        validate_v4_build_lock_state(description.get("lock_state"))
+    return table, fds, descriptions
+
+
+def validate_v4_build_parent_fd_state(
+    initial_object_edges: object, fd_table: object,
+    open_descriptions: object, inherited_fd_indices: object,
+) -> dict[str, Any]:
+    """Validate and snapshot the complete inherited parent FD/OFD state."""
+    label = "V4 parent FD state"
+    values = (
+        initial_object_edges, fd_table, open_descriptions,
+        inherited_fd_indices,
+    )
+    _require_v4_exact_json_types(list(values), label)
+    edges = _validate_v4_initial_object_edges(initial_object_edges)
+    _, fds, _ = _validate_v4_parent_fd_open_descriptions(
+        fd_table, open_descriptions, edges,
+    )
+    require(
+        type(inherited_fd_indices) is list and
+        inherited_fd_indices == list(range(len(fds))) and
+        all(is_int(index) for index in inherited_fd_indices),
+        "V4 inherited fd indexes do not select every fd exactly once",
+    )
+    return json.loads(canonical_value_bytes({
+        "initial_object_edges": initial_object_edges,
+        "fd_table": fd_table,
+        "open_descriptions": open_descriptions,
+        "inherited_fd_indices": inherited_fd_indices,
+    }))
+
+
 def _validate_v4_root_stable_identity(
     edge: dict[str, Any], label: str,
 ) -> None:
@@ -3377,80 +3503,9 @@ def _validate_v4_initial_fd_ofd_roots(
     initial_edges: list[dict[str, Any]], input_root_edge: dict[str, Any],
     input_root_fd_generation: int,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
-    table_label = "V4 initial fd table"
-    table = _v4_exact_dict(
-        fd_table, V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS, table_label,
+    _, fds, descriptions = _validate_v4_parent_fd_open_descriptions(
+        fd_table, open_descriptions, initial_edges,
     )
-    fds = table.get("fds")
-    require(
-        is_int(table.get("table_id")) and table["table_id"] > 0 and
-        is_int(table.get("generation")) and table["generation"] > 0 and
-        is_int(table.get("fd_count")) and
-        0 <= table["fd_count"] <= V4_BUILD_FD_PER_TABLE_MAX and
-        type(fds) is list and len(fds) == table["fd_count"],
-        f"malformed {table_label} count/list",
-    )
-    previous_fd = -1
-    for index, fd in enumerate(fds):
-        item = _v4_exact_dict(
-            fd, V4_BUILD_INITIAL_FD_FIELDS, f"{table_label} entry {index}",
-        )
-        require(
-            is_int(item.get("index")) and item["index"] == index and
-            is_int(item.get("fd")) and
-            previous_fd < item["fd"] < 4_096 and
-            is_int(item.get("fd_generation")) and
-            item["fd_generation"] > 0 and
-            type(item.get("cloexec")) is bool and
-            type(item.get("access_mode")) is str and
-            bool(item["access_mode"]) and
-            is_int(item.get("open_description_index")),
-            f"malformed {table_label} entry {index}",
-        )
-        previous_fd = item["fd"]
-    require(
-        type(table.get("ordered_fd_sha256")) is str and
-        table["ordered_fd_sha256"] == canonical_sha256(fds),
-        f"{table_label} digest mismatch",
-    )
-
-    descriptions = _validate_v4_indexed_list_container(
-        open_descriptions, V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
-        V4_BUILD_INITIAL_OPEN_DESCRIPTION_FIELDS, V4_BUILD_FD_PER_TABLE_MAX,
-        "V4 initial open descriptions",
-    )
-    references = [0] * len(descriptions)
-    for fd in fds:
-        selected = fd["open_description_index"]
-        require(0 <= selected < len(descriptions),
-                "V4 initial fd selects absent open description")
-        description = descriptions[selected]
-        require(fd["access_mode"] == description.get("access_mode"),
-                "V4 initial fd/OFD access mismatch")
-        references[selected] += 1
-    open_description_ids: set[int] = set()
-    for index, description in enumerate(descriptions):
-        label = f"V4 initial open description {index}"
-        require(
-            is_int(description.get("open_description_id")) and
-            description["open_description_id"] > 0 and
-            description["open_description_id"] not in open_description_ids and
-            is_int(description.get("generation")) and
-            description["generation"] > 0 and
-            is_int(description.get("object_edge_index")) and
-            0 <= description["object_edge_index"] < len(initial_edges) and
-            type(description.get("access_mode")) is str and
-            bool(description["access_mode"]) and
-            is_int(description.get("status_flags")) and
-            description["status_flags"] >= 0 and
-            is_int(description.get("offset")) and description["offset"] >= 0 and
-            is_int(description.get("descriptor_ref_count")) and
-            description["descriptor_ref_count"] == references[index] and
-            references[index] > 0,
-            f"malformed {label}",
-        )
-        open_description_ids.add(description["open_description_id"])
-        validate_v4_build_lock_state(description.get("lock_state"))
 
     input_description_indices = [
         index for index, description in enumerate(descriptions)
@@ -3496,16 +3551,7 @@ def _derive_v4_build_initial_root_authority(
         is_int(input_root_fd_generation) and input_root_fd_generation > 0,
         f"malformed {label} input closure join",
     )
-    edges = _validate_v4_indexed_list_container(
-        initial_object_edges, V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS,
-        V4_BUILD_INITIAL_OBJECT_EDGE_FIELDS, V4_BUILD_INPUT_CLOSURE_ENTRY_MAX,
-        "V4 initial object edges",
-    )
-    require(
-        all(edge.get("domain") in V4_BUILD_INITIAL_OBJECT_EDGE_DOMAINS
-            for edge in edges),
-        "unknown V4 initial object-edge domain",
-    )
+    edges = _validate_v4_initial_object_edges(initial_object_edges)
     setup_roots = [edge for edge in edges if edge["domain"] == "setup-root"]
     input_roots = [edge for edge in edges if edge["domain"] == "input-root"]
     require(len(setup_roots) == 1 and len(input_roots) == 1,

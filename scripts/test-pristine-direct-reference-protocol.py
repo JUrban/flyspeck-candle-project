@@ -2122,6 +2122,138 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 root_authority=authority,
             )
 
+    def test_v4_parent_fd_state_closes_aliases_edges_and_inheritance(self) -> None:
+        def edge(index: int, domain: str) -> dict[str, object]:
+            return {
+                "index": index, "domain": domain,
+                "authority_role": None, "authority_index": None,
+                "root_identity": None, "root_fd_generation": None,
+                "input_root_entry_index": None, "stream_role": None,
+                "setup_role": None, "parent_descriptor_identity": None,
+                "mount_id": None, "st_dev": None, "st_ino": None,
+                "stable_generation": None, "resolved_relative": None,
+                "symlink_decisions": None,
+            }
+
+        def container(entries: list[dict[str, object]]) -> dict[str, object]:
+            return {
+                "count": len(entries), "entries": entries,
+                "ordered_entry_sha256": subject.canonical_sha256(entries),
+            }
+
+        edges = container([
+            edge(0, "stream-endpoint"), edge(1, "input-root-entry"),
+        ])
+        descriptions = [
+            {
+                "index": 0, "open_description_id": 100, "generation": 3,
+                "object_edge_index": 0, "access_mode": "write-only",
+                "status_flags": 1, "offset": 0,
+                "lock_state": {"mode": "unlocked"},
+                "descriptor_ref_count": 2,
+            },
+            {
+                "index": 1, "open_description_id": 101, "generation": 4,
+                "object_edge_index": 1, "access_mode": "read-only",
+                "status_flags": 0, "offset": 7,
+                "lock_state": {"mode": "shared"},
+                "descriptor_ref_count": 1,
+            },
+        ]
+        ofds = container(descriptions)
+        fds = [
+            {
+                "index": 0, "fd": 1, "fd_generation": 10,
+                "cloexec": False, "access_mode": "write-only",
+                "open_description_index": 0,
+            },
+            {
+                "index": 1, "fd": 2, "fd_generation": 11,
+                "cloexec": True, "access_mode": "write-only",
+                "open_description_index": 0,
+            },
+            {
+                "index": 2, "fd": 10, "fd_generation": 12,
+                "cloexec": False, "access_mode": "read-only",
+                "open_description_index": 1,
+            },
+        ]
+        table = {
+            "table_id": 9, "generation": 5, "fd_count": len(fds),
+            "fds": fds, "ordered_fd_sha256": subject.canonical_sha256(fds),
+        }
+        snapshot = subject.validate_v4_build_parent_fd_state(
+            edges, table, ofds, [0, 1, 2],
+        )
+        self.assertEqual(snapshot["fd_table"], table)
+        self.assertIsNot(snapshot["fd_table"], table)
+        table["generation"] = 99
+        self.assertEqual(snapshot["fd_table"]["generation"], 5)
+        table["generation"] = 5
+
+        def mutated(
+            mutator: object,
+        ) -> tuple[dict[str, object], dict[str, object], dict[str, object], list[int]]:
+            edge_value = copy.deepcopy(edges)
+            table_value = copy.deepcopy(table)
+            ofd_value = copy.deepcopy(ofds)
+            inherited = [0, 1, 2]
+            mutator(edge_value, table_value, ofd_value, inherited)
+            table_value["ordered_fd_sha256"] = subject.canonical_sha256(
+                table_value["fds"],
+            )
+            ofd_value["ordered_entry_sha256"] = subject.canonical_sha256(
+                ofd_value["entries"],
+            )
+            edge_value["ordered_entry_sha256"] = subject.canonical_sha256(
+                edge_value["entries"],
+            )
+            return edge_value, table_value, ofd_value, inherited
+
+        mutations = (
+            lambda e, t, o, i: t.update(table_id=True),
+            lambda e, t, o, i: t["fds"][0].update(index=False),
+            lambda e, t, o, i: t["fds"][0].update(fd=True),
+            lambda e, t, o, i: t["fds"][0].update(fd_generation=True),
+            lambda e, t, o, i: t["fds"][0].update(cloexec=0),
+            lambda e, t, o, i: t["fds"][0].update(
+                open_description_index=True,
+            ),
+            lambda e, t, o, i: t["fds"][2].update(
+                open_description_index=2,
+            ),
+            lambda e, t, o, i: t["fds"][1].update(access_mode="read-only"),
+            lambda e, t, o, i: o["entries"][1].update(
+                open_description_id=100,
+            ),
+            lambda e, t, o, i: o["entries"][0].update(
+                object_edge_index=2,
+            ),
+            lambda e, t, o, i: o["entries"][0].update(
+                descriptor_ref_count=1,
+            ),
+            lambda e, t, o, i: o["entries"][0].update(offset=True),
+            lambda e, t, o, i: o["entries"][0].update(
+                lock_state={"mode": "unknown"},
+            ),
+            lambda e, t, o, i: i.__setitem__(slice(None), [0, 2, 1]),
+            lambda e, t, o, i: i.__setitem__(0, False),
+            lambda e, t, o, i: e["entries"][0].update(domain="unknown"),
+        )
+        for mutation in mutations:
+            hostile = mutated(mutation)
+            with self.subTest(hostile=hostile), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_parent_fd_state(*hostile)
+
+        bad_digest = copy.deepcopy(ofds)
+        bad_digest["ordered_entry_sha256"] = "0" * 64
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_parent_fd_state(
+                edges, table, bad_digest, [0, 1, 2],
+            )
+
     def test_v4_mount_graph_and_clone_reject_hostile_splices(self) -> None:
         source_ids = [100, 110, 120, 130, 140]
         child_ids = [200, 210, 220, 230, 240]
