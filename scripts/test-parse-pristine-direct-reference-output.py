@@ -462,7 +462,7 @@ class PristineOutputParserTests(unittest.TestCase):
         request = fixture_module.make_request(plan)
         with self.assertRaisesRegex(
             subject.OutputProtocolError,
-            "executing output parser differs from plan authority",
+            "output parser versus plan authority mismatch",
         ):
             self.parse(plan=plan, request=request)
 
@@ -471,7 +471,18 @@ class PristineOutputParserTests(unittest.TestCase):
         request = fixture_module.make_request(plan)
         with self.assertRaisesRegex(
             subject.OutputProtocolError,
-            "executing pristine protocol differs from plan authority",
+            "pristine protocol versus plan authority mismatch",
+        ):
+            self.parse(plan=plan, request=request)
+
+        plan = copy.deepcopy(self.plan)
+        plan["authority"]["producer"]["direct_release_protocol"][
+            "sha256"
+        ] = "0" * 64
+        request = fixture_module.make_request(plan)
+        with self.assertRaisesRegex(
+            subject.OutputProtocolError,
+            "direct-release protocol versus plan authority mismatch",
         ):
             self.parse(plan=plan, request=request)
 
@@ -498,6 +509,7 @@ class PristineOutputParserTests(unittest.TestCase):
             scripts.mkdir()
             for relative in (
                 protocol.PROTOCOL_PATH, protocol.OUTPUT_PARSER_PATH,
+                protocol.DIRECT_PROTOCOL_PATH,
             ):
                 source = PROJECT_ROOT / relative
                 (root / relative).write_bytes(source.read_bytes())
@@ -505,6 +517,9 @@ class PristineOutputParserTests(unittest.TestCase):
             cache.mkdir()
             (cache / "parse-pristine-direct-reference-output.pyc").write_bytes(
                 b"hostile bytecode must not execute"
+            )
+            (cache / "direct_release_protocol.cpython-311.pyc").write_bytes(
+                b"hostile permissive projection bytecode must not execute"
             )
             plan = copy.deepcopy(self.plan)
             plan["authority"]["repositories"]["project"]["path"] = str(root)
@@ -514,6 +529,87 @@ class PristineOutputParserTests(unittest.TestCase):
                 loaded._executing_parser_source_record(loaded._protocol()),
                 plan["authority"]["producer"]["output_parser"],
             )
+            self.assertEqual(
+                loaded._executing_direct_protocol_source_record(
+                    loaded._protocol()
+                ),
+                plan["authority"]["producer"]["direct_release_protocol"],
+            )
+
+    def test_trusted_loader_rejects_permissive_pft_direct_protocol(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for relative in (
+                protocol.PROTOCOL_PATH, protocol.OUTPUT_PARSER_PATH,
+                protocol.DIRECT_PROTOCOL_PATH,
+            ):
+                source = PROJECT_ROOT / relative
+                (root / relative).write_bytes(source.read_bytes())
+            (root / protocol.DIRECT_PROTOCOL_PATH).write_bytes(
+                b"PFT_USED = True\n"
+                b"def validate_semantic_projection(value): return value\n"
+                b"def validate_cross_runtime_coverage_projection(value): "
+                b"return value\n"
+            )
+            plan = copy.deepcopy(self.plan)
+            plan["authority"]["repositories"]["project"]["path"] = str(root)
+            with self.assertRaisesRegex(
+                loader_module.LoaderError,
+                "direct release protocol source differs from plan authority",
+            ):
+                loader_module.load_trusted_output_parser(root, plan)
+
+    def test_trusted_loader_rejects_redirected_path_components(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary).resolve()
+            actual_root = parent / "actual-root"
+            actual_scripts = actual_root / "scripts"
+            actual_scripts.mkdir(parents=True)
+            linked_root = parent / "linked-root"
+            linked_root.symlink_to(actual_root, target_is_directory=True)
+            with self.assertRaisesRegex(
+                loader_module.LoaderError, "project root.*exact",
+            ):
+                loader_module.load_trusted_output_parser(
+                    linked_root, self.plan,
+                )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            actual_scripts = root / "actual-scripts"
+            actual_scripts.mkdir()
+            (root / "scripts").symlink_to(
+                actual_scripts, target_is_directory=True,
+            )
+            plan = copy.deepcopy(self.plan)
+            plan["authority"]["repositories"]["project"]["path"] = str(root)
+            with self.assertRaisesRegex(
+                loader_module.LoaderError, "cannot pin fixed.*sources",
+            ):
+                loader_module.load_trusted_output_parser(root, plan)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for relative in (
+                protocol.PROTOCOL_PATH, protocol.OUTPUT_PARSER_PATH,
+            ):
+                source = PROJECT_ROOT / relative
+                (root / relative).write_bytes(source.read_bytes())
+            redirected = root / "redirected-direct-release-protocol.py"
+            redirected.write_bytes(
+                (PROJECT_ROOT / protocol.DIRECT_PROTOCOL_PATH).read_bytes()
+            )
+            (root / protocol.DIRECT_PROTOCOL_PATH).symlink_to(redirected)
+            plan = copy.deepcopy(self.plan)
+            plan["authority"]["repositories"]["project"]["path"] = str(root)
+            with self.assertRaisesRegex(
+                loader_module.LoaderError, "cannot pin fixed.*sources",
+            ):
+                loader_module.load_trusted_output_parser(root, plan)
 
     def test_incompatible_protocol_sibling_fails_closed(self) -> None:
         sibling = subject._protocol()
@@ -530,6 +626,16 @@ class PristineOutputParserTests(unittest.TestCase):
                     self.parse()
             finally:
                 setattr(sibling, name, original)
+        original_contract = copy.deepcopy(sibling.MARKER_CONTRACT)
+        try:
+            sibling.MARKER_CONTRACT["nonce_in_every_marker"] = 1
+            with self.assertRaisesRegex(
+                subject.OutputProtocolError,
+                "marker contract compatibility mismatch",
+            ):
+                self.parse()
+        finally:
+            sibling.MARKER_CONTRACT = original_contract
         self.assertIs(subject._protocol(), sibling)
 
     def test_complete_counts_and_marker_shape_are_exact(self) -> None:

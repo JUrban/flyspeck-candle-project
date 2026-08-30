@@ -22,11 +22,17 @@ No exact pristine dependency-history/semantic marker grammar exists yet.
 Accordingly this parser rejects semantic, fingerprint, and other unknown
 success-like markers and emits no semantic or coverage projection.  Its result
 is raw, unauthenticated, unapproved, and ineligible for S2/S3.
+
+Trusted activation and the injected modules below are private plumbing, not an
+in-process security boundary.  A future collector must run the separately
+authenticated fixed-source loader as the exclusive entrypoint of a fresh
+isolated process; executing a copied module can synthesize Python globals.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from types import ModuleType
 from typing import Any
@@ -94,13 +100,34 @@ _TRUSTED_ACTIVATION = globals().get("_TRUSTED_ACTIVATION") is True
 _TRUSTED_PROJECT_ROOT = globals().get("_TRUSTED_PROJECT_ROOT_INPUT")
 _EXECUTING_SOURCE_BYTES = globals().get("_TRUSTED_SOURCE_BYTES_INPUT")
 _EXECUTING_PROTOCOL_BYTES = globals().get("_TRUSTED_PROTOCOL_BYTES_INPUT")
+_EXECUTING_DIRECT_PROTOCOL_BYTES = globals().get(
+    "_TRUSTED_DIRECT_PROTOCOL_BYTES_INPUT"
+)
 _PROTOCOL: ModuleType | None = globals().get("_TRUSTED_PROTOCOL_MODULE_INPUT")
 if _TRUSTED_ACTIVATION:
     require(isinstance(_TRUSTED_PROJECT_ROOT, str) and
             type(_EXECUTING_SOURCE_BYTES) is bytes and
             type(_EXECUTING_PROTOCOL_BYTES) is bytes and
+            type(_EXECUTING_DIRECT_PROTOCOL_BYTES) is bytes and
             isinstance(_PROTOCOL, ModuleType),
             "trusted parser activation is incomplete")
+
+
+def _canonical_value_bytes(value: Any, label: str) -> bytes:
+    try:
+        return json.dumps(
+            value, sort_keys=True, separators=(",", ":"), allow_nan=False,
+        ).encode()
+    except (TypeError, ValueError) as error:
+        raise OutputProtocolError(f"malformed exact JSON {label}: {error}") from error
+
+
+def _require_exact_json(value: Any, expected: Any, label: str) -> None:
+    require(
+        _canonical_value_bytes(value, label) ==
+        _canonical_value_bytes(expected, label),
+        f"exact JSON {label} mismatch",
+    )
 
 
 def _require_compatible_protocol(module: ModuleType) -> None:
@@ -119,11 +146,15 @@ def _require_compatible_protocol(module: ModuleType) -> None:
             EXPECTED_OUTPUT_PARSER_PATH and
             getattr(module, "PROTOCOL_PATH", None) ==
             "scripts/pristine_direct_reference_protocol.py" and
+            getattr(module, "DIRECT_PROTOCOL_PATH", None) ==
+            "scripts/direct_release_protocol.py" and
+            getattr(module, "AUTHORITY_POLICY", None) ==
+            "exact-clean-project-hol-light-flyspeck-runtime-tool-and-input-"
+            "authority-v3" and
             getattr(module, "REFERENCE_ROLE", None) ==
             "pristine-clean-reference" and
             getattr(module, "REFERENCE_NONCE_KIND", None) ==
             "reference-session-nonce-v1" and
-            contract == EXPECTED_MARKER_CONTRACT and
             getattr(module, "FINAL_ACTION_COUNT", None) == 297 and
             getattr(module, "FINAL_BOUNDARY_ID", None) ==
             "07-final_assembly-through-296" and
@@ -136,6 +167,10 @@ def _require_compatible_protocol(module: ModuleType) -> None:
             getattr(module, "LOADER_LEDGER_ORDER", None) ==
             "per-phase-new-loaded-files-delta-reversed-to-success-order-v1",
             "incompatible pristine-reference protocol sibling")
+    _require_exact_json(
+        contract, EXPECTED_MARKER_CONTRACT,
+        "pristine-reference marker contract compatibility",
+    )
 
 
 def _protocol() -> ModuleType:
@@ -164,6 +199,18 @@ def _executing_protocol_source_record(protocol: ModuleType) -> dict[str, object]
         "path": protocol.PROTOCOL_PATH,
         **byte_content_record(
             _EXECUTING_PROTOCOL_BYTES, "executing pristine protocol source",
+        ),
+    }
+
+
+def _executing_direct_protocol_source_record(
+    protocol: ModuleType,
+) -> dict[str, object]:
+    return {
+        "path": protocol.DIRECT_PROTOCOL_PATH,
+        **byte_content_record(
+            _EXECUTING_DIRECT_PROTOCOL_BYTES,
+            "executing direct-release protocol source",
         ),
     }
 
@@ -450,12 +497,21 @@ def rederive_raw_source_observations(
         request = protocol.validate_raw_request(request, plan)
     except protocol.ProtocolError as error:
         raise OutputProtocolError(f"invalid pristine input: {error}") from error
-    require(plan["authority"]["producer"]["output_parser"] ==
-            _executing_parser_source_record(protocol),
-            "executing output parser differs from plan authority")
-    require(plan["authority"]["producer"]["protocol"] ==
-            _executing_protocol_source_record(protocol),
-            "executing pristine protocol differs from plan authority")
+    _require_exact_json(
+        plan["authority"]["producer"]["output_parser"],
+        _executing_parser_source_record(protocol),
+        "executing output parser versus plan authority",
+    )
+    _require_exact_json(
+        plan["authority"]["producer"]["protocol"],
+        _executing_protocol_source_record(protocol),
+        "executing pristine protocol versus plan authority",
+    )
+    _require_exact_json(
+        plan["authority"]["producer"]["direct_release_protocol"],
+        _executing_direct_protocol_source_record(protocol),
+        "executing direct-release protocol versus plan authority",
+    )
     require(plan["authority"]["repositories"]["project"]["path"] ==
             _TRUSTED_PROJECT_ROOT,
             "trusted parser project root differs from plan authority")
