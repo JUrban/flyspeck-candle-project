@@ -1801,7 +1801,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "flags": ["rw"], "super_options": ["rw"],
             "optional_fields": [], "propagation": propagation,
         }
-        mountinfo = b"fixture mountinfo\n"
+        mountinfo = b"100 999 0:42 / / rw - tmpfs tmpfs rw\n"
         mount_graph = {
             "mount_namespace_identity": {"fixture": "mount-namespace"},
             "generation": 1, "mount_count": 1, "mounts": [mount],
@@ -2121,6 +2121,305 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 [input_setup_edge], phase="setup", setup_step_index=4,
                 root_authority=authority,
             )
+
+    def test_v4_mount_graph_and_clone_reject_hostile_splices(self) -> None:
+        source_ids = [100, 110, 120, 130, 140]
+        child_ids = [200, 210, 220, 230, 240]
+        mountpoints = ["/", "/a", "/b", "/c", "/d"]
+        source_optional = [
+            [], ["shared:10", "x-opt"],
+            ["master:20", "propagate_from:21"],
+            ["shared:30", "master:40", "propagate_from:41"],
+            ["unbindable"],
+        ]
+        child_optional = [
+            [], ["master:10", "x-opt"],
+            ["master:20", "propagate_from:21"],
+            ["master:30"], ["unbindable"],
+        ]
+        source_propagation = [
+            {
+                "shared_group_id": None, "master_group_id": None,
+                "propagate_from_group_id": None, "unbindable": False,
+            },
+            {
+                "shared_group_id": 10, "master_group_id": None,
+                "propagate_from_group_id": None, "unbindable": False,
+            },
+            {
+                "shared_group_id": None, "master_group_id": 20,
+                "propagate_from_group_id": 21, "unbindable": False,
+            },
+            {
+                "shared_group_id": 30, "master_group_id": 40,
+                "propagate_from_group_id": 41, "unbindable": False,
+            },
+            {
+                "shared_group_id": None, "master_group_id": None,
+                "propagate_from_group_id": None, "unbindable": True,
+            },
+        ]
+        child_propagation = [
+            copy.deepcopy(source_propagation[0]),
+            {
+                "shared_group_id": None, "master_group_id": 10,
+                "propagate_from_group_id": None, "unbindable": False,
+            },
+            copy.deepcopy(source_propagation[2]),
+            {
+                "shared_group_id": None, "master_group_id": 30,
+                "propagate_from_group_id": None, "unbindable": False,
+            },
+            copy.deepcopy(source_propagation[4]),
+        ]
+
+        def refresh_graph(graph: dict[str, object]) -> None:
+            rows = graph["mounts"]
+            lines = []
+            for row in rows:
+                optional = "".join(
+                    f" {token}" for token in row["optional_fields"]
+                )
+                root = base64.b64decode(row["root_bytes_base64"])
+                mountpoint = base64.b64decode(
+                    row["mountpoint_bytes_base64"],
+                )
+                mount_source = base64.b64decode(
+                    row["mount_source_bytes_base64"],
+                )
+                lines.append(
+                    str(row["mount_id"]).encode() + b" " +
+                    str(row["raw_parent_mount_id"]).encode() + b" " +
+                    str(row["device_major"]).encode() + b":" +
+                    str(row["device_minor"]).encode() + b" " + root + b" " +
+                    mountpoint + b" " + ",".join(row["flags"]).encode() +
+                    optional.encode() + b" - " +
+                    row["filesystem_type"].encode() + b" " + mount_source +
+                    b" " + ",".join(row["super_options"]).encode() + b"\n"
+                )
+            payload = b"".join(lines)
+            graph["mount_count"] = len(rows)
+            graph["ordered_mount_sha256"] = subject.canonical_sha256(rows)
+            graph["mountinfo_bytes"] = len(payload)
+            graph["mountinfo_sha256"] = hashlib.sha256(payload).hexdigest()
+            graph["mountinfo_payload_base64"] = base64.b64encode(
+                payload,
+            ).decode()
+
+        def graph(
+            ids: list[int], namespace: str, generation: int,
+            optional_fields: list[list[str]],
+            propagations: list[dict[str, object]], raw_root_parent: int,
+        ) -> dict[str, object]:
+            rows = []
+            for index, mount_id in enumerate(ids):
+                parent_id = None if index == 0 else ids[0]
+                path = mountpoints[index].encode()
+                rows.append({
+                    "index": index, "mount_id": mount_id,
+                    "raw_parent_mount_id": (
+                        raw_root_parent if parent_id is None else parent_id
+                    ),
+                    "parent_mount_id": parent_id,
+                    "root_identity": {"root": index},
+                    "mountpoint_identity": {"mountpoint": mountpoints[index]},
+                    "device_major": 0, "device_minor": 42,
+                    "root_bytes_base64": base64.b64encode(b"/").decode(),
+                    "mountpoint_bytes_base64": base64.b64encode(path).decode(),
+                    "filesystem_type": "tmpfs",
+                    "mount_source_bytes_base64": base64.b64encode(
+                        b"tmpfs",
+                    ).decode(),
+                    "flags": ["rw"], "super_options": ["rw"],
+                    "optional_fields": copy.deepcopy(optional_fields[index]),
+                    "propagation": copy.deepcopy(propagations[index]),
+                })
+            result = {
+                "mount_namespace_identity": {"namespace": namespace},
+                "generation": generation, "mount_count": len(rows),
+                "mounts": rows, "ordered_mount_sha256": "",
+                "mountinfo_bytes": 0, "mountinfo_sha256": "",
+                "mountinfo_payload_base64": "",
+            }
+            refresh_graph(result)
+            return result
+
+        source_graph = graph(
+            source_ids, "parent", 7, source_optional, source_propagation, 999,
+        )
+        child_graph = graph(
+            child_ids, "builder", 1, child_optional, child_propagation, 1999,
+        )
+        self.assertIs(
+            subject.validate_v4_build_mount_graph(
+                source_graph, source_graph=True,
+            ),
+            source_graph,
+        )
+        self.assertIs(
+            subject.validate_v4_build_mount_graph(
+                child_graph, source_graph=False,
+            ),
+            child_graph,
+        )
+        clones = []
+        for index, (source_row, child_row) in enumerate(zip(
+            source_graph["mounts"], child_graph["mounts"], strict=True,
+        )):
+            clones.append({
+                "index": index,
+                "source_mount_id": source_row["mount_id"],
+                "child_mount_id": child_row["mount_id"],
+                "source_raw_parent_mount_id":
+                    source_row["raw_parent_mount_id"],
+                "child_raw_parent_mount_id": child_row["raw_parent_mount_id"],
+                "root_identity": copy.deepcopy(source_row["root_identity"]),
+                "mountpoint_identity": copy.deepcopy(
+                    source_row["mountpoint_identity"],
+                ),
+                "device_major": source_row["device_major"],
+                "device_minor": source_row["device_minor"],
+                "root_bytes_base64": source_row["root_bytes_base64"],
+                "mountpoint_bytes_base64":
+                    source_row["mountpoint_bytes_base64"],
+                "filesystem_type": source_row["filesystem_type"],
+                "mount_source_bytes_base64":
+                    source_row["mount_source_bytes_base64"],
+                "flags": copy.deepcopy(source_row["flags"]),
+                "super_options": copy.deepcopy(source_row["super_options"]),
+                "source_optional_fields": copy.deepcopy(
+                    source_row["optional_fields"],
+                ),
+                "child_optional_fields": copy.deepcopy(
+                    child_row["optional_fields"],
+                ),
+                "source_propagation": copy.deepcopy(
+                    source_row["propagation"],
+                ),
+                "child_propagation": copy.deepcopy(child_row["propagation"]),
+                "source_parent_mount_id": source_row["parent_mount_id"],
+                "child_parent_mount_id": child_row["parent_mount_id"],
+            })
+        transition = {
+            "kind": "mount-namespace-create", "index": 0, "task_index": 0,
+            "source_mount_namespace_identity": {"namespace": "parent"},
+            "source_generation": 7,
+            "child_mount_namespace_identity": {"namespace": "builder"},
+            "child_generation": 1, "mount_clone_count": len(clones),
+            "mount_clones": clones,
+        }
+        self.assertIs(
+            subject.validate_v4_build_mount_namespace_clone(
+                transition, source_graph, child_graph,
+            ),
+            transition,
+        )
+
+        hostile_graphs = []
+        bool_index = copy.deepcopy(source_graph)
+        bool_index["mounts"][0]["index"] = False
+        refresh_graph(bool_index)
+        hostile_graphs.append(bool_index)
+        malformed_base64 = copy.deepcopy(source_graph)
+        malformed_base64["mountinfo_payload_base64"] = "!!!!"
+        hostile_graphs.append(malformed_base64)
+        wrong_hash = copy.deepcopy(source_graph)
+        wrong_hash["mountinfo_sha256"] = "0" * 64
+        hostile_graphs.append(wrong_hash)
+        later_parent = copy.deepcopy(source_graph)
+        later_parent["mounts"][1]["parent_mount_id"] = 120
+        later_parent["mounts"][1]["raw_parent_mount_id"] = 120
+        refresh_graph(later_parent)
+        hostile_graphs.append(later_parent)
+        misordered = copy.deepcopy(source_graph)
+        misordered["mounts"][1], misordered["mounts"][2] = (
+            misordered["mounts"][2], misordered["mounts"][1]
+        )
+        misordered["mounts"][1]["index"] = 1
+        misordered["mounts"][2]["index"] = 2
+        refresh_graph(misordered)
+        hostile_graphs.append(misordered)
+        duplicate_id = copy.deepcopy(source_graph)
+        duplicate_id["mounts"][2]["mount_id"] = 110
+        refresh_graph(duplicate_id)
+        hostile_graphs.append(duplicate_id)
+        wrong_propagation = copy.deepcopy(source_graph)
+        wrong_propagation["mounts"][1]["propagation"] = copy.deepcopy(
+            source_propagation[0],
+        )
+        refresh_graph(wrong_propagation)
+        hostile_graphs.append(wrong_propagation)
+        bool_propagation = copy.deepcopy(source_graph)
+        bool_propagation["mounts"][1]["propagation"][
+            "shared_group_id"
+        ] = True
+        refresh_graph(bool_propagation)
+        hostile_graphs.append(bool_propagation)
+        nsfs = copy.deepcopy(source_graph)
+        nsfs["mounts"][1]["filesystem_type"] = "nsfs"
+        refresh_graph(nsfs)
+        hostile_graphs.append(nsfs)
+        proc_namespace = copy.deepcopy(source_graph)
+        proc_namespace["mounts"][1]["filesystem_type"] = "proc"
+        proc_namespace["mounts"][1]["root_bytes_base64"] = base64.b64encode(
+            b"/1/ns/net",
+        ).decode()
+        proc_namespace["mounts"][1][
+            "mount_source_bytes_base64"
+        ] = base64.b64encode(b"proc").decode()
+        refresh_graph(proc_namespace)
+        hostile_graphs.append(proc_namespace)
+        proc_mountpoint = copy.deepcopy(source_graph)
+        proc_mountpoint["mounts"][0]["filesystem_type"] = "proc"
+        proc_mountpoint["mounts"][0][
+            "mount_source_bytes_base64"
+        ] = base64.b64encode(b"proc").decode()
+        proc_mountpoint["mounts"][1][
+            "mountpoint_bytes_base64"
+        ] = base64.b64encode(b"/1/ns/net").decode()
+        refresh_graph(proc_mountpoint)
+        hostile_graphs.append(proc_mountpoint)
+        for hostile in hostile_graphs:
+            with self.subTest(graph=hostile), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_mount_graph(
+                    hostile, source_graph=True,
+                )
+
+        bool_clone_index = copy.deepcopy(transition)
+        bool_clone_index["mount_clones"][0]["index"] = False
+        child_splice = copy.deepcopy(transition)
+        child_splice["mount_clones"][1]["child_mount_id"] = 220
+        identity_splice = copy.deepcopy(transition)
+        identity_splice["mount_clones"][1]["root_identity"] = {"root": 2}
+        wrong_child_graph = copy.deepcopy(child_graph)
+        wrong_child_graph["mounts"][1]["optional_fields"] = [
+            "shared:10", "x-opt",
+        ]
+        wrong_child_graph["mounts"][1]["propagation"] = copy.deepcopy(
+            source_propagation[1],
+        )
+        refresh_graph(wrong_child_graph)
+        wrong_child_transition = copy.deepcopy(transition)
+        wrong_child_transition["mount_clones"][1][
+            "child_optional_fields"
+        ] = ["shared:10", "x-opt"]
+        wrong_child_transition["mount_clones"][1][
+            "child_propagation"
+        ] = copy.deepcopy(source_propagation[1])
+        for hostile_transition, hostile_child in (
+            (bool_clone_index, child_graph),
+            (child_splice, child_graph),
+            (identity_splice, child_graph),
+            (wrong_child_transition, wrong_child_graph),
+        ):
+            with self.subTest(clone=hostile_transition), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_mount_namespace_clone(
+                    hostile_transition, source_graph, hostile_child,
+                )
 
     def test_v4_credentials_task_control_and_capset_transition(self) -> None:
         empty_digest = subject.canonical_sha256([])

@@ -11,6 +11,7 @@ calling this protocol.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 import math
@@ -2717,58 +2718,454 @@ def _validate_v4_initial_root_edge(
     return edge
 
 
-def _validate_v4_builder_mount_root(
-    value: object, setup_root_edge: dict[str, Any],
+def _v4_decode_canonical_base64(
+    value: object, maximum_bytes: int, label: str, *, nonempty: bool,
+) -> bytes:
+    require(type(value) is str and value.isascii(), f"malformed {label}")
+    encoded = value.encode("ascii")
+    require(
+        len(encoded) <= 4 * ((maximum_bytes + 2) // 3),
+        f"{label} encoded bytes exceed cap",
+    )
+    try:
+        decoded = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as error:
+        raise ProtocolError(f"malformed {label}: {error}") from error
+    require(
+        len(decoded) <= maximum_bytes and (not nonempty or decoded) and
+        base64.b64encode(decoded) == encoded,
+        f"noncanonical or over-cap {label}",
+    )
+    return decoded
+
+
+def _v4_mount_ascii_token(value: object, label: str) -> str:
+    require(type(value) is str and value.isascii(), f"malformed {label}")
+    encoded = value.encode("ascii")
+    require(
+        1 <= len(encoded) <= V4_SAFE_RELATIVE_MAX_BYTES and
+        all(0x21 <= byte <= 0x7E for byte in encoded),
+        f"malformed {label}",
+    )
+    return value
+
+
+def _v4_mount_token_list(value: object, label: str) -> list[str]:
+    require(
+        type(value) is list and len(value) <= V4_SAFE_RELATIVE_MAX_BYTES,
+        f"malformed {label} list",
+    )
+    for index, token in enumerate(value):
+        _v4_mount_ascii_token(token, f"{label} token {index}")
+    return value
+
+
+def _v4_mount_decimal(value: bytes, label: str, *, positive: bool) -> int:
+    require(
+        1 <= len(value) <= 20 and (
+            value == b"0" or
+            value[:1] in b"123456789" and
+            (len(value) == 1 or value[1:].isdigit())
+        ),
+        f"noncanonical {label}",
+    )
+    result = int(value)
+    require(
+        result < (1 << 64) and (not positive or result > 0),
+        f"out-of-range {label}",
+    )
+    return result
+
+
+def _v4_unescape_mountinfo_field(value: bytes, label: str) -> bytes:
+    require(not any(byte in {0x09, 0x0A, 0x20} for byte in value),
+            f"unescaped whitespace in {label}")
+    result = bytearray()
+    index = 0
+    escapes = {
+        b"040": 0x20, b"011": 0x09, b"012": 0x0A, b"134": 0x5C,
+    }
+    while index < len(value):
+        if value[index] != 0x5C:
+            result.append(value[index])
+            index += 1
+            continue
+        code = value[index + 1:index + 4]
+        require(len(code) == 3 and code in escapes,
+                f"malformed {label} mountinfo escape")
+        result.append(escapes[code])
+        index += 4
+    require(b"\x00" not in result, f"NUL in {label}")
+    return bytes(result)
+
+
+def _v4_mountinfo_ascii(value: bytes, label: str) -> str:
+    try:
+        result = value.decode("ascii")
+    except UnicodeDecodeError as error:
+        raise ProtocolError(f"non-ASCII {label}") from error
+    return _v4_mount_ascii_token(result, label)
+
+
+def _validate_v4_mount_propagation(
+    value: object, label: str,
+) -> tuple[dict[str, Any], str]:
+    result = _v4_exact_dict(value, V4_BUILD_MOUNT_PROPAGATION_FIELDS, label)
+    group_ids: dict[str, int | None] = {}
+    for field in (
+        "shared_group_id", "master_group_id", "propagate_from_group_id",
+    ):
+        candidate = result.get(field)
+        if candidate is None:
+            group_ids[field] = None
+        else:
+            group_id = _v4_uint(candidate, 32, f"{label} {field}")
+            require(group_id > 0, f"zero {label} {field}")
+            group_ids[field] = group_id
+    require(type(result.get("unbindable")) is bool,
+            f"malformed {label} unbindable")
+    shared = group_ids["shared_group_id"]
+    master = group_ids["master_group_id"]
+    propagate_from = group_ids["propagate_from_group_id"]
+    if result["unbindable"]:
+        require(shared is None and master is None and propagate_from is None,
+                f"grouped unbindable {label}")
+        kind = "unbindable"
+    elif shared is None and master is None:
+        require(propagate_from is None, f"orphan propagate-from in {label}")
+        kind = "private"
+    elif shared is not None and master is None:
+        require(propagate_from is None, f"orphan propagate-from in {label}")
+        kind = "shared"
+    elif shared is None:
+        kind = "slave"
+    else:
+        kind = "shared-slave"
+    return result, kind
+
+
+def _v4_mountinfo_propagation(
+    optional_fields: list[str], label: str,
 ) -> dict[str, Any]:
-    label = "V4 builder mount graph"
+    values: dict[str, int | None] = {
+        "shared_group_id": None,
+        "master_group_id": None,
+        "propagate_from_group_id": None,
+    }
+    prefixes = {
+        "shared": "shared_group_id",
+        "master": "master_group_id",
+        "propagate_from": "propagate_from_group_id",
+    }
+    unbindable = False
+    for token in optional_fields:
+        if token == "unbindable":
+            require(not unbindable, f"duplicate {label} unbindable")
+            unbindable = True
+            continue
+        prefix, separator, suffix = token.partition(":")
+        if prefix not in prefixes:
+            continue
+        require(separator == ":" and values[prefixes[prefix]] is None,
+                f"duplicate or malformed {label} {prefix}")
+        group_id = _v4_mount_decimal(
+            suffix.encode("ascii"), f"{label} {prefix}", positive=True,
+        )
+        require(group_id < (1 << 32), f"out-of-range {label} {prefix}")
+        values[prefixes[prefix]] = group_id
+    result = {**values, "unbindable": unbindable}
+    _validate_v4_mount_propagation(result, label)
+    return result
+
+
+def _v4_parse_mountinfo(payload: bytes, label: str) -> list[dict[str, Any]]:
+    require(payload and payload.endswith(b"\n") and b"\r" not in payload,
+            f"malformed {label} framing")
+    lines = payload[:-1].split(b"\n")
+    require(lines and all(lines), f"empty {label} line")
+    records: list[dict[str, Any]] = []
+    mount_ids: set[int] = set()
+    for index, line in enumerate(lines):
+        fields = line.split(b" ")
+        separators = [
+            candidate for candidate in range(6, len(fields))
+            if fields[candidate] == b"-" and len(fields) == candidate + 4
+        ]
+        require(all(fields) and len(separators) == 1,
+                f"malformed {label} line {index}")
+        separator = separators[0]
+        require(len(fields) == separator + 4,
+                f"malformed {label} field count {index}")
+        mount_id = _v4_mount_decimal(
+            fields[0], f"{label} mount id {index}", positive=True,
+        )
+        parent_id = _v4_mount_decimal(
+            fields[1], f"{label} parent id {index}", positive=True,
+        )
+        require(mount_id not in mount_ids, f"duplicate {label} mount id")
+        mount_ids.add(mount_id)
+        device = fields[2].split(b":")
+        require(len(device) == 2, f"malformed {label} device {index}")
+        device_major = _v4_mount_decimal(
+            device[0], f"{label} device major {index}", positive=False,
+        )
+        device_minor = _v4_mount_decimal(
+            device[1], f"{label} device minor {index}", positive=False,
+        )
+        require(device_major < (1 << 32) and device_minor < (1 << 32),
+                f"out-of-range {label} device {index}")
+        root_raw, mountpoint_raw = fields[3], fields[4]
+        require(
+            1 <= len(root_raw) <= V4_SAFE_RELATIVE_MAX_BYTES and
+            1 <= len(mountpoint_raw) <= V4_SAFE_RELATIVE_MAX_BYTES,
+            f"over-cap {label} path field {index}",
+        )
+        root = _v4_unescape_mountinfo_field(
+            root_raw, f"{label} root {index}",
+        )
+        mountpoint = _v4_unescape_mountinfo_field(
+            mountpoint_raw, f"{label} mountpoint {index}",
+        )
+        require(root.startswith(b"/") and mountpoint.startswith(b"/"),
+                f"nonabsolute {label} path {index}")
+        mount_flags = _v4_mountinfo_ascii(
+            fields[5], f"{label} flags field {index}",
+        ).split(",")
+        optional_fields = [
+            _v4_mountinfo_ascii(field, f"{label} optional field {index}")
+            for field in fields[6:separator]
+        ]
+        filesystem_type = _v4_mountinfo_ascii(
+            fields[separator + 1], f"{label} filesystem type {index}",
+        )
+        mount_source_raw = fields[separator + 2]
+        super_options = _v4_mountinfo_ascii(
+            fields[separator + 3], f"{label} super-options field {index}",
+        ).split(",")
+        _v4_mount_token_list(mount_flags, f"{label} flags {index}")
+        _v4_mount_token_list(optional_fields, f"{label} optional fields {index}")
+        require(1 <= len(mount_source_raw) <= V4_SAFE_RELATIVE_MAX_BYTES,
+                f"over-cap {label} mount source {index}")
+        _v4_unescape_mountinfo_field(
+            mount_source_raw, f"{label} mount source {index}",
+        )
+        _v4_mount_token_list(super_options,
+                             f"{label} super options {index}")
+        records.append({
+            "mount_id": mount_id,
+            "raw_parent_mount_id": parent_id,
+            "device_major": device_major,
+            "device_minor": device_minor,
+            "root_raw": root_raw,
+            "root": root,
+            "mountpoint_raw": mountpoint_raw,
+            "mountpoint": mountpoint,
+            "filesystem_type": filesystem_type,
+            "mount_source_raw": mount_source_raw,
+            "flags": mount_flags,
+            "super_options": super_options,
+            "optional_fields": optional_fields,
+            "propagation": _v4_mountinfo_propagation(
+                optional_fields, f"{label} propagation {index}",
+            ),
+        })
+    return records
+
+
+def _v4_proc_namespace_relative(path: bytes) -> bool:
+    components = [component for component in path.split(b"/") if component]
+    if not components:
+        return False
+    first = components[0]
+    pid_like = first in {b"self", b"thread-self"} or first.isdigit()
+    if not pid_like:
+        return False
+    if len(components) >= 3 and components[1] == b"ns":
+        return True
+    return (
+        len(components) >= 5 and components[1] == b"task" and
+        components[2].isdigit() and components[3] == b"ns"
+    )
+
+
+def _v4_path_relative_to(path: bytes, root: bytes) -> bytes | None:
+    if root == b"/":
+        return path[1:] if path.startswith(b"/") else None
+    if path == root:
+        return b""
+    prefix = root.rstrip(b"/") + b"/"
+    return path[len(prefix):] if path.startswith(prefix) else None
+
+
+def validate_v4_build_mount_graph(
+    value: object, *, source_graph: object,
+) -> dict[str, Any]:
+    label = "V4 source mount graph" if source_graph is True else "V4 builder mount graph"
+    require(type(source_graph) is bool, "malformed V4 mount graph role")
+    _require_v4_exact_json_types(value, label)
     result = _v4_exact_dict(value, V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS, label)
     mounts = result.get("mounts")
     require(
         type(result.get("mount_namespace_identity")) is dict and
-        is_int(result.get("generation")) and result["generation"] > 0 and
+        is_int(result.get("generation")) and 0 < result["generation"] < (1 << 64) and
         is_int(result.get("mount_count")) and
         1 <= result["mount_count"] <= V4_BUILD_MOUNT_GRAPH_MAX and
         type(mounts) is list and len(mounts) == result["mount_count"],
         f"malformed {label} count/list",
     )
-    mount_ids: list[int] = []
+    require(
+        type(result.get("ordered_mount_sha256")) is str and
+        HEX64.fullmatch(result["ordered_mount_sha256"]) is not None and
+        result["ordered_mount_sha256"] == canonical_sha256(mounts),
+        f"{label} digest mismatch",
+    )
+    payload_value = result.get("mountinfo_payload_base64")
+    require(type(payload_value) is str and payload_value.isascii() and
+            len(payload_value) <= V4_NATIVE_BUILD_RECEIPT_MAX_BYTES,
+            f"over-cap {label} mountinfo payload")
+    payload = _v4_decode_canonical_base64(
+        payload_value, V4_NATIVE_BUILD_RECEIPT_MAX_BYTES,
+        f"{label} mountinfo payload", nonempty=True,
+    )
+    require(
+        is_int(result.get("mountinfo_bytes")) and
+        result["mountinfo_bytes"] == len(payload) and
+        type(result.get("mountinfo_sha256")) is str and
+        HEX64.fullmatch(result["mountinfo_sha256"]) is not None and
+        result["mountinfo_sha256"] == hashlib.sha256(payload).hexdigest(),
+        f"{label} mountinfo content mismatch",
+    )
+    parsed = _v4_parse_mountinfo(payload, f"{label} mountinfo")
+    require(len(parsed) == len(mounts), f"{label} mountinfo count mismatch")
+    parsed_by_id = {record["mount_id"]: record for record in parsed}
+    mount_ids: set[int] = set()
+    rows_by_id: dict[int, dict[str, Any]] = {}
     for index, mount in enumerate(mounts):
-        item = _v4_exact_dict(
+        row = _v4_exact_dict(
             mount, V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS,
             f"{label} entry {index}",
         )
         require(
-            is_int(item.get("index")) and item["index"] == index and
-            is_int(item.get("mount_id")) and item["mount_id"] > 0 and
-            item["mount_id"] not in mount_ids and
-            is_int(item.get("raw_parent_mount_id")) and
-            item["raw_parent_mount_id"] > 0 and
-            type(item.get("root_identity")) is dict and
-            type(item.get("mountpoint_identity")) is dict,
+            is_int(row.get("index")) and row["index"] == index and
+            is_int(row.get("mount_id")) and 0 < row["mount_id"] < (1 << 64) and
+            row["mount_id"] not in mount_ids and
+            is_int(row.get("raw_parent_mount_id")) and
+            0 < row["raw_parent_mount_id"] < (1 << 64) and
+            (row.get("parent_mount_id") is None or
+             is_int(row["parent_mount_id"]) and
+             0 < row["parent_mount_id"] < (1 << 64)) and
+            type(row.get("root_identity")) is dict and
+            type(row.get("mountpoint_identity")) is dict and
+            is_int(row.get("device_major")) and
+            0 <= row["device_major"] < (1 << 32) and
+            is_int(row.get("device_minor")) and
+            0 <= row["device_minor"] < (1 << 32),
             f"malformed {label} entry {index} identity",
         )
-        if index == 0:
-            require(
-                item.get("parent_mount_id") is None and
-                item["raw_parent_mount_id"] not in {
-                    candidate.get("mount_id") for candidate in mounts
-                    if type(candidate) is dict
-                },
-                f"malformed {label} root parent",
-            )
-        else:
-            require(
-                is_int(item.get("parent_mount_id")) and
-                item["parent_mount_id"] in mount_ids and
-                item["raw_parent_mount_id"] == item["parent_mount_id"],
-                f"malformed {label} parent topology",
-            )
-        mount_ids.append(item["mount_id"])
-    require(
-        type(result.get("ordered_mount_sha256")) is str and
-        result["ordered_mount_sha256"] == canonical_sha256(mounts),
-        f"{label} digest mismatch",
-    )
+        root_raw = _v4_decode_canonical_base64(
+            row.get("root_bytes_base64"), V4_SAFE_RELATIVE_MAX_BYTES,
+            f"{label} entry {index} root", nonempty=True,
+        )
+        mountpoint_raw = _v4_decode_canonical_base64(
+            row.get("mountpoint_bytes_base64"), V4_SAFE_RELATIVE_MAX_BYTES,
+            f"{label} entry {index} mountpoint", nonempty=True,
+        )
+        source_raw = _v4_decode_canonical_base64(
+            row.get("mount_source_bytes_base64"), V4_SAFE_RELATIVE_MAX_BYTES,
+            f"{label} entry {index} source", nonempty=True,
+        )
+        _v4_mount_ascii_token(
+            row.get("filesystem_type"), f"{label} entry {index} filesystem",
+        )
+        _v4_mount_token_list(row.get("flags"), f"{label} entry {index} flags")
+        _v4_mount_token_list(
+            row.get("super_options"), f"{label} entry {index} super options",
+        )
+        _v4_mount_token_list(
+            row.get("optional_fields"), f"{label} entry {index} optional fields",
+        )
+        propagation, _ = _validate_v4_mount_propagation(
+            row.get("propagation"), f"{label} entry {index} propagation",
+        )
+        observed = parsed_by_id.get(row["mount_id"])
+        require(observed is not None, f"{label} entry absent from mountinfo")
+        require(
+            row["raw_parent_mount_id"] == observed["raw_parent_mount_id"] and
+            row["device_major"] == observed["device_major"] and
+            row["device_minor"] == observed["device_minor"] and
+            root_raw == observed["root_raw"] and
+            mountpoint_raw == observed["mountpoint_raw"] and
+            source_raw == observed["mount_source_raw"] and
+            row["filesystem_type"] == observed["filesystem_type"],
+            f"{label} entry {index} differs from mountinfo",
+        )
+        require_exact_json(row["flags"], observed["flags"],
+                           f"{label} entry {index} flags")
+        require_exact_json(row["super_options"], observed["super_options"],
+                           f"{label} entry {index} super options")
+        require_exact_json(row["optional_fields"], observed["optional_fields"],
+                           f"{label} entry {index} optional fields")
+        require_exact_json(propagation, observed["propagation"],
+                           f"{label} entry {index} propagation")
+        mount_ids.add(row["mount_id"])
+        rows_by_id[row["mount_id"]] = row
+    roots = [row for row in mounts if row["parent_mount_id"] is None]
+    require(len(roots) == 1 and roots[0] is mounts[0],
+            f"{label} does not have one index-zero root")
+    root = roots[0]
+    require(root["raw_parent_mount_id"] not in mount_ids,
+            f"{label} root raw parent is visible")
+    for row in mounts[1:]:
+        require(
+            row["parent_mount_id"] in mount_ids and
+            row["raw_parent_mount_id"] == row["parent_mount_id"],
+            f"{label} nonroot parent mismatch",
+        )
+    emitted: set[int] = set()
+    remaining = set(mount_ids)
+    for index, row in enumerate(mounts):
+        eligible = [
+            mount_id for mount_id in remaining
+            if rows_by_id[mount_id]["parent_mount_id"] is None or
+            rows_by_id[mount_id]["parent_mount_id"] in emitted
+        ]
+        require(eligible, f"cyclic {label} topology")
+        expected = min(eligible, key=lambda mount_id: (
+            parsed_by_id[mount_id]["mountpoint_raw"], mount_id,
+        ))
+        require(row["mount_id"] == expected,
+                f"noncanonical {label} order at index {index}")
+        emitted.add(expected)
+        remaining.remove(expected)
+    if source_graph:
+        require(all(row["filesystem_type"] != "nsfs" for row in mounts),
+                f"{label} contains nsfs")
+        proc_mountpoints = [
+            parsed_by_id[row["mount_id"]]["mountpoint"] for row in mounts
+            if row["filesystem_type"] == "proc"
+        ]
+        for row in mounts:
+            observed = parsed_by_id[row["mount_id"]]
+            if row["filesystem_type"] == "proc":
+                require(not _v4_proc_namespace_relative(observed["root"]),
+                        f"{label} is rooted at a proc namespace file")
+            for proc_root in proc_mountpoints:
+                relative = _v4_path_relative_to(
+                    observed["mountpoint"], proc_root,
+                )
+                require(
+                    relative is None or not _v4_proc_namespace_relative(relative),
+                    f"{label} mounts a proc namespace file",
+                )
+    return result
+
+
+def _validate_v4_builder_mount_root(
+    value: object, setup_root_edge: dict[str, Any],
+) -> dict[str, Any]:
+    label = "V4 builder mount graph"
+    result = validate_v4_build_mount_graph(value, source_graph=False)
+    mounts = result["mounts"]
     root = mounts[0]
     require(root["mount_id"] == setup_root_edge["mount_id"],
             f"{label} root mount id does not join initial setup root")
@@ -2777,6 +3174,184 @@ def _validate_v4_builder_mount_root(
         f"{label} root mountpoint identity",
     )
     return root
+
+
+def _v4_nonpropagation_optional_fields(tokens: list[str]) -> list[str]:
+    result = []
+    for token in tokens:
+        prefix = token.partition(":")[0]
+        if token == "unbindable" or prefix in {
+            "shared", "master", "propagate_from",
+        }:
+            continue
+        result.append(token)
+    return result
+
+
+def _v4_expected_cloned_propagation(
+    source: dict[str, Any], label: str,
+) -> dict[str, Any]:
+    source, kind = _validate_v4_mount_propagation(source, label)
+    if kind in {"private", "slave", "unbindable"}:
+        return json.loads(canonical_value_bytes(source))
+    return {
+        "shared_group_id": None,
+        "master_group_id": source["shared_group_id"],
+        "propagate_from_group_id": None,
+        "unbindable": False,
+    }
+
+
+def validate_v4_build_mount_namespace_clone(
+    value: object, parent_mount_graph: object, builder_mount_graph: object,
+) -> dict[str, Any]:
+    label = "V4 mount-namespace clone"
+    _require_v4_exact_json_types(
+        [value, parent_mount_graph, builder_mount_graph], label,
+    )
+    source_graph = validate_v4_build_mount_graph(
+        parent_mount_graph, source_graph=True,
+    )
+    child_graph = validate_v4_build_mount_graph(
+        builder_mount_graph, source_graph=False,
+    )
+    result = _v4_exact_dict(
+        value, V4_BUILD_FS_TRANSITION_FIELDS["mount-namespace-create"], label,
+    )
+    clones = result.get("mount_clones")
+    require(
+        result.get("kind") == "mount-namespace-create" and
+        is_int(result.get("index")) and result["index"] >= 0 and
+        is_int(result.get("task_index")) and result["task_index"] >= 0 and
+        is_int(result.get("source_generation")) and
+        result["source_generation"] == source_graph["generation"] and
+        is_int(result.get("child_generation")) and
+        result["child_generation"] == child_graph["generation"] and
+        is_int(result.get("mount_clone_count")) and
+        result["mount_clone_count"] == source_graph["mount_count"] and
+        result["mount_clone_count"] == child_graph["mount_count"] and
+        type(clones) is list and len(clones) == result["mount_clone_count"],
+        f"malformed {label} identity/count",
+    )
+    require_exact_json(
+        result.get("source_mount_namespace_identity"),
+        source_graph["mount_namespace_identity"],
+        f"{label} source namespace",
+    )
+    require_exact_json(
+        result.get("child_mount_namespace_identity"),
+        child_graph["mount_namespace_identity"],
+        f"{label} child namespace",
+    )
+    require(
+        canonical_value_bytes(source_graph["mount_namespace_identity"]) !=
+        canonical_value_bytes(child_graph["mount_namespace_identity"]),
+        f"{label} namespaces are not distinct",
+    )
+    source_rows = source_graph["mounts"]
+    child_by_id = {
+        row["mount_id"]: row for row in child_graph["mounts"]
+    }
+    source_to_child: dict[int, int] = {}
+    child_ids: set[int] = set()
+    clone_rows: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
+    for index, clone in enumerate(clones):
+        row = _v4_exact_dict(
+            clone, V4_BUILD_MOUNT_CLONE_FIELDS, f"{label} row {index}",
+        )
+        source_row = source_rows[index]
+        require(
+            is_int(row.get("index")) and row["index"] == index and
+            is_int(row.get("source_mount_id")) and
+            row["source_mount_id"] == source_row["mount_id"] and
+            is_int(row.get("child_mount_id")) and row["child_mount_id"] > 0 and
+            row["source_mount_id"] not in source_to_child and
+            row["child_mount_id"] not in child_ids,
+            f"malformed or duplicate {label} ID row {index}",
+        )
+        child_row = child_by_id.get(row["child_mount_id"])
+        require(child_row is not None, f"{label} row selects absent child")
+        source_to_child[row["source_mount_id"]] = row["child_mount_id"]
+        child_ids.add(row["child_mount_id"])
+        clone_rows.append((row, source_row, child_row))
+    require(child_ids == set(child_by_id), f"{label} child mapping is not total")
+    preserved_scalar_fields = (
+        "device_major", "device_minor", "root_bytes_base64",
+        "mountpoint_bytes_base64", "filesystem_type",
+        "mount_source_bytes_base64", "flags", "super_options",
+    )
+    for index, (row, source_row, child_row) in enumerate(clone_rows):
+        require(
+            is_int(row.get("source_raw_parent_mount_id")) and
+            row["source_raw_parent_mount_id"] > 0 and
+            is_int(row.get("child_raw_parent_mount_id")) and
+            row["child_raw_parent_mount_id"] > 0 and
+            (row.get("source_parent_mount_id") is None or
+             is_int(row["source_parent_mount_id"]) and
+             row["source_parent_mount_id"] > 0) and
+            (row.get("child_parent_mount_id") is None or
+             is_int(row["child_parent_mount_id"]) and
+             row["child_parent_mount_id"] > 0) and
+            row["source_raw_parent_mount_id"] ==
+            source_row["raw_parent_mount_id"] and
+            row["child_raw_parent_mount_id"] ==
+            child_row["raw_parent_mount_id"] and
+            row["source_parent_mount_id"] == source_row["parent_mount_id"] and
+            row["child_parent_mount_id"] == child_row["parent_mount_id"],
+            f"{label} row {index} parent splice",
+        )
+        expected_child_parent = (
+            None if source_row["parent_mount_id"] is None else
+            source_to_child[source_row["parent_mount_id"]]
+        )
+        require(child_row["parent_mount_id"] == expected_child_parent,
+                f"{label} row {index} parent translation mismatch")
+        require_exact_json(row["root_identity"], source_row["root_identity"],
+                           f"{label} row {index} source root identity")
+        require_exact_json(row["root_identity"], child_row["root_identity"],
+                           f"{label} row {index} child root identity")
+        require_exact_json(
+            row["mountpoint_identity"], source_row["mountpoint_identity"],
+            f"{label} row {index} source mountpoint identity",
+        )
+        require_exact_json(
+            row["mountpoint_identity"], child_row["mountpoint_identity"],
+            f"{label} row {index} child mountpoint identity",
+        )
+        for field in preserved_scalar_fields:
+            require_exact_json(row[field], source_row[field],
+                               f"{label} row {index} source {field}")
+            require_exact_json(row[field], child_row[field],
+                               f"{label} row {index} child {field}")
+        require_exact_json(
+            row["source_optional_fields"], source_row["optional_fields"],
+            f"{label} row {index} source optional fields",
+        )
+        require_exact_json(
+            row["child_optional_fields"], child_row["optional_fields"],
+            f"{label} row {index} child optional fields",
+        )
+        require_exact_json(
+            row["source_propagation"], source_row["propagation"],
+            f"{label} row {index} source propagation",
+        )
+        require_exact_json(
+            row["child_propagation"], child_row["propagation"],
+            f"{label} row {index} child propagation",
+        )
+        require_exact_json(
+            child_row["propagation"], _v4_expected_cloned_propagation(
+                source_row["propagation"],
+                f"{label} row {index} propagation transform",
+            ),
+            f"{label} row {index} propagation transform",
+        )
+        require_exact_json(
+            _v4_nonpropagation_optional_fields(source_row["optional_fields"]),
+            _v4_nonpropagation_optional_fields(child_row["optional_fields"]),
+            f"{label} row {index} nonpropagation optional fields",
+        )
+    return result
 
 
 def _validate_v4_initial_fd_ofd_roots(
