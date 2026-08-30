@@ -97,6 +97,38 @@ GENERATED_INPUT_CLASS_COUNTS = {
 CERTIFICATE_CONSUMPTION_ORDER = (
     "manifest-runtime-certificate-basename-lexicographic-v1"
 )
+RAW_V6_RECEIPT_FIELDS = frozenset({
+    "schema", "kind", "claim", "state", "started_utc", "boundary_id",
+    "diagnostic_only", "attempt_nonce", "action_count",
+    "ordered_expected_action_sha256", "expected_action_events",
+    "timeout_seconds", "resource_limits", "fresh_process_replay_from_action_zero",
+    "cooperative_build_run_lock_held", "runtime_lock",
+    "concurrent_mutation_model", "process_state_checkpoint", "evidence_contract",
+    "expected_logical_source_closure", "expected_physical_source_trace",
+    "semantic_evidence_plan", "lp_consumption_contract",
+    "runtime_environment_policy", "runtime_environment", "inputs", "repositories",
+    "finished_utc", "timed_out", "exit_code", "command", "child_resources",
+    "log", "initial_attempt", "action_markers_validated", "action_events",
+    "logical_source_closure", "physical_source_trace", "semantic_fingerprints",
+    "dependency_history", "semantic_coverage", "lp_certificate_consumption",
+    "s2_s3_evidence", "validation_error", "postflight_reauthenticated",
+})
+RAW_V6_CLAIM = (
+    "compiled cumulative source-action, semantic, and exact LP-certificate "
+    "consumption observation attempt; not S2/S3 without independent approval"
+)
+RAW_V6_SEMANTIC_POLICY = (
+    "authenticated-direct-source-lp-consumption-nonlinear-observation-v2"
+)
+RAW_LP_CONSUMPTION_PROTOCOL = (
+    "candle-flyspeck-lp-certificate-consumption-v1"
+)
+RAW_LP_CONSUMPTION_KIND = (
+    "candle-flyspeck-lp-certificate-consumption-observation-v1"
+)
+RAW_LP_CONSUMPTION_POLICY = (
+    "successful-deserialization-authenticated-runtime-table-v1"
+)
 HEX64 = re.compile(r"[0-9a-f]{64}")
 HEX32 = re.compile(r"[0-9a-f]{32}")
 PFT_NAMESPACE = re.compile(r"(?:^|[/:._-])pft(?:$|[/:._-])", re.IGNORECASE)
@@ -727,6 +759,395 @@ def validate_coverage_projection(value: object) -> dict[str, Any]:
         value.get("lp_certificate_consumption"), generated,
     )
     return value
+
+
+def coverage_projection_from_schema6(
+    receipt: object, authenticated_plan: object,
+) -> dict[str, Any]:
+    """Project one already-authenticated final schema-6 receipt and its plan.
+
+    This is a pure adapter, not a raw-result authenticator.  Its caller must
+    first apply Candle's schema-6 receipt/log/snapshot validator.  The exact
+    plan bytes are nevertheless re-bound here so that the 43 generated inputs
+    cannot be supplied from a different run.
+    """
+    require(isinstance(receipt, dict) and
+            set(receipt) == RAW_V6_RECEIPT_FIELDS,
+            "malformed authenticated direct evidence-v6 receipt")
+    require(type(receipt.get("schema")) is int and receipt["schema"] == 6 and
+            receipt.get("kind") ==
+            "candle-flyspeck-compiled-stratum-attempt" and
+            receipt.get("claim") == RAW_V6_CLAIM and
+            receipt.get("state") == "completed" and
+            receipt.get("boundary_id") == FINAL_BOUNDARY_ID and
+            receipt.get("diagnostic_only") is False and
+            type(receipt.get("action_count")) is int and
+            receipt["action_count"] == FINAL_ACTION_COUNT and
+            receipt.get("timed_out") is False and
+            type(receipt.get("exit_code")) is int and
+            receipt["exit_code"] == 0 and
+            receipt.get("validation_error") is None and
+            receipt.get("postflight_reauthenticated") is True and
+            receipt.get("s2_s3_evidence") is False,
+            "direct evidence-v6 receipt is not an exact unapproved final result")
+    nonce = receipt.get("attempt_nonce")
+    _hex(nonce, HEX32, "direct evidence-v6 nonce")
+
+    evidence_contract = receipt.get("evidence_contract")
+    evidence_contract_fields = {
+        "schema", "allowed_action_outcomes",
+        "physical_loader_cache_skip_allowed", "logical_source_closure_policy",
+        "logical_source_closure_order",
+        "selected_loadt_ledger_delta_included",
+        "physical_loader_cache_trace_included",
+        "physical_source_trace_protocol", "pre_trace_control_exclusion",
+        "s2_s3_approval_included", "dependency_history_protocol",
+        "dependency_history_policy", "semantic_coverage_policy",
+        "dependency_history_is_kernel_trace", "semantic_approval_included",
+        "pft_used", "lp_certificate_consumption_protocol",
+        "lp_certificate_consumption_policy",
+        "lp_certificate_consumption_order",
+        "lp_certificate_consumption_exactly_once",
+    }
+    require(isinstance(evidence_contract, dict) and
+            set(evidence_contract) == evidence_contract_fields and
+            evidence_contract.get("schema") ==
+            "candle-flyspeck-direct-runtime-evidence-v6" and
+            evidence_contract.get("allowed_action_outcomes") ==
+            list(ACTION_OUTCOMES) and
+            evidence_contract.get("logical_source_closure_policy") ==
+            SOURCE_CLOSURE_POLICY and
+            evidence_contract.get("logical_source_closure_order") ==
+            SOURCE_CLOSURE_ORDER and
+            evidence_contract.get("physical_source_trace_protocol") ==
+            SOURCE_TRACE_PROTOCOL and
+            evidence_contract.get("semantic_coverage_policy") ==
+            RAW_V6_SEMANTIC_POLICY and
+            evidence_contract.get("lp_certificate_consumption_protocol") ==
+            RAW_LP_CONSUMPTION_PROTOCOL and
+            evidence_contract.get("lp_certificate_consumption_policy") ==
+            RAW_LP_CONSUMPTION_POLICY and
+            evidence_contract.get("lp_certificate_consumption_order") ==
+            CERTIFICATE_CONSUMPTION_ORDER and
+            evidence_contract.get("lp_certificate_consumption_exactly_once")
+            is True and
+            evidence_contract.get("s2_s3_approval_included") is False and
+            evidence_contract.get("semantic_approval_included") is False and
+            evidence_contract.get("dependency_history_is_kernel_trace") is False and
+            evidence_contract.get("pft_used") is False,
+            "malformed direct evidence-v6 contract")
+
+    require(isinstance(authenticated_plan, dict) and
+            type(authenticated_plan.get("schema")) is int and
+            authenticated_plan["schema"] == 1 and
+            authenticated_plan.get("kind") ==
+            "candle-flyspeck-cumulative-stratum-plan" and
+            type(authenticated_plan.get("action_count")) is int and
+            authenticated_plan["action_count"] == FINAL_ACTION_COUNT,
+            "malformed authenticated final cumulative plan")
+    plan_bytes = canonical_json_bytes(authenticated_plan)
+    plan_record = {
+        "bytes": len(plan_bytes),
+        "sha256": hashlib.sha256(plan_bytes).hexdigest(),
+        "md5": hashlib.md5(plan_bytes, usedforsecurity=False).hexdigest(),
+    }
+    inputs = receipt.get("inputs")
+    require(isinstance(inputs, dict) and inputs.get("plan") == plan_record,
+            "authenticated final plan differs from direct evidence-v6 input")
+
+    expected_actions = receipt.get("expected_action_events")
+    action_events = receipt.get("action_events")
+    require(isinstance(expected_actions, list) and
+            isinstance(action_events, list) and
+            len(expected_actions) == len(action_events) == FINAL_ACTION_COUNT and
+            type(receipt.get("action_markers_validated")) is int and
+            receipt["action_markers_validated"] == FINAL_ACTION_COUNT,
+            "direct evidence-v6 action closure is incomplete")
+    projected_actions = []
+    for index, (expected, observed) in enumerate(zip(
+        expected_actions, action_events, strict=True,
+    )):
+        expected_fields = {
+            "index", "source_sha256", "logical_source_delta",
+            "logical_source_delta_sha256",
+        }
+        observed_fields = {
+            "index", "source_sha256", "logical_source_delta_sha256", "outcome",
+        }
+        require(isinstance(expected, dict) and set(expected) == expected_fields and
+                isinstance(observed, dict) and set(observed) == observed_fields and
+                all(expected[field] == observed[field] for field in (
+                    "index", "source_sha256", "logical_source_delta_sha256",
+                )) and isinstance(expected.get("logical_source_delta"), list) and
+                bool(expected["logical_source_delta"]) and
+                expected["logical_source_delta_sha256"] ==
+                canonical_sha256(expected["logical_source_delta"]),
+                f"direct evidence-v6 action observation mismatch: {index}")
+        projected_actions.append(copy.deepcopy(observed))
+    require(receipt.get("ordered_expected_action_sha256") ==
+            canonical_sha256(expected_actions),
+            "direct evidence-v6 expected-action digest mismatch")
+
+    logical = receipt.get("logical_source_closure")
+    logical_fields = {
+        "schema", "kind", "policy", "order", "completed_action_count",
+        "final_target_selected", "record_count", "ordered_record_sha256",
+        "records", "physical_loader_cache_trace", "execution_observation",
+        "self_certifies_nested_execution", "s2_s3_evidence", "status",
+    }
+    require(isinstance(logical, dict) and set(logical) == logical_fields and
+            logical.get("schema") == 3 and
+            logical.get("kind") == RAW_SOURCE_CLOSURE_KIND and
+            logical.get("policy") == SOURCE_CLOSURE_POLICY and
+            logical.get("order") == SOURCE_CLOSURE_ORDER and
+            logical.get("completed_action_count") == FINAL_ACTION_COUNT and
+            logical.get("final_target_selected") is True and
+            logical.get("physical_loader_cache_trace") is False and
+            logical.get("execution_observation") == SOURCE_CLOSURE_OBSERVATION and
+            logical.get("self_certifies_nested_execution") is False and
+            logical.get("s2_s3_evidence") is False and
+            logical.get("status") == "expected-closure-emitted-unapproved" and
+            isinstance(logical.get("records"), list) and
+            type(logical.get("record_count")) is int and
+            logical["record_count"] == len(logical["records"]) and
+            logical.get("ordered_record_sha256") ==
+            canonical_sha256(logical["records"]),
+            "malformed direct evidence-v6 logical-source observation")
+    expected_logical = copy.deepcopy(logical)
+    del expected_logical["status"]
+    require(receipt.get("expected_logical_source_closure") == expected_logical,
+            "direct evidence-v6 logical source differs from its attempt")
+    projected_logical = {
+        "schema": 1,
+        "kind": LOGICAL_COVERAGE_KIND,
+        "policy": logical["policy"],
+        "order": logical["order"],
+        "record_count": logical["record_count"],
+        "ordered_record_sha256": logical["ordered_record_sha256"],
+        "records": copy.deepcopy(logical["records"]),
+        "execution_observation": logical["execution_observation"],
+        "self_certifies_nested_execution": False,
+    }
+
+    physical = receipt.get("physical_source_trace")
+    require(isinstance(physical, dict) and set(physical) == {
+                "schema", "protocol", "nonce", "event_count",
+                "ordered_event_sha256", "events", "request_count",
+                "cache_skip_count", "observed_key_count",
+                "ordered_observed_key_sha256", "observed_keys", "status",
+            } and physical.get("schema") == 1 and
+            physical.get("protocol") == SOURCE_TRACE_PROTOCOL and
+            physical.get("nonce") == nonce and
+            physical.get("status") == "closed-loader-owned-session" and
+            isinstance(physical.get("events"), list) and
+            type(physical.get("event_count")) is int and
+            physical["event_count"] == len(physical["events"]) and
+            physical.get("ordered_event_sha256") ==
+            canonical_sha256(physical["events"]) and
+            isinstance(physical.get("observed_keys"), list) and
+            physical.get("ordered_observed_key_sha256") ==
+            canonical_sha256(physical["observed_keys"]),
+            "malformed direct evidence-v6 physical-source observation")
+    projected_physical_events = []
+    for index, event in enumerate(physical.get("events", [])):
+        require(isinstance(event, dict),
+                f"malformed direct evidence-v6 physical event: {index}")
+        if event.get("event") == "request":
+            require(set(event) == {
+                        "event", "id", "parent", "kind", "binding_id", "key",
+                        "cache_before",
+                    }, f"malformed direct evidence-v6 request: {index}")
+            _hex(event.get("binding_id"), HEX64,
+                 f"direct evidence-v6 physical binding: {index}")
+            projected_physical_events.append({
+                field: copy.deepcopy(event[field]) for field in (
+                    "event", "id", "parent", "kind", "key", "cache_before",
+                )
+            })
+        else:
+            projected_physical_events.append(copy.deepcopy(event))
+    projected_physical = {
+        "schema": 1,
+        "kind": PHYSICAL_COVERAGE_KIND,
+        "protocol": physical["protocol"],
+        "event_count": len(projected_physical_events),
+        "ordered_event_sha256": canonical_sha256(projected_physical_events),
+        "events": projected_physical_events,
+        "request_count": physical["request_count"],
+        "cache_skip_count": physical["cache_skip_count"],
+        "observed_key_count": physical["observed_key_count"],
+        "ordered_observed_key_sha256": physical["ordered_observed_key_sha256"],
+        "observed_keys": copy.deepcopy(physical["observed_keys"]),
+        "status": physical["status"],
+    }
+
+    semantic_plan = receipt.get("semantic_evidence_plan")
+    require(isinstance(semantic_plan, dict) and
+            semantic_plan.get("boundary_id") == FINAL_BOUNDARY_ID and
+            semantic_plan.get("completed_action_count") == FINAL_ACTION_COUNT and
+            semantic_plan.get("structural_fingerprint_requests") ==
+            list(FINAL_THEOREM_NAMES) and
+            semantic_plan.get("dependency_history_requests") ==
+            list(FINAL_THEOREM_NAMES) and
+            semantic_plan.get("approval_included") is False and
+            semantic_plan.get("pft_used") is False and
+            semantic_plan.get("s2_s3_evidence") is False and
+            isinstance(semantic_plan.get("authenticated_inputs"), dict) and
+            semantic_plan["authenticated_inputs"].get("plan_sha256") ==
+            plan_record["sha256"],
+            "malformed direct evidence-v6 semantic plan")
+
+    lp_contract = receipt.get("lp_consumption_contract")
+    lp_observation = receipt.get("lp_certificate_consumption")
+    require(isinstance(lp_contract, dict) and
+            lp_contract.get("nonce") == nonce and
+            lp_contract.get("protocol") == RAW_LP_CONSUMPTION_PROTOCOL and
+            lp_contract.get("policy") == RAW_LP_CONSUMPTION_POLICY and
+            lp_contract.get("order") == CERTIFICATE_CONSUMPTION_ORDER and
+            lp_contract.get("pft_used") is False and
+            isinstance(lp_observation, dict) and
+            lp_observation.get("kind") == RAW_LP_CONSUMPTION_KIND and
+            lp_observation.get("protocol") == RAW_LP_CONSUMPTION_PROTOCOL and
+            lp_observation.get("policy") == RAW_LP_CONSUMPTION_POLICY and
+            lp_observation.get("order") == CERTIFICATE_CONSUMPTION_ORDER and
+            lp_observation.get("nonce") == nonce and
+            lp_observation.get("status") == "consumption-observed-unapproved" and
+            lp_observation.get("approved_reference_present") is False and
+            lp_observation.get("pft_used") is False and
+            lp_observation.get("s2_s3_evidence") is False and
+            lp_observation.get("unmatched_event_count") == 0 and
+            lp_observation.get("event_count") == 39 and
+            lp_observation.get("record_count") == 39,
+            "malformed direct evidence-v6 LP consumption observation")
+    lp_records = lp_observation.get("records")
+    semantic_lp = semantic_plan.get("lp_certificate_inputs")
+    require(isinstance(lp_records, list) and len(lp_records) == 39 and
+            isinstance(semantic_lp, dict) and
+            isinstance(semantic_lp.get("records"), list) and
+            len(semantic_lp["records"]) == 39 and
+            semantic_lp.get("record_count") == 39 and
+            semantic_lp.get("ordered_record_sha256") ==
+            canonical_sha256(semantic_lp["records"]) and
+            lp_observation.get("ordered_record_sha256") ==
+            canonical_sha256(lp_records),
+            "direct evidence-v6 lacks 39 LP consumption records")
+    projected_lp_records = []
+    for index, (record, planned) in enumerate(zip(
+        lp_records, semantic_lp["records"], strict=True,
+    )):
+        identity_fields = (
+            "index", "class", "relative", "bytes", "sha256", "md5",
+        )
+        require(isinstance(record, dict) and isinstance(planned, dict) and
+                all(record.get(field) == planned.get(field)
+                    for field in identity_fields) and
+                type(record.get("event_count")) is int and
+                record["event_count"] == 1,
+                f"direct evidence-v6 LP input/observation mismatch: {index}")
+        projected_lp_records.append({
+            field: copy.deepcopy(record[field]) for field in (
+                "index", "class", "relative", "bytes", "sha256",
+                "event_count", "ordered_nonce_free_event_sha256",
+            )
+        })
+
+    semantic_coverage = receipt.get("semantic_coverage")
+    semantic_coverage_fields = {
+        "schema", "kind", "policy", "status", "boundary_id",
+        "semantic_evidence_plan_sha256", "logical_source_observation_sha256",
+        "physical_source_observation_sha256",
+        "structural_fingerprint_observation_sha256",
+        "dependency_history_observation_sha256", "lp_certificate_input_sha256",
+        "source", "lp", "nonlinear", "final_implication",
+        "lp_certificate_consumption_trace_included",
+        "lp_certificate_consumption_contract_sha256",
+        "lp_certificate_consumption_observation_sha256",
+        "dependency_history_is_kernel_trace", "approved_reference_present",
+        "approval_sha256", "pft_used", "s2_eligible", "s3_eligible",
+        "s2_s3_evidence",
+    }
+    require(isinstance(semantic_coverage, dict) and
+            set(semantic_coverage) == semantic_coverage_fields and
+            semantic_coverage.get("schema") == 2 and
+            semantic_coverage.get("kind") ==
+            "candle-flyspeck-direct-semantic-coverage-observation-v2" and
+            semantic_coverage.get("policy") == RAW_V6_SEMANTIC_POLICY and
+            semantic_coverage.get("status") == "observed_uncompared" and
+            semantic_coverage.get("boundary_id") == FINAL_BOUNDARY_ID and
+            semantic_coverage.get("source") ==
+            "loader-observed-exact-unapproved" and
+            semantic_coverage.get("lp") ==
+            "consumption-observed-uncompared" and
+            semantic_coverage.get("nonlinear") == "observed-uncompared" and
+            semantic_coverage.get("final_implication") ==
+            "observed-uncompared" and
+            semantic_coverage.get("lp_certificate_consumption_trace_included")
+            is True and
+            semantic_coverage.get("dependency_history_is_kernel_trace") is False and
+            semantic_coverage.get("approved_reference_present") is False and
+            semantic_coverage.get("approval_sha256") is None and
+            semantic_coverage.get("pft_used") is False and
+            semantic_coverage.get("s2_eligible") is False and
+            semantic_coverage.get("s3_eligible") is False and
+            semantic_coverage.get("s2_s3_evidence") is False and
+            semantic_coverage.get("semantic_evidence_plan_sha256") ==
+            canonical_sha256(semantic_plan) and
+            semantic_coverage.get("logical_source_observation_sha256") ==
+            canonical_sha256(logical) and
+            semantic_coverage.get("physical_source_observation_sha256") ==
+            canonical_sha256(physical) and
+            semantic_coverage.get("structural_fingerprint_observation_sha256") ==
+            canonical_sha256(receipt.get("semantic_fingerprints")) and
+            semantic_coverage.get("dependency_history_observation_sha256") ==
+            canonical_sha256(receipt.get("dependency_history")) and
+            semantic_coverage.get("lp_certificate_input_sha256") ==
+            semantic_lp["ordered_record_sha256"] and
+            semantic_coverage.get("lp_certificate_consumption_contract_sha256") ==
+            canonical_sha256(lp_contract) and
+            semantic_coverage.get("lp_certificate_consumption_observation_sha256") ==
+            canonical_sha256(lp_observation),
+            "direct evidence-v6 semantic coverage is not content-bound")
+
+    generated_inputs = copy.deepcopy(authenticated_plan.get("generated_inputs"))
+    projection = {
+        "schema": 1,
+        "kind": COVERAGE_PROJECTION_KIND,
+        "boundary_id": FINAL_BOUNDARY_ID,
+        "completed_action_count": FINAL_ACTION_COUNT,
+        "action_events": {
+            "record_count": len(projected_actions),
+            "ordered_record_sha256": canonical_sha256(projected_actions),
+            "records": projected_actions,
+        },
+        "logical_source_coverage": projected_logical,
+        "physical_source_coverage": projected_physical,
+        "generated_inputs": generated_inputs,
+        "mathematical_coverage": {
+            "structural_fingerprint_requests": list(FINAL_THEOREM_NAMES),
+            "dependency_history_requests": list(FINAL_THEOREM_NAMES),
+            "source": semantic_coverage["source"],
+            "lp": "observed-uncompared",
+            "nonlinear": semantic_coverage["nonlinear"],
+            "final_implication": semantic_coverage["final_implication"],
+            "lp_certificate_consumption_trace_included": True,
+            "dependency_history_is_kernel_trace": False,
+            "approved_reference_present": False,
+        },
+        "lp_certificate_consumption": {
+            "schema": 1,
+            "kind": CERTIFICATE_CONSUMPTION_KIND,
+            "policy": CERTIFICATE_CONSUMPTION_POLICY,
+            "order": CERTIFICATE_CONSUMPTION_ORDER,
+            "status": "consumption-observed-unapproved",
+            "record_count": len(projected_lp_records),
+            "ordered_record_sha256": canonical_sha256(projected_lp_records),
+            "records": projected_lp_records,
+            "unmatched_event_count": 0,
+            "pft_used": False,
+        },
+        "pft_used": False,
+    }
+    return validate_coverage_projection(projection)
 
 
 def coverage_projection_from_schema5(_schema5: object) -> dict[str, Any]:

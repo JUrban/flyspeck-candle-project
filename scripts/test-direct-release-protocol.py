@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import importlib.util
 import math
 from pathlib import Path
@@ -276,6 +277,263 @@ def coverage_fixture() -> dict:
     }
 
 
+def schema6_fixture() -> tuple[dict, dict]:
+    coverage = coverage_fixture()
+    nonce = "9" * 32
+    plan = {
+        "schema": 1,
+        "kind": "candle-flyspeck-cumulative-stratum-plan",
+        "action_count": subject.FINAL_ACTION_COUNT,
+        "generated_inputs": copy.deepcopy(coverage["generated_inputs"]),
+    }
+    plan_bytes = subject.canonical_json_bytes(plan)
+    plan_record = {
+        "bytes": len(plan_bytes),
+        "sha256": hashlib.sha256(plan_bytes).hexdigest(),
+        "md5": hashlib.md5(plan_bytes, usedforsecurity=False).hexdigest(),
+    }
+    expected_actions = []
+    observed_actions = []
+    for record in coverage["action_events"]["records"]:
+        delta = [{"fixture_action": record["index"]}]
+        delta_sha256 = subject.canonical_sha256(delta)
+        expected_actions.append({
+            "index": record["index"],
+            "source_sha256": record["source_sha256"],
+            "logical_source_delta": delta,
+            "logical_source_delta_sha256": delta_sha256,
+        })
+        observed_actions.append({
+            "index": record["index"],
+            "source_sha256": record["source_sha256"],
+            "logical_source_delta_sha256": delta_sha256,
+            "outcome": record["outcome"],
+        })
+
+    logical_projection = coverage["logical_source_coverage"]
+    logical = {
+        "schema": 3,
+        "kind": subject.RAW_SOURCE_CLOSURE_KIND,
+        "policy": logical_projection["policy"],
+        "order": logical_projection["order"],
+        "completed_action_count": subject.FINAL_ACTION_COUNT,
+        "final_target_selected": True,
+        "record_count": logical_projection["record_count"],
+        "ordered_record_sha256": logical_projection["ordered_record_sha256"],
+        "records": copy.deepcopy(logical_projection["records"]),
+        "physical_loader_cache_trace": False,
+        "execution_observation": logical_projection["execution_observation"],
+        "self_certifies_nested_execution": False,
+        "s2_s3_evidence": False,
+        "status": "expected-closure-emitted-unapproved",
+    }
+    expected_logical = copy.deepcopy(logical)
+    del expected_logical["status"]
+
+    physical_projection = coverage["physical_source_coverage"]
+    physical_events = []
+    for event in physical_projection["events"]:
+        event = copy.deepcopy(event)
+        if event["event"] == "request":
+            event["binding_id"] = hashlib.sha256(
+                event["key"].encode()
+            ).hexdigest()
+        physical_events.append(event)
+    physical = {
+        "schema": 1,
+        "protocol": subject.SOURCE_TRACE_PROTOCOL,
+        "nonce": nonce,
+        "event_count": len(physical_events),
+        "ordered_event_sha256": subject.canonical_sha256(physical_events),
+        "events": physical_events,
+        "request_count": physical_projection["request_count"],
+        "cache_skip_count": physical_projection["cache_skip_count"],
+        "observed_key_count": physical_projection["observed_key_count"],
+        "ordered_observed_key_sha256":
+            physical_projection["ordered_observed_key_sha256"],
+        "observed_keys": copy.deepcopy(physical_projection["observed_keys"]),
+        "status": "closed-loader-owned-session",
+    }
+
+    semantic_lp_records = []
+    lp_records = []
+    lp_bindings = []
+    lp_events = []
+    for projected in coverage["lp_certificate_consumption"]["records"]:
+        identity = {
+            field: copy.deepcopy(projected[field]) for field in (
+                "index", "class", "relative", "bytes", "sha256",
+            )
+        }
+        identity["md5"] = f"{projected['index'] + 1:032x}"
+        binding_id = subject.canonical_sha256(identity)
+        event = {
+            "event": "consumed",
+            "id": projected["index"],
+            "binding_id": binding_id,
+            "index": projected["index"],
+        }
+        semantic_lp_records.append(identity)
+        lp_records.append({
+            **identity,
+            "event_count": 1,
+            "ordered_nonce_free_event_sha256":
+                subject.canonical_sha256([event]),
+        })
+        lp_bindings.append({
+            "binding_id": binding_id,
+            **identity,
+            "path": f"/snapshot/generated/{identity['relative']}",
+        })
+        lp_events.append(event)
+    semantic_lp = {
+        "status": "authenticated-runtime-inputs-not-consumption-traced",
+        "record_count": 39,
+        "ordered_record_sha256": subject.canonical_sha256(semantic_lp_records),
+        "records": semantic_lp_records,
+    }
+    semantic_plan = {
+        "schema": 1,
+        "kind": "candle-flyspeck-direct-semantic-evidence-plan",
+        "policy": "authenticated-direct-source-lp-nonlinear-observation-v1",
+        "boundary_id": subject.FINAL_BOUNDARY_ID,
+        "completed_action_count": subject.FINAL_ACTION_COUNT,
+        "logical_source": {},
+        "physical_source_trace": {},
+        "structural_fingerprint_requests": list(subject.FINAL_THEOREM_NAMES),
+        "dependency_history_requests": list(subject.FINAL_THEOREM_NAMES),
+        "authenticated_inputs": {
+            "plan_sha256": plan_record["sha256"],
+            "host_materialization_sha256": "a" * 64,
+            "manifest_sha256": "b" * 64,
+        },
+        "lp_certificate_inputs": semantic_lp,
+        "approval_included": False,
+        "pft_used": False,
+        "s2_s3_evidence": False,
+    }
+    lp_contract = {
+        "schema": 1,
+        "protocol": subject.RAW_LP_CONSUMPTION_PROTOCOL,
+        "policy": subject.RAW_LP_CONSUMPTION_POLICY,
+        "order": subject.CERTIFICATE_CONSUMPTION_ORDER,
+        "nonce": nonce,
+        "record_count": 39,
+        "ordered_binding_sha256": subject.canonical_sha256(lp_bindings),
+        "bindings": lp_bindings,
+        "pft_used": False,
+    }
+    lp_observation = {
+        "schema": 1,
+        "kind": subject.RAW_LP_CONSUMPTION_KIND,
+        "protocol": subject.RAW_LP_CONSUMPTION_PROTOCOL,
+        "policy": subject.RAW_LP_CONSUMPTION_POLICY,
+        "order": subject.CERTIFICATE_CONSUMPTION_ORDER,
+        "nonce": nonce,
+        "status": "consumption-observed-unapproved",
+        "event_count": 39,
+        "ordered_event_sha256": subject.canonical_sha256(lp_events),
+        "events": lp_events,
+        "record_count": 39,
+        "ordered_record_sha256": subject.canonical_sha256(lp_records),
+        "records": lp_records,
+        "unmatched_event_count": 0,
+        "approved_reference_present": False,
+        "pft_used": False,
+        "s2_s3_evidence": False,
+    }
+    fingerprints, dependency = fixture()
+    semantic_coverage = {
+        "schema": 2,
+        "kind": "candle-flyspeck-direct-semantic-coverage-observation-v2",
+        "policy": subject.RAW_V6_SEMANTIC_POLICY,
+        "status": "observed_uncompared",
+        "boundary_id": subject.FINAL_BOUNDARY_ID,
+        "semantic_evidence_plan_sha256": subject.canonical_sha256(semantic_plan),
+        "logical_source_observation_sha256": subject.canonical_sha256(logical),
+        "physical_source_observation_sha256": subject.canonical_sha256(physical),
+        "structural_fingerprint_observation_sha256":
+            subject.canonical_sha256(fingerprints),
+        "dependency_history_observation_sha256":
+            subject.canonical_sha256(dependency),
+        "lp_certificate_input_sha256": semantic_lp["ordered_record_sha256"],
+        "source": "loader-observed-exact-unapproved",
+        "lp": "consumption-observed-uncompared",
+        "nonlinear": "observed-uncompared",
+        "final_implication": "observed-uncompared",
+        "lp_certificate_consumption_trace_included": True,
+        "lp_certificate_consumption_contract_sha256":
+            subject.canonical_sha256(lp_contract),
+        "lp_certificate_consumption_observation_sha256":
+            subject.canonical_sha256(lp_observation),
+        "dependency_history_is_kernel_trace": False,
+        "approved_reference_present": False,
+        "approval_sha256": None,
+        "pft_used": False,
+        "s2_eligible": False,
+        "s3_eligible": False,
+        "s2_s3_evidence": False,
+    }
+    evidence_contract = {
+        "schema": "candle-flyspeck-direct-runtime-evidence-v6",
+        "allowed_action_outcomes": list(subject.ACTION_OUTCOMES),
+        "physical_loader_cache_skip_allowed":
+            "only loader-authenticated needs cache-skip events",
+        "logical_source_closure_policy": subject.SOURCE_CLOSURE_POLICY,
+        "logical_source_closure_order": subject.SOURCE_CLOSURE_ORDER,
+        "selected_loadt_ledger_delta_included": True,
+        "physical_loader_cache_trace_included": True,
+        "physical_source_trace_protocol": subject.SOURCE_TRACE_PROTOCOL,
+        "pre_trace_control_exclusion": "control:runtime-config",
+        "s2_s3_approval_included": False,
+        "dependency_history_protocol": "CANDLE_FLYSPECK_DEPENDENCY_HISTORY_V1",
+        "dependency_history_policy": subject.DEPENDENCY_HISTORY_POLICY,
+        "semantic_coverage_policy": subject.RAW_V6_SEMANTIC_POLICY,
+        "dependency_history_is_kernel_trace": False,
+        "semantic_approval_included": False,
+        "pft_used": False,
+        "lp_certificate_consumption_protocol":
+            subject.RAW_LP_CONSUMPTION_PROTOCOL,
+        "lp_certificate_consumption_policy": subject.RAW_LP_CONSUMPTION_POLICY,
+        "lp_certificate_consumption_order":
+            subject.CERTIFICATE_CONSUMPTION_ORDER,
+        "lp_certificate_consumption_exactly_once": True,
+    }
+    receipt = {field: None for field in subject.RAW_V6_RECEIPT_FIELDS}
+    receipt.update({
+        "schema": 6,
+        "kind": "candle-flyspeck-compiled-stratum-attempt",
+        "claim": subject.RAW_V6_CLAIM,
+        "state": "completed",
+        "boundary_id": subject.FINAL_BOUNDARY_ID,
+        "diagnostic_only": False,
+        "attempt_nonce": nonce,
+        "action_count": subject.FINAL_ACTION_COUNT,
+        "ordered_expected_action_sha256":
+            subject.canonical_sha256(expected_actions),
+        "expected_action_events": expected_actions,
+        "evidence_contract": evidence_contract,
+        "expected_logical_source_closure": expected_logical,
+        "semantic_evidence_plan": semantic_plan,
+        "lp_consumption_contract": lp_contract,
+        "inputs": {"plan": plan_record},
+        "timed_out": False,
+        "exit_code": 0,
+        "action_markers_validated": subject.FINAL_ACTION_COUNT,
+        "action_events": observed_actions,
+        "logical_source_closure": logical,
+        "physical_source_trace": physical,
+        "semantic_fingerprints": fingerprints,
+        "dependency_history": dependency,
+        "semantic_coverage": semantic_coverage,
+        "lp_certificate_consumption": lp_observation,
+        "s2_s3_evidence": False,
+        "validation_error": None,
+        "postflight_reauthenticated": True,
+    })
+    return receipt, plan
+
+
 class DirectReleaseProtocolTests(unittest.TestCase):
     def test_exact_semantic_projection_is_unapproved_and_nonce_free(self) -> None:
         projection = subject.project_authenticated_semantic_observations(*fixture())
@@ -428,6 +686,85 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                     "lp_certificate_consumption_trace_included": False,
                 },
             })
+
+    def test_authenticated_schema6_projects_one_nonce_free_coverage_value(self) -> None:
+        receipt, plan = schema6_fixture()
+        projection = subject.coverage_projection_from_schema6(receipt, plan)
+        self.assertIs(subject.validate_coverage_projection(projection), projection)
+        self.assertEqual(projection["completed_action_count"], 297)
+        self.assertEqual(
+            projection["lp_certificate_consumption"]["record_count"], 39,
+        )
+        self.assertTrue(all(
+            record["event_count"] == 1
+            for record in projection["lp_certificate_consumption"]["records"]
+        ))
+
+        def reject_nonce_and_binding_ids(value) -> None:
+            if isinstance(value, dict):
+                self.assertNotIn("nonce", value)
+                self.assertNotIn("binding_id", value)
+                for nested in value.values():
+                    reject_nonce_and_binding_ids(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    reject_nonce_and_binding_ids(nested)
+
+        reject_nonce_and_binding_ids(projection)
+
+    def test_schema6_projection_rejects_plan_splice_and_overclaim(self) -> None:
+        receipt, plan = schema6_fixture()
+        spliced = copy.deepcopy(plan)
+        spliced["generated_inputs"]["bindings"][0]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(subject.ProtocolError, "plan differs"):
+            subject.coverage_projection_from_schema6(receipt, spliced)
+        for label, mutate in (
+            ("diagnostic", lambda item: item.update(diagnostic_only=True)),
+            ("receipt approval", lambda item: item.update(s2_s3_evidence=True)),
+            ("contract approval", lambda item: item[
+                "evidence_contract"
+            ].update(semantic_approval_included=True)),
+            ("contract PFT", lambda item: item[
+                "evidence_contract"
+            ].update(pft_used=True)),
+            ("coverage PFT", lambda item: item[
+                "semantic_coverage"
+            ].update(pft_used=True)),
+        ):
+            forged = copy.deepcopy(receipt)
+            mutate(forged)
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.coverage_projection_from_schema6(forged, plan)
+
+    def test_schema6_projection_rejects_detached_observation_sections(self) -> None:
+        receipt, plan = schema6_fixture()
+        original = subject.coverage_projection_from_schema6(receipt, plan)
+        changed_outcome = copy.deepcopy(receipt)
+        changed_outcome["action_events"][0]["outcome"] = "skip-ledger"
+        self.assertNotEqual(
+            subject.coverage_projection_from_schema6(changed_outcome, plan),
+            original,
+        )
+        cases = (
+            lambda item: item["logical_source_closure"]["records"][0].update(
+                source_sha256="0" * 64,
+            ),
+            lambda item: item["physical_source_trace"]["events"][0].update(
+                cache_before="prior-cache",
+            ),
+            lambda item: item["lp_certificate_consumption"]["records"][0].update(
+                event_count=0,
+            ),
+        )
+        for index, mutate in enumerate(cases):
+            forged = copy.deepcopy(receipt)
+            mutate(forged)
+            with self.subTest(index=index), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.coverage_projection_from_schema6(forged, plan)
 
     def test_coverage_requires_exact_final_boundary_count_and_no_pft(self) -> None:
         for field, value in (
