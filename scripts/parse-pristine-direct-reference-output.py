@@ -46,6 +46,8 @@ COVERAGE_GRAMMAR_STATUS = (
     "not-derived-semantic-and-completion-grammar-absent"
 )
 CANONICAL_DECIMAL = re.compile(r"0|[1-9][0-9]*")
+MAX_CANONICAL_DECIMAL_DIGITS = 19
+PFT_TOKEN = re.compile(r"(?<![A-Za-z0-9])pft(?![A-Za-z0-9])", re.IGNORECASE)
 SUCCESS_LIKE = re.compile(
     r"(?:CANDLE_|PASS(?:[\t :]|$)|SUCCESS(?:[\t :]|$)|"
     r"SUCCEEDED(?:[\t :]|$)|COMPLETED(?:[\t :]|$))",
@@ -91,9 +93,14 @@ def byte_content_record(data: bytes, label: str) -> dict[str, object]:
 
 
 def _decimal(value: str, label: str) -> int:
+    require(0 < len(value) <= MAX_CANONICAL_DECIMAL_DIGITS,
+            f"overlong {label}")
     require(CANONICAL_DECIMAL.fullmatch(value) is not None,
             f"noncanonical {label}")
-    return int(value)
+    try:
+        return int(value)
+    except (ValueError, OverflowError) as error:
+        raise OutputProtocolError(f"cannot convert {label}") from error
 
 
 def _decode_lines(data: bytes, label: str, *, allow_empty: bool) -> list[str]:
@@ -108,8 +115,9 @@ def _decode_lines(data: bytes, label: str, *, allow_empty: bool) -> list[str]:
         text = data.decode("utf-8", errors="strict")
     except UnicodeDecodeError as error:
         raise OutputProtocolError(f"{label} is not exact UTF-8: {error}") from error
-    require(all(character in "\n\t" or ord(character) >= 32 for character in text),
-            f"{label} contains a forbidden control character")
+    require(all(character in "\n\t" or 32 <= ord(character) <= 126
+                for character in text),
+            f"{label} contains a character outside the exact ASCII wire alphabet")
     return text[:-1].split("\n")
 
 
@@ -183,6 +191,8 @@ def _parse_source_lines(
     lp_input_indices: set[int] = set()
 
     for line_index, line in enumerate(lines):
+        require(PFT_TOKEN.search(line) is None,
+                f"PFT namespace is forbidden in stdout line {line_index}")
         marker_name = line.split("\t", 1)[0]
         if marker_name not in allowed:
             stripped = line.lstrip()

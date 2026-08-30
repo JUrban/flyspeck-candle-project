@@ -223,6 +223,65 @@ class PristineOutputParserTests(unittest.TestCase):
             ):
                 self.parse(**case)
 
+    def test_stdout_uses_only_the_exact_ascii_tab_lf_wire_alphabet(self) -> None:
+        complete_index = marker_indices(
+            self.lines, protocol.MARKER_CONTRACT["session_complete"],
+        )[0]
+        hostile_characters = (
+            "\x7f",       # DEL
+            "\u0085",     # C1 next-line
+            "\ufeff",     # BOM / format control
+            "\u200d",     # zero-width joiner / format control
+            "\u202e",     # bidi override / format control
+            "\u2028",     # Unicode line separator
+            "\u2029",     # Unicode paragraph separator
+            "\u00e9",     # printable non-ASCII is outside the v1 alphabet
+        )
+        for character in hostile_characters:
+            forged = copy.deepcopy(self.lines)
+            forged.insert(complete_index, "ordinary" + character + "output")
+            with self.subTest(codepoint=ord(character)), self.assertRaisesRegex(
+                subject.OutputProtocolError, "ASCII wire alphabet",
+            ):
+                self.parse(forged)
+
+        start_index = marker_indices(
+            self.lines, protocol.MARKER_CONTRACT["session_start"],
+        )[0]
+        bom_marker = copy.deepcopy(self.lines)
+        bom_marker[start_index] = "\ufeff" + bom_marker[start_index]
+        with self.assertRaisesRegex(
+            subject.OutputProtocolError, "ASCII wire alphabet",
+        ):
+            self.parse(bom_marker)
+
+    def test_every_stdout_line_rejects_pft_tokens_before_classification(self) -> None:
+        complete_index = marker_indices(
+            self.lines, protocol.MARKER_CONTRACT["session_complete"],
+        )[0]
+        hostile_lines = (
+            "PFT",
+            "PFT_USED\ttrue",
+            "PFT_SUCCESS\ttrue",
+            "pFt",
+            "ordinary /PfT/result",
+            "ordinary.pFt-result",
+            "ordinary PFT success claim",
+        )
+        for line in hostile_lines:
+            forged = copy.deepcopy(self.lines)
+            forged.insert(complete_index, line)
+            with self.subTest(line=line), self.assertRaisesRegex(
+                subject.OutputProtocolError, "PFT namespace",
+            ):
+                self.parse(forged)
+
+        benign = copy.deepcopy(self.lines)
+        benign.insert(complete_index, "ordinary notpft diagnostic")
+        self.assertEqual(
+            self.parse(benign)["authentication_status"], "not-authenticated",
+        )
+
     def test_action_markers_reject_missing_duplicate_reorder_and_plan_tamper(self) -> None:
         indices = marker_indices(
             self.lines, protocol.MARKER_CONTRACT["action_complete"],
@@ -379,6 +438,22 @@ class PristineOutputParserTests(unittest.TestCase):
         for index, mutation in enumerate(mutations):
             with self.subTest(index=index):
                 self.assert_rejects(mutation)
+
+    def test_decimal_fields_are_bounded_before_integer_conversion(self) -> None:
+        action = marker_indices(
+            self.lines, protocol.MARKER_CONTRACT["action_complete"],
+        )[0]
+        forged = copy.deepcopy(self.lines)
+        forged[action] = replace_field(forged[action], 2, "9" * 5000)
+        with self.assertRaisesRegex(
+            subject.OutputProtocolError, "overlong completed action index",
+        ):
+            self.parse(forged)
+        for value in ("+1", "-1", "1.0", "1e0", " 1"):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                subject.OutputProtocolError, "noncanonical hostile decimal",
+            ):
+                subject._decimal(value, "hostile decimal")
 
 
 if __name__ == "__main__":
