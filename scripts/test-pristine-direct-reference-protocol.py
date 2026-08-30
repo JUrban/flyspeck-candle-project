@@ -848,6 +848,8 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "V4_BUILD_INPUT_CLOSURE_ENTRY_MAX": 196_608,
             "V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES": 1_073_741_824,
             "V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES": 68_719_476_736,
+            "V4_BUILD_EXECUTION_TASK_MAX": 4_096,
+            "V4_BUILD_EXECUTION_EVENT_MAX": 131_072,
             "V4_INVENTORY_OBJECT_MAX": 131_072,
             "V4_INVENTORY_TOTAL_MAX_BYTES": 68_719_476_736,
             "V4_NAMESPACE_EDGE_MAX": 16_384,
@@ -861,7 +863,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertEqual(subject.V4_BUILD_FILTER_ERRNO, 1)
         self.assertEqual(subject.V4_BUILD_FILTER_CLONE_SYSCALL, 56)
         self.assertEqual(
-            subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK, 0x7E020000,
+            subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK, 0x7E820000,
         )
         self.assertEqual(
             tuple(number for number, _ in subject.V4_BUILD_FILTER_DENIED_SYSCALLS),
@@ -870,6 +872,15 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 for number, _ in subject.V4_BUILD_FILTER_DENIED_SYSCALLS
             )),
         )
+        self.assertEqual(subject.V4_BUILD_PTRACE_OPTIONS, (
+            "PTRACE_O_TRACESYSGOOD",
+            "PTRACE_O_TRACEFORK",
+            "PTRACE_O_TRACEVFORK",
+            "PTRACE_O_TRACECLONE",
+            "PTRACE_O_TRACEEXEC",
+            "PTRACE_O_TRACEEXIT",
+            "PTRACE_O_EXITKILL",
+        ))
 
         self.assertEqual(subject.V4_BUNDLE_FIELDS, frozenset({
             "schema", "kind", "role", "reference_ordinal", "nonce_kind",
@@ -909,10 +920,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 157)
+        self.assertEqual(len(values), 163)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "ed77e514ab41ddcd3ac87632988e079ab9394f360377b33410269ae129a68260",
+            "4fbdbccc7318a958a37ce9a40e4d3c4fa23c8531409c2dbe292cf46547f30d0b",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:

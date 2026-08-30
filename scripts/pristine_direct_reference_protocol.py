@@ -322,19 +322,37 @@ V4_BUILD_FILTER_KIND = (
     "candle-flyspeck-isolated-native-build-seccomp-filter-v1"
 )
 V4_BUILD_FILTER_POLICY = (
-    "isolated-native-build-post-pivot-deny-escape-and-network-v1"
+    "isolated-native-build-post-pivot-deny-escape-network-ipc-v1"
 )
 V4_BUILD_FILTER_ERRNO = 1
 V4_BUILD_FILTER_CLONE_SYSCALL = 56
-V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E020000
+V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E820000
 V4_BUILD_FILTER_DENIED_SYSCALLS = (
+    (29, "shmget"),
+    (30, "shmat"),
+    (31, "shmctl"),
     (41, "socket"),
     (53, "socketpair"),
+    (64, "semget"),
+    (65, "semop"),
+    (66, "semctl"),
+    (67, "shmdt"),
+    (68, "msgget"),
+    (69, "msgsnd"),
+    (70, "msgrcv"),
+    (71, "msgctl"),
     (101, "ptrace"),
     (155, "pivot_root"),
     (161, "chroot"),
     (165, "mount"),
     (166, "umount2"),
+    (220, "semtimedop"),
+    (240, "mq_open"),
+    (241, "mq_unlink"),
+    (242, "mq_timedsend"),
+    (243, "mq_timedreceive"),
+    (244, "mq_notify"),
+    (245, "mq_getsetattr"),
     (248, "add_key"),
     (249, "request_key"),
     (250, "keyctl"),
@@ -355,6 +373,24 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (435, "clone3"),
     (438, "pidfd_getfd"),
     (442, "mount_setattr"),
+)
+V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 1
+V4_BUILD_EXECUTION_OBSERVATION_KIND = (
+    "candle-flyspeck-isolated-native-build-execution-observation-v1"
+)
+V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
+    "outside-parent-all-task-source-consumption-and-output-chronology-v1"
+)
+V4_BUILD_EXECUTION_TASK_MAX = 4_096
+V4_BUILD_EXECUTION_EVENT_MAX = 131_072
+V4_BUILD_PTRACE_OPTIONS = (
+    "PTRACE_O_TRACESYSGOOD",
+    "PTRACE_O_TRACEFORK",
+    "PTRACE_O_TRACEVFORK",
+    "PTRACE_O_TRACECLONE",
+    "PTRACE_O_TRACEEXEC",
+    "PTRACE_O_TRACEEXIT",
+    "PTRACE_O_EXITKILL",
 )
 V4_BUILD_OUTPUT_ROLES = (
     "target-executable",
