@@ -2995,10 +2995,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 391)
+        self.assertEqual(len(values), 394)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "21b21b662966fe57eccd045e599e705b68d2f1e0d32b5d9fba3d0a6411c3b13d",
+            "eba873817e212ddbe4e8de8849b9c9b1d5988e1f0cafca03ea5c635e44926f06",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -3383,6 +3383,226 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.enumerate_isolated_native_build_root_v2(
                 compiler, linker, source_tree, inputs,
             )
+
+    def test_v4_input_closure_inherited_fds_rejects_hostile_splices(
+        self,
+    ) -> None:
+        inherited_fds = [
+            {
+                "fd": 0, "role": "stdin-eof", "access_mode": "read-only",
+                "object_identity": {
+                    "kind": "pipe-endpoint", "endpoint": "stdin",
+                },
+                "fd_generation": 11, "cloexec": False,
+            },
+            {
+                "fd": 1, "role": "build-stdout",
+                "access_mode": "write-only",
+                "object_identity": {
+                    "kind": "pipe-endpoint", "endpoint": "stdout",
+                },
+                "fd_generation": 12, "cloexec": False,
+            },
+            {
+                "fd": 2, "role": "build-stderr",
+                "access_mode": "write-only",
+                "object_identity": {
+                    "kind": "pipe-endpoint", "endpoint": "stderr",
+                },
+                "fd_generation": 13, "cloexec": False,
+            },
+        ]
+        authority = {
+            "inherited_fd_count": 3,
+            "inherited_fds": inherited_fds,
+        }
+        snapshot = subject.validate_v4_build_input_closure_inherited_fds(
+            authority,
+        )
+        self.assertEqual(snapshot, authority)
+        self.assertIsNot(snapshot, authority)
+        self.assertIsNot(snapshot["inherited_fds"], inherited_fds)
+        authority["inherited_fds"][0]["object_identity"]["endpoint"] = (
+            "mutated caller"
+        )
+        self.assertEqual(
+            snapshot["inherited_fds"][0]["object_identity"]["endpoint"],
+            "stdin",
+        )
+        authority["inherited_fds"][0]["object_identity"]["endpoint"] = (
+            "stdin"
+        )
+
+        real_bounded_digest = subject._v4_bounded_compact_canonical_digest
+        raced = copy.deepcopy(authority)
+        digest_calls = 0
+
+        def mutate_between_frozen_captures(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 1:
+                raced["inherited_fds"][0]["object_identity"]["endpoint"] = (
+                    "raced"
+                )
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_between_frozen_captures,
+        ), self.assertRaisesRegex(subject.ProtocolError, "changed while freezing"):
+            subject.validate_v4_build_input_closure_inherited_fds(raced)
+
+        post_freeze = copy.deepcopy(authority)
+        digest_calls = 0
+
+        def mutate_caller_after_second_frozen_digest(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 2:
+                post_freeze["inherited_fds"][0]["object_identity"][
+                    "endpoint"
+                ] = "late caller mutation"
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_caller_after_second_frozen_digest,
+        ):
+            stable_snapshot = (
+                subject.validate_v4_build_input_closure_inherited_fds(
+                    post_freeze,
+                )
+            )
+        self.assertEqual(
+            post_freeze["inherited_fds"][0]["object_identity"]["endpoint"],
+            "late caller mutation",
+        )
+        self.assertEqual(
+            stable_snapshot["inherited_fds"][0]["object_identity"][
+                "endpoint"
+            ],
+            "stdin",
+        )
+
+        def hostile(mutator: object) -> dict[str, object]:
+            value = copy.deepcopy(authority)
+            mutator(value)
+            return value
+
+        mutations = (
+            lambda value: value.update(inherited_fd_count=True),
+            lambda value: value.update(inherited_fd_count=2),
+            lambda value: value.update(inherited_fds=value["inherited_fds"][:2]),
+            lambda value: value["inherited_fds"].append(
+                copy.deepcopy(value["inherited_fds"][2]),
+            ),
+            lambda value: value["inherited_fds"].reverse(),
+            lambda value: value["inherited_fds"][0].update(fd=False),
+            lambda value: value["inherited_fds"][1].update(fd=2),
+            lambda value: value["inherited_fds"][0].update(role="build-stdout"),
+            lambda value: value["inherited_fds"][1].update(role="stdin-eof"),
+            lambda value: value["inherited_fds"][0].update(
+                access_mode="write-only",
+            ),
+            lambda value: value["inherited_fds"][2].update(
+                access_mode="read-only",
+            ),
+            lambda value: value["inherited_fds"][0].update(
+                fd_generation=True,
+            ),
+            lambda value: value["inherited_fds"][1].update(fd_generation=0),
+            lambda value: value["inherited_fds"][2].update(
+                fd_generation=1 << 64,
+            ),
+            lambda value: value["inherited_fds"][0].update(cloexec=True),
+            lambda value: value["inherited_fds"][1].update(cloexec=0),
+            lambda value: value["inherited_fds"][0].update(
+                object_identity=[],
+            ),
+            lambda value: value["inherited_fds"][2].update(
+                object_identity={
+                    "endpoint": "stdout", "kind": "pipe-endpoint",
+                },
+            ),
+            lambda value: value["inherited_fds"][0].update(extra=False),
+            lambda value: value["inherited_fds"][0].pop("role"),
+            lambda value: value.update(extra=False),
+            lambda value: value.pop("inherited_fd_count"),
+        )
+        for mutation in mutations:
+            forged = hostile(mutation)
+            with self.subTest(forged=forged), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_input_closure_inherited_fds(forged)
+
+        outer_subclass = type("Authority", (dict,), {})(authority)
+        list_subclass = copy.deepcopy(authority)
+        list_subclass["inherited_fds"] = type("InheritedFDs", (list,), {})(
+            list_subclass["inherited_fds"],
+        )
+        row_subclass = copy.deepcopy(authority)
+        row_subclass["inherited_fds"][0] = type("InheritedFD", (dict,), {})(
+            row_subclass["inherited_fds"][0],
+        )
+        identity_subclass = copy.deepcopy(authority)
+        identity_subclass["inherited_fds"][0]["object_identity"] = type(
+            "ObjectIdentity", (dict,), {},
+        )(identity_subclass["inherited_fds"][0]["object_identity"])
+        for malformed in (
+            outer_subclass, list_subclass, row_subclass, identity_subclass,
+        ):
+            with self.subTest(mutable_subclass=malformed), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_input_closure_inherited_fds(
+                    malformed,
+                )
+
+        deep_identity: object = {"terminal": True}
+        for _ in range(subject.V4_EXACT_JSON_TYPE_DEPTH_MAX + 1):
+            deep_identity = {"nested": deep_identity}
+        deep = hostile(
+            lambda value: value["inherited_fds"][0].update(
+                object_identity=deep_identity,
+            ),
+        )
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=AssertionError("encoding reached before preflight"),
+        ), self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_input_closure_inherited_fds(deep)
+
+        cyclic = copy.deepcopy(authority)
+        cyclic_identity: dict[str, object] = {}
+        cyclic_identity["cycle"] = cyclic_identity
+        cyclic["inherited_fds"][0]["object_identity"] = cyclic_identity
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_input_closure_inherited_fds(cyclic)
+
+        encoded = subject.canonical_value_bytes(authority)
+        cap_cases = (
+            ("V4_AUTHORITY_OBJECT_MAX_BYTES", len(encoded) - 1),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_NODE_MAX", 5),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_CONTAINER_MAX", 2),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_STRING_MAX_BYTES", 8),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_KEY_MAX_BYTES", 5),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_FRAGMENT_MAX_BYTES", 3),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES", 32),
+        )
+        for constant, cap in cap_cases:
+            with self.subTest(constant=constant), mock.patch.object(
+                subject, constant, cap,
+            ), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_input_closure_inherited_fds(
+                    authority,
+                )
 
     def test_v4_input_closure_entry_authority_rejects_hostile_splices(
         self,
