@@ -332,17 +332,19 @@ V4_BUILD_FILTER_CLONE_SYSCALL = 56
 V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E820080
 V4_BUILD_FILTER_AUDIT_ARCH = 0xC000003E
 V4_BUILD_FILTER_X32_SYSCALL_BIT = 0x40000000
-V4_BUILD_FILTER_INSTRUCTION_COUNT = 122
-V4_BUILD_FILTER_INSTRUCTIONS_BYTES = 976
-V4_BUILD_FILTER_DECODED_RULE_COUNT = 59
+V4_BUILD_FILTER_INSTRUCTION_COUNT = 134
+V4_BUILD_FILTER_INSTRUCTIONS_BYTES = 1_072
+V4_BUILD_FILTER_DECODED_RULE_COUNT = 65
 V4_BUILD_FILTER_RET_KILL_PROCESS = 0x80000000
 V4_BUILD_FILTER_RET_ERRNO = 0x00050001
 V4_BUILD_FILTER_RET_ENOSYS = 0x00050026
 V4_BUILD_FILTER_RET_ALLOW = 0x7FFF0000
 V4_BUILD_FILTER_DENIED_SYSCALLS = (
+    (16, "ioctl"),
     (29, "shmget"),
     (30, "shmat"),
     (31, "shmctl"),
+    (40, "sendfile"),
     (41, "socket"),
     (53, "socketpair"),
     (64, "semget"),
@@ -374,6 +376,9 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (249, "request_key"),
     (250, "keyctl"),
     (272, "unshare"),
+    (275, "splice"),
+    (276, "tee"),
+    (278, "vmsplice"),
     (298, "perf_event_open"),
     (303, "name_to_handle_at"),
     (304, "open_by_handle_at"),
@@ -382,6 +387,7 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (311, "process_vm_writev"),
     (321, "bpf"),
     (323, "userfaultfd"),
+    (326, "copy_file_range"),
     (333, "io_pgetevents"),
     (425, "io_uring_setup"),
     (426, "io_uring_enter"),
@@ -405,6 +411,8 @@ V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
 )
 V4_BUILD_EXECUTION_TASK_MAX = 4_096
 V4_BUILD_EXECUTION_EVENT_MAX = 131_072
+V4_BUILD_SOURCE_JOIN_MAX = 4_096
+V4_BUILD_OUTPUT_JOIN_MAX = 4_096
 V4_BUILD_NAMESPACE_CLONE_FLAGS = 0x78020011
 V4_BUILD_NAMESPACE_KINDS = (
     "user-namespace",

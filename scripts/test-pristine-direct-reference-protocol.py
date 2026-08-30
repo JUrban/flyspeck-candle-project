@@ -852,6 +852,8 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES": 68_719_476_736,
             "V4_BUILD_EXECUTION_TASK_MAX": 4_096,
             "V4_BUILD_EXECUTION_EVENT_MAX": 131_072,
+            "V4_BUILD_SOURCE_JOIN_MAX": 4_096,
+            "V4_BUILD_OUTPUT_JOIN_MAX": 4_096,
             "V4_INVENTORY_OBJECT_MAX": 131_072,
             "V4_INVENTORY_TOTAL_MAX_BYTES": 68_719_476_736,
             "V4_NAMESPACE_EDGE_MAX": 16_384,
@@ -863,6 +865,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 self.assertEqual(getattr(subject, name), expected)
 
         self.assertEqual(subject.V4_BUILD_FILTER_ERRNO, 1)
+        self.assertTrue({16, 40, 275, 276, 278, 326}.issubset({
+            number for number, _ in subject.V4_BUILD_FILTER_DENIED_SYSCALLS
+        }))
         self.assertEqual(subject.V4_BUILD_FILTER_CLONE_SYSCALL, 56)
         self.assertEqual(
             subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK, 0x7E820080,
@@ -923,10 +928,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 179)
+        self.assertEqual(len(values), 181)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "4ebd83cb16c36bf7bee12ec6987cb3ab6069976731c9ecb44c69f38aa3b2f972",
+            "c8d35ca38a7d1f169909bbb3592c2a3f197ba9f726fd1b8d226f3a4d59b95818",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
