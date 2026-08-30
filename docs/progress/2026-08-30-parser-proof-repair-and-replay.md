@@ -143,3 +143,55 @@ page-in/page-out and available-memory conditions remain authoritative.
 This is an active proof replay, not a pass.  Candle must be repinned to
 `586e06883...`, not `ca67ffaa...`, only after all four exact stages and six
 postconditions succeed.
+
+## Resumable-heap diagnosis and third repair
+
+The later `68946a69f...` replay again reached
+`run_candle_parser_diagnostic_ok_spec` and failed deterministically.  Its
+stage-2 receipt closed normally after `1:13:34`, with maximum RSS
+`40335900` KiB, zero swaps, and exit 1.  This was not a resource failure.  HOL
+saved a native proof heap at the failed goal; a copy is retained outside the
+CakeML worktree at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-68946a69f-attempt-001/compiler64Prog.run_candle_parser_diagnostic_ok_spec.dumpedheap`
+
+Its SHA-256 is
+`059bc3779aefde87cd44969500caeafe1c1ed68bceb980079210434b8bb83da1`.
+Loading that heap made it possible to diagnose and prove both run-level
+theorems interactively without repeating the expensive translation prefix.
+The successful compact source-form tactics were then replayed a second time
+inside the resumed state to check tactic-combinator precedence.
+
+The exact source defects were:
+
+- `rename` did not select the existential `stdin` assumption;
+- the translated leading unit `let` required `xcon \\ xsimpl`, followed by a
+  distinct `openStdIn` step;
+- the success `inputAll` frame required the explicit `emp` witness;
+- the error stdout and stderr calls required complete, ordered witnesses for
+  the semantic reply string, residual `RUNTIME`, and filesystem state.
+
+CakeML commit `9e1bd759fe0e1d4f4afc91bd25601423131a7d28`
+(`proof: repair parser diagnostic stdio frames`) contains only those proof and
+focused-regression repairs.  The focused suite passes 7/7.  Both theorem
+statements were proved unchanged in the resumed exact theory state.
+
+This also validates one immediately useful point from the external speed
+advice: native failed-goal heaps are a practical proof-development cache.  They
+do not replace a clean replay or authorize a pin, but they remove repeated
+hour-long prefixes from local theorem repair.
+
+## Current replay at `9e1bd759f...`
+
+The reusable committed controller at project commit `075857e` launched a
+fresh serial four-stage replay at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-9e1bd759f-attempt-001`
+
+The controller PID/process group is `3469592`, with `/proc` start ticks
+`318581076`; the read-only sampler PID is `3469958`.  CakeML is pinned to
+`9e1bd759fe0e1d4f4afc91bd25601423131a7d28` and HOL4 remains pinned to
+`a390cbabd3a4521bab4ee20281e3e42933a8a3ae`.  Stage 1 passed and stage 2 is
+active.  The controller is serial (`-j1 --mt=1`) and its address-space limit is
+`117964800` KiB.  This is an active replay, not a success claim; Candle remains
+unrepinned until all four receipts and all six postconditions pass.
