@@ -2761,6 +2761,11 @@ def _validate_v4_parent_fd_open_descriptions(
         o_path = 0x20_0000
         o_directory = 0x01_0000
         o_nofollow = 0x02_0000
+        o_cloexec = 0x08_0000
+        require(
+            status_flags & o_cloexec == 0,
+            f"{label} status flags contain descriptor-only O_CLOEXEC",
+        )
         if access_mode == "read-search-only":
             require(
                 status_flags & o_path == o_path and access_bits == 0 and

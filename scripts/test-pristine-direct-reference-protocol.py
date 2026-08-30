@@ -2187,6 +2187,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertEqual(snapshot["fd_table"], table)
         self.assertIsNot(snapshot["fd_table"], table)
+        self.assertEqual(
+            [fd["cloexec"] for fd in snapshot["fd_table"]["fds"][:2]],
+            [False, True],
+        )
         table["generation"] = 99
         self.assertEqual(snapshot["fd_table"]["generation"], 5)
         table["generation"] = 5
@@ -2285,6 +2289,16 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ),
             lambda e, t, o, i: set_ofd_mode(
                 t, o, 1, "read-search-only", 0x29_0000,
+            ),
+            lambda e, t, o, i: o["entries"][1].update(
+                status_flags=0x08_0000,
+            ),
+            lambda e, t, o, i: (
+                t["fds"][2].update(cloexec=True),
+                o["entries"][1].update(status_flags=0x08_0000),
+            ),
+            lambda e, t, o, i: o["entries"][0].update(
+                status_flags=0x08_0001,
             ),
             lambda e, t, o, i: o["entries"][1].update(
                 open_description_id=100,
