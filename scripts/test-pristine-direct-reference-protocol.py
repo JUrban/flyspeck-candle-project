@@ -3384,6 +3384,241 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 compiler, linker, source_tree, inputs,
             )
 
+    def test_v4_input_closure_entry_authority_rejects_hostile_splices(
+        self,
+    ) -> None:
+        compiler = {
+            "argument_path": "/tool/cc", "resolved_path": "/tool/cc",
+            "bytes": 101, "sha256": "a" * 64, "mode": 0o100755,
+            "version": "cc fixture",
+        }
+        linker = {
+            "argument_path": "/tool/ld", "resolved_path": "/tool/ld",
+            "bytes": 103, "sha256": "b" * 64, "mode": 0o100755,
+            "version": "ld fixture",
+        }
+        files = [{
+            "index": 0, "relative": "main.c",
+            "mode": subject.V4_SOURCE_TREE_DATA_MODE, "bytes": 17,
+            "sha256": "c" * 64,
+        }]
+        source_tree = {
+            "schema": subject.V4_NATIVE_SOURCE_TREE_SCHEMA,
+            "kind": subject.V4_NATIVE_SOURCE_TREE_KIND,
+            "authority_role": "attempt-supervisor",
+            "root_policy": subject.V4_NATIVE_SOURCE_TREE_ROOT_POLICY,
+            "file_count": 1, "total_bytes": 17,
+            "ordered_file_sha256": subject.canonical_sha256(files),
+            "files": files,
+        }
+        runtime_inputs = [{
+            "index": 0, "role": "header",
+            "mode": subject.V4_SOURCE_TREE_DATA_MODE,
+            "content": {
+                "path": "include/runtime.h", "bytes": 19,
+                "sha256": "d" * 64,
+            },
+        }]
+        derived = subject.enumerate_isolated_native_build_root_v2(
+            compiler, linker, source_tree, runtime_inputs,
+        )
+        entries = []
+        for entry in derived:
+            entries.append({
+                **entry,
+                "st_nlink": 1 if entry["object_type"] == "ordinary-file" else 2,
+                "parent_descriptor_identity": {
+                    "fixture": "parent", "entry_index": entry["index"],
+                },
+                "mount_id": 100, "st_dev": 7,
+                "st_ino": 1_000 + entry["index"],
+                "stable_generation": 3,
+            })
+
+        def selected(kind: str, index_field: str | None = None) -> list[int]:
+            pairs = []
+            for entry in derived:
+                selector = entry["selector"]
+                if selector is not None and selector["kind"] == kind:
+                    pairs.append((
+                        0 if index_field is None else selector[index_field],
+                        entry["index"],
+                    ))
+            return [entry_index for _, entry_index in sorted(pairs)]
+
+        compiler_indices = selected("build-compiler")
+        linker_indices = selected("build-linker")
+        source_indices = selected("source-tree-member", "member_index")
+        runtime_indices = selected("build-runtime-input", "input_index")
+        output_indices = [
+            entry["index"] for entry in derived
+            if entry["relative"] == subject.V4_BUILD_OUTPUT_DIRECTORY
+        ]
+        total_file_bytes = sum(
+            entry["bytes"] for entry in entries
+            if entry["object_type"] == "ordinary-file"
+        )
+        authority = {
+            "entry_count": len(entries),
+            "total_file_bytes": total_file_bytes,
+            "ordered_entry_sha256": subject.canonical_sha256(entries),
+            "entries": entries,
+            "compiler_entry_index": compiler_indices[0],
+            "linker_entry_index": linker_indices[0],
+            "source_entry_count": len(source_indices),
+            "source_entry_indices": source_indices,
+            "runtime_input_entry_count": len(runtime_indices),
+            "runtime_input_entry_indices": runtime_indices,
+            "output_root_entry_index": output_indices[0],
+        }
+        snapshot = subject.validate_v4_build_input_closure_entry_authority(
+            compiler, linker, source_tree, runtime_inputs, authority,
+        )
+        self.assertEqual(snapshot["entry_authority"], authority)
+        self.assertIsNot(snapshot["entry_authority"], authority)
+        self.assertIsNot(snapshot["compiler"], compiler)
+        compiler["version"] = "mutated caller"
+        self.assertEqual(snapshot["compiler"]["version"], "cc fixture")
+        compiler["version"] = "cc fixture"
+        detached = copy.deepcopy(authority)
+        detached_snapshot = (
+            subject.validate_v4_build_input_closure_entry_authority(
+                compiler, linker, source_tree, runtime_inputs, detached,
+            )
+        )
+        detached["entries"][0]["parent_descriptor_identity"]["fixture"] = (
+            "mutated"
+        )
+        self.assertEqual(
+            detached_snapshot["entry_authority"]["entries"][0][
+                "parent_descriptor_identity"
+            ]["fixture"],
+            "parent",
+        )
+
+        file_index = next(
+            entry["index"] for entry in entries
+            if entry["object_type"] == "ordinary-file"
+        )
+        directory_index = next(
+            entry["index"] for entry in entries
+            if entry["object_type"] == "directory"
+        )
+
+        def hostile(mutator: object, *, rehash: bool = True) -> dict[str, object]:
+            value = copy.deepcopy(authority)
+            mutator(value)
+            if rehash:
+                value["ordered_entry_sha256"] = subject.canonical_sha256(
+                    value["entries"],
+                )
+            return value
+
+        mutations = (
+            lambda value: value.update(entry_count=True),
+            lambda value: value.update(entry_count=len(entries) - 1),
+            lambda value: value.update(total_file_bytes=True),
+            lambda value: value.update(total_file_bytes=total_file_bytes + 1),
+            lambda value: value["entries"][file_index].update(
+                selector={"kind": "build-linker"},
+            ),
+            lambda value: value["entries"][file_index].update(
+                relative="../escape",
+            ),
+            lambda value: value["entries"][file_index].update(
+                object_type="directory",
+            ),
+            lambda value: value["entries"][file_index].update(
+                mode=subject.V4_DIRECTORY_0700_MODE,
+            ),
+            lambda value: value["entries"][file_index].update(bytes=18),
+            lambda value: value["entries"][file_index].update(sha256="e" * 64),
+            lambda value: value["entries"][file_index].update(st_nlink=2),
+            lambda value: value["entries"][file_index].update(st_nlink=True),
+            lambda value: value["entries"][directory_index].update(st_nlink=0),
+            lambda value: value["entries"][directory_index].update(
+                parent_descriptor_identity=[],
+            ),
+            lambda value: value["entries"][directory_index].update(
+                mount_id=False,
+            ),
+            lambda value: value["entries"][directory_index].update(mount_id=0),
+            lambda value: value["entries"][directory_index].update(st_dev=True),
+            lambda value: value["entries"][directory_index].update(st_dev=-1),
+            lambda value: value["entries"][directory_index].update(st_ino=False),
+            lambda value: value["entries"][directory_index].update(st_ino=0),
+            lambda value: value["entries"][directory_index].update(
+                stable_generation=True,
+            ),
+            lambda value: value["entries"][directory_index].update(
+                stable_generation=0,
+            ),
+            lambda value: value.update(compiler_entry_index=True),
+            lambda value: value.update(
+                compiler_entry_index=value["linker_entry_index"],
+            ),
+            lambda value: value.update(linker_entry_index=True),
+            lambda value: value.update(source_entry_count=True),
+            lambda value: value.update(source_entry_count=0),
+            lambda value: value.update(source_entry_indices=[]),
+            lambda value: value.update(source_entry_indices=[False]),
+            lambda value: value.update(runtime_input_entry_count=True),
+            lambda value: value.update(runtime_input_entry_count=0),
+            lambda value: value.update(runtime_input_entry_indices=[]),
+            lambda value: value.update(runtime_input_entry_indices=[False]),
+            lambda value: value.update(output_root_entry_index=True),
+            lambda value: value.update(
+                output_root_entry_index=value["compiler_entry_index"],
+            ),
+            lambda value: value.update(extra=False),
+        )
+        for mutation in mutations:
+            forged = hostile(mutation)
+            with self.subTest(forged=forged), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_input_closure_entry_authority(
+                    compiler, linker, source_tree, runtime_inputs, forged,
+                )
+
+        digest_drift = hostile(lambda value: None, rehash=False)
+        digest_drift["ordered_entry_sha256"] = "0" * 64
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_input_closure_entry_authority(
+                compiler, linker, source_tree, runtime_inputs, digest_drift,
+            )
+        list_subclass = copy.deepcopy(authority)
+        list_subclass["entries"] = type("Entries", (list,), {})(
+            list_subclass["entries"],
+        )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_input_closure_entry_authority(
+                compiler, linker, source_tree, runtime_inputs, list_subclass,
+            )
+        entry_subclass = copy.deepcopy(authority)
+        entry_subclass["entries"][0] = type("Entry", (dict,), {})(
+            entry_subclass["entries"][0],
+        )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_input_closure_entry_authority(
+                compiler, linker, source_tree, runtime_inputs, entry_subclass,
+            )
+
+        encoded_authority = subject.canonical_value_bytes(authority)
+        cap_cases = (
+            ("V4_BUILD_INPUT_CLOSURE_ENTRY_MAX", len(entries) - 1),
+            ("V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES", 100),
+            ("V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES", total_file_bytes - 1),
+            ("V4_AUTHORITY_OBJECT_MAX_BYTES", len(encoded_authority) - 1),
+        )
+        for constant, cap in cap_cases:
+            with self.subTest(constant=constant), mock.patch.object(
+                subject, constant, cap,
+            ), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_input_closure_entry_authority(
+                    compiler, linker, source_tree, runtime_inputs, authority,
+                )
+
     def test_v4_isolated_native_build_filter_enumerator(self) -> None:
         authority = subject.enumerate_isolated_native_build_filter_v6()
         self.assertEqual(set(authority), {
