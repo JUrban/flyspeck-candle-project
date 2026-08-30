@@ -2379,6 +2379,20 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         ] = base64.b64encode(b"/1/ns/net").decode()
         refresh_graph(proc_mountpoint)
         hostile_graphs.append(proc_mountpoint)
+        for proc_subroot in (b"/123", b"/123/task/456"):
+            proc_subroot_splice = copy.deepcopy(source_graph)
+            proc_subroot_splice["mounts"][1]["filesystem_type"] = "proc"
+            proc_subroot_splice["mounts"][1][
+                "root_bytes_base64"
+            ] = base64.b64encode(proc_subroot).decode()
+            proc_subroot_splice["mounts"][1][
+                "mount_source_bytes_base64"
+            ] = base64.b64encode(b"proc").decode()
+            proc_subroot_splice["mounts"][2][
+                "mountpoint_bytes_base64"
+            ] = base64.b64encode(b"/a/ns/net").decode()
+            refresh_graph(proc_subroot_splice)
+            hostile_graphs.append(proc_subroot_splice)
         for hostile in hostile_graphs:
             with self.subTest(graph=hostile), self.assertRaises(
                 subject.ProtocolError,
@@ -2408,11 +2422,49 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         wrong_child_transition["mount_clones"][1][
             "child_propagation"
         ] = copy.deepcopy(source_propagation[1])
+
+        def transition_for_child(
+            candidate: dict[str, object],
+        ) -> dict[str, object]:
+            result = copy.deepcopy(transition)
+            result["child_mount_namespace_identity"] = copy.deepcopy(
+                candidate["mount_namespace_identity"],
+            )
+            result["child_generation"] = candidate["generation"]
+            for clone, child_row in zip(
+                result["mount_clones"], candidate["mounts"], strict=True,
+            ):
+                clone["child_mount_id"] = child_row["mount_id"]
+                clone["child_raw_parent_mount_id"] = child_row[
+                    "raw_parent_mount_id"
+                ]
+                clone["child_parent_mount_id"] = child_row["parent_mount_id"]
+                clone["child_optional_fields"] = copy.deepcopy(
+                    child_row["optional_fields"],
+                )
+                clone["child_propagation"] = copy.deepcopy(
+                    child_row["propagation"],
+                )
+            return result
+
+        partial_overlap_graph = copy.deepcopy(child_graph)
+        partial_overlap_graph["mounts"][1]["mount_id"] = 100
+        refresh_graph(partial_overlap_graph)
+        partial_overlap_transition = transition_for_child(
+            partial_overlap_graph,
+        )
+        full_overlap_graph = graph(
+            [110, 100, 120, 130, 140], "builder", 1, child_optional,
+            child_propagation, 1999,
+        )
+        full_overlap_transition = transition_for_child(full_overlap_graph)
         for hostile_transition, hostile_child in (
             (bool_clone_index, child_graph),
             (child_splice, child_graph),
             (identity_splice, child_graph),
             (wrong_child_transition, wrong_child_graph),
+            (partial_overlap_transition, partial_overlap_graph),
+            (full_overlap_transition, full_overlap_graph),
         ):
             with self.subTest(clone=hostile_transition), self.assertRaises(
                 subject.ProtocolError,

@@ -2997,6 +2997,15 @@ def _v4_path_relative_to(path: bytes, root: bytes) -> bytes | None:
     return path[len(prefix):] if path.startswith(prefix) else None
 
 
+def _v4_path_below_mount_root(root: bytes, relative: bytes) -> bytes:
+    require(root.startswith(b"/"), "nonabsolute V4 mount root")
+    if not relative:
+        return root
+    if root == b"/":
+        return b"/" + relative
+    return root.rstrip(b"/") + b"/" + relative
+
+
 def validate_v4_build_mount_graph(
     value: object, *, source_graph: object,
 ) -> dict[str, Any]:
@@ -3140,8 +3149,12 @@ def validate_v4_build_mount_graph(
     if source_graph:
         require(all(row["filesystem_type"] != "nsfs" for row in mounts),
                 f"{label} contains nsfs")
-        proc_mountpoints = [
-            parsed_by_id[row["mount_id"]]["mountpoint"] for row in mounts
+        proc_mounts = [
+            (
+                parsed_by_id[row["mount_id"]]["mountpoint"],
+                parsed_by_id[row["mount_id"]]["root"],
+            )
+            for row in mounts
             if row["filesystem_type"] == "proc"
         ]
         for row in mounts:
@@ -3149,12 +3162,14 @@ def validate_v4_build_mount_graph(
             if row["filesystem_type"] == "proc":
                 require(not _v4_proc_namespace_relative(observed["root"]),
                         f"{label} is rooted at a proc namespace file")
-            for proc_root in proc_mountpoints:
+            for proc_mountpoint, proc_root in proc_mounts:
                 relative = _v4_path_relative_to(
-                    observed["mountpoint"], proc_root,
+                    observed["mountpoint"], proc_mountpoint,
                 )
                 require(
-                    relative is None or not _v4_proc_namespace_relative(relative),
+                    relative is None or not _v4_proc_namespace_relative(
+                        _v4_path_below_mount_root(proc_root, relative)
+                    ),
                     f"{label} mounts a proc namespace file",
                 )
     return result
@@ -3252,6 +3267,9 @@ def validate_v4_build_mount_namespace_clone(
     child_by_id = {
         row["mount_id"]: row for row in child_graph["mounts"]
     }
+    source_ids = {row["mount_id"] for row in source_rows}
+    require(source_ids.isdisjoint(child_by_id),
+            f"{label} source and child mount IDs overlap")
     source_to_child: dict[int, int] = {}
     child_ids: set[int] = set()
     clone_rows: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any]]] = []
