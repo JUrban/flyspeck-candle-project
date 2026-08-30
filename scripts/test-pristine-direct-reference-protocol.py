@@ -2995,10 +2995,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 396)
+        self.assertEqual(len(values), 397)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "ff9e405e6e399c3c08348508b49ce9e38c241fa9eb4768595eeb170c07a76d95",
+            "edcfd93fa2d2dd5e5064813a01562b33f57562bb3a106db717e439de88033760",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -3383,6 +3383,200 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.enumerate_isolated_native_build_root_v2(
                 compiler, linker, source_tree, inputs,
             )
+
+    def test_v4_input_closure_header_filter_rejects_hostile_splices(
+        self,
+    ) -> None:
+        authority = {
+            "schema": subject.V4_BUILD_INPUT_CLOSURE_SCHEMA,
+            "kind": subject.V4_BUILD_INPUT_CLOSURE_KIND,
+            "policy": subject.V4_BUILD_INPUT_CLOSURE_POLICY,
+            "build_filter": subject.enumerate_isolated_native_build_filter_v6(),
+        }
+        snapshot = subject.validate_v4_build_input_closure_header_filter(
+            authority,
+        )
+        self.assertEqual(snapshot, authority)
+        self.assertIsNot(snapshot, authority)
+        self.assertIsNot(snapshot["build_filter"], authority["build_filter"])
+        authority["kind"] = "mutated caller"
+        authority["build_filter"]["decoded_policy"][0]["decision"] = (
+            "mutated caller"
+        )
+        self.assertEqual(snapshot["kind"], subject.V4_BUILD_INPUT_CLOSURE_KIND)
+        self.assertEqual(
+            snapshot["build_filter"]["decoded_policy"][0]["decision"],
+            "kill-process",
+        )
+        authority["kind"] = subject.V4_BUILD_INPUT_CLOSURE_KIND
+        authority["build_filter"] = (
+            subject.enumerate_isolated_native_build_filter_v6()
+        )
+
+        real_bounded_digest = subject._v4_bounded_compact_canonical_digest
+        raced = copy.deepcopy(authority)
+        digest_calls = 0
+
+        def mutate_between_frozen_captures(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 1:
+                raced["schema"] = subject.V4_BUILD_INPUT_CLOSURE_SCHEMA + 1
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_between_frozen_captures,
+        ), self.assertRaisesRegex(subject.ProtocolError, "changed while freezing"):
+            subject.validate_v4_build_input_closure_header_filter(raced)
+
+        post_freeze = copy.deepcopy(authority)
+        digest_calls = 0
+
+        def mutate_caller_after_second_frozen_digest(
+            value: object, maximum_bytes: int, label: str,
+        ) -> tuple[int, str]:
+            nonlocal digest_calls
+            digest_calls += 1
+            result = real_bounded_digest(value, maximum_bytes, label)
+            if digest_calls == 2:
+                post_freeze["kind"] = "late caller mutation"
+            return result
+
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=mutate_caller_after_second_frozen_digest,
+        ):
+            stable_snapshot = (
+                subject.validate_v4_build_input_closure_header_filter(
+                    post_freeze,
+                )
+            )
+        self.assertEqual(post_freeze["kind"], "late caller mutation")
+        self.assertEqual(
+            stable_snapshot["kind"], subject.V4_BUILD_INPUT_CLOSURE_KIND,
+        )
+
+        def hostile(mutator: object) -> dict[str, object]:
+            value = copy.deepcopy(authority)
+            mutator(value)
+            return value
+
+        mutations = (
+            lambda value: value.pop("schema"),
+            lambda value: value.pop("kind"),
+            lambda value: value.pop("policy"),
+            lambda value: value.pop("build_filter"),
+            lambda value: value.update(extra=False),
+            lambda value: value.update(filter_install_observation={}),
+            lambda value: value.update(schema=True),
+            lambda value: value.update(schema="2"),
+            lambda value: value.update(
+                schema=subject.V4_BUILD_INPUT_CLOSURE_SCHEMA + 1,
+            ),
+            lambda value: value.update(kind=None),
+            lambda value: value.update(kind="wrong-kind"),
+            lambda value: value.update(policy=False),
+            lambda value: value.update(policy="wrong-policy"),
+            lambda value: value.update(build_filter=None),
+            lambda value: value.update(build_filter=[]),
+            lambda value: value["build_filter"].update(extra=False),
+        )
+        for mutation in mutations:
+            forged = hostile(mutation)
+            with self.subTest(forged=forged), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_input_closure_header_filter(forged)
+
+        for field, field_value in authority["build_filter"].items():
+            forged = copy.deepcopy(authority)
+            if type(field_value) is int:
+                replacement: object = True
+            elif type(field_value) is str:
+                replacement = field_value + "x"
+            else:
+                self.assertIs(type(field_value), list)
+                replacement = field_value[:-1]
+            forged["build_filter"][field] = replacement
+            with self.subTest(filter_field=field), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_input_closure_header_filter(forged)
+
+        coordinated = copy.deepcopy(authority)
+        payload = bytearray(base64.b64decode(
+            coordinated["build_filter"]["instructions_payload_base64"],
+            validate=True,
+        ))
+        payload[-1] ^= 0x01
+        coordinated["build_filter"]["instructions_payload_base64"] = (
+            base64.b64encode(payload).decode("ascii")
+        )
+        coordinated["build_filter"]["instructions_sha256"] = (
+            hashlib.sha256(payload).hexdigest()
+        )
+        coordinated["build_filter"]["decoded_policy"][-1]["ret_data"] = 1
+        coordinated["build_filter"]["policy_sha256"] = subject.canonical_sha256(
+            coordinated["build_filter"]["decoded_policy"],
+        )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_input_closure_header_filter(coordinated)
+
+        outer_subclass = type("HeaderFilter", (dict,), {})(authority)
+        filter_subclass = copy.deepcopy(authority)
+        filter_subclass["build_filter"] = type("Filter", (dict,), {})(
+            filter_subclass["build_filter"],
+        )
+        list_subclass = copy.deepcopy(authority)
+        list_subclass["build_filter"]["decoded_policy"] = type(
+            "DecodedPolicy", (list,), {},
+        )(list_subclass["build_filter"]["decoded_policy"])
+        string_subclass = copy.deepcopy(authority)
+        string_subclass["policy"] = type("Policy", (str,), {})(
+            string_subclass["policy"],
+        )
+        for malformed in (
+            outer_subclass, filter_subclass, list_subclass, string_subclass,
+        ):
+            with self.subTest(subclass=malformed), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_v4_build_input_closure_header_filter(
+                    malformed,
+                )
+
+        cyclic = copy.deepcopy(authority)
+        cyclic_policy: list[object] = []
+        cyclic_policy.append(cyclic_policy)
+        cyclic["build_filter"]["decoded_policy"] = cyclic_policy
+        with mock.patch.object(
+            subject, "_v4_bounded_compact_canonical_digest",
+            side_effect=AssertionError("encoding reached before preflight"),
+        ), self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_input_closure_header_filter(cyclic)
+
+        encoded = subject.canonical_value_bytes(authority)
+        cap_cases = (
+            ("V4_AUTHORITY_OBJECT_MAX_BYTES", len(encoded) - 1),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_NODE_MAX", 10),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_CONTAINER_MAX", 3),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_STRING_MAX_BYTES", 8),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_KEY_MAX_BYTES", 5),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_FRAGMENT_MAX_BYTES", 3),
+            ("V4_BUILD_INPUT_ENTRY_AUTHORITY_GRAPH_MAX_BYTES", 32),
+            ("JSON_INTEGER_MAX_DIGITS", 2),
+        )
+        for constant, cap in cap_cases:
+            with self.subTest(constant=constant), mock.patch.object(
+                subject, constant, cap,
+            ), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_input_closure_header_filter(
+                    authority,
+                )
 
     def test_v4_input_closure_task_identities_rejects_hostile_splices(
         self,

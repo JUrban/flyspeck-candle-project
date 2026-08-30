@@ -338,6 +338,9 @@ V4_BUILD_INPUT_CLOSURE_TASK_IDENTITY_FIELDS = ("pid", "start_ticks")
 V4_BUILD_INPUT_CLOSURE_TASK_IDENTITIES_FIELDS = (
     "builder_task_identity", "observer_task_identity",
 )
+V4_BUILD_INPUT_CLOSURE_HEADER_FILTER_FIELDS = (
+    "schema", "kind", "policy", "build_filter",
+)
 V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS = (
     "index", "relative", "object_type", "mode", "bytes", "sha256",
     "selector", "st_nlink", "parent_descriptor_identity", "mount_id",
@@ -4969,6 +4972,39 @@ def validate_v4_build_input_closure_task_identities(
         builder_identity != observer_identity,
         f"equal {label}",
     )
+    return result
+
+
+def validate_v4_build_input_closure_header_filter(
+    value: object,
+) -> dict[str, Any]:
+    """Validate and snapshot the structural closure header/filter authority."""
+    label = "V4 native build input-closure header/filter"
+    first_frozen = _v4_resource_checked_json_graph(value, label)
+    first_size, first_digest = _v4_bounded_compact_canonical_digest(
+        first_frozen, V4_AUTHORITY_OBJECT_MAX_BYTES, label,
+    )
+    frozen = _v4_resource_checked_json_graph(value, label)
+    frozen_size, frozen_digest = _v4_bounded_compact_canonical_digest(
+        frozen, V4_AUTHORITY_OBJECT_MAX_BYTES, label,
+    )
+    require(
+        (frozen_size, frozen_digest) == (first_size, first_digest),
+        f"{label} changed while freezing",
+    )
+    result = _v4_exact_dict(
+        frozen, V4_BUILD_INPUT_CLOSURE_HEADER_FILTER_FIELDS, label,
+    )
+    require(
+        is_int(result.get("schema")) and
+        result["schema"] == V4_BUILD_INPUT_CLOSURE_SCHEMA and
+        type(result.get("kind")) is str and
+        result["kind"] == V4_BUILD_INPUT_CLOSURE_KIND and
+        type(result.get("policy")) is str and
+        result["policy"] == V4_BUILD_INPUT_CLOSURE_POLICY,
+        f"wrong {label} identity",
+    )
+    validate_isolated_native_build_filter(result.get("build_filter"))
     return result
 
 
