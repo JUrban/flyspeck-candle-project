@@ -156,7 +156,7 @@ remain clean.
 ```sh
 /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
   /usr/bin/python3 -I -S \
-  /project/worktrees/candle-runtime-pin-964406486/candle/cakeml_bootstrap_transition.py \
+  /project/worktrees/candle-runtime-pin-964406486/candle/cakeml_artifact_provenance.py \
   check-linked \
   --candle-root /project/worktrees/candle-runtime-pin-964406486
 ```
@@ -301,3 +301,9 @@ cold replay logs or `x64BootstrapProofTheory.uo`; the cold replay remains a
 separate operational proof gate.  It also authenticates `cake_compile_heap` as
 an input rather than independently rederiving it.  No bootstrap or parser
 receipt should be described as attesting those separate derivations.
+
+The exact fail-fast compatibility sequence after both retained parser profiles
+pass is recorded in
+`docs/progress/2026-08-30-linked-compatibility-handoff.md`.  It binds the same
+heads and materializations and must not run concurrently with another compiled
+Candle workload in this worktree.
