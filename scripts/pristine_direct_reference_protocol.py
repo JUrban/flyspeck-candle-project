@@ -304,6 +304,14 @@ V4_BUILD_RUNTIME_INPUT_ROLES = (
     "dynamic-loader",
     "runtime-data",
 )
+V4_BUILD_RUNTIME_INPUT_MIN = 1
+V4_BUILD_OUTPUT_ROLES = (
+    "target-executable",
+    "intermediate-object",
+    "static-library",
+    "shared-library",
+    "runtime-data",
+)
 V4_RUNTIME_MEMBER_ROLES = (
     "python-standard-library",
     "python-native-extension",
@@ -565,6 +573,30 @@ def _safe_relative(value: object, label: str) -> str:
     return text
 
 
+def _v4_source_tree_relative(value: object, label: str) -> str:
+    require(
+        isinstance(value, str) and value and
+        all(32 <= ord(character) < 127 for character in value),
+        f"malformed {label}",
+    )
+    encoded = value.encode("ascii")
+    require(
+        len(encoded) <= V4_SAFE_RELATIVE_MAX_BYTES and
+        not value.startswith("/") and "\\" not in value and "\x00" not in value,
+        f"unsafe {label}",
+    )
+    components = value.split("/")
+    require(
+        all(
+            component not in {"", ".", ".."} and
+            len(component.encode("ascii")) <= V4_SAFE_PATH_COMPONENT_MAX_BYTES
+            for component in components
+        ),
+        f"unsafe {label}",
+    )
+    return value
+
+
 def _safe_absolute(value: object, label: str) -> str:
     text = _printable(value, label)
     require(len(text) <= 4096 and "\\" not in text and
@@ -609,6 +641,80 @@ def _named_content_record(value: object, label: str) -> dict[str, Any]:
         {"bytes": value.get("bytes"), "sha256": value.get("sha256")}, label,
     )
     return value
+
+
+def validate_native_source_tree(value: object) -> dict[str, Any]:
+    label = "V4 native source tree"
+    require(isinstance(value, dict) and set(value) == {
+                "schema", "kind", "authority_role", "root_policy",
+                "file_count", "total_bytes", "ordered_file_sha256", "files",
+            }, f"malformed {label}")
+    require(
+        is_int(value.get("schema")) and
+        value["schema"] == V4_NATIVE_SOURCE_TREE_SCHEMA and
+        value.get("kind") == V4_NATIVE_SOURCE_TREE_KIND and
+        value.get("authority_role") in V4_NATIVE_SOURCE_TREE_ROLES and
+        value.get("root_policy") == V4_NATIVE_SOURCE_TREE_ROOT_POLICY and
+        is_int(value.get("file_count")) and
+        0 <= value["file_count"] <= V4_SOURCE_TREE_MEMBER_MAX and
+        is_int(value.get("total_bytes")) and
+        0 <= value["total_bytes"] <= V4_SOURCE_TREE_TOTAL_MAX_BYTES and
+        isinstance(value.get("files"), list) and
+        len(value["files"]) == value["file_count"],
+        f"malformed {label} header",
+    )
+    _hex(
+        value.get("ordered_file_sha256"), HEX64,
+        f"{label} ordered-file SHA-256",
+    )
+
+    total_bytes = 0
+    previous_relative: bytes | None = None
+    for index, record in enumerate(value["files"]):
+        record_label = f"{label} file {index}"
+        require(isinstance(record, dict) and set(record) == {
+                    "index", "relative", "mode", "bytes", "sha256",
+                }, f"malformed {record_label}")
+        require(
+            is_int(record.get("index")) and record["index"] == index and
+            is_int(record.get("mode")) and record["mode"] in {
+                V4_SOURCE_TREE_DATA_MODE, V4_SOURCE_TREE_EXECUTABLE_MODE,
+            } and
+            is_int(record.get("bytes")) and
+            0 < record["bytes"] <= V4_SOURCE_TREE_FILE_MAX_BYTES,
+            f"malformed {record_label} fields",
+        )
+        relative = _v4_source_tree_relative(
+            record.get("relative"), f"{record_label} relative path",
+        )
+        relative_bytes = relative.encode("ascii")
+        require(
+            previous_relative is None or previous_relative < relative_bytes,
+            f"unordered or duplicate {label} relative path",
+        )
+        previous_relative = relative_bytes
+        _hex(record.get("sha256"), HEX64, f"{record_label} SHA-256")
+        total_bytes += record["bytes"]
+        require(
+            total_bytes <= V4_SOURCE_TREE_TOTAL_MAX_BYTES,
+            f"{label} total bytes exceed cap",
+        )
+
+    require(total_bytes == value["total_bytes"],
+            f"{label} total-byte mismatch")
+    require(
+        value["ordered_file_sha256"] == canonical_sha256(value["files"]),
+        f"{label} ordered-file digest mismatch",
+    )
+    return value
+
+
+def validate_canonical_native_source_tree_bytes(data: bytes) -> dict[str, Any]:
+    label = "V4 native source-tree authority"
+    require(type(data) is bytes, f"{label} is not immutable bytes")
+    require(len(data) <= V4_AUTHORITY_OBJECT_MAX_BYTES,
+            f"{label} exceeds retained cap")
+    return validate_canonical_bytes(data, label, validate_native_source_tree)
 
 
 def _repository_record(value: object, label: str) -> dict[str, Any]:

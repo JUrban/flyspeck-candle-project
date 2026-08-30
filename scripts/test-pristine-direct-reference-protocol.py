@@ -884,11 +884,116 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 139)
+        self.assertEqual(len(values), 141)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "4e5da349f39c4d60cd2fad6bc2fbb38f8c9f9d5473b87d471cddcb47598062de",
+            "42ffee47f6c98f4baeaecb85b6fcc15d0ab39334060d2488bbcb37aa8959338b",
         )
+
+    def test_v4_native_source_tree_leaf_validator(self) -> None:
+        files = [
+            {
+                "index": 0,
+                "relative": "bin/run.sh",
+                "mode": subject.V4_SOURCE_TREE_EXECUTABLE_MODE,
+                "bytes": 9,
+                "sha256": "1" * 64,
+            },
+            {
+                "index": 1,
+                "relative": "src/main.c",
+                "mode": subject.V4_SOURCE_TREE_DATA_MODE,
+                "bytes": 17,
+                "sha256": "2" * 64,
+            },
+        ]
+        tree = {
+            "schema": subject.V4_NATIVE_SOURCE_TREE_SCHEMA,
+            "kind": subject.V4_NATIVE_SOURCE_TREE_KIND,
+            "authority_role": "attempt-supervisor",
+            "root_policy": subject.V4_NATIVE_SOURCE_TREE_ROOT_POLICY,
+            "file_count": len(files),
+            "total_bytes": sum(record["bytes"] for record in files),
+            "ordered_file_sha256": subject.canonical_sha256(files),
+            "files": files,
+        }
+        self.assertIs(subject.validate_native_source_tree(tree), tree)
+        encoded = subject.canonical_json_bytes(tree)
+        self.assertEqual(
+            subject.validate_canonical_native_source_tree_bytes(encoded), tree,
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "not immutable"):
+            subject.validate_canonical_native_source_tree_bytes(bytearray(encoded))
+        with self.assertRaisesRegex(subject.ProtocolError, "not canonical"):
+            subject.validate_canonical_native_source_tree_bytes(
+                subject.canonical_value_bytes(tree),
+            )
+        with mock.patch.object(
+            subject, "V4_AUTHORITY_OBJECT_MAX_BYTES", len(encoded) - 1,
+        ), self.assertRaisesRegex(subject.ProtocolError, "exceeds retained cap"):
+            subject.validate_canonical_native_source_tree_bytes(encoded)
+
+        mutations = (
+            ("unknown key", lambda item: item.update(extra=False)),
+            ("bool schema", lambda item: item.update(schema=True)),
+            ("wrong kind", lambda item: item.update(kind="source-tree-v0")),
+            ("wrong role", lambda item: item.update(authority_role="caller")),
+            ("wrong root policy", lambda item: item.update(root_policy="open")),
+            ("count mismatch", lambda item: item.update(file_count=3)),
+            ("total mismatch", lambda item: item.update(total_bytes=27)),
+            (
+                "digest mismatch",
+                lambda item: item.update(ordered_file_sha256="0" * 64),
+            ),
+            ("bool index", lambda item: item["files"][0].update(index=True)),
+            ("permission-only mode", lambda item: item["files"][0].update(
+                mode=365,
+            )),
+            ("bool mode", lambda item: item["files"][0].update(mode=True)),
+            ("zero bytes", lambda item: item["files"][0].update(bytes=0)),
+            (
+                "oversize file",
+                lambda item: item["files"][0].update(
+                    bytes=subject.V4_SOURCE_TREE_FILE_MAX_BYTES + 1,
+                ),
+            ),
+            (
+                "uppercase digest",
+                lambda item: item["files"][0].update(sha256="A" * 64),
+            ),
+            (
+                "duplicate relative",
+                lambda item: item["files"][1].update(relative="bin/run.sh"),
+            ),
+        )
+        for label, mutate in mutations:
+            forged = copy.deepcopy(tree)
+            mutate(forged)
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_native_source_tree(forged)
+
+        for relative in (
+            "", "/absolute", "a\\b", ".", "a/../b", "a//b",
+            "x" * 256, ("a/" * 2048) + "a",
+        ):
+            forged = copy.deepcopy(tree)
+            forged["files"][0]["relative"] = relative
+            with self.subTest(relative=relative[:40]), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_native_source_tree(forged)
+
+        forged = copy.deepcopy(tree)
+        forged["files"].reverse()
+        for index, record in enumerate(forged["files"]):
+            record["index"] = index
+        forged["ordered_file_sha256"] = subject.canonical_sha256(
+            forged["files"],
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "unordered"):
+            subject.validate_native_source_tree(forged)
 
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
