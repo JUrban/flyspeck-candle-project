@@ -301,3 +301,42 @@ proof process used about 20 GiB RSS and the host still had about 170 GiB
 available.  This remains an active development replay, not proof success or
 compiler qualification.  Candle stays pinned to its prior compiler until all
 four stages and the controller's six postconditions pass.
+
+## Eval-state FFI-divergence repair at `0e75b7e42...`
+
+The `9383815a3...` stage 2 saved the repaired diagnostic-error whole-program
+specification and the ordinary semantic theorem, then failed in the custom
+reuse helper with `raw_match_term: different constructors`.  Its receipt
+closed after `1:02:29`, maximum RSS `42632364` KiB, zero swaps, and exit 1.
+Stages 3 and 4 were not launched, and no Candle repin was made.
+
+Two read-only retained-heap diagnostics separated theorem selection from code
+reuse.  The declaration conclusion was alpha-equivalent before and after the
+ordinary `prove_sem_thm`.  Capability and successful diagnostic modes matched
+only `whole_prog_spec_IMP'`, and an explicit capability replay then passed
+every conversion through SNOC removal, reuse of `compiler64_prog`, LET
+elimination, namespace lookup, FFI equality and basis-reference discharge.
+The error mode alone failed: its declaration state has the translated
+eval-state override, while CakeML exposed only the non-overridden
+`whole_prog_spec_ffidiv_IMP`.  The general semantics theorem already supports
+an arbitrary eval state; the missing link was its exported implication.
+
+CakeML commit `0e75b7e423294fad11320cb26cbcf137a3b3d5d7`
+(`Support eval-state FFI-divergence semantics`) adds
+`whole_prog_spec_ffidiv_IMP'`, teaches the common and source-local semantic
+helpers to select it, and changes no generated program or runtime behavior.
+A single-theory qualification rebuilt `basis_ffiTheory.uo` successfully in
+`2:34.28`, maximum RSS `3216844` KiB, zero swaps; the updated library target
+also passed in `8.48` seconds.  The retained logs have SHA-256
+`16c0705ef43f053a1e5b02178ee39150fdf3b2a82406c250061c08425b8c3417`
+and `65fbd434510d9988add24a3d3361fa00f2329084dd4f627f2e39625c13ed9e11`.
+
+A fresh serial four-stage replay is active at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-diagnostic-proof-0e75b7e42-attempt-001`
+
+HOL4 remains exact commit
+`a390cbabd3a4521bab4ee20281e3e42933a8a3ae`.  Stage 1 passed and stage 2 is
+active under `-j1 --mt=1` and the `117964800` KiB address-space limit.  This
+is still development evidence, not compiler qualification; Candle remains on
+the prior compiler pin unless all four stages and the postflight gate pass.
