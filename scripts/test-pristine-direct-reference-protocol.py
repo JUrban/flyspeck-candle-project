@@ -1354,6 +1354,36 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertEqual(
             subject.enumerate_isolated_native_build_filter_v1(), authority,
         )
+        self.assertIs(
+            subject.validate_isolated_native_build_filter(authority), authority,
+        )
+        for label, forge in (
+            ("dict subclass", type("Filter", (dict,), {})(authority)),
+            (
+                "list subclass",
+                {
+                    **authority,
+                    "decoded_policy": type("Rules", (list,), {})(
+                        authority["decoded_policy"],
+                    ),
+                },
+            ),
+            (
+                "string subclass",
+                {
+                    **authority,
+                    "kind": type("Kind", (str,), {})(authority["kind"]),
+                },
+            ),
+            (
+                "mutated payload",
+                {**authority, "instructions_sha256": "0" * 64},
+            ),
+        ):
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_isolated_native_build_filter(forge)
 
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle

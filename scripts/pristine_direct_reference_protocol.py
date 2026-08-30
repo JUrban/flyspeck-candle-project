@@ -1188,6 +1188,32 @@ def enumerate_isolated_native_build_filter_v1() -> dict[str, Any]:
     }
 
 
+def _require_v4_exact_json_types(value: object, label: str) -> None:
+    if value is None or type(value) in {bool, int, str}:
+        return
+    if type(value) is list:
+        for index, item in enumerate(value):
+            _require_v4_exact_json_types(item, f"{label}[{index}]")
+        return
+    if type(value) is dict:
+        require(all(type(key) is str for key in value),
+                f"malformed {label} key type")
+        for key, item in value.items():
+            _require_v4_exact_json_types(item, f"{label}.{key}")
+        return
+    raise ProtocolError(f"malformed {label} JSON type")
+
+
+def validate_isolated_native_build_filter(value: object) -> dict[str, Any]:
+    label = "V4 isolated native build filter"
+    _require_v4_exact_json_types(value, label)
+    require(type(value) is dict, f"malformed {label}")
+    require_exact_json(
+        value, enumerate_isolated_native_build_filter_v1(), label,
+    )
+    return value
+
+
 def _repository_record(value: object, label: str) -> dict[str, Any]:
     require(isinstance(value, dict) and set(value) == {
                 "path", "git_head", "git_status",
