@@ -120,6 +120,14 @@ def coverage_fixture() -> dict:
         },
         {
             "index": 4,
+            "key": subject.LOGICAL_CANDLE_SETUP_HARNESS_KEY,
+            "classification": "expected-nested-source",
+            "source_sha256": "1" * 64,
+            "source_md5": "1" * 32,
+            "execution_normalization": None,
+        },
+        {
+            "index": 5,
             "key": "flyspeck:b.hl",
             "classification": "observed-outer-source",
             "source_sha256": "e" * 64,
@@ -142,28 +150,32 @@ def coverage_fixture() -> dict:
          "key": "candle:candle/build/insulate.ml",
          "cache_before": "fresh-cache"},
         {"event": "outcome", "id": 2, "outcome": "evaluated"},
-        {"event": "outcome", "id": 0, "outcome": "evaluated"},
-        {"event": "request", "id": 3, "parent": None, "kind": "#use",
-         "key": "control:instrumented-prefix", "cache_before": "fresh-cache"},
-        {"event": "request", "id": 4, "parent": 3, "kind": "needs",
-         "key": "flyspeck:b.hl", "cache_before": "fresh-cache"},
-        {"event": "outcome", "id": 4, "outcome": "evaluated"},
+        {"event": "request", "id": 3, "parent": 0, "kind": "#use",
+         "key": subject.LOGICAL_CANDLE_SETUP_HARNESS_KEY,
+         "cache_before": "fresh-cache"},
         {"event": "outcome", "id": 3, "outcome": "evaluated"},
-        {"event": "request", "id": 5, "parent": None, "kind": "#use",
-         "key": "control:stratum-check", "cache_before": "fresh-cache"},
+        {"event": "outcome", "id": 0, "outcome": "evaluated"},
+        {"event": "request", "id": 4, "parent": None, "kind": "#use",
+         "key": "control:instrumented-prefix", "cache_before": "fresh-cache"},
+        {"event": "request", "id": 5, "parent": 4, "kind": "needs",
+         "key": "flyspeck:b.hl", "cache_before": "fresh-cache"},
         {"event": "outcome", "id": 5, "outcome": "evaluated"},
+        {"event": "outcome", "id": 4, "outcome": "evaluated"},
         {"event": "request", "id": 6, "parent": None, "kind": "#use",
+         "key": "control:stratum-check", "cache_before": "fresh-cache"},
+        {"event": "outcome", "id": 6, "outcome": "evaluated"},
+        {"event": "request", "id": 7, "parent": None, "kind": "#use",
          "key": "control:postlude", "cache_before": "fresh-cache"},
-        {"event": "request", "id": 7, "parent": 6, "kind": "#use",
+        {"event": "request", "id": 8, "parent": 7, "kind": "#use",
          "key": subject.LOGICAL_FINAL_TARGET_KEY,
          "cache_before": "fresh-cache"},
-        {"event": "outcome", "id": 7, "outcome": "evaluated"},
-        {"event": "request", "id": 8, "parent": 6, "kind": "#use",
+        {"event": "outcome", "id": 8, "outcome": "evaluated"},
+        {"event": "request", "id": 9, "parent": 7, "kind": "#use",
          "key": "control:fingerprint-serializer",
          "cache_before": "fresh-cache"},
-        {"event": "outcome", "id": 8, "outcome": "evaluated"},
-        {"event": "outcome", "id": 6, "outcome": "evaluated"},
-        {"event": "terminal", "request_count": 9},
+        {"event": "outcome", "id": 9, "outcome": "evaluated"},
+        {"event": "outcome", "id": 7, "outcome": "evaluated"},
+        {"event": "terminal", "request_count": 10},
     ]
     observed_keys = sorted({
         event["key"] for event in events if event["event"] == "request"
@@ -235,7 +247,7 @@ def coverage_fixture() -> dict:
             "event_count": len(events),
             "ordered_event_sha256": subject.canonical_sha256(events),
             "events": events,
-            "request_count": 9,
+            "request_count": 10,
             "cache_skip_count": 0,
             "observed_key_count": len(observed_keys),
             "ordered_observed_key_sha256":
@@ -291,7 +303,10 @@ def schema6_fixture() -> tuple[dict, dict]:
          f"flyspeck:text_formalization/fixture/action-{index:03d}.hl")
         for index in range(subject.FINAL_ACTION_COUNT)
     ]
-    source_keys = set(action_keys) | set(logical_by_key)
+    source_keys = (
+        set(action_keys) | set(logical_by_key) |
+        {subject.LOGICAL_CANDLE_SETUP_HARNESS_KEY}
+    )
     extra_index = 0
     while len(source_keys) < 400:
         source_keys.add(f"flyspeck:fixture/extra-{extra_index:03d}.hl")
@@ -868,7 +883,27 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             record["key"] for record in
             projection["selected_logical_source_closure"]["records"]
         }
+        detailed_logical_keys = {
+            record["key"] for record in
+            receipt["logical_source_closure"]["records"]
+        }
+        inventory_keys = {
+            record["key"] for record in
+            projection["original_source_inventory"]["records"]
+        }
+        self.assertIn(
+            subject.LOGICAL_CANDLE_SETUP_HARNESS_KEY, inventory_keys
+        )
+        self.assertIn(
+            subject.LOGICAL_CANDLE_SETUP_HARNESS_KEY,
+            detailed_logical_keys,
+        )
         self.assertTrue(action_keys <= logical_keys)
+        self.assertTrue(
+            set(subject.CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS).isdisjoint(
+                logical_keys
+            )
+        )
         self.assertEqual(
             projection["selected_logical_source_closure"]["records"][0][
                 "key"
@@ -938,6 +973,22 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             closure["records"][0]["key"] = "control:runtime-setup"
             closure["ordered_record_sha256"] = subject.canonical_sha256(
                 closure["records"]
+            )
+
+        def copy_excluded_candle_source(item, key):
+            closure = item["selected_logical_source_closure"]
+            closure["records"][0]["key"] = key
+            closure["ordered_record_sha256"] = subject.canonical_sha256(
+                closure["records"]
+            )
+
+        def select_candle_setup_harness(item):
+            action = item["actions"]["records"][0]
+            action["selected_source"] = (
+                subject.LOGICAL_CANDLE_SETUP_HARNESS_KEY
+            )
+            item["actions"]["ordered_record_sha256"] = (
+                subject.canonical_sha256(item["actions"]["records"])
             )
 
         def omit_action_source_from_closure(item):
@@ -1010,6 +1061,30 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("missing source", omit_source),
             ("PFT source", inject_pft_source),
             ("copied Candle control", copy_candle_control),
+            (
+                "copied Candle setup harness",
+                lambda item: copy_excluded_candle_source(
+                    item, subject.LOGICAL_CANDLE_SETUP_HARNESS_KEY,
+                ),
+            ),
+            (
+                "copied Candle derivation input",
+                lambda item: copy_excluded_candle_source(
+                    item, subject.LOGICAL_DERIVATION_KEY,
+                ),
+            ),
+            (
+                "copied generated Candle control 0",
+                lambda item: copy_excluded_candle_source(
+                    item, subject.LOGICAL_GENERATED_CONTROL_KEYS[0],
+                ),
+            ),
+            (
+                "copied generated Candle control 1",
+                lambda item: copy_excluded_candle_source(
+                    item, subject.LOGICAL_GENERATED_CONTROL_KEYS[1],
+                ),
+            ),
             ("action source omitted from closure", omit_action_source_from_closure),
             ("duplicate closure source", duplicate_closure_source),
             ("reordered closure source", reorder_closure_sources),
@@ -1049,6 +1124,14 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 subject.ProtocolError,
             ):
                 subject.validate_cross_runtime_coverage_projection(forged)
+
+        forged = copy.deepcopy(projection)
+        select_candle_setup_harness(forged)
+        with self.assertRaisesRegex(
+            subject.ProtocolError,
+            "control, derivation input, or setup harness",
+        ):
+            subject.validate_cross_runtime_coverage_projection(forged)
 
     def test_cross_runtime_action_target_aliases_are_exact(self) -> None:
         receipt, plan = schema6_fixture()
@@ -1789,7 +1872,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(subject.ProtocolError, "not canonical"):
             subject.validate_coverage_projection(projection)
         projection = coverage_fixture()
-        normalization = projection["logical_source_coverage"]["records"][4][
+        normalization = projection["logical_source_coverage"]["records"][5][
             "execution_normalization"
         ]
         normalization["normalized_sha256"] = "not-a-hash"
@@ -1805,7 +1888,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             "normalization_pft_trace_v1", "normalization\ncontrol-v1",
         ):
             projection = coverage_fixture()
-            normalization = projection["logical_source_coverage"]["records"][4][
+            normalization = projection["logical_source_coverage"]["records"][5][
                 "execution_normalization"
             ]
             normalization["id"] = unsafe_id
@@ -1820,7 +1903,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 subject.validate_coverage_projection(projection)
         projection = coverage_fixture()
         records = projection["logical_source_coverage"]["records"]
-        records[4]["key"] = "flyspeck:c.hl"
+        records[5]["key"] = "flyspeck:c.hl"
         projection["logical_source_coverage"]["ordered_record_sha256"] = (
             subject.canonical_sha256(records)
         )
@@ -1834,7 +1917,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             subject.validate_coverage_projection(projection)
         projection = coverage_fixture()
         logical = projection["logical_source_coverage"]
-        logical["records"][4]["key"] = "pft:trace"
+        logical["records"][5]["key"] = "pft:trace"
         logical["ordered_record_sha256"] = subject.canonical_sha256(
             logical["records"]
         )
@@ -1890,7 +1973,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             subject.validate_coverage_projection(projection)
         projection = coverage_fixture()
         logical = projection["logical_source_coverage"]
-        logical["records"][4]["classification"] = "derivation-only-input"
+        logical["records"][5]["classification"] = "derivation-only-input"
         logical["ordered_record_sha256"] = subject.canonical_sha256(
             logical["records"]
         )
@@ -1899,10 +1982,10 @@ class DirectReleaseProtocolTests(unittest.TestCase):
 
     def test_physical_coverage_parent_cache_outcome_and_terminal_reject(self) -> None:
         for event_index, field, value, message in (
-            (7, "parent", None, "parent mismatch"),
-            (7, "cache_before", "prior-cache", "cache state mismatch"),
-            (8, "outcome", "cache-skip", "outcome mismatch"),
-            (18, "request_count", 8, "terminal mismatch"),
+            (9, "parent", None, "parent mismatch"),
+            (9, "cache_before", "prior-cache", "cache state mismatch"),
+            (10, "outcome", "cache-skip", "outcome mismatch"),
+            (20, "request_count", 9, "terminal mismatch"),
         ):
             projection = coverage_fixture()
             events = projection["physical_source_coverage"]["events"]

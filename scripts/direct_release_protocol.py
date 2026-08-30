@@ -142,6 +142,14 @@ LOGICAL_GENERATED_CONTROL_KEYS = (
     "candle:candle/build/insulate.ml",
     "candle:candle/flyspeck_source_digests.ml",
 )
+LOGICAL_CANDLE_SETUP_HARNESS_KEY = (
+    "candle:candle/flyspeck_source_integrity.ml"
+)
+CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS = (
+    LOGICAL_DERIVATION_KEY,
+    *LOGICAL_GENERATED_CONTROL_KEYS,
+    LOGICAL_CANDLE_SETUP_HARNESS_KEY,
+)
 LOGICAL_FINAL_TARGET_KEY = "candle:candle/flyspeck_l2_target.ml"
 GENERATED_INPUT_CLASSES = (
     "lp-archive", "lp-certificate", "lp-certificate-archive",
@@ -937,6 +945,10 @@ def _validate_cross_runtime_actions(value: object) -> dict[str, Any]:
             record.get("selected_source"),
             f"cross-runtime action selected source: {index}",
         )
+        require(record["selected_source"] not in
+                CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS,
+                f"cross-runtime action selects Candle-only control, "
+                f"derivation input, or setup harness: {index}")
         _validate_action_target_alias(
             record.get("target"), record.get("selected_source"),
             f"cross-runtime action target: {index}",
@@ -1057,6 +1069,9 @@ def _validate_cross_runtime_logical_closure(
         _validate_logical_source_key(
             key, f"cross-runtime logical-source key: {index}",
         )
+        require(key not in CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS,
+                f"cross-runtime logical-source closure contains Candle-only "
+                f"control, derivation input, or setup harness: {index}")
         require(previous_key is None or previous_key < key,
                 f"cross-runtime logical-source keys are not canonical: {index}")
         previous_key = key
@@ -1785,9 +1800,7 @@ def cross_runtime_coverage_projection_from_schema6(
         for action in action_records
     }
     for logical in detailed["logical_source_coverage"]["records"]:
-        if logical["classification"] in {
-            "derivation-only-input", "generated-executed-control",
-        }:
+        if logical["key"] in CROSS_RUNTIME_EXCLUDED_LOGICAL_KEYS:
             continue
         source = inventory_by_key.get(logical["key"])
         require(source is not None and
