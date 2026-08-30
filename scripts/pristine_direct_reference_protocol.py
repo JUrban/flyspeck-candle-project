@@ -982,6 +982,7 @@ def enumerate_isolated_native_build_root_v1(
         relative: str, mode: int, byte_count: int, sha256: str,
         selector: dict[str, Any],
     ) -> None:
+        _v4_source_tree_relative(relative, "V4 native build root file path")
         require(relative not in files, "duplicate V4 native build root file")
         files[relative] = {
             "relative": relative,

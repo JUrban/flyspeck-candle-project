@@ -1271,6 +1271,18 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 compiler, linker, source_tree, forged_inputs,
             )
 
+        prefixed_oversize = copy.deepcopy(source_tree)
+        prefixed_oversize["files"][0]["relative"] = "/".join(
+            ["a" * 255] * 16,
+        )
+        prefixed_oversize["ordered_file_sha256"] = subject.canonical_sha256(
+            prefixed_oversize["files"],
+        )
+        with self.assertRaises(subject.ProtocolError):
+            subject.enumerate_isolated_native_build_root_v1(
+                compiler, linker, prefixed_oversize, inputs,
+            )
+
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
         cases = (
