@@ -853,6 +853,79 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 expected_authority=capture["authority"],
             )
 
+    def test_compiled_comparison_descriptor_is_derived_from_capture(self) -> None:
+        receipt, plan = schema6_fixture()
+        capture_authority = {
+            "policy": subject.AUTHENTICATED_CAPTURE_POLICY,
+            "consumer_project_commit": "1" * 40,
+            "candle_commit": "c" * 40,
+            "cakeml_commit": "2" * 40,
+            "hol4_commit": "3" * 40,
+            "flyspeck_commit": "f" * 40,
+        }
+        capture = subject.build_authenticated_schema6_capture(
+            receipt, plan, capture_authority,
+        )
+        entrypoint = {
+            "path": "scripts/check-published-direct-result.py",
+            "bytes": 101,
+            "sha256": "4" * 64,
+            "md5": "4" * 32,
+        }
+        candidate_authority = {
+            "policy": subject.COMPARISON_CANDIDATE_AUTHORITY_POLICY,
+            "authenticator": subject.COMPILED_COMPARISON_AUTHENTICATOR,
+            "project_commit": capture_authority["consumer_project_commit"],
+            "runtime_commit": capture_authority["candle_commit"],
+            "entrypoint": entrypoint,
+            "sources": [copy.deepcopy(entrypoint)],
+        }
+        descriptor = subject.build_authenticated_compiled_comparison_descriptor(
+            capture,
+            receipt=receipt,
+            authenticated_plan=plan,
+            expected_capture_authority=capture_authority,
+            candidate_authority=candidate_authority,
+        )
+        self.assertEqual(descriptor["role"], subject.COMPILED_COMPARISON_ROLE)
+        self.assertEqual(
+            descriptor["authenticated_nonce"]["value"],
+            receipt["attempt_nonce"],
+        )
+        self.assertEqual(
+            descriptor["candidate"], subject._content_record(capture),
+        )
+        self.assertEqual(
+            descriptor["semantic_projection"], capture["semantic_projection"],
+        )
+        self.assertEqual(
+            descriptor["coverage_projection"], capture["coverage_projection"],
+        )
+
+        drifted = copy.deepcopy(candidate_authority)
+        drifted["runtime_commit"] = "d" * 40
+        with self.assertRaisesRegex(
+            subject.ProtocolError, "authority differs from schema-6 capture",
+        ):
+            subject.build_authenticated_compiled_comparison_descriptor(
+                capture,
+                receipt=receipt,
+                authenticated_plan=plan,
+                expected_capture_authority=capture_authority,
+                candidate_authority=drifted,
+            )
+
+        spliced = copy.deepcopy(capture)
+        spliced["authenticated_plan"]["sha256"] = "0" * 64
+        with self.assertRaises(subject.ProtocolError):
+            subject.build_authenticated_compiled_comparison_descriptor(
+                spliced,
+                receipt=receipt,
+                authenticated_plan=plan,
+                expected_capture_authority=capture_authority,
+                candidate_authority=candidate_authority,
+            )
+
     def test_unapproved_three_way_comparison_fixture_is_exact(self) -> None:
         semantic = subject.project_authenticated_semantic_observations(*fixture())
         coverage = coverage_fixture()

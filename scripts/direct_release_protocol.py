@@ -1485,6 +1485,59 @@ def _validate_authenticated_comparison_descriptor(
     return value
 
 
+def build_authenticated_compiled_comparison_descriptor(
+    capture: object,
+    *,
+    receipt: object,
+    authenticated_plan: object,
+    expected_capture_authority: object,
+    candidate_authority: object,
+) -> dict[str, Any]:
+    """Derive the compiled descriptor from one revalidated schema-6 capture.
+
+    The caller must still authenticate the candidate-authority sources.  This
+    builder prevents a later comparator from relabelling a detached capture,
+    nonce, plan, or projection after the descriptor-held consumer has run.
+    """
+    validate_authenticated_schema6_capture(
+        capture,
+        receipt=receipt,
+        authenticated_plan=authenticated_plan,
+        expected_authority=expected_capture_authority,
+    )
+    capture_authority = _validate_capture_authority(
+        expected_capture_authority,
+    )
+    authority = copy.deepcopy(_validate_candidate_authority(
+        candidate_authority, COMPILED_COMPARISON_ROLE,
+    ))
+    require(authority["project_commit"] ==
+            capture_authority["consumer_project_commit"] and
+            authority["runtime_commit"] == capture_authority["candle_commit"],
+            "compiled descriptor authority differs from schema-6 capture")
+    require(isinstance(receipt, dict),
+            "compiled descriptor requires a schema-6 receipt")
+    descriptor = {
+        "schema": 1,
+        "kind": AUTHENTICATED_COMPARISON_DESCRIPTOR_KIND,
+        "role": COMPILED_COMPARISON_ROLE,
+        "ordinal": 0,
+        "candidate": _content_record(capture),
+        "authenticated_nonce": {
+            "kind": COMPILED_COMPARISON_NONCE_KIND,
+            "value": receipt.get("attempt_nonce"),
+        },
+        "authenticated_plan": copy.deepcopy(capture["authenticated_plan"]),
+        "semantic_projection": copy.deepcopy(capture["semantic_projection"]),
+        "coverage_projection": copy.deepcopy(capture["coverage_projection"]),
+        "candidate_authority": authority,
+        "pft_used": False,
+    }
+    return _validate_authenticated_comparison_descriptor(
+        descriptor, role=COMPILED_COMPARISON_ROLE, ordinal=0,
+    )
+
+
 def validate_unapproved_direct_comparison_fixture(
     value: object,
     *,
