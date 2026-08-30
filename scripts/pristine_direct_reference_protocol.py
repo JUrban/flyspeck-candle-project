@@ -315,6 +315,8 @@ V4_BUILD_INPUT_CLOSURE_ENTRY_MAX = 196_608
 V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES = 1_073_741_824
 V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES = 68_719_476_736
 V4_BUILD_READONLY_DIRECTORY_MODE = 16_749
+V4_BUILD_SOURCE_DIRECTORY = "candle-source"
+V4_BUILD_OUTPUT_DIRECTORY = "candle-output"
 V4_BUILD_FILTER_SCHEMA = 1
 V4_BUILD_FILTER_KIND = (
     "candle-flyspeck-isolated-native-build-seccomp-filter-v1"
@@ -830,6 +832,201 @@ def classify_isolated_native_build_runtime_input_v1(path: object) -> str:
     if re.search(r"\.so(?:\.[0-9]+)*$", basename) is not None:
         return "shared-library"
     return "runtime-data"
+
+
+def _v4_full_regular_mode(value: object, label: str) -> int:
+    require(
+        is_int(value) and value == (0o100000 | (value & 0o777)),
+        f"malformed {label} regular-file mode",
+    )
+    return value
+
+
+def _v4_native_build_executable_record(
+    value: object, label: str,
+) -> dict[str, Any]:
+    require(type(value) is dict and
+            all(type(key) is str for key in value) and set(value) == {
+                "argument_path", "resolved_path", "bytes", "sha256", "mode",
+                "version",
+            }, f"malformed {label}")
+    require(type(value.get("argument_path")) is str and
+            type(value.get("resolved_path")) is str,
+            f"malformed {label} path type")
+    _safe_absolute(value["argument_path"], f"{label} argument path")
+    _safe_absolute(value["resolved_path"], f"{label} resolved path")
+    require(is_int(value.get("bytes")) and
+            0 < value["bytes"] <= V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES,
+            f"malformed {label} byte count")
+    require(type(value.get("sha256")) is str, f"malformed {label} SHA-256 type")
+    _hex(value["sha256"], HEX64, f"{label} SHA-256")
+    mode = _v4_full_regular_mode(value.get("mode"), label)
+    require(mode & 0o111 != 0, f"non-executable {label} mode")
+    require(type(value.get("version")) is str and value["version"] and
+            all(32 <= ord(character) < 127 for character in value["version"]),
+            f"malformed {label} version")
+    return value
+
+
+def _validate_v4_native_build_runtime_inputs(value: object) -> list[dict[str, Any]]:
+    label = "V4 native build runtime inputs"
+    require(type(value) is list and
+            V4_BUILD_RUNTIME_INPUT_MIN <= len(value) <=
+            V4_SOURCE_TREE_MEMBER_MAX,
+            f"malformed {label}")
+    previous_key: tuple[int, bytes] | None = None
+    total_bytes = 0
+    role_rank = {
+        role: index for index, role in enumerate(V4_BUILD_RUNTIME_INPUT_ROLES)
+    }
+    for index, record in enumerate(value):
+        record_label = f"{label} record {index}"
+        require(type(record) is dict and
+                all(type(key) is str for key in record) and set(record) == {
+                    "index", "role", "mode", "content",
+                }, f"malformed {record_label}")
+        require(is_int(record.get("index")) and record["index"] == index and
+                type(record.get("role")) is str and
+                record["role"] in V4_BUILD_RUNTIME_INPUT_ROLES,
+                f"malformed {record_label} index or role")
+        require(is_int(record.get("mode")) and record["mode"] in {
+                    V4_SOURCE_TREE_DATA_MODE,
+                    V4_SOURCE_TREE_EXECUTABLE_MODE,
+                }, f"malformed {record_label} mode")
+        content = record.get("content")
+        require(type(content) is dict and
+                all(type(key) is str for key in content) and set(content) == {
+                    "path", "bytes", "sha256",
+                }, f"malformed {record_label} content")
+        path = _v4_source_tree_relative(
+            content.get("path"), f"{record_label} content path",
+        )
+        require(path.split("/", 1)[0] not in {
+                    V4_BUILD_SOURCE_DIRECTORY,
+                    V4_BUILD_OUTPUT_DIRECTORY,
+                }, f"reserved {record_label} content path")
+        require(is_int(content.get("bytes")) and
+                0 < content["bytes"] <=
+                V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES,
+                f"malformed {record_label} byte count")
+        require(type(content.get("sha256")) is str,
+                f"malformed {record_label} SHA-256 type")
+        _hex(content["sha256"], HEX64, f"{record_label} SHA-256")
+        require(
+            record["role"] ==
+            classify_isolated_native_build_runtime_input_v1(path),
+            f"misclassified {record_label}",
+        )
+        order_key = (role_rank[record["role"]], path.encode("ascii"))
+        require(previous_key is None or previous_key < order_key,
+                f"unordered or duplicate {label}")
+        previous_key = order_key
+        total_bytes += content["bytes"]
+        require(total_bytes <= V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES,
+                f"{label} total bytes exceed cap")
+    return value
+
+
+def enumerate_isolated_native_build_root_v1(
+    compiler: object, linker: object, source_tree: object,
+    runtime_inputs: object,
+) -> list[dict[str, Any]]:
+    compiler_record = _v4_native_build_executable_record(
+        compiler, "V4 native build compiler",
+    )
+    linker_record = _v4_native_build_executable_record(
+        linker, "V4 native build linker",
+    )
+    source = validate_native_source_tree(source_tree)
+    inputs = _validate_v4_native_build_runtime_inputs(runtime_inputs)
+
+    files: dict[str, dict[str, Any]] = {}
+
+    def add_file(
+        relative: str, mode: int, byte_count: int, sha256: str,
+        selector: dict[str, Any],
+    ) -> None:
+        require(relative not in files, "duplicate V4 native build root file")
+        files[relative] = {
+            "relative": relative,
+            "object_type": "ordinary-file",
+            "mode": mode,
+            "bytes": byte_count,
+            "sha256": sha256,
+            "selector": selector,
+        }
+
+    for role, executable in (
+        ("build-compiler", compiler_record),
+        ("build-linker", linker_record),
+    ):
+        relative = executable["resolved_path"][1:]
+        require(relative.split("/", 1)[0] not in {
+                    V4_BUILD_SOURCE_DIRECTORY,
+                    V4_BUILD_OUTPUT_DIRECTORY,
+                }, f"reserved {role} resolved path")
+        add_file(
+            relative,
+            0o100000 | (executable["mode"] & 0o555),
+            executable["bytes"], executable["sha256"], {"kind": role},
+        )
+
+    for index, member in enumerate(source["files"]):
+        add_file(
+            f"{V4_BUILD_SOURCE_DIRECTORY}/{member['relative']}",
+            member["mode"], member["bytes"], member["sha256"],
+            {"kind": "source-tree-member", "member_index": index},
+        )
+
+    for index, item in enumerate(inputs):
+        content = item["content"]
+        add_file(
+            content["path"], item["mode"], content["bytes"],
+            content["sha256"],
+            {"kind": "build-runtime-input", "input_index": index},
+        )
+
+    directories = {V4_BUILD_OUTPUT_DIRECTORY, V4_BUILD_SOURCE_DIRECTORY}
+    for relative in files:
+        components = relative.split("/")
+        for length in range(1, len(components)):
+            parent = "/".join(components[:length])
+            require(parent not in files,
+                    "ordinary file is an ancestor in V4 native build root")
+            directories.add(parent)
+        require(relative not in directories,
+                "directory collides with V4 native build root file")
+
+    entries: list[dict[str, Any]] = []
+    for relative in sorted(
+        directories | set(files), key=lambda item: tuple(item.split("/")),
+    ):
+        if relative in files:
+            entry = files[relative]
+        else:
+            entry = {
+                "relative": relative,
+                "object_type": "directory",
+                "mode": (
+                    V4_DIRECTORY_0700_MODE
+                    if relative == V4_BUILD_OUTPUT_DIRECTORY else
+                    V4_BUILD_READONLY_DIRECTORY_MODE
+                ),
+                "bytes": 0,
+                "sha256": EMPTY_BYTES_SHA256,
+                "selector": None,
+            }
+        entries.append({"index": len(entries), **entry})
+
+    require(4 <= len(entries) <= V4_BUILD_INPUT_CLOSURE_ENTRY_MAX,
+            "V4 native build root entry count exceeds cap")
+    total_bytes = sum(
+        entry["bytes"] for entry in entries
+        if entry["object_type"] == "ordinary-file"
+    )
+    require(total_bytes <= V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES,
+            "V4 native build root total bytes exceed cap")
+    return entries
 
 
 def _repository_record(value: object, label: str) -> dict[str, Any]:

@@ -909,10 +909,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 155)
+        self.assertEqual(len(values), 157)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "d60161f4d18d8cc1de0810bf9d60d52aa1ed9d954155af31887ee646d8ac9290",
+            "ed77e514ab41ddcd3ac87632988e079ab9394f360377b33410269ae129a68260",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1111,6 +1111,154 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 subject.ProtocolError,
             ):
                 subject.classify_isolated_native_build_runtime_input_v1(path)
+
+    def test_v4_isolated_native_build_root_enumerator(self) -> None:
+        compiler = {
+            "argument_path": "/usr/bin/cc",
+            "resolved_path": "/usr/bin/cc",
+            "bytes": 101,
+            "sha256": "a" * 64,
+            "mode": 0o100755,
+            "version": "cc 1.0",
+        }
+        linker = {
+            "argument_path": "/usr/bin/ld",
+            "resolved_path": "/usr/bin/ld",
+            "bytes": 102,
+            "sha256": "b" * 64,
+            "mode": 0o100755,
+            "version": "ld 1.0",
+        }
+        files = [{
+            "index": 0,
+            "relative": "main.c",
+            "mode": subject.V4_SOURCE_TREE_DATA_MODE,
+            "bytes": 17,
+            "sha256": "c" * 64,
+        }]
+        source_tree = {
+            "schema": subject.V4_NATIVE_SOURCE_TREE_SCHEMA,
+            "kind": subject.V4_NATIVE_SOURCE_TREE_KIND,
+            "authority_role": "attempt-supervisor",
+            "root_policy": subject.V4_NATIVE_SOURCE_TREE_ROOT_POLICY,
+            "file_count": 1,
+            "total_bytes": 17,
+            "ordered_file_sha256": subject.canonical_sha256(files),
+            "files": files,
+        }
+        inputs = [
+            {
+                "index": 0,
+                "role": "header",
+                "mode": subject.V4_SOURCE_TREE_DATA_MODE,
+                "content": {
+                    "path": "usr/include/stdio.h",
+                    "bytes": 19,
+                    "sha256": "d" * 64,
+                },
+            },
+            {
+                "index": 1,
+                "role": "shared-library",
+                "mode": subject.V4_SOURCE_TREE_EXECUTABLE_MODE,
+                "content": {
+                    "path": "lib/libc.so.6",
+                    "bytes": 23,
+                    "sha256": "e" * 64,
+                },
+            },
+            {
+                "index": 2,
+                "role": "runtime-data",
+                "mode": subject.V4_SOURCE_TREE_EXECUTABLE_MODE,
+                "content": {
+                    "path": "usr/bin/as",
+                    "bytes": 29,
+                    "sha256": "f" * 64,
+                },
+            },
+        ]
+        entries = subject.enumerate_isolated_native_build_root_v1(
+            compiler, linker, source_tree, inputs,
+        )
+        self.assertEqual(
+            [entry["index"] for entry in entries], list(range(len(entries))),
+        )
+        by_path = {entry["relative"]: entry for entry in entries}
+        self.assertEqual(
+            by_path[subject.V4_BUILD_OUTPUT_DIRECTORY]["mode"],
+            subject.V4_DIRECTORY_0700_MODE,
+        )
+        self.assertEqual(by_path["usr/bin/cc"]["mode"], 0o100555)
+        self.assertEqual(
+            by_path["usr/bin/cc"]["selector"], {"kind": "build-compiler"},
+        )
+        self.assertEqual(
+            by_path["candle-source/main.c"]["selector"],
+            {"kind": "source-tree-member", "member_index": 0},
+        )
+        self.assertEqual(
+            by_path["lib/libc.so.6"]["selector"],
+            {"kind": "build-runtime-input", "input_index": 1},
+        )
+        self.assertTrue(all(
+            entry["sha256"] == subject.EMPTY_BYTES_SHA256
+            for entry in entries if entry["object_type"] == "directory"
+        ))
+
+        mutations = (
+            (
+                "misclassified input",
+                lambda c, l, s, items: items[0].update(role="runtime-data"),
+            ),
+            (
+                "reserved input path",
+                lambda c, l, s, items: items[0]["content"].update(
+                    path="candle-output/header.h",
+                ),
+            ),
+            (
+                "unordered input",
+                lambda c, l, s, items: items.reverse(),
+            ),
+            (
+                "compiler/output collision",
+                lambda c, l, s, items: c.update(
+                    argument_path="/candle-output/cc",
+                    resolved_path="/candle-output/cc",
+                ),
+            ),
+            (
+                "compiler/linker collision",
+                lambda c, l, s, items: l.update(
+                    argument_path=c["argument_path"],
+                    resolved_path=c["resolved_path"],
+                ),
+            ),
+            (
+                "file ancestor collision",
+                lambda c, l, s, items: c.update(
+                    argument_path="/usr",
+                    resolved_path="/usr",
+                ),
+            ),
+        )
+        for label, mutate in mutations:
+            forged = (
+                copy.deepcopy(compiler), copy.deepcopy(linker),
+                copy.deepcopy(source_tree), copy.deepcopy(inputs),
+            )
+            mutate(*forged)
+            with self.subTest(label=label), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.enumerate_isolated_native_build_root_v1(*forged)
+
+        forged_inputs = type("Inputs", (list,), {})(copy.deepcopy(inputs))
+        with self.assertRaises(subject.ProtocolError):
+            subject.enumerate_isolated_native_build_root_v1(
+                compiler, linker, source_tree, forged_inputs,
+            )
 
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
