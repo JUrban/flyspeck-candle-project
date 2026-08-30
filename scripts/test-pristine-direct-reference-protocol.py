@@ -928,6 +928,16 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(subject.ProtocolError, "not immutable"):
             subject.validate_canonical_native_source_tree_bytes(bytearray(encoded))
+        hostile_json = (
+            b'{"x":' + (b"9" * 5000) + b"}",
+            b'{"x":' + (b"[" * 1100) + b"0" + (b"]" * 1100) + b"}",
+            b'{"x":1e999}',
+        )
+        for payload in hostile_json:
+            with self.subTest(hostile=payload[:20]), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_canonical_native_source_tree_bytes(payload)
         with self.assertRaisesRegex(subject.ProtocolError, "not canonical"):
             subject.validate_canonical_native_source_tree_bytes(
                 subject.canonical_value_bytes(tree),

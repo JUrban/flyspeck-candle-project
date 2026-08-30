@@ -77,6 +77,7 @@ SERIALIZATION_ENVIRONMENT_KEY = "FLYSPECK_SERIALIZATION"
 RETAINED_STDOUT_MAX_BYTES = 536870912
 RETAINED_STDERR_MAX_BYTES = 0
 EMPTY_BYTES_SHA256 = hashlib.sha256(b"").hexdigest()
+JSON_INTEGER_MAX_DIGITS = 20
 PRODUCER_ENTRYPOINT_PATH = "scripts/collect-pristine-direct-reference.py"
 PROTOCOL_PATH = "scripts/pristine_direct_reference_protocol.py"
 OUTPUT_PARSER_PATH = "scripts/parse-pristine-direct-reference-output.py"
@@ -526,14 +527,27 @@ def _reject_nonfinite(value: str) -> None:
     raise ProtocolError(f"non-finite JSON number: {value}")
 
 
+def _bounded_json_integer(value: str) -> int:
+    digits = value[1:] if value.startswith("-") else value
+    require(
+        1 <= len(digits) <= JSON_INTEGER_MAX_DIGITS,
+        "JSON integer exceeds decimal digit cap",
+    )
+    return int(value)
+
+
 def decode_object(data: bytes, label: str) -> dict[str, Any]:
     try:
         value = json.loads(
             data.decode("utf-8", errors="strict"),
             object_pairs_hook=_reject_duplicate_keys,
+            parse_int=_bounded_json_integer,
             parse_constant=_reject_nonfinite,
         )
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    except ProtocolError:
+        raise
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError,
+            RecursionError) as error:
         raise ProtocolError(f"cannot decode {label}: {error}") from error
     require(isinstance(value, dict), f"{label} is not a JSON object")
     return value
@@ -544,7 +558,13 @@ def validate_canonical_bytes(
 ) -> dict[str, Any]:
     require(type(data) is bytes, f"{label} is not immutable bytes")
     value = decode_object(data, label)
-    require(data == canonical_json_bytes(value), f"{label} is not canonical JSON")
+    try:
+        canonical = canonical_json_bytes(value)
+    except ProtocolError:
+        raise
+    except (TypeError, ValueError, RecursionError) as error:
+        raise ProtocolError(f"cannot canonicalize {label}: {error}") from error
+    require(data == canonical, f"{label} is not canonical JSON")
     return validator(value)
 
 
