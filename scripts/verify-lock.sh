@@ -3,6 +3,11 @@ set -euo pipefail
 
 project_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 workspace_dir=$(cd -- "$project_dir/.." && pwd)
+if [[ ! -d "$workspace_dir/worktrees/candle-integration-v13" ]]; then
+  workspace_parent=$(cd -- "$workspace_dir/.." && pwd)
+  [[ -d "$workspace_parent/worktrees/candle-integration-v13" ]]
+  workspace_dir=$workspace_parent
+fi
 repos_dir="$workspace_dir/repos"
 lock_path="$project_dir/manifest.lock.toml"
 
