@@ -330,21 +330,22 @@ V4_BUILD_SOURCE_DIRECTORY = "candle-source"
 V4_BUILD_OUTPUT_DIRECTORY = "candle-output"
 V4_BUILD_OLD_ROOT_DIRECTORY = ".candle-old-root"
 V4_BUILD_ROOT_DERIVATION_MAX_BYTES = 33_554_432
-V4_BUILD_FILTER_SCHEMA = 3
+V4_BUILD_FILTER_SCHEMA = 4
 V4_BUILD_FILTER_KIND = (
-    "candle-flyspeck-isolated-native-build-seccomp-filter-v3"
+    "candle-flyspeck-isolated-native-build-seccomp-filter-v4"
 )
 V4_BUILD_FILTER_POLICY = (
-    "isolated-native-build-post-pivot-deny-escape-network-ipc-transfer-v3"
+    "isolated-native-build-post-pivot-deny-escape-network-ipc-transfer-v4"
 )
 V4_BUILD_FILTER_ERRNO = 1
 V4_BUILD_FILTER_CLONE_SYSCALL = 56
-V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E820680
+V4_BUILD_FILTER_CLONE_REJECT_MASK = 0xFEDFBE80
+V4_BUILD_FILTER_CLONE_ALLOWED_LOW_MASK = 0x0120417F
 V4_BUILD_FILTER_AUDIT_ARCH = 0xC000003E
 V4_BUILD_FILTER_X32_SYSCALL_BIT = 0x40000000
-V4_BUILD_FILTER_INSTRUCTION_COUNT = 134
-V4_BUILD_FILTER_INSTRUCTIONS_BYTES = 1_072
-V4_BUILD_FILTER_DECODED_RULE_COUNT = 65
+V4_BUILD_FILTER_INSTRUCTION_COUNT = 136
+V4_BUILD_FILTER_INSTRUCTIONS_BYTES = 1_088
+V4_BUILD_FILTER_DECODED_RULE_COUNT = 66
 V4_BUILD_FILTER_RET_KILL_PROCESS = 0x80000000
 V4_BUILD_FILTER_RET_ERRNO = 0x00050001
 V4_BUILD_FILTER_RET_ENOSYS = 0x00050026
@@ -395,6 +396,7 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (308, "setns"),
     (310, "process_vm_readv"),
     (311, "process_vm_writev"),
+    (317, "seccomp"),
     (321, "bpf"),
     (323, "userfaultfd"),
     (326, "copy_file_range"),
@@ -412,12 +414,12 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (438, "pidfd_getfd"),
     (442, "mount_setattr"),
 )
-V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 2
+V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 3
 V4_BUILD_EXECUTION_OBSERVATION_KIND = (
-    "candle-flyspeck-isolated-native-build-execution-observation-v2"
+    "candle-flyspeck-isolated-native-build-execution-observation-v3"
 )
 V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
-    "outside-parent-all-task-source-consumption-and-output-chronology-v2"
+    "outside-parent-all-task-source-consumption-and-output-chronology-v3"
 )
 V4_BUILD_EXECUTION_TASK_MAX = 4_096
 V4_BUILD_EXECUTION_EVENT_MAX = 131_072
@@ -435,7 +437,8 @@ V4_BUILD_INITIAL_STATE_SEED_FIELDS = (
     "builder_interrupt_stop_event_index",
     "initial_object_edges", "parent_fd_table", "parent_open_descriptions",
     "parent_address_space", "parent_mappings", "parent_fs_state",
-    "parent_mount_graph", "builder_credentials", "builder_task_control_state",
+    "parent_mount_graph", "builder_mount_graph", "builder_credentials",
+    "builder_task_control_state",
     "gate_mapping_index", "inherited_fd_indices", "ordered_state_sha256",
     "complete",
 )
@@ -443,13 +446,17 @@ V4_BUILD_INITIAL_STATE_CAPTURE_BOUNDARY = (
     "held-interrupt-stop-after-id-maps-before-builder-gate-release-v1"
 )
 V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN = (
-    "candle-flyspeck-v4-initial-state-seed-v1"
+    "candle-flyspeck-v4-initial-state-seed-v2"
+)
+V4_BUILD_INITIAL_STATE_DIGEST_PREIMAGE = (
+    "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
 )
 V4_BUILD_INITIAL_STATE_DIGEST_FIELDS = (
     "capture_boundary", "observer_task_identity", "builder_task_identity",
     "builder_interrupt_stop_event_index", "initial_object_edges",
     "parent_fd_table", "parent_open_descriptions", "parent_address_space",
     "parent_mappings", "parent_fs_state", "parent_mount_graph",
+    "builder_mount_graph",
     "builder_credentials", "builder_task_control_state", "gate_mapping_index",
     "inherited_fd_indices",
 )
@@ -457,7 +464,8 @@ V4_BUILD_INITIAL_LIST_CONTAINER_FIELDS = (
     "count", "entries", "ordered_entry_sha256",
 )
 V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS = (
-    "table_id", "generation", "fd_count", "fds", "ordered_fd_sha256",
+    "table_id", "generation", "max_fds", "fd_count", "fds",
+    "ordered_fd_sha256",
 )
 V4_BUILD_INITIAL_ADDRESS_SPACE_FIELDS = (
     "address_space_id", "generation", "mapping_count", "mapping_indices",
@@ -483,6 +491,8 @@ V4_BUILD_INITIAL_OPEN_DESCRIPTION_FIELDS = (
     "access_mode", "status_flags", "offset", "lock_state",
     "descriptor_ref_count",
 )
+V4_BUILD_LOCK_STATE_FIELDS = ("mode",)
+V4_BUILD_LOCK_TYPES = ("unlocked", "shared", "exclusive")
 V4_BUILD_INITIAL_MAPPING_FIELDS = (
     "index", "address", "length", "protection", "flags", "file_offset",
     "object_edge_index", "gate_mapping",
@@ -498,23 +508,123 @@ V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS = (
     "index", "mount_id", "parent_mount_id", "root_identity",
     "mountpoint_identity", "filesystem_type", "flags", "propagation",
 )
+V4_BUILD_MOUNT_CLONE_FIELDS = (
+    "index", "source_mount_id", "child_mount_id", "root_identity",
+    "mountpoint_identity", "filesystem_type", "flags", "propagation",
+    "source_parent_mount_id", "child_parent_mount_id",
+)
 V4_BUILD_INITIAL_CREDENTIAL_FIELDS = (
     "real_uid", "effective_uid", "saved_uid", "fsuid", "real_gid",
-    "effective_gid", "saved_gid", "fsgid", "supplementary_gids",
-    "securebits", "effective_capabilities",
-    "permitted_capabilities", "inheritable_capabilities",
-    "ambient_capabilities", "bounding_capabilities", "no_new_privileges",
+    "effective_gid", "saved_gid", "fsgid", "supplementary_groups",
+    "securebits", "capability_sets", "no_new_privileges",
     "seccomp_mode", "seccomp_filter_count",
 )
+V4_BUILD_SUPPLEMENTARY_GROUP_CONTAINER_FIELDS = (
+    "count", "gids", "ordered_gid_sha256",
+)
+V4_BUILD_SUPPLEMENTARY_GROUP_MAX = 65_536
+V4_BUILD_GID_MIN = 0
+V4_BUILD_GID_MAX = 0xFFFF_FFFF
+V4_BUILD_CAPABILITY_SET_FIELDS = (
+    "cap_last_cap", "count", "capabilities", "ordered_capability_sha256",
+)
+V4_BUILD_CAPABILITY_SETS_FIELDS = (
+    "effective", "permitted", "inheritable", "ambient", "bounding",
+)
+V4_BUILD_CAPABILITY_SET_NAMES = V4_BUILD_CAPABILITY_SETS_FIELDS
 V4_BUILD_INITIAL_TASK_CONTROL_STATE_FIELDS = (
     "signal_disposition_count", "signal_dispositions",
-    "signal_disposition_sha256", "blocked_signal_mask",
-    "pending_signal_mask", "signal_altstack", "fs_base", "gs_base",
-    "clear_child_tid", "robust_list_head",
-    "robust_list_length", "rseq_address", "rseq_length", "rseq_signature",
+    "signal_disposition_sha256", "blocked_signal_set",
+    "pending_signal_set", "signal_altstack", "fs_base", "gs_base",
+    "clear_child_tid", "robust_list_registration", "rseq_registration",
+    "personality",
 )
 V4_BUILD_INITIAL_SIGNAL_DISPOSITION_FIELDS = (
-    "signal_number", "handler", "flags", "restorer", "mask",
+    "signal_number", "action",
+)
+V4_BUILD_SIGNAL_MIN = 1
+V4_BUILD_SIGNAL_MAX = 64
+V4_BUILD_SIGNAL_DISPOSITION_COUNT = 64
+V4_BUILD_SIGNAL_SET_FIELDS = (
+    "raw_u64", "count", "signals", "ordered_signal_sha256",
+)
+V4_BUILD_SIGNAL_ACTION_FIELDS = (
+    "handler", "flags", "restorer", "mask",
+)
+V4_BUILD_SIGNAL_ACTION_FLAG_MASK = 0xDC00_0C07
+V4_BUILD_SIGNAL_ALTSTACK_FIELDS = ("sp", "flags", "size")
+V4_BUILD_SIGNAL_ALTSTACK_FLAG_MASK = 0x8000_0003
+V4_BUILD_SIGNAL_ALTSTACK_DISABLED = (0, 2, 0)
+V4_BUILD_ROBUST_LIST_REGISTRATION_FIELDS = (
+    "registered", "head", "length",
+)
+V4_BUILD_ROBUST_LIST_LENGTHS = (0, 24)
+V4_BUILD_RSEQ_REGISTRATION_FIELDS = (
+    "registered", "address", "length", "flags", "signature",
+)
+V4_BUILD_RSEQ_LENGTHS = (0, 32)
+V4_BUILD_RSEQ_SIGNATURES = (0, 0x5305_3053)
+V4_BUILD_RSEQ_STATE_FLAGS = (0,)
+V4_BUILD_PERSONALITY_STICKY_TIMEOUTS = 0x0400_0000
+V4_BUILD_PERSONALITY_POLICY = (
+    "exact-uint32-nonbool-and-sticky-timeouts-bit-clear-v1"
+)
+V4_BUILD_NESTED_VALUE_POLICY_FIELDS = (
+    "name", "fields", "exact_rules",
+)
+V4_BUILD_NESTED_VALUE_POLICY = (
+    (
+        "lock-state", V4_BUILD_LOCK_STATE_FIELDS,
+        "exact-dict;mode-is-unlocked-shared-or-exclusive;flock-lock-nb-is-"
+        "call-behavior-not-retained-state",
+    ),
+    (
+        "supplementary-groups", V4_BUILD_SUPPLEMENTARY_GROUP_CONTAINER_FIELDS,
+        "exact-dict;count-0-through-65536;gids-exact-list-of-count;"
+        "strictly-increasing-unique-uint32-nonbool;digest-canonical-gids-list",
+    ),
+    (
+        "capability-set", V4_BUILD_CAPABILITY_SET_FIELDS,
+        "exact-dict;cap-last-cap-equals-kernel-profile;count-0-through-"
+        "cap-last-cap-plus-one;capabilities-exact-list-of-count;strictly-"
+        "increasing-unique-nonbool-integers-0-through-cap-last-cap;"
+        "digest-canonical-capabilities-list",
+    ),
+    (
+        "capability-sets", V4_BUILD_CAPABILITY_SETS_FIELDS,
+        "exact-dict;each-value-is-capability-set;no-extra-set",
+    ),
+    (
+        "signal-set", V4_BUILD_SIGNAL_SET_FIELDS,
+        "exact-dict;raw-u64-uint64-nonbool;count-0-through-64;signals-exact-"
+        "list-of-count;bit-signal-minus-one-in-raw-u64-iff-list-membership;strictly-"
+        "increasing-unique-nonbool-integers-1-through-64;digest-canonical-"
+        "signals-list;blocked-set-excludes-9-and-19",
+    ),
+    (
+        "signal-action", V4_BUILD_SIGNAL_ACTION_FIELDS,
+        "exact-dict;handler-and-restorer-uint64-nonbool;flags-uint64-nonbool-"
+        "with-no-bit-outside-0xdc000c07;"
+        "mask-is-signal-set",
+    ),
+    (
+        "signal-altstack", V4_BUILD_SIGNAL_ALTSTACK_FIELDS,
+        "exact-dict;sp-null-or-uint64-nonbool;size-uint64-nonbool;flags-"
+        "uint32-nonbool-with-no-bit-outside-0x80000003;disabled-canonical-"
+        "form-sp-zero-flags-two-size-zero",
+    ),
+    (
+        "robust-list-registration", V4_BUILD_ROBUST_LIST_REGISTRATION_FIELDS,
+        "exact-dict;registered-bool;unregistered-is-false-null-head-length-"
+        "zero;registered-is-true-nonzero-uint64-nonbool-head-and-length-24",
+    ),
+    (
+        "rseq-registration", V4_BUILD_RSEQ_REGISTRATION_FIELDS,
+        "exact-dict;registered-bool;unregistered-is-false-null-address-length-"
+        "zero-flags-zero-signature-zero;registered-is-true-nonzero-uint64-"
+        "nonbool-address-length-32-signature-"
+        "0x53053053-flags-zero",
+    ),
 )
 V4_BUILD_PRECLONE_SIGNAL_PROFILE = (
     "all-blockable-signals-blocked", "all-dispositions-default",
@@ -535,13 +645,15 @@ V4_BUILD_INITIAL_STATE_CONTAINER_POLICY = (
      V4_BUILD_INITIAL_MAPPING_FIELDS, V4_BUILD_VMA_PER_ADDRESS_SPACE_MAX),
     ("parent_mount_graph", V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS,
      V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS, V4_BUILD_MOUNT_GRAPH_MAX),
+    ("builder_mount_graph", V4_BUILD_MOUNT_GRAPH_CONTAINER_FIELDS,
+     V4_BUILD_MOUNT_GRAPH_ENTRY_FIELDS, V4_BUILD_MOUNT_GRAPH_MAX),
 )
 V4_BUILD_SETUP_PHASE_FIELDS = (
     "policy", "first_event_index", "filter_install_entry_event_index",
     "filter_install_exit_event_index", "step_count", "steps",
     "ordered_step_sha256", "final_replay_state",
     "final_replay_state_sha256", "final_fd_indices", "final_mapping_indices",
-    "final_fs_state", "final_supplementary_gids",
+    "final_fs_state", "final_supplementary_groups",
     "final_capability_sets", "no_new_privileges", "seccomp_mode",
     "seccomp_filter_count", "complete",
 )
@@ -555,10 +667,13 @@ V4_BUILD_SETUP_REPLAY_STATE_FIELDS = (
     "fs_state", "mount_graph", "credentials", "task_control_state",
 )
 V4_BUILD_SETUP_STATE_DIGEST_DOMAIN = (
-    "candle-flyspeck-v4-setup-replay-state-v1"
+    "candle-flyspeck-v4-setup-replay-state-v2"
+)
+V4_BUILD_SETUP_STATE_DIGEST_PREIMAGE = (
+    "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
 )
 V4_BUILD_SETUP_POLICY = (
-    "derived-pre-filter-builder-setup-deny-all-other-v1"
+    "derived-pre-filter-builder-setup-deny-all-other-v2"
 )
 V4_BUILD_SETUP_SEQUENCE_FIELDS = (
     "index", "role", "syscall_numbers", "argument_policy",
@@ -596,6 +711,29 @@ V4_BUILD_SETUP_FINAL_CAPABILITY_SETS = (
     "ambient-empty", "bounding-empty",
 )
 V4_BUILD_NAMESPACE_CLONE_FLAGS = 0x78020011
+V4_BUILD_CLONE_PROFILE_FIELDS = (
+    "profile", "flags", "ptrace_event_kind", "address_space_policy",
+    "fd_table_policy", "fs_state_policy", "signal_handler_policy",
+    "parent_tid_policy", "child_tid_policy",
+)
+V4_BUILD_CLONE_PROFILES = (
+    (
+        "fork-equivalent-sigchld", 0x00000011, "fork", "copy", "copy",
+        "copy", "copy", "unchanged", "unchanged",
+    ),
+    (
+        "dash-child-tid-sigchld", 0x01200011, "fork", "copy", "copy",
+        "copy", "copy", "unchanged", "set-and-clear-child-tid",
+    ),
+    (
+        "ocaml-vfork-vm-clear-sighand-sigchld", 0x0000000100004111,
+        "vfork", "share-held-until-vfork-done", "copy", "copy",
+        "clear", "unchanged", "unchanged",
+    ),
+)
+V4_BUILD_CLONE_PROFILE_POLICY = (
+    "exact-unsigned-64-bit-flags-equality-reject-before-resume-v1"
+)
 V4_BUILD_NAMESPACE_KINDS = (
     "user-namespace",
     "mount-namespace",
@@ -960,6 +1098,11 @@ V4_BUILD_FS_TRANSITION_FIELDS = {
         "after_generation", "detached_mount_count", "detached_mount_ids",
         "target_identity", "flags",
     ),
+    "mount-namespace-create": (
+        "kind", "index", "task_index", "source_mount_namespace_identity",
+        "source_generation", "child_mount_namespace_identity",
+        "child_generation", "mount_clone_count", "mount_clones",
+    ),
 }
 V4_BUILD_TASK_TRANSITION_FIELDS = {
     "builder-create": (
@@ -993,7 +1136,8 @@ V4_BUILD_TASK_TRANSITION_FIELDS = {
         "new_task_control_state",
     ),
     "exit-stop": (
-        "kind", "index", "task_index", "exit_message",
+        "kind", "index", "task_index", "exit_message", "termination_scope",
+        "initiating_task_index", "initiating_entry_event_index",
     ),
     "wait-consumed": (
         "kind", "index", "task_index", "raw_wait_status",
@@ -1002,9 +1146,9 @@ V4_BUILD_TASK_TRANSITION_FIELDS = {
         "kind", "index", "task_index", "before_credentials",
         "after_credentials", "changed_fields",
     ),
-    "capability-change": (
-        "kind", "index", "task_index", "capability_set",
-        "before_capabilities", "after_capabilities",
+    "capability-sets-change": (
+        "kind", "index", "task_index", "changed_sets",
+        "before_capability_sets", "after_capability_sets",
     ),
     "no-new-privileges-change": (
         "kind", "index", "task_index", "old_value", "new_value",
@@ -1018,7 +1162,7 @@ V4_BUILD_TASK_TRANSITION_FIELDS = {
         "new_action",
     ),
     "signal-mask-change": (
-        "kind", "index", "task_index", "old_mask", "new_mask",
+        "kind", "index", "task_index", "old_set", "new_set",
     ),
     "signal-altstack-change": (
         "kind", "index", "task_index", "old_stack", "new_stack",
@@ -1232,7 +1376,6 @@ _V4_BUILD_STATE_OPERATION_CAPTURE_POLICY_BOUNDS = (
     (292, "dup3", "fd-control-entry", "fd-state-exit", (0,), (0, 3), (0,), (0,), (0,)),
     (293, "pipe2", "fd-control-entry", "fd-pair-exit", (0,), (4,), (0,), (0,), (0,)),
     (295, "preadv", "fd-io-entry", "io-exit", (0, 1), (0,), (0,), (0,), (0,)),
-    (317, "seccomp", "seccomp-install-entry", "seccomp-install-exit", (0,), (0,), (0,), (0,), (0,)),
     (327, "preadv2", "fd-io-entry", "io-exit", (0, 1), (0,), (0,), (0,), (0,)),
     (436, "close_range", "fd-control-entry", "scalar-exit", (0,), (0, 8_192), (0,), (0,), (0,)),
 )
@@ -1246,7 +1389,7 @@ V4_BUILD_PTRACE_EVENT_TRANSITION_POLICY_FIELDS = (
     "task_transition_counts",
 )
 _V4_BUILD_PTRACE_EVENT_TRANSITION_POLICY_BOUNDS = (
-    ("namespace-clone", (0,), (1,), (1,), (1,), (1,)),
+    ("namespace-clone", (0,), (1,), (1,), (2,), (1,)),
     ("interrupt-stop", (0,), (0,), (0,), (0,), (1,)),
     ("peer-interrupt-stop", (0,), (0,), (0,), (0,), (0,)),
     ("child-initial-stop", (0,), (0,), (0,), (0,), (1,)),
@@ -1284,6 +1427,9 @@ V4_BUILD_CLOSE_RANGE_REJECTED_FLAGS = (2, 6)
 V4_BUILD_MMAP_FIXED_FLAG = 0x10
 V4_BUILD_MREMAP_ALLOWED_FLAGS = (0, 1, 3)
 V4_BUILD_MREMAP_REJECTED_FLAGS = (2, 4, 5, 6, 7)
+V4_BUILD_MREMAP_OLD_SIZE_POLICY = (
+    "positive-mapped-range-reject-zero-before-resume-v1"
+)
 V4_BUILD_RENAMEAT2_ALLOWED_FLAGS = (0, 1)
 V4_BUILD_RENAME_EQUAL_OPERAND_POLICY = "reject-before-resume-v1"
 V4_BUILD_STATE_CHANGING_FAILURE_POLICY_FIELDS = (
@@ -1308,10 +1454,22 @@ V4_BUILD_NONRETURNING_SYSCALLS = (
     (60, "exit"),
     (231, "exit_group"),
 )
+V4_BUILD_EXIT_GROUP_POLICY = (
+    "exactly-one-live-thread-group-member-reject-before-resume-v1"
+)
+V4_BUILD_TASK_FIELDS = (
+    "index", "task_identity", "thread_group_identity", "parent_task_index",
+    "creation_event_index", "initial_stop_event_index", "exec_count",
+    "exit_event_index", "terminal_wait_event_index",
+)
+V4_BUILD_FATAL_SIGNAL_POLICY = (
+    "reject-signal-caused-exit-before-authentication-v1"
+)
 V4_BUILD_REJECTED_CONTROL_SYSCALLS = (
     (15, "rt_sigreturn"),
     (62, "kill"),
     (202, "futex"),
+    (219, "restart_syscall"),
     (234, "tgkill"),
 )
 V4_BUILD_ARCH_PRCTL_ALLOWED_OPERATIONS = (
@@ -1394,7 +1552,6 @@ V4_BUILD_CONTROL_OPERATION_CAPTURE_POLICY = (
 )
 V4_BUILD_PRCTL_ALLOWED_OPERATIONS = (
     (21, "PR_GET_SECCOMP"),
-    (38, "PR_SET_NO_NEW_PRIVS"),
     (39, "PR_GET_NO_NEW_PRIVS"),
 )
 V4_BUILD_PRLIMIT64_POLICY = "query-only-null-new-limit-pointer-v1"
@@ -1458,16 +1615,71 @@ V4_BUILD_QUERY_ABI_LENGTH_KINDS = (
     "fixed-bytes", "argument-bytes", "nfds-times-pollfd-8",
     "fdset-bytes-from-nfds", "pages-covered-by-range",
 )
+V4_BUILD_QUERY_ABI_LENGTH_FORMULA_FIELDS = (
+    "length_kind", "formula", "input_bounds", "overflow_policy",
+)
+V4_BUILD_QUERY_ABI_LENGTH_FORMULAS = (
+    (
+        "fixed-bytes", "exact-nonnegative-length-value-bytes",
+        "0-through-1048576", "reject-before-copy-if-over-region-cap",
+    ),
+    (
+        "argument-bytes", "unsigned-argument[length_value]",
+        "0-through-1048576", "checked-unsigned-64-bit",
+    ),
+    (
+        "nfds-times-pollfd-8", "unsigned-argument[length_value]*8",
+        "nfds-0-through-4096", "checked-unsigned-64-bit",
+    ),
+    (
+        "fdset-bytes-from-nfds",
+        "effective_nfds=min(nfds,fd_table.max_fds);"
+        "((effective_nfds+63)//64)*8",
+        "nfds-0-through-4096-and-max-fds-1-through-4096",
+        "checked-add-and-multiply-unsigned-64-bit",
+    ),
+    (
+        "pages-covered-by-range", "(length+4095)//4096",
+        "page-aligned-address-and-length-1-through-4294967296",
+        "checked-add-unsigned-64-bit-and-result-at-most-1048576",
+    ),
+)
 V4_BUILD_QUERY_ABI_CONDITIONS = (
     "always-nonnull", "if-nonnull", "if-success-nonnull",
-    "if-eintr-nonnull", "if-nonnull-after-exit",
+    "if-raw-return-minus-516-nonnull", "if-nonnull-after-exit",
     "if-positive-return-nonnull", "if-success-nonnull-get-operation",
+    "if-valid-nonzero-ppoll-timeout-nonnull",
 )
 V4_BUILD_QUERY_ABI_POST_LENGTH_KINDS = (
     "same-as-entry", "fixed", "positive-return",
     "positive-return-clipped-to-region",
 )
 V4_BUILD_CLOCK_NANOSLEEP_ALLOWED_FLAGS = (0, 1)
+V4_BUILD_CLOCK_ID_POLICY = (
+    (0, "CLOCK_REALTIME"),
+    (1, "CLOCK_MONOTONIC"),
+    (2, "CLOCK_PROCESS_CPUTIME_ID"),
+    (3, "CLOCK_THREAD_CPUTIME_ID"),
+    (4, "CLOCK_MONOTONIC_RAW"),
+    (5, "CLOCK_REALTIME_COARSE"),
+    (6, "CLOCK_MONOTONIC_COARSE"),
+    (7, "CLOCK_BOOTTIME"),
+    (8, "CLOCK_REALTIME_ALARM"),
+    (9, "CLOCK_BOOTTIME_ALARM"),
+    (11, "CLOCK_TAI"),
+)
+V4_BUILD_CLOCK_GETTIME_ALLOWED_IDS = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11)
+V4_BUILD_CLOCK_GETRES_ALLOWED_IDS = V4_BUILD_CLOCK_GETTIME_ALLOWED_IDS
+V4_BUILD_CLOCK_NANOSLEEP_ALLOWED_CLOCK_IDS = (0, 1, 7, 11)
+V4_BUILD_RAW_RESTART_RESULTS = (
+    (-512, "ERESTARTSYS"),
+    (-513, "ERESTARTNOINTR"),
+    (-514, "ERESTARTNOHAND"),
+    (-516, "ERESTART_RESTARTBLOCK"),
+)
+V4_BUILD_RAW_RESTART_POLICY = (
+    "capture-required-output-then-reject-at-syscall-exit-without-resume-v1"
+)
 V4_BUILD_NEWFSTATAT_ALLOWED_FLAGS = (0, 0x100, 0x1000, 0x1100)
 V4_BUILD_GETRANDOM_ALLOWED_FLAGS = (0, 1, 2, 3, 4, 5, 6, 7)
 V4_BUILD_FACCESSAT2_ALLOWED_FLAG_MASK = 0x1300
@@ -1498,8 +1710,10 @@ _V4_QUERY_OUTPUT_REGION_POLICIES = {
         (3, "output", "fdset-bytes-from-nfds", 0, "if-nonnull-after-exit", "same-as-entry"),
         (4, "output", "fixed-bytes", 16, "if-nonnull-after-exit", "fixed"),
     ),
-    27: ((2, "output", "pages-covered-by-range", (0, 1), "if-success-nonnull", "fixed"),),
-    35: ((1, "output", "fixed-bytes", 16, "if-eintr-nonnull", "fixed"),),
+    27: ((2, "output", "pages-covered-by-range", 1,
+          "if-success-nonnull", "fixed"),),
+    35: ((1, "output", "fixed-bytes", 16,
+          "if-raw-return-minus-516-nonnull", "fixed"),),
     63: ((0, "output", "fixed-bytes", 390, "if-success-nonnull", "fixed"),),
     79: ((0, "output", "argument-bytes", 1, "if-success-nonnull", "positive-return-clipped-to-region"),),
     89: ((1, "output", "argument-bytes", 2, "if-success-nonnull", "positive-return-clipped-to-region"),),
@@ -1526,10 +1740,16 @@ _V4_QUERY_OUTPUT_REGION_POLICIES = {
     201: ((0, "output", "fixed-bytes", 8, "if-success-nonnull", "fixed"),),
     228: ((1, "output", "fixed-bytes", 16, "if-success-nonnull", "fixed"),),
     229: ((1, "output", "fixed-bytes", 16, "if-success-nonnull", "fixed"),),
-    230: ((3, "output", "fixed-bytes", 16, "if-eintr-nonnull", "fixed"),),
+    230: ((3, "output", "fixed-bytes", 16,
+           "if-raw-return-minus-516-nonnull", "fixed"),),
     262: ((2, "output", "fixed-bytes", 144, "if-success-nonnull", "fixed"),),
     267: ((2, "output", "argument-bytes", 3, "if-success-nonnull", "positive-return-clipped-to-region"),),
-    271: ((0, "output", "nfds-times-pollfd-8", 1, "if-nonnull-after-exit", "same-as-entry"),),
+    271: (
+        (0, "output", "nfds-times-pollfd-8", 1,
+         "if-nonnull-after-exit", "same-as-entry"),
+        (2, "output", "fixed-bytes", 16,
+         "if-valid-nonzero-ppoll-timeout-nonnull", "fixed"),
+    ),
     302: ((3, "output", "fixed-bytes", 16, "if-success-nonnull", "fixed"),),
     318: ((0, "output", "argument-bytes", 1, "if-success-nonnull", "positive-return-clipped-to-region"),),
     332: ((4, "output", "fixed-bytes", 256, "if-success-nonnull", "fixed"),),
@@ -1568,9 +1788,9 @@ _V4_STATELESS_ARGUMENT_POLICIES = {
     138: "live-fd-arg0-statfs-output-arg1-exact",
     186: "six-zero-arguments-exact",
     201: "nullable-time64-output-arg0-exact",
-    228: "clock-id-in-current-host-profile-exact",
-    229: "clock-id-in-current-host-profile-nullable-result-exact",
-    230: "clock-id-profile-flags-in-v4-clock-nanosleep-policy-exact",
+    228: "clock-id-in-v4-build-clock-id-policy-exact",
+    229: "clock-id-in-v4-build-clock-id-policy-nullable-result-exact",
+    230: "clock-id-in-v4-clock-nanosleep-set-flags-zero-or-one-exact",
     262: "flags-in-v4-build-newfstatat-allowed-flags-exact",
     267: "dirfd-path-buffer-length-0-through-1048576-exact",
     271: "nfds-at-most-4096-timespec-sigmask-size-8-exact",
@@ -1632,7 +1852,11 @@ V4_BUILD_NONRETURNING_CAPTURE_POLICY = tuple(
     for number, operation in V4_BUILD_NONRETURNING_SYSCALLS
 )
 V4_BUILD_SYSCALL_DISPOSITION_POLICY = (
-    "phase-split-allow-only-modeled-control-query-deny-all-other-native-v2"
+    "phase-split-allow-only-modeled-control-query-deny-all-other-native-v3"
+)
+V4_BUILD_SYSCALL_DISPOSITION_SCHEMA = 3
+V4_BUILD_SYSCALL_DISPOSITION_KIND = (
+    "candle-flyspeck-isolated-native-build-syscall-disposition-v3"
 )
 V4_BUILD_REJECTED_OUTPUT_MUTATION_SYSCALLS = (
     (16, "ioctl"),
@@ -1866,6 +2090,31 @@ def canonical_value_bytes(value: Any) -> bytes:
 
 def canonical_sha256(value: Any) -> str:
     return hashlib.sha256(canonical_value_bytes(value)).hexdigest()
+
+
+def v4_ordered_field_digest(
+    value: object, fields: tuple[str, ...], domain: str,
+) -> str:
+    require(type(value) is dict, "V4 ordered-field digest value is not exact dict")
+    require(
+        type(fields) is tuple and fields and
+        all(type(field) is str and field for field in fields) and
+        len(set(fields)) == len(fields),
+        "V4 ordered-field digest fields are malformed",
+    )
+    require(
+        type(domain) is str and domain.isascii() and domain and "\x00" not in domain,
+        "V4 ordered-field digest domain is malformed",
+    )
+    require(
+        all(field in value for field in fields),
+        "V4 ordered-field digest field is absent",
+    )
+    preimage = (
+        domain.encode("ascii") + b"\x00" +
+        canonical_value_bytes([value[field] for field in fields])
+    )
+    return hashlib.sha256(preimage).hexdigest()
 
 
 def require_exact_json(value: Any, expected: Any, label: str) -> None:
@@ -2409,7 +2658,7 @@ def enumerate_isolated_native_build_root_v1(
     return entries
 
 
-def enumerate_isolated_native_build_filter_v3() -> dict[str, Any]:
+def enumerate_isolated_native_build_filter_v4() -> dict[str, Any]:
     load_word_absolute = 0x20
     jump_equal = 0x15
     jump_mask_nonzero = 0x45
@@ -2439,7 +2688,7 @@ def enumerate_isolated_native_build_filter_v3() -> dict[str, Any]:
             emit(load_word_absolute, 0, 0, 16)
             emit(
                 jump_mask_nonzero, 0, 1,
-                V4_BUILD_FILTER_CLONE_NAMESPACE_MASK,
+                V4_BUILD_FILTER_CLONE_REJECT_MASK,
             )
             emit(return_constant, 0, 0, V4_BUILD_FILTER_RET_ERRNO)
             emit(load_word_absolute, 0, 0, 0)
@@ -2500,7 +2749,7 @@ def enumerate_isolated_native_build_filter_v3() -> dict[str, Any]:
                 "index": 0,
                 "argument_index": 0,
                 "operation": "masked-nonzero",
-                "mask": V4_BUILD_FILTER_CLONE_NAMESPACE_MASK,
+                "mask": V4_BUILD_FILTER_CLONE_REJECT_MASK,
                 "value": None,
             })
         decoded_policy.append({
@@ -2578,7 +2827,7 @@ def validate_isolated_native_build_filter(value: object) -> dict[str, Any]:
     _require_v4_exact_json_types(value, label)
     require(type(value) is dict, f"malformed {label}")
     require_exact_json(
-        value, enumerate_isolated_native_build_filter_v3(), label,
+        value, enumerate_isolated_native_build_filter_v4(), label,
     )
     return value
 

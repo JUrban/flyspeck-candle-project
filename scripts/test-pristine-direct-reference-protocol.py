@@ -872,13 +872,37 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 self.assertEqual(getattr(subject, name), expected)
 
         self.assertEqual(subject.V4_BUILD_FILTER_ERRNO, 1)
-        self.assertTrue({16, 40, 275, 276, 278, 326}.issubset({
+        self.assertTrue({16, 40, 275, 276, 278, 317, 326}.issubset({
             number for number, _ in subject.V4_BUILD_FILTER_DENIED_SYSCALLS
         }))
         self.assertEqual(subject.V4_BUILD_FILTER_CLONE_SYSCALL, 56)
         self.assertEqual(
-            subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK, 0x7E820680,
+            subject.V4_BUILD_FILTER_CLONE_REJECT_MASK, 0xFEDFBE80,
         )
+        self.assertEqual(
+            subject.V4_BUILD_FILTER_CLONE_ALLOWED_LOW_MASK, 0x0120417F,
+        )
+        self.assertEqual(
+            subject.V4_BUILD_FILTER_CLONE_REJECT_MASK
+            ^ subject.V4_BUILD_FILTER_CLONE_ALLOWED_LOW_MASK,
+            0xFFFF_FFFF,
+        )
+        for hostile_flag in (
+            0x0000_0800,  # CLONE_SIGHAND
+            0x0000_1000,  # CLONE_PIDFD
+            0x0001_0000,  # CLONE_THREAD
+            0x0010_0000,  # CLONE_PARENT_SETTID
+        ):
+            self.assertEqual(
+                hostile_flag & subject.V4_BUILD_FILTER_CLONE_REJECT_MASK,
+                hostile_flag,
+            )
+        for profile in subject.V4_BUILD_CLONE_PROFILES:
+            self.assertEqual(
+                (profile[1] & 0xFFFF_FFFF)
+                & subject.V4_BUILD_FILTER_CLONE_REJECT_MASK,
+                0,
+            )
         self.assertEqual(
             tuple(number for number, _ in subject.V4_BUILD_FILTER_DENIED_SYSCALLS),
             tuple(sorted(
@@ -896,13 +920,16 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "PTRACE_O_TRACEEXIT",
             "PTRACE_O_EXITKILL",
         ))
-        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 2)
-        self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 3)
+        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 3)
+        self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 4)
         self.assertFalse(hasattr(
             subject, "enumerate_isolated_native_build_filter_v1",
         ))
         self.assertFalse(hasattr(
             subject, "enumerate_isolated_native_build_filter_v2",
+        ))
+        self.assertFalse(hasattr(
+            subject, "enumerate_isolated_native_build_filter_v3",
         ))
         self.assertTrue({
             "paired_event_index", "object_edges", "fd_transitions",
@@ -937,7 +964,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "builder-create", "observer-attached-stop", "child-create",
                 "child-attached-stop", "vfork-hold", "vfork-release",
                 "group-listen", "exec-image", "exit-stop", "wait-consumed",
-                "credential-change", "capability-change",
+                "credential-change", "capability-sets-change",
                 "no-new-privileges-change", "seccomp-change",
                 "signal-disposition-change", "signal-mask-change",
                 "signal-altstack-change", "tls-base-change",
@@ -999,7 +1026,11 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertEqual(
             {item[0] for item in subject.V4_BUILD_REJECTED_CONTROL_SYSCALLS},
-            {15, 62, 202, 234},
+            {15, 62, 202, 219, 234},
+        )
+        self.assertEqual(
+            {item[0] for item in subject.V4_BUILD_PRCTL_ALLOWED_OPERATIONS},
+            {21, 39},
         )
         self.assertEqual(nonreturning_numbers, {60, 231})
         self.assertTrue({0, 3, 8, 17, 19, 28, 32, 33, 72, 80, 81, 95,
@@ -1116,13 +1147,48 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "securebits", subject.V4_BUILD_INITIAL_CREDENTIAL_FIELDS,
         )
         self.assertEqual(
+            subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
+            "candle-flyspeck-v4-initial-state-seed-v2",
+        )
+        self.assertEqual(
+            subject.V4_BUILD_INITIAL_STATE_DIGEST_PREIMAGE,
+            "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1",
+        )
+        self.assertEqual(
+            subject.V4_BUILD_SETUP_STATE_DIGEST_PREIMAGE,
+            "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1",
+        )
+        self.assertEqual(
+            subject.V4_BUILD_NESTED_VALUE_POLICY_FIELDS,
+            ("name", "fields", "exact_rules"),
+        )
+        self.assertEqual(
+            {row[0] for row in subject.V4_BUILD_NESTED_VALUE_POLICY},
+            {
+                "lock-state", "supplementary-groups", "capability-set",
+                "capability-sets", "signal-set", "signal-action",
+                "signal-altstack", "robust-list-registration",
+                "rseq-registration",
+            },
+        )
+        self.assertEqual(subject.V4_BUILD_SIGNAL_DISPOSITION_COUNT, 64)
+        self.assertEqual(subject.V4_BUILD_SUPPLEMENTARY_GROUP_MAX, 65_536)
+        self.assertEqual(
             {row[0] for row in subject.V4_BUILD_INITIAL_STATE_CONTAINER_POLICY},
             {
                 "initial_object_edges", "parent_fd_table",
                 "parent_open_descriptions", "parent_mappings",
-                "parent_mount_graph",
+                "parent_mount_graph", "builder_mount_graph",
             },
         )
+        self.assertIn(
+            "mount-namespace-create", subject.V4_BUILD_FS_TRANSITION_FIELDS,
+        )
+        namespace_clone = next(
+            row for row in subject.V4_BUILD_PTRACE_EVENT_TRANSITION_POLICY
+            if row[0] == "namespace-clone"
+        )
+        self.assertEqual(namespace_clone[4], ("exact-values", 2))
         self.assertEqual(subject.V4_BUILD_SETUP_FINAL_FDS, (0, 1, 2))
         self.assertEqual(len(subject.V4_BUILD_SETUP_SEQUENCE_FIELDS), 4)
         self.assertEqual(
@@ -1141,6 +1207,20 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             )
         self.assertEqual(subject.V4_BUILD_MREMAP_ALLOWED_FLAGS, (0, 1, 3))
         self.assertIn(4, subject.V4_BUILD_MREMAP_REJECTED_FLAGS)
+        self.assertIn("reject-zero", subject.V4_BUILD_MREMAP_OLD_SIZE_POLICY)
+        self.assertEqual(
+            tuple(row[1] for row in subject.V4_BUILD_CLONE_PROFILES),
+            (0x11, 0x01200011, 0x0000000100004111),
+        )
+        self.assertEqual(
+            subject.V4_BUILD_EXIT_GROUP_POLICY,
+            "exactly-one-live-thread-group-member-reject-before-resume-v1",
+        )
+        self.assertIn("thread_group_identity", subject.V4_BUILD_TASK_FIELDS)
+        self.assertIn(
+            "personality", subject.V4_BUILD_INITIAL_TASK_CONTROL_STATE_FIELDS,
+        )
+        self.assertEqual(subject.V4_BUILD_PERSONALITY_STICKY_TIMEOUTS, 0x04000000)
         self.assertEqual(
             subject.V4_BUILD_RENAME_EQUAL_OPERAND_POLICY,
             "reject-before-resume-v1",
@@ -1169,6 +1249,43 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             if row[0] == 25
         )
         self.assertEqual(mremap[6], ("inclusive-range", 1, 2))
+        self.assertNotIn(
+            317,
+            {row[0] for row in subject.V4_BUILD_STATE_OPERATION_CAPTURE_POLICY},
+        )
+        ppoll = next(
+            row for row in subject.V4_BUILD_STATELESS_OPERATION_CAPTURE_POLICY
+            if row[0] == 271
+        )
+        self.assertEqual(
+            ppoll[6],
+            (
+                (0, "output", "nfds-times-pollfd-8", 1,
+                 "if-nonnull-after-exit", "same-as-entry"),
+                (2, "output", "fixed-bytes", 16,
+                 "if-valid-nonzero-ppoll-timeout-nonnull", "fixed"),
+            ),
+        )
+        self.assertEqual(
+            dict(
+                (row[0], row[1])
+                for row in subject.V4_BUILD_QUERY_ABI_LENGTH_FORMULAS
+            )["fdset-bytes-from-nfds"],
+            "effective_nfds=min(nfds,fd_table.max_fds);"
+            "((effective_nfds+63)//64)*8",
+        )
+        self.assertEqual(
+            {row[0] for row in subject.V4_BUILD_CLOCK_ID_POLICY},
+            set(range(10)) | {11},
+        )
+        self.assertEqual(
+            subject.V4_BUILD_RAW_RESTART_RESULTS,
+            (
+                (-512, "ERESTARTSYS"), (-513, "ERESTARTNOINTR"),
+                (-514, "ERESTARTNOHAND"),
+                (-516, "ERESTART_RESTARTBLOCK"),
+            ),
+        )
         self.assertEqual(
             subject.V4_BUILD_NETWORK_LOOPBACK_FIXED_FIELDS,
             {
@@ -1194,6 +1311,34 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "s2_s3_evidence",
         }))
 
+    def test_v4_ordered_field_digest_framing_is_exact(self) -> None:
+        fixtures = (
+            (
+                subject.V4_BUILD_INITIAL_STATE_DIGEST_FIELDS,
+                subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
+                "bb40e16801e82b82d79b448967fc665ab998355fe61a2067f3006ddf5fce2ef1",
+            ),
+            (
+                subject.V4_BUILD_SETUP_REPLAY_STATE_FIELDS,
+                subject.V4_BUILD_SETUP_STATE_DIGEST_DOMAIN,
+                "83218cf241caf0f5fac3cc50030de1f56eec683c00e436d33a3a47323ebfef62",
+            ),
+        )
+        for fields, domain, expected in fixtures:
+            value = {field: index for index, field in enumerate(fields)}
+            self.assertEqual(
+                subject.v4_ordered_field_digest(value, fields, domain), expected,
+            )
+            wrong_order = tuple(reversed(fields))
+            self.assertNotEqual(
+                subject.v4_ordered_field_digest(value, wrong_order, domain),
+                expected,
+            )
+        with self.assertRaisesRegex(subject.ProtocolError, "domain"):
+            subject.v4_ordered_field_digest({"a": 1}, ("a",), "bad\x00domain")
+        with self.assertRaisesRegex(subject.ProtocolError, "absent"):
+            subject.v4_ordered_field_digest({}, ("a",), "domain")
+
     def test_complete_v4_constant_table_fingerprint(self) -> None:
         def normalize(value: object) -> object:
             if isinstance(value, frozenset):
@@ -1215,10 +1360,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 302)
+        self.assertEqual(len(values), 351)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "7e1217d83397e2551ad45c9dfdd0f227e208c239f9ecbafc49d702f47dd12225",
+            "221b1795a6f1fc90b5ad334e9baf506a22cb779d4b66ba11a673f7b06a6f095f",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1605,14 +1750,14 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             )
 
     def test_v4_isolated_native_build_filter_enumerator(self) -> None:
-        authority = subject.enumerate_isolated_native_build_filter_v3()
+        authority = subject.enumerate_isolated_native_build_filter_v4()
         self.assertEqual(set(authority), {
             "schema", "kind", "policy", "architecture", "audit_arch",
             "instruction_count", "instructions_bytes", "instructions_sha256",
             "instructions_payload_base64", "decoded_rule_count",
             "decoded_policy", "policy_sha256",
         })
-        self.assertEqual(authority["schema"], 3)
+        self.assertEqual(authority["schema"], 4)
         self.assertEqual(authority["kind"], subject.V4_BUILD_FILTER_KIND)
         self.assertEqual(authority["policy"], subject.V4_BUILD_FILTER_POLICY)
         self.assertEqual(
@@ -1633,7 +1778,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertEqual(
             authority["instructions_sha256"],
-            "820d8da684899784e4d980b9c4e8cc95265ab9d1b0a7d618f727515c55ce89c3",
+            "49d8c674b40cbba7141c048d3b35c99307445775ac5abea5f6c7e946a2521565",
         )
         instructions = [
             struct.unpack("<HBBI", payload[offset:offset + 8])
@@ -1679,7 +1824,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 "index": 0,
                 "argument_index": 0,
                 "operation": "masked-nonzero",
-                "mask": subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK,
+                "mask": subject.V4_BUILD_FILTER_CLONE_REJECT_MASK,
                 "value": None,
             }],
         )
@@ -1688,10 +1833,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         self.assertEqual(
             authority["policy_sha256"],
-            "a6a294301db6b55263a03df4222ab9397afb5ba5d11e0fc72974fd10ee76e660",
+            "c4f62ed80a79d38b4d720545fea261032fea91a13907d62402d23ce3e3ae3267",
         )
         self.assertEqual(
-            subject.enumerate_isolated_native_build_filter_v3(), authority,
+            subject.enumerate_isolated_native_build_filter_v4(), authority,
         )
         self.assertIs(
             subject.validate_isolated_native_build_filter(authority), authority,
