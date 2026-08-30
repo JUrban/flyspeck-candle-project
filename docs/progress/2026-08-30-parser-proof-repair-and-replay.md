@@ -495,3 +495,17 @@ join the initial and successful-result exact-domain facts through environment
 append, alongside the pre-existing global-invariant append/weakening proof.
 That consumer repair and a fresh focused target are still in progress.  None
 of these attempts is compiler qualification or authorizes a Candle repin.
+
+Focused attempt 006 passed all of those earlier proof frontiers and saved the
+strengthened `declare_env_store_env_id` theorem.  It then failed while
+composing the two already-verified App consumer children: the tactic used one
+selected-child branch followed by a trailing all-goals combinator, which left
+`FIRST_ASSUM` with no matching assumption.  The printed parent was the
+declaration-result conjunct, not a new semantic obligation.  The run failed
+normally after `2:23.92`, maximum RSS `1118224` KiB and zero swaps; its log and
+timing-record SHA-256 values are
+`232abb446b093c032cf21e999dcb64ff98d943f7175dd9f5a1d5e0d4719685ed` and
+`b89cbf1f62e8c51523010199f0d1ee69dbbf5bd10f867bf366c21bfa86593021`.
+The isolated branch, head and `.git` pointer passed the postflight check.  A
+deterministic two-selected-child composition was verified in the saved App
+state and focused attempt 007 is replaying that exact proof text.
