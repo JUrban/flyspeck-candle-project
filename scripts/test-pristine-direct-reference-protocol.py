@@ -2223,8 +2223,15 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
                 open_description_index=2,
             ),
             lambda e, t, o, i: t["fds"][1].update(access_mode="read-only"),
+            lambda e, t, o, i: (
+                t["fds"][0].update(access_mode="invented-mode"),
+                o["entries"][0].update(access_mode="invented-mode"),
+            ),
             lambda e, t, o, i: o["entries"][1].update(
                 open_description_id=100,
+            ),
+            lambda e, t, o, i: o["entries"][1].update(
+                open_description_id=1 << 64,
             ),
             lambda e, t, o, i: o["entries"][0].update(
                 object_edge_index=2,
@@ -2336,6 +2343,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             lambda e, s, m, g: s["mapping_indices"].__setitem__(0, False),
             lambda e, s, m, g: m["entries"][0].update(index=False),
             lambda e, s, m, g: m["entries"][0].update(address=True),
+            lambda e, s, m, g: m["entries"][0].update(address=0x1001),
             lambda e, s, m, g: m["entries"][0].update(length=0),
             lambda e, s, m, g: m["entries"][0].update(length=0x1001),
             lambda e, s, m, g: m["entries"][1].update(address=0x2000),
@@ -2371,6 +2379,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             lambda e, s, m, g: e["entries"][0].update(
                 resolved_relative="pft/bootstrap-stub",
             ),
+            lambda e, s, m, g: e["entries"][0].update(mount_id=1 << 32),
         )
         for mutation in mutations:
             hostile = mutated(mutation)

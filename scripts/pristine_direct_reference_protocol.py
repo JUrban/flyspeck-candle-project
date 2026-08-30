@@ -2690,9 +2690,12 @@ def _validate_v4_parent_fd_open_descriptions(
         fd_table, V4_BUILD_INITIAL_FD_TABLE_CONTAINER_FIELDS, table_label,
     )
     fds = table.get("fds")
+    table_id = _v4_uint(table.get("table_id"), 64, f"{table_label} ID")
+    generation = _v4_uint(
+        table.get("generation"), 64, f"{table_label} generation",
+    )
     require(
-        is_int(table.get("table_id")) and table["table_id"] > 0 and
-        is_int(table.get("generation")) and table["generation"] > 0 and
+        table_id > 0 and generation > 0 and
         is_int(table.get("fd_count")) and
         0 <= table["fd_count"] <= V4_BUILD_FD_PER_TABLE_MAX and
         type(fds) is list and len(fds) == table["fd_count"],
@@ -2703,19 +2706,23 @@ def _validate_v4_parent_fd_open_descriptions(
         item = _v4_exact_dict(
             fd, V4_BUILD_INITIAL_FD_FIELDS, f"{table_label} entry {index}",
         )
+        fd_number = _v4_uint(item.get("fd"), 32, f"{table_label} fd")
+        fd_generation = _v4_uint(
+            item.get("fd_generation"), 64,
+            f"{table_label} fd generation",
+        )
         require(
             is_int(item.get("index")) and item["index"] == index and
-            is_int(item.get("fd")) and
-            previous_fd < item["fd"] < V4_BUILD_FD_PER_TABLE_MAX and
-            is_int(item.get("fd_generation")) and
-            item["fd_generation"] > 0 and
+            previous_fd < fd_number < V4_BUILD_FD_PER_TABLE_MAX and
+            fd_generation > 0 and
             type(item.get("cloexec")) is bool and
-            type(item.get("access_mode")) is str and
-            bool(item["access_mode"]) and
+            item.get("access_mode") in {
+                "read-only", "write-only", "read-write", "read-search-only",
+            } and
             is_int(item.get("open_description_index")),
             f"malformed {table_label} entry {index}",
         )
-        previous_fd = item["fd"]
+        previous_fd = fd_number
     require(
         type(table.get("ordered_fd_sha256")) is str and
         table["ordered_fd_sha256"] == canonical_sha256(fds),
@@ -2739,25 +2746,30 @@ def _validate_v4_parent_fd_open_descriptions(
     open_description_ids: set[int] = set()
     for index, description in enumerate(descriptions):
         label = f"V4 initial open description {index}"
+        open_description_id = _v4_uint(
+            description.get("open_description_id"), 64, f"{label} ID",
+        )
+        generation = _v4_uint(
+            description.get("generation"), 64, f"{label} generation",
+        )
+        _v4_uint(description.get("status_flags"), 64,
+                 f"{label} status flags")
+        _v4_uint(description.get("offset"), 64, f"{label} offset")
         require(
-            is_int(description.get("open_description_id")) and
-            description["open_description_id"] > 0 and
-            description["open_description_id"] not in open_description_ids and
-            is_int(description.get("generation")) and
-            description["generation"] > 0 and
+            open_description_id > 0 and
+            open_description_id not in open_description_ids and
+            generation > 0 and
             is_int(description.get("object_edge_index")) and
             0 <= description["object_edge_index"] < len(initial_edges) and
-            type(description.get("access_mode")) is str and
-            bool(description["access_mode"]) and
-            is_int(description.get("status_flags")) and
-            description["status_flags"] >= 0 and
-            is_int(description.get("offset")) and description["offset"] >= 0 and
+            description.get("access_mode") in {
+                "read-only", "write-only", "read-write", "read-search-only",
+            } and
             is_int(description.get("descriptor_ref_count")) and
             description["descriptor_ref_count"] == references[index] and
             references[index] > 0,
             f"malformed {label}",
         )
-        open_description_ids.add(description["open_description_id"])
+        open_description_ids.add(open_description_id)
         validate_v4_build_lock_state(description.get("lock_state"))
     return table, fds, descriptions
 
@@ -2794,24 +2806,32 @@ def validate_v4_build_parent_fd_state(
 def _validate_v4_bootstrap_mapping_edge(
     edge: dict[str, Any], label: str,
 ) -> None:
+    authority_index = _v4_uint(
+        edge.get("authority_index"), 32, f"{label} authority index",
+    )
+    root_fd_generation = _v4_uint(
+        edge.get("root_fd_generation"), 64,
+        f"{label} root fd generation",
+    )
+    mount_id = _v4_uint(edge.get("mount_id"), 32, f"{label} mount ID")
+    _v4_uint(edge.get("st_dev"), 64, f"{label} st_dev")
+    st_ino = _v4_uint(edge.get("st_ino"), 64, f"{label} st_ino")
+    stable_generation = _v4_uint(
+        edge.get("stable_generation"), 64,
+        f"{label} stable generation",
+    )
     require(
         edge.get("domain") == "bootstrap-runtime" and
         type(edge.get("authority_role")) is str and
         bool(edge["authority_role"]) and
-        is_int(edge.get("authority_index")) and
-        edge["authority_index"] >= 0 and
+        authority_index >= 0 and
         type(edge.get("root_identity")) is dict and
-        is_int(edge.get("root_fd_generation")) and
-        edge["root_fd_generation"] > 0 and
+        root_fd_generation > 0 and
         edge.get("input_root_entry_index") is None and
         edge.get("stream_role") is None and
         edge.get("setup_role") is None and
         type(edge.get("parent_descriptor_identity")) is dict and
-        is_int(edge.get("mount_id")) and edge["mount_id"] > 0 and
-        is_int(edge.get("st_dev")) and edge["st_dev"] >= 0 and
-        is_int(edge.get("st_ino")) and edge["st_ino"] > 0 and
-        is_int(edge.get("stable_generation")) and
-        edge["stable_generation"] > 0 and
+        mount_id > 0 and st_ino > 0 and stable_generation > 0 and
         type(edge.get("symlink_decisions")) is list,
         f"malformed {label} bootstrap object edge",
     )
@@ -2830,10 +2850,14 @@ def _validate_v4_parent_address_space_mappings(
         address_space, V4_BUILD_INITIAL_ADDRESS_SPACE_FIELDS, space_label,
     )
     mapping_indices = space.get("mapping_indices")
+    address_space_id = _v4_uint(
+        space.get("address_space_id"), 64, f"{space_label} ID",
+    )
+    generation = _v4_uint(
+        space.get("generation"), 64, f"{space_label} generation",
+    )
     require(
-        is_int(space.get("address_space_id")) and
-        space["address_space_id"] > 0 and
-        is_int(space.get("generation")) and space["generation"] > 0 and
+        address_space_id > 0 and generation > 0 and
         is_int(space.get("mapping_count")) and
         1 <= space["mapping_count"] <= V4_BUILD_VMA_PER_ADDRESS_SPACE_MAX and
         type(mapping_indices) is list and
