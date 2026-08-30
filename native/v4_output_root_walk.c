@@ -785,8 +785,10 @@ v4_orw_list_directory(
         v4_orw_name_vector_destroy(names);
         return result;
     }
-    qsort(names->names, names->count, sizeof(*names->names),
-          v4_orw_name_compare);
+    if (names->count > 1) {
+        qsort(names->names, names->count, sizeof(*names->names),
+              v4_orw_name_compare);
+    }
     {
         size_t index;
         for (index = 1; index < names->count; ++index) {
