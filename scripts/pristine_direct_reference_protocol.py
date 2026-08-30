@@ -4710,6 +4710,188 @@ def enumerate_isolated_native_build_root_v2(
     return entries
 
 
+_v4_build_input_closure_entry_authority_fields = (
+    "entry_count", "total_file_bytes", "ordered_entry_sha256", "entries",
+    "compiler_entry_index", "linker_entry_index", "source_entry_count",
+    "source_entry_indices", "runtime_input_entry_count",
+    "runtime_input_entry_indices", "output_root_entry_index",
+)
+
+
+def _v4_bounded_compact_canonical_digest(
+    value: object, maximum_bytes: int, label: str,
+) -> tuple[int, str]:
+    require(is_int(maximum_bytes) and maximum_bytes >= 0,
+            f"malformed {label} encoded cap")
+    encoder = json.JSONEncoder(
+        sort_keys=True, separators=(",", ":"), allow_nan=False,
+    )
+    byte_count = 0
+    digest = hashlib.sha256()
+    try:
+        for fragment in encoder.iterencode(value):
+            encoded = fragment.encode()
+            byte_count += len(encoded)
+            require(byte_count <= maximum_bytes,
+                    f"{label} exceeds encoded cap")
+            digest.update(encoded)
+    except (TypeError, ValueError) as error:
+        raise ProtocolError(f"malformed {label}: {error}") from error
+    return byte_count, digest.hexdigest()
+
+
+def validate_v4_build_input_closure_entry_authority(
+    compiler: object, linker: object, source_tree: object,
+    runtime_inputs: object, value: object,
+) -> dict[str, Any]:
+    """Validate and snapshot the derived entry/selector closure authority."""
+    label = "V4 native build input-closure entry authority"
+    result = _v4_exact_dict(
+        value, _v4_build_input_closure_entry_authority_fields, label,
+    )
+    expected = enumerate_isolated_native_build_root_v2(
+        compiler, linker, source_tree, runtime_inputs,
+    )
+    entries = result.get("entries")
+    require(
+        is_int(result.get("entry_count")) and
+        4 <= result["entry_count"] <= V4_BUILD_INPUT_CLOSURE_ENTRY_MAX and
+        type(entries) is list and len(entries) == result["entry_count"] and
+        len(entries) == len(expected),
+        f"malformed {label} entry count/list",
+    )
+
+    observed_fields = set(V4_BUILD_INPUT_CLOSURE_OBSERVED_ENTRY_FIELDS)
+    total_file_bytes = 0
+    for index, entry in enumerate(entries):
+        entry_label = f"{label} entry {index}"
+        item = _v4_exact_dict(
+            entry, V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS, entry_label,
+        )
+        projected = {
+            key: item[key] for key in V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS
+            if key not in observed_fields
+        }
+        require_exact_json(projected, expected[index],
+                           f"{entry_label} derived projection")
+        st_nlink = _v4_uint(
+            item.get("st_nlink"), 64, f"{entry_label} st_nlink",
+        )
+        if item["object_type"] == "ordinary-file":
+            require(st_nlink == 1, f"wrong {entry_label} file link count")
+            total_file_bytes += item["bytes"]
+            require(
+                total_file_bytes <= V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES,
+                f"{label} total bytes exceed cap",
+            )
+        else:
+            require(st_nlink > 0, f"wrong {entry_label} directory link count")
+        parent_identity = item.get("parent_descriptor_identity")
+        require(type(parent_identity) is dict,
+                f"malformed {entry_label} parent descriptor identity")
+        _require_v4_exact_json_types(
+            parent_identity, f"{entry_label} parent descriptor identity",
+        )
+        mount_id = _v4_uint(
+            item.get("mount_id"), 32, f"{entry_label} mount ID",
+        )
+        _v4_uint(item.get("st_dev"), 64, f"{entry_label} st_dev")
+        st_ino = _v4_uint(item.get("st_ino"), 64, f"{entry_label} st_ino")
+        generation = _v4_uint(
+            item.get("stable_generation"), 64,
+            f"{entry_label} stable generation",
+        )
+        require(
+            mount_id > 0 and st_ino > 0 and generation > 0,
+            f"malformed {entry_label} observed identity",
+        )
+
+    require(
+        is_int(result.get("total_file_bytes")) and
+        result["total_file_bytes"] == total_file_bytes,
+        f"{label} total-byte mismatch",
+    )
+    _, entry_digest = _v4_bounded_compact_canonical_digest(
+        entries, V4_AUTHORITY_OBJECT_MAX_BYTES, f"{label} entries",
+    )
+    require(
+        type(result.get("ordered_entry_sha256")) is str and
+        result["ordered_entry_sha256"] == entry_digest,
+        f"{label} ordered-entry digest mismatch",
+    )
+
+    compiler_indices: list[int] = []
+    linker_indices: list[int] = []
+    source_by_member: dict[int, int] = {}
+    runtime_by_input: dict[int, int] = {}
+    output_root_indices: list[int] = []
+    for entry in expected:
+        selector = entry["selector"]
+        if selector is None:
+            if entry["relative"] == V4_BUILD_OUTPUT_DIRECTORY:
+                output_root_indices.append(entry["index"])
+            continue
+        kind = selector["kind"]
+        if kind == "build-compiler":
+            compiler_indices.append(entry["index"])
+        elif kind == "build-linker":
+            linker_indices.append(entry["index"])
+        elif kind == "source-tree-member":
+            source_by_member[selector["member_index"]] = entry["index"]
+        else:
+            require(kind == "build-runtime-input",
+                    f"unknown {label} derived selector")
+            runtime_by_input[selector["input_index"]] = entry["index"]
+    source_count = source_tree["file_count"]
+    runtime_count = len(runtime_inputs)
+    require(
+        len(compiler_indices) == 1 and len(linker_indices) == 1 and
+        len(output_root_indices) == 1 and
+        set(source_by_member) == set(range(source_count)) and
+        set(runtime_by_input) == set(range(runtime_count)),
+        f"incomplete {label} derived selectors",
+    )
+    expected_source_indices = [
+        source_by_member[index] for index in range(source_count)
+    ]
+    expected_runtime_indices = [
+        runtime_by_input[index] for index in range(runtime_count)
+    ]
+    require(
+        is_int(result.get("compiler_entry_index")) and
+        result["compiler_entry_index"] == compiler_indices[0] and
+        is_int(result.get("linker_entry_index")) and
+        result["linker_entry_index"] == linker_indices[0] and
+        is_int(result.get("source_entry_count")) and
+        result["source_entry_count"] == source_count and
+        type(result.get("source_entry_indices")) is list and
+        all(is_int(item) for item in result["source_entry_indices"]) and
+        result["source_entry_indices"] == expected_source_indices and
+        is_int(result.get("runtime_input_entry_count")) and
+        result["runtime_input_entry_count"] == runtime_count and
+        type(result.get("runtime_input_entry_indices")) is list and
+        all(is_int(item) for item in result["runtime_input_entry_indices"]) and
+        result["runtime_input_entry_indices"] == expected_runtime_indices and
+        is_int(result.get("output_root_entry_index")) and
+        result["output_root_entry_index"] == output_root_indices[0],
+        f"{label} selector projection mismatch",
+    )
+    _v4_bounded_compact_canonical_digest(
+        result, V4_AUTHORITY_OBJECT_MAX_BYTES, label,
+    )
+    try:
+        snapshot_bytes = canonical_value_bytes({
+            "compiler": compiler,
+            "linker": linker,
+            "source_tree": source_tree,
+            "runtime_inputs": runtime_inputs,
+            "entry_authority": result,
+        })
+    except (TypeError, ValueError) as error:
+        raise ProtocolError(f"malformed {label} snapshot: {error}") from error
+    return json.loads(snapshot_bytes)
+
+
 def enumerate_isolated_native_build_filter_v6() -> dict[str, Any]:
     load_word_absolute = 0x20
     jump_equal = 0x15
