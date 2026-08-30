@@ -920,7 +920,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "PTRACE_O_TRACEEXIT",
             "PTRACE_O_EXITKILL",
         ))
-        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 6)
+        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 7)
         self.assertEqual(subject.V4_BUILD_FILTER_SCHEMA, 6)
         self.assertEqual(subject.V4_BUILD_INPUT_CLOSURE_SCHEMA, 2)
         self.assertEqual(subject.V4_BUILD_SYSCALL_DISPOSITION_SCHEMA, 4)
@@ -1148,6 +1148,29 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ("input-root-entry", "output-generation", "output-root"),
         )
         self.assertEqual(
+            subject.V4_BUILD_SETUP_ROOT_EDGE_DOMAINS,
+            ("setup-root", "input-root"),
+        )
+        self.assertEqual(subject.V4_BUILD_SETUP_ROOT_EDGE_SCHEMA, 1)
+        self.assertEqual(
+            subject.V4_BUILD_SETUP_ROOT_EDGE_KIND,
+            "candle-flyspeck-isolated-native-build-setup-root-edge-v1",
+        )
+        self.assertEqual(
+            subject.V4_BUILD_SETUP_ROOT_EDGE_POLICY,
+            "phase-only-initial-or-held-root-exact-authority-join-v1",
+        )
+        self.assertEqual(
+            subject.V4_BUILD_EVENT_OBJECT_EDGE_DOMAINS,
+            subject.V4_BUILD_OBJECT_EDGE_DOMAINS +
+            subject.V4_BUILD_SETUP_ROOT_EDGE_DOMAINS,
+        )
+        self.assertTrue(
+            set(subject.V4_BUILD_OBJECT_EDGE_DOMAINS).isdisjoint(
+                subject.V4_BUILD_SETUP_ROOT_EDGE_DOMAINS,
+            ),
+        )
+        self.assertEqual(
             subject.V4_BUILD_OUTPUT_GENERATION_FINAL_STATES,
             ("published", "deleted"),
         )
@@ -1179,7 +1202,15 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertIn("clone-newuser", securebits_policy[3])
         self.assertEqual(
             subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
-            "candle-flyspeck-v4-initial-state-seed-v4",
+            "candle-flyspeck-v4-initial-state-seed-v5",
+        )
+        self.assertEqual(
+            subject.V4_BUILD_SETUP_STATE_DIGEST_DOMAIN,
+            "candle-flyspeck-v4-setup-replay-state-v5",
+        )
+        self.assertEqual(
+            subject.V4_BUILD_SETUP_POLICY,
+            "derived-pre-filter-builder-setup-deny-all-other-v6",
         )
         self.assertEqual(
             subject.V4_BUILD_INITIAL_STATE_DIGEST_PREIMAGE,
@@ -1406,12 +1437,12 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             (
                 subject.V4_BUILD_INITIAL_STATE_DIGEST_FIELDS,
                 subject.V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN,
-                "38fb170870e5ba9dc08fd325369c68b5a7a12a9bb3fe1c55b0a5b2cf95428160",
+                "7907fb2d22ca3a5bb22533bc3b5713d62d87107d3a38978e99c5772eb72dd1ef",
             ),
             (
                 subject.V4_BUILD_SETUP_REPLAY_STATE_FIELDS,
                 subject.V4_BUILD_SETUP_STATE_DIGEST_DOMAIN,
-                "93a7fc5bd7105e9b49de6ec1f0f612bc60d176b9b3ca3d2b1d7838a68da14063",
+                "75194504bb3da8f08c6ffdea1b449b7fda5b09e6940ce376890a2050bda60014",
             ),
         )
         for fields, domain, expected in fixtures:
@@ -1428,6 +1459,152 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.v4_ordered_field_digest({"a": 1}, ("a",), "bad\x00domain")
         with self.assertRaisesRegex(subject.ProtocolError, "absent"):
             subject.v4_ordered_field_digest({}, ("a",), "domain")
+
+    def test_v4_setup_root_event_edges_are_closed_and_representable(self) -> None:
+        setup_root_identity = {"fixture": "initial-setup-root"}
+        input_root_identity = {"fixture": "held-input-root"}
+        input_root_fd_generation = 17
+
+        def initial_edge(domain: str) -> dict[str, object]:
+            is_input = domain == "input-root"
+            return {
+                "index": 3 if is_input else 2,
+                "domain": domain,
+                "authority_role": "fixture-authority" if is_input else None,
+                "authority_index": 0 if is_input else None,
+                "root_identity": (
+                    input_root_identity if is_input else setup_root_identity
+                ),
+                "root_fd_generation": (
+                    input_root_fd_generation if is_input else None
+                ),
+                "input_root_entry_index": None,
+                "stream_role": None,
+                "setup_role": None if is_input else "builder-initial-root",
+                "parent_descriptor_identity": {
+                    "fixture": f"{domain}-parent-descriptor",
+                },
+                "mount_id": 101 if is_input else 100,
+                "st_dev": 7,
+                "st_ino": 43 if is_input else 42,
+                "stable_generation": 5,
+                "resolved_relative": ".",
+                "symlink_decisions": [],
+            }
+
+        policies = subject.V4_BUILD_SETUP_ROOT_EDGE_ROLE_POLICY
+        self.assertTrue(all(
+            len(row) == len(subject.V4_BUILD_SETUP_ROOT_EDGE_POLICY_FIELDS)
+            for row in policies
+        ))
+        policy_roles = tuple(row[0] for row in policies)
+        required_edge_roles = tuple(
+            row[0]
+            for row in subject.V4_BUILD_SETUP_OPERATION_CAPTURE_POLICY
+            if row[5] == ("exact-values", 1)
+        )
+        self.assertEqual(policy_roles, required_edge_roles)
+        self.assertEqual(policy_roles, (
+            "private-mount-propagation",
+            "enter-held-input-root",
+            "chroot-into-input-root",
+            "enter-new-root",
+        ))
+        self.assertEqual(
+            {row[0]: row[-1] for row in policies},
+            {
+                "private-mount-propagation":
+                    "mount-propagation-change-includes-edge-mount-id",
+                "enter-held-input-root":
+                    "cwd-change-index-zero-after-identity-equals-edge-root",
+                "chroot-into-input-root":
+                    "root-change-index-zero-after-identity-equals-edge-root",
+                "enter-new-root":
+                    "cwd-change-index-zero-after-identity-equals-edge-root",
+            },
+        )
+
+        generated: dict[str, dict[str, object]] = {}
+        for role, domain, initial_domain, *_ in policies:
+            edge = subject.enumerate_isolated_native_build_setup_root_edge_v1(
+                role,
+                initial_edge(initial_domain),
+                setup_root_identity,
+                input_root_identity,
+                input_root_fd_generation,
+            )
+            generated[role] = edge
+            self.assertEqual(set(edge), set(subject.V4_BUILD_OBJECT_EDGE_FIELDS))
+            self.assertEqual(edge["index"], 0)
+            self.assertEqual(edge["domain"], domain)
+            self.assertIn(domain, subject.V4_BUILD_EVENT_OBJECT_EDGE_DOMAINS)
+            self.assertNotIn(domain, subject.V4_BUILD_OBJECT_EDGE_DOMAINS)
+            self.assertIsNone(edge["input_root_entry_index"])
+            self.assertIsNone(edge["output_generation_index"])
+            self.assertIsNone(edge["post_tree_entry_index"])
+            self.assertEqual(edge["resolved_relative"], ".")
+            self.assertEqual(edge["symlink_decisions"], [])
+            self.assertIsNot(edge["root_identity"], (
+                input_root_identity if domain == "input-root"
+                else setup_root_identity
+            ))
+        self.assertEqual(
+            generated["private-mount-propagation"]["root_identity"],
+            setup_root_identity,
+        )
+        self.assertIsNone(
+            generated["private-mount-propagation"]["root_fd_generation"],
+        )
+        for role in policy_roles[1:]:
+            self.assertEqual(generated[role]["root_identity"], input_root_identity)
+            self.assertEqual(
+                generated[role]["root_fd_generation"],
+                input_root_fd_generation,
+            )
+
+        input_edge = initial_edge("input-root")
+        hostile_edges = (
+            {**input_edge, "domain": "input-root-entry"},
+            {**input_edge, "root_identity": {"fixture": "wrong-root"}},
+            {**input_edge, "root_fd_generation": 18},
+            {**input_edge, "input_root_entry_index": 0},
+            {**input_edge, "resolved_relative": "candle-source"},
+            {**input_edge, "symlink_decisions": ["followed"]},
+            {**input_edge, "stable_generation": True},
+            {**input_edge, "parent_descriptor_identity": "not-an-identity"},
+            {key: value for key, value in input_edge.items() if key != "mount_id"},
+            type("InitialEdge", (dict,), {})(input_edge),
+        )
+        for hostile in hostile_edges:
+            with self.subTest(hostile=hostile), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.enumerate_isolated_native_build_setup_root_edge_v1(
+                    "enter-held-input-root",
+                    hostile,
+                    setup_root_identity,
+                    input_root_identity,
+                    input_root_fd_generation,
+                )
+        with self.assertRaises(subject.ProtocolError):
+            subject.enumerate_isolated_native_build_setup_root_edge_v1(
+                "unknown-setup-role", input_edge, setup_root_identity,
+                input_root_identity, input_root_fd_generation,
+            )
+        with self.assertRaises(subject.ProtocolError):
+            subject.enumerate_isolated_native_build_setup_root_edge_v1(
+                "enter-held-input-root", input_edge, setup_root_identity,
+                input_root_identity, True,
+            )
+        with mock.patch.object(
+            subject,
+            "V4_BUILD_EVENT_OBJECT_EDGE_DOMAINS",
+            subject.V4_BUILD_OBJECT_EDGE_DOMAINS,
+        ), self.assertRaisesRegex(subject.ProtocolError, "unregistered"):
+            subject.enumerate_isolated_native_build_setup_root_edge_v1(
+                "enter-held-input-root", input_edge, setup_root_identity,
+                input_root_identity, input_root_fd_generation,
+            )
 
     def test_complete_v4_constant_table_fingerprint(self) -> None:
         def normalize(value: object) -> object:
@@ -1450,10 +1627,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 377)
+        self.assertEqual(len(values), 384)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "80e4c4fb9065ad45612b5d8fc1d7bc489aba6f22a9fc7b4f5345e0c8913fd139",
+            "d45871ad16dd89b25f215daef29bb76c42b092a920580962aebffb6ddaec5990",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:

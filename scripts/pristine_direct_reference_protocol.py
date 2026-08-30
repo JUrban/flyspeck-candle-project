@@ -416,12 +416,12 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
 V4_BUILD_FILTER_ENOSYS_SYSCALLS = (
     (435, "clone3"),
 )
-V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 6
+V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 7
 V4_BUILD_EXECUTION_OBSERVATION_KIND = (
-    "candle-flyspeck-isolated-native-build-execution-observation-v6"
+    "candle-flyspeck-isolated-native-build-execution-observation-v7"
 )
 V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
-    "outside-parent-all-task-source-consumption-and-output-chronology-v6"
+    "outside-parent-all-task-source-consumption-and-output-chronology-v7"
 )
 V4_BUILD_EXECUTION_TASK_MAX = 4_096
 V4_BUILD_EXECUTION_EVENT_MAX = 131_072
@@ -448,7 +448,7 @@ V4_BUILD_INITIAL_STATE_CAPTURE_BOUNDARY = (
     "held-interrupt-stop-after-id-maps-before-builder-gate-release-v1"
 )
 V4_BUILD_INITIAL_STATE_DIGEST_DOMAIN = (
-    "candle-flyspeck-v4-initial-state-seed-v4"
+    "candle-flyspeck-v4-initial-state-seed-v5"
 )
 V4_BUILD_INITIAL_STATE_DIGEST_PREIMAGE = (
     "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
@@ -786,13 +786,13 @@ V4_BUILD_SETUP_REPLAY_STATE_FIELDS = (
     "fs_state", "mount_graph", "credentials", "task_control_state",
 )
 V4_BUILD_SETUP_STATE_DIGEST_DOMAIN = (
-    "candle-flyspeck-v4-setup-replay-state-v4"
+    "candle-flyspeck-v4-setup-replay-state-v5"
 )
 V4_BUILD_SETUP_STATE_DIGEST_PREIMAGE = (
     "ascii-domain-nul-canonical-json-array-of-ordered-field-values-v1"
 )
 V4_BUILD_SETUP_POLICY = (
-    "derived-pre-filter-builder-setup-deny-all-other-v5"
+    "derived-pre-filter-builder-setup-deny-all-other-v6"
 )
 V4_BUILD_SETUP_SEQUENCE_FIELDS = (
     "index", "role", "syscall_numbers", "argument_policy",
@@ -1099,6 +1099,54 @@ V4_BUILD_OBJECT_EDGE_FIELDS = (
 )
 V4_BUILD_OBJECT_EDGE_DOMAINS = (
     "input-root-entry", "output-generation", "output-root",
+)
+V4_BUILD_SETUP_ROOT_EDGE_SCHEMA = 1
+V4_BUILD_SETUP_ROOT_EDGE_KIND = (
+    "candle-flyspeck-isolated-native-build-setup-root-edge-v1"
+)
+V4_BUILD_SETUP_ROOT_EDGE_POLICY = (
+    "phase-only-initial-or-held-root-exact-authority-join-v1"
+)
+V4_BUILD_SETUP_ROOT_EDGE_DOMAINS = (
+    "setup-root", "input-root",
+)
+V4_BUILD_EVENT_OBJECT_EDGE_DOMAINS = (
+    V4_BUILD_OBJECT_EDGE_DOMAINS + V4_BUILD_SETUP_ROOT_EDGE_DOMAINS
+)
+V4_BUILD_SETUP_ROOT_EDGE_POLICY_FIELDS = (
+    "role", "domain", "initial_edge_domain", "root_identity_join",
+    "root_fd_generation_join", "stable_identity_join",
+    "fs_transition_join",
+)
+V4_BUILD_SETUP_ROOT_EDGE_ROLE_POLICY = (
+    (
+        "private-mount-propagation", "setup-root", "setup-root",
+        "state-before-fs-root-and-unique-initial-setup-root",
+        "null",
+        "unique-initial-setup-root-and-builder-mount-graph-index-zero",
+        "mount-propagation-change-includes-edge-mount-id",
+    ),
+    (
+        "enter-held-input-root", "input-root", "input-root",
+        "input-closure-root-and-unique-initial-input-root",
+        "input-closure-root-fd-generation-and-live-fchdir-fd",
+        "unique-initial-input-root-and-held-root-observation",
+        "cwd-change-index-zero-after-identity-equals-edge-root",
+    ),
+    (
+        "chroot-into-input-root", "input-root", "input-root",
+        "input-closure-root-and-unique-initial-input-root",
+        "input-closure-root-fd-generation-and-live-held-root-fd",
+        "unique-initial-input-root-and-held-root-observation",
+        "root-change-index-zero-after-identity-equals-edge-root",
+    ),
+    (
+        "enter-new-root", "input-root", "input-root",
+        "input-closure-root-and-unique-initial-input-root",
+        "input-closure-root-fd-generation-and-live-held-root-fd",
+        "unique-initial-input-root-and-held-root-observation",
+        "cwd-change-index-zero-after-identity-equals-edge-root",
+    ),
 )
 V4_BUILD_OPEN_HOW_FIELDS = (
     "address", "size", "payload_base64", "sha256", "flags", "mode",
@@ -2960,6 +3008,106 @@ def _require_v4_exact_json_types(value: object, label: str) -> None:
                 stack.append((child, f"{item_label}.{key}", depth + 1))
             continue
         raise ProtocolError(f"malformed {item_label} JSON type")
+
+
+def enumerate_isolated_native_build_setup_root_edge_v1(
+    role: object,
+    initial_edge: object,
+    setup_root_identity: object,
+    input_root_identity: object,
+    input_root_fd_generation: object,
+) -> dict[str, Any]:
+    """Derive the sole setup-event edge for a root-selection operation."""
+    label = "V4 isolated native build setup root edge"
+    _require_v4_exact_json_types(
+        [role, initial_edge, setup_root_identity, input_root_identity,
+         input_root_fd_generation],
+        label,
+    )
+    require(type(role) is str, f"malformed {label} role")
+    require(
+        type(setup_root_identity) is dict and
+        type(input_root_identity) is dict and
+        is_int(input_root_fd_generation) and
+        input_root_fd_generation > 0,
+        f"malformed {label} authority joins",
+    )
+    policies = {
+        row[0]: row for row in V4_BUILD_SETUP_ROOT_EDGE_ROLE_POLICY
+    }
+    require(role in policies, f"unknown {label} role")
+    require(
+        type(initial_edge) is dict and
+        set(initial_edge) == set(V4_BUILD_INITIAL_OBJECT_EDGE_FIELDS),
+        f"malformed {label} initial edge",
+    )
+    policy = policies[role]
+    expected_domain = policy[1]
+    expected_initial_domain = policy[2]
+    require(
+        expected_domain in V4_BUILD_SETUP_ROOT_EDGE_DOMAINS and
+        expected_domain in V4_BUILD_EVENT_OBJECT_EDGE_DOMAINS and
+        expected_domain not in V4_BUILD_OBJECT_EDGE_DOMAINS,
+        f"unregistered {label} domain",
+    )
+    require(
+        initial_edge["domain"] == expected_initial_domain,
+        f"wrong {label} initial edge domain",
+    )
+    require(
+        is_int(initial_edge["index"]) and initial_edge["index"] >= 0,
+        f"malformed {label} initial edge index",
+    )
+    require(
+        initial_edge["input_root_entry_index"] is None and
+        initial_edge["resolved_relative"] == "." and
+        initial_edge["symlink_decisions"] == [],
+        f"malformed {label} root selection",
+    )
+    require(
+        type(initial_edge["parent_descriptor_identity"]) is dict and
+        is_int(initial_edge["mount_id"]) and initial_edge["mount_id"] > 0 and
+        is_int(initial_edge["st_dev"]) and initial_edge["st_dev"] >= 0 and
+        is_int(initial_edge["st_ino"]) and initial_edge["st_ino"] > 0 and
+        is_int(initial_edge["stable_generation"]) and
+        initial_edge["stable_generation"] > 0,
+        f"incomplete {label} stable identity",
+    )
+    if expected_domain == "setup-root":
+        expected_root_identity = setup_root_identity
+        expected_root_fd_generation = None
+    else:
+        expected_root_identity = input_root_identity
+        expected_root_fd_generation = input_root_fd_generation
+    require(
+        type(expected_root_identity) is dict and
+        initial_edge["root_identity"] == expected_root_identity,
+        f"wrong {label} root identity join",
+    )
+    require(
+        initial_edge["root_fd_generation"] == expected_root_fd_generation,
+        f"wrong {label} root fd generation join",
+    )
+    return {
+        "index": 0,
+        "domain": expected_domain,
+        "root_identity": json.loads(canonical_value_bytes(
+            expected_root_identity
+        )),
+        "root_fd_generation": expected_root_fd_generation,
+        "input_root_entry_index": None,
+        "output_generation_index": None,
+        "post_tree_entry_index": None,
+        "parent_descriptor_identity": json.loads(canonical_value_bytes(
+            initial_edge["parent_descriptor_identity"]
+        )),
+        "mount_id": initial_edge["mount_id"],
+        "st_dev": initial_edge["st_dev"],
+        "st_ino": initial_edge["st_ino"],
+        "stable_generation": initial_edge["stable_generation"],
+        "resolved_relative": ".",
+        "symlink_decisions": [],
+    }
 
 
 def validate_isolated_native_build_filter(value: object) -> dict[str, Any]:
