@@ -270,11 +270,15 @@ def open_pinned_directory(path: Path, label: str) -> tuple[int, tuple[int, int]]
         )
     except OSError as error:
         raise ResultError(f"could not pin {label}: {path}") from error
-    opened = os.fstat(descriptor)
-    named = path.stat(follow_symlinks=False)
-    require(stat.S_ISDIR(opened.st_mode) and
-            (opened.st_dev, opened.st_ino) == (named.st_dev, named.st_ino),
-            f"{label} identity changed while opening")
+    try:
+        opened = os.fstat(descriptor)
+        named = path.stat(follow_symlinks=False)
+        require(stat.S_ISDIR(opened.st_mode) and
+                (opened.st_dev, opened.st_ino) == (named.st_dev, named.st_ino),
+                f"{label} identity changed while opening")
+    except Exception:
+        os.close(descriptor)
+        raise
     return descriptor, (opened.st_dev, opened.st_ino)
 
 
@@ -932,18 +936,20 @@ def build_schema6_capture_result(
             receipt_data == protocol.canonical_json_bytes(receipt) and
             plan_data == protocol.canonical_json_bytes(plan),
             "schema-6 capture sources are not exact canonical JSON")
+    expected_authority = {
+        "policy": protocol.AUTHENTICATED_CAPTURE_POLICY,
+        "consumer_project_commit": arguments.project_head,
+        "candle_commit": arguments.candle_head,
+        "cakeml_commit": arguments.cakeml_head,
+        "hol4_commit": arguments.hol4_head,
+        "flyspeck_commit": arguments.flyspeck_head,
+    }
     capture = protocol.build_authenticated_schema6_capture(
-        receipt, plan, {
-            "policy": protocol.AUTHENTICATED_CAPTURE_POLICY,
-            "consumer_project_commit": arguments.project_head,
-            "candle_commit": arguments.candle_head,
-            "cakeml_commit": arguments.cakeml_head,
-            "hol4_commit": arguments.hol4_head,
-            "flyspeck_commit": arguments.flyspeck_head,
-        },
+        receipt, plan, expected_authority,
     )
     require(capture["receipt"] == data_record(receipt_data) and
             capture["authenticated_plan"] == data_record(plan_data) and
+            capture["authority"] == expected_authority and
             capture["promotion"] is False and
             capture["approval_included"] is False and
             capture["direct_s2_execution_approved"] is False and

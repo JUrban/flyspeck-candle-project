@@ -10,6 +10,7 @@ import sys
 import tempfile
 import types
 import unittest
+from unittest import mock
 
 
 SUBJECT_PATH = Path(__file__).with_name("check-published-direct-result.py")
@@ -157,6 +158,31 @@ class PublishedDirectResultTests(unittest.TestCase):
                     )
             finally:
                 os.close(descriptor)
+
+    def test_open_pinned_directory_closes_descriptor_on_identity_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "result"
+            root.mkdir()
+            real_open = os.open
+            opened = []
+
+            def record_open(*args, **kwargs):
+                descriptor = real_open(*args, **kwargs)
+                opened.append(descriptor)
+                return descriptor
+
+            with mock.patch.object(subject.os, "open", side_effect=record_open), \
+                    mock.patch.object(
+                        subject, "require",
+                        side_effect=subject.ResultError("forced identity failure"),
+                    ):
+                with self.assertRaisesRegex(
+                    subject.ResultError, "forced identity failure",
+                ):
+                    subject.open_pinned_directory(root, "result")
+            self.assertEqual(len(opened), 1)
+            with self.assertRaises(OSError):
+                os.fstat(opened[0])
 
     def test_held_lock_rejects_build_directory_replacement(self):
         with tempfile.TemporaryDirectory() as temporary:

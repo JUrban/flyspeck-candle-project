@@ -786,6 +786,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         self.assertIs(
             subject.validate_authenticated_schema6_capture(
                 capture, receipt=receipt, authenticated_plan=plan,
+                expected_authority=authority,
             ), capture,
         )
         self.assertFalse(capture["approval_included"])
@@ -814,8 +815,11 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 v1_3_s3_release_approved=True,
             )),
             ("PFT", lambda item: item.update(pft_used=True)),
-            ("authority", lambda item: item["authority"].update(
-                flyspeck_commit="0" * 40,
+            *((field, lambda item, field=field: item["authority"].update({
+                field: "0" * 40,
+            })) for field in (
+                "consumer_project_commit", "candle_commit", "cakeml_commit",
+                "hol4_commit", "flyspeck_commit",
             )),
         ):
             forged = copy.deepcopy(capture)
@@ -825,6 +829,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ):
                 subject.validate_authenticated_schema6_capture(
                     forged, receipt=receipt, authenticated_plan=plan,
+                    expected_authority=authority,
                 )
 
     def test_capture_rejects_a_spliced_source_pair(self) -> None:
@@ -842,6 +847,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         with self.assertRaises(subject.ProtocolError):
             subject.validate_authenticated_schema6_capture(
                 capture, receipt=receipt, authenticated_plan=spliced_plan,
+                expected_authority=capture["authority"],
             )
 
     def test_coverage_requires_exact_final_boundary_count_and_no_pft(self) -> None:
@@ -901,6 +907,24 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(subject.ProtocolError, "normalized SHA-256"):
             subject.validate_coverage_projection(projection)
+        for unsafe_id in (
+            "PFT-instrumented", "normalization-pft-results-v1",
+            "normalization_pft_trace_v1", "normalization\ncontrol-v1",
+        ):
+            projection = coverage_fixture()
+            normalization = projection["logical_source_coverage"]["records"][4][
+                "execution_normalization"
+            ]
+            normalization["id"] = unsafe_id
+            projection["logical_source_coverage"]["ordered_record_sha256"] = (
+                subject.canonical_sha256(
+                    projection["logical_source_coverage"]["records"]
+                )
+            )
+            with self.subTest(unsafe_id=unsafe_id), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.validate_coverage_projection(projection)
         projection = coverage_fixture()
         records = projection["logical_source_coverage"]["records"]
         records[4]["key"] = "flyspeck:c.hl"
@@ -1043,6 +1067,15 @@ class DirectReleaseProtocolTests(unittest.TestCase):
     def test_certificate_consumption_positive_exact_and_pft_free(self) -> None:
         projection = coverage_fixture()
         projection["lp_certificate_consumption"]["records"][0]["event_count"] = 0
+        projection["lp_certificate_consumption"]["ordered_record_sha256"] = (
+            subject.canonical_sha256(
+                projection["lp_certificate_consumption"]["records"]
+            )
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "consumption record"):
+            subject.validate_coverage_projection(projection)
+        projection = coverage_fixture()
+        projection["lp_certificate_consumption"]["records"][0]["event_count"] = 2
         projection["lp_certificate_consumption"]["ordered_record_sha256"] = (
             subject.canonical_sha256(
                 projection["lp_certificate_consumption"]["records"]

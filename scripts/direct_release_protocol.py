@@ -386,6 +386,14 @@ def _no_pft_namespace(value: str, label: str) -> str:
     return value
 
 
+def _validate_printable_label(value: object, label: str) -> str:
+    require(isinstance(value, str) and value and
+            all(ord(character) >= 32 and character != "\x7f"
+                for character in value),
+            f"malformed {label}")
+    return _no_pft_namespace(value, label)
+
+
 def _validate_logical_source_key(value: str, label: str) -> str:
     _no_pft_namespace(value, label)
     repository, separator, relative = value.partition(":")
@@ -464,10 +472,13 @@ def _validate_logical_source_coverage(value: object) -> dict[str, Any]:
         require(normalization is None or (
             isinstance(normalization, dict) and set(normalization) == {
                 "id", "normalized_sha256", "normalized_md5",
-            } and isinstance(normalization.get("id"), str) and
-            bool(normalization["id"])
+            }
         ), f"malformed direct logical-source normalization: {index}")
         if isinstance(normalization, dict):
+            _validate_printable_label(
+                normalization.get("id"),
+                f"direct logical-source normalization ID: {index}",
+            )
             _hex(normalization.get("normalized_sha256"), HEX64,
                  f"direct logical-source normalized SHA-256: {index}")
             _hex(normalization.get("normalized_md5"), HEX32,
@@ -692,7 +703,7 @@ def _validate_certificate_consumption(
                     "lp-certificate", "lp-certificate-prepared",
                 } and type(record.get("bytes")) is int and record["bytes"] > 0 and
                 type(record.get("event_count")) is int and
-                record["event_count"] >= 1,
+                record["event_count"] == 1,
                 f"malformed direct LP-certificate consumption record: {index}")
         relative = _safe_relative(
             record.get("relative"),
@@ -1192,6 +1203,7 @@ def validate_authenticated_schema6_capture(
     *,
     receipt: object,
     authenticated_plan: object,
+    expected_authority: object,
 ) -> dict[str, Any]:
     fields = {
         "schema", "kind", "boundary_id", "action_count", "receipt",
@@ -1227,7 +1239,10 @@ def validate_authenticated_schema6_capture(
     validate_semantic_projection(value.get("semantic_projection"))
     validate_coverage_projection(value.get("coverage_projection"))
     authority = _validate_capture_authority(value.get("authority"))
+    expected = _validate_capture_authority(expected_authority)
 
+    require(authority == expected,
+            "direct capture authority differs from authenticated authority")
     require(value["receipt"] == _content_record(receipt) and
             value["authenticated_plan"] == _content_record(authenticated_plan),
             "direct capture source content differs from bound records")
@@ -1282,6 +1297,7 @@ def build_authenticated_schema6_capture(
     }
     return validate_authenticated_schema6_capture(
         capture, receipt=receipt, authenticated_plan=authenticated_plan,
+        expected_authority=authority,
     )
 
 
