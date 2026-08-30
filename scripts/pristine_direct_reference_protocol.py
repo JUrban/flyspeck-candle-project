@@ -296,17 +296,32 @@ V4_ORDERED_LIST_ENCODING = "compact-canonical-json-list-v1"
 V4_TRACE_CHUNK_DIGEST_DOMAIN = "CANDLE_V4_TRACE_CHUNKS_V1"
 V4_TRACE_RECORD_DIGEST_DOMAIN = "CANDLE_V4_TRACE_RECORDS_V1"
 V4_BUILD_RUNTIME_INPUT_ROLES = (
-    "compiler-runtime",
-    "linker-runtime",
     "header",
     "startup-object",
     "linker-script",
     "static-library",
     "shared-library",
-    "dynamic-loader",
     "runtime-data",
 )
 V4_BUILD_RUNTIME_INPUT_MIN = 1
+V4_BUILD_INPUT_CLOSURE_SCHEMA = 1
+V4_BUILD_INPUT_CLOSURE_KIND = (
+    "candle-flyspeck-isolated-native-build-input-closure-v1"
+)
+V4_BUILD_INPUT_CLOSURE_POLICY = (
+    "outside-parent-held-pivot-root-exhaustive-input-tree-v1"
+)
+V4_BUILD_INPUT_CLOSURE_ENTRY_MAX = 196_608
+V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES = 1_073_741_824
+V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES = 68_719_476_736
+V4_BUILD_READONLY_DIRECTORY_MODE = 16_749
+V4_BUILD_FILTER_SCHEMA = 1
+V4_BUILD_FILTER_KIND = (
+    "candle-flyspeck-isolated-native-build-seccomp-filter-v1"
+)
+V4_BUILD_FILTER_POLICY = (
+    "isolated-native-build-post-pivot-deny-escape-and-network-v1"
+)
 V4_BUILD_OUTPUT_ROLES = (
     "target-executable",
     "intermediate-object",
@@ -767,6 +782,22 @@ def validate_canonical_native_source_tree_bytes(data: bytes) -> dict[str, Any]:
         data, label, validate_native_source_tree,
         integer_max_digits=JSON_INTEGER_MAX_DIGITS,
     )
+
+
+def classify_isolated_native_build_runtime_input_v1(path: object) -> str:
+    text = _v4_source_tree_relative(path, "V4 native build runtime-input path")
+    basename = text.rsplit("/", 1)[-1]
+    if basename.endswith((".h", ".hh", ".hpp", ".hxx", ".inc")):
+        return "header"
+    if re.fullmatch(r"crt[^/]*\.o", basename) is not None:
+        return "startup-object"
+    if basename.endswith((".ld", ".lds")):
+        return "linker-script"
+    if basename.endswith(".a"):
+        return "static-library"
+    if re.search(r"\.so(?:\.[0-9]+)*$", basename) is not None:
+        return "shared-library"
+    return "runtime-data"
 
 
 def _repository_record(value: object, label: str) -> dict[str, Any]:

@@ -845,6 +845,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "V4_COLLECTION_FRAME_MAX_BYTES": 402_653_396,
             "V4_SOURCE_TREE_MEMBER_MAX": 65_536,
             "V4_SOURCE_TREE_TOTAL_MAX_BYTES": 4_294_967_296,
+            "V4_BUILD_INPUT_CLOSURE_ENTRY_MAX": 196_608,
+            "V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES": 1_073_741_824,
+            "V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES": 68_719_476_736,
             "V4_INVENTORY_OBJECT_MAX": 131_072,
             "V4_INVENTORY_TOTAL_MAX_BYTES": 68_719_476_736,
             "V4_NAMESPACE_EDGE_MAX": 16_384,
@@ -893,10 +896,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 141)
+        self.assertEqual(len(values), 151)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "42ffee47f6c98f4baeaecb85b6fcc15d0ab39334060d2488bbcb37aa8959338b",
+            "919658c39e0a273dabb192da82e69298ef842ea4db71905c7814f3a0dd56e225",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
@@ -1067,6 +1070,34 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(subject.ProtocolError, "unordered"):
             subject.validate_native_source_tree(forged)
+
+    def test_v4_native_build_runtime_input_role_classifier(self) -> None:
+        cases = {
+            "usr/include/stdio.h": "header",
+            "usr/include/c++/vector.hpp": "header",
+            "usr/lib/crt1.o": "startup-object",
+            "usr/lib/layout.lds": "linker-script",
+            "usr/lib/libc.a": "static-library",
+            "lib/x86_64-linux-gnu/libc.so.6": "shared-library",
+            "usr/bin/as": "runtime-data",
+            "usr/lib/ordinary.o": "runtime-data",
+        }
+        for path, expected in cases.items():
+            with self.subTest(path=path):
+                self.assertEqual(
+                    subject.classify_isolated_native_build_runtime_input_v1(
+                        path,
+                    ),
+                    expected,
+                )
+        for path in (
+            "", "/usr/include/a.h", "usr/../include/a.h", "pft/tool.h",
+            type("Path", (str,), {})("usr/include/a.h"),
+        ):
+            with self.subTest(path=path), self.assertRaises(
+                subject.ProtocolError,
+            ):
+                subject.classify_isolated_native_build_runtime_input_v1(path)
 
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
