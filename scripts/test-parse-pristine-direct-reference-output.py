@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
@@ -20,15 +21,17 @@ def load_module(name: str, filename: str):
     return module
 
 
-subject = load_module(
-    "parse_pristine_direct_reference_output",
-    "parse-pristine-direct-reference-output.py",
+loader_module = load_module(
+    "load_pristine_direct_reference_output",
+    "load-pristine-direct-reference-output.py",
 )
+subject = None
 fixture_module = load_module(
     "parse_pristine_direct_reference_fixture",
     "test-pristine-direct-reference-protocol.py",
 )
 protocol = fixture_module.subject
+PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 
 
 def replace_field(line: str, index: int, value: str) -> str:
@@ -129,7 +132,11 @@ def marker_indices(lines: list[str], marker: str) -> list[int]:
 class PristineOutputParserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
+        global subject
         cls.bundle = fixture_module.bundle_fixture()
+        subject = loader_module.load_trusted_output_parser(
+            PROJECT_ROOT, cls.bundle["plan"],
+        )
         cls.plan = cls.bundle["plan"]
         cls.request = cls.bundle["request"]
         cls.lines = producer_lines(cls.bundle)
@@ -459,17 +466,70 @@ class PristineOutputParserTests(unittest.TestCase):
         ):
             self.parse(plan=plan, request=request)
 
+        plan = copy.deepcopy(self.plan)
+        plan["authority"]["producer"]["protocol"]["sha256"] = "0" * 64
+        request = fixture_module.make_request(plan)
+        with self.assertRaisesRegex(
+            subject.OutputProtocolError,
+            "executing pristine protocol differs from plan authority",
+        ):
+            self.parse(plan=plan, request=request)
+
+    def test_trusted_loader_binds_fixed_sources_and_ignores_bytecode(self) -> None:
+        forged = copy.deepcopy(self.plan)
+        forged["authority"]["producer"]["protocol"]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(
+            loader_module.LoaderError, "protocol source differs",
+        ):
+            loader_module.load_trusted_output_parser(PROJECT_ROOT, forged)
+
+        untrusted = load_module(
+            "untrusted_pristine_output_parser",
+            "parse-pristine-direct-reference-output.py",
+        )
+        with self.assertRaisesRegex(
+            untrusted.OutputProtocolError, "trusted fixed-path.*required",
+        ):
+            untrusted._protocol()
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            scripts = root / "scripts"
+            scripts.mkdir()
+            for relative in (
+                protocol.PROTOCOL_PATH, protocol.OUTPUT_PARSER_PATH,
+            ):
+                source = PROJECT_ROOT / relative
+                (root / relative).write_bytes(source.read_bytes())
+            cache = scripts / "__pycache__"
+            cache.mkdir()
+            (cache / "parse-pristine-direct-reference-output.pyc").write_bytes(
+                b"hostile bytecode must not execute"
+            )
+            plan = copy.deepcopy(self.plan)
+            plan["authority"]["repositories"]["project"]["path"] = str(root)
+            loaded = loader_module.load_trusted_output_parser(root, plan)
+            self.assertEqual(loaded._TRUSTED_PROJECT_ROOT, str(root))
+            self.assertEqual(
+                loaded._executing_parser_source_record(loaded._protocol()),
+                plan["authority"]["producer"]["output_parser"],
+            )
+
     def test_incompatible_protocol_sibling_fails_closed(self) -> None:
         sibling = subject._protocol()
-        original = sibling.RAW_PROTOCOL_SCHEMA
-        try:
-            sibling.RAW_PROTOCOL_SCHEMA = 1
-            with self.assertRaisesRegex(
-                subject.OutputProtocolError, "incompatible.*sibling",
-            ):
-                self.parse()
-        finally:
-            sibling.RAW_PROTOCOL_SCHEMA = original
+        for name, replacement in (
+            ("RAW_PROTOCOL_SCHEMA", 1),
+            ("REFERENCE_ROLE", "forged-reference-role"),
+        ):
+            original = getattr(sibling, name)
+            try:
+                setattr(sibling, name, replacement)
+                with self.subTest(name=name), self.assertRaisesRegex(
+                    subject.OutputProtocolError, "incompatible.*sibling",
+                ):
+                    self.parse()
+            finally:
+                setattr(sibling, name, original)
         self.assertIs(subject._protocol(), sibling)
 
     def test_complete_counts_and_marker_shape_are_exact(self) -> None:

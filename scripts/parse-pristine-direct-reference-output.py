@@ -27,8 +27,6 @@ is raw, unauthenticated, unapproved, and ineligible for S2/S3.
 from __future__ import annotations
 
 import hashlib
-import importlib.util
-from pathlib import Path
 import re
 from types import ModuleType
 from typing import Any
@@ -92,15 +90,17 @@ def require(condition: bool, message: str) -> None:
         raise OutputProtocolError(message)
 
 
-try:
-    _EXECUTING_SOURCE_BYTES = Path(__file__).read_bytes()
-except OSError as error:
-    raise OutputProtocolError(
-        f"cannot capture executing output parser source: {error}"
-    ) from error
-
-
-_PROTOCOL: ModuleType | None = None
+_TRUSTED_ACTIVATION = globals().get("_TRUSTED_ACTIVATION") is True
+_TRUSTED_PROJECT_ROOT = globals().get("_TRUSTED_PROJECT_ROOT_INPUT")
+_EXECUTING_SOURCE_BYTES = globals().get("_TRUSTED_SOURCE_BYTES_INPUT")
+_EXECUTING_PROTOCOL_BYTES = globals().get("_TRUSTED_PROTOCOL_BYTES_INPUT")
+_PROTOCOL: ModuleType | None = globals().get("_TRUSTED_PROTOCOL_MODULE_INPUT")
+if _TRUSTED_ACTIVATION:
+    require(isinstance(_TRUSTED_PROJECT_ROOT, str) and
+            type(_EXECUTING_SOURCE_BYTES) is bytes and
+            type(_EXECUTING_PROTOCOL_BYTES) is bytes and
+            isinstance(_PROTOCOL, ModuleType),
+            "trusted parser activation is incomplete")
 
 
 def _require_compatible_protocol(module: ModuleType) -> None:
@@ -117,6 +117,12 @@ def _require_compatible_protocol(module: ModuleType) -> None:
             EXPECTED_MARKER_PROTOCOL and
             getattr(module, "OUTPUT_PARSER_PATH", None) ==
             EXPECTED_OUTPUT_PARSER_PATH and
+            getattr(module, "PROTOCOL_PATH", None) ==
+            "scripts/pristine_direct_reference_protocol.py" and
+            getattr(module, "REFERENCE_ROLE", None) ==
+            "pristine-clean-reference" and
+            getattr(module, "REFERENCE_NONCE_KIND", None) ==
+            "reference-session-nonce-v1" and
             contract == EXPECTED_MARKER_CONTRACT and
             getattr(module, "FINAL_ACTION_COUNT", None) == 297 and
             getattr(module, "FINAL_BOUNDARY_ID", None) ==
@@ -133,17 +139,8 @@ def _require_compatible_protocol(module: ModuleType) -> None:
 
 
 def _protocol() -> ModuleType:
-    global _PROTOCOL
-    if _PROTOCOL is None:
-        path = Path(__file__).with_name("pristine_direct_reference_protocol.py")
-        spec = importlib.util.spec_from_file_location(
-            "_pristine_direct_reference_output_exact_protocol", path,
-        )
-        require(spec is not None and spec.loader is not None,
-                "cannot load exact pristine-reference protocol sibling")
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        _PROTOCOL = module
+    require(_TRUSTED_ACTIVATION and isinstance(_PROTOCOL, ModuleType),
+            "trusted fixed-path parser activation is required")
     _require_compatible_protocol(_PROTOCOL)
     return _PROTOCOL
 
@@ -158,6 +155,15 @@ def _executing_parser_source_record(protocol: ModuleType) -> dict[str, object]:
         "path": protocol.OUTPUT_PARSER_PATH,
         **byte_content_record(
             _EXECUTING_SOURCE_BYTES, "executing output parser source",
+        ),
+    }
+
+
+def _executing_protocol_source_record(protocol: ModuleType) -> dict[str, object]:
+    return {
+        "path": protocol.PROTOCOL_PATH,
+        **byte_content_record(
+            _EXECUTING_PROTOCOL_BYTES, "executing pristine protocol source",
         ),
     }
 
@@ -447,6 +453,12 @@ def rederive_raw_source_observations(
     require(plan["authority"]["producer"]["output_parser"] ==
             _executing_parser_source_record(protocol),
             "executing output parser differs from plan authority")
+    require(plan["authority"]["producer"]["protocol"] ==
+            _executing_protocol_source_record(protocol),
+            "executing pristine protocol differs from plan authority")
+    require(plan["authority"]["repositories"]["project"]["path"] ==
+            _TRUSTED_PROJECT_ROOT,
+            "trusted parser project root differs from plan authority")
     require(isinstance(process_result, dict) and set(process_result) == {
                 "exit_code", "timed_out",
             } and type(process_result.get("exit_code")) is int and
