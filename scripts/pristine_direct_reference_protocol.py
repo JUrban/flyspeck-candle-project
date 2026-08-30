@@ -2300,6 +2300,202 @@ def v4_ordered_field_digest(
     return hashlib.sha256(preimage).hexdigest()
 
 
+def _v4_exact_dict(value: object, fields: tuple[str, ...], label: str) -> dict[str, Any]:
+    require(
+        type(value) is dict and all(type(key) is str for key in value) and
+        set(value) == set(fields),
+        f"malformed {label}",
+    )
+    return value
+
+
+def _v4_uint(value: object, bits: int, label: str) -> int:
+    require(
+        is_int(value) and 0 <= value < (1 << bits),
+        f"malformed {label}",
+    )
+    return value
+
+
+def validate_v4_build_lock_state(value: object) -> dict[str, Any]:
+    result = _v4_exact_dict(value, V4_BUILD_LOCK_STATE_FIELDS,
+                            "V4 build OFD lock state")
+    require(result["mode"] in V4_BUILD_LOCK_TYPES,
+            "malformed V4 build OFD lock mode")
+    return result
+
+
+def validate_v4_build_supplementary_groups(value: object) -> dict[str, Any]:
+    label = "V4 build supplementary groups"
+    result = _v4_exact_dict(
+        value, V4_BUILD_SUPPLEMENTARY_GROUP_CONTAINER_FIELDS, label,
+    )
+    gids = result.get("gids")
+    require(
+        is_int(result.get("count")) and
+        0 <= result["count"] <= V4_BUILD_SUPPLEMENTARY_GROUP_MAX and
+        type(gids) is list and len(gids) == result["count"],
+        f"malformed {label} count/list",
+    )
+    previous = -1
+    for index, gid in enumerate(gids):
+        _v4_uint(gid, 32, f"{label} GID {index}")
+        require(previous < gid, f"unordered or duplicate {label}")
+        previous = gid
+    require(
+        type(result.get("ordered_gid_sha256")) is str and
+        result["ordered_gid_sha256"] == canonical_sha256(gids),
+        f"{label} digest mismatch",
+    )
+    return result
+
+
+def validate_v4_build_capability_set(
+    value: object, cap_last_cap: object,
+) -> dict[str, Any]:
+    label = "V4 build capability set"
+    expected_last = _v4_uint(cap_last_cap, 32, f"{label} cap_last_cap")
+    result = _v4_exact_dict(value, V4_BUILD_CAPABILITY_SET_FIELDS, label)
+    capabilities = result.get("capabilities")
+    require(
+        result.get("cap_last_cap") == expected_last and
+        is_int(result.get("count")) and
+        0 <= result["count"] <= expected_last + 1 and
+        type(capabilities) is list and len(capabilities) == result["count"],
+        f"malformed {label} count/list",
+    )
+    previous = -1
+    for index, capability in enumerate(capabilities):
+        require(
+            is_int(capability) and 0 <= capability <= expected_last and
+            previous < capability,
+            f"malformed, unordered or duplicate {label} member {index}",
+        )
+        previous = capability
+    require(
+        type(result.get("ordered_capability_sha256")) is str and
+        result["ordered_capability_sha256"] == canonical_sha256(capabilities),
+        f"{label} digest mismatch",
+    )
+    return result
+
+
+def validate_v4_build_capability_sets(
+    value: object, cap_last_cap: object,
+) -> dict[str, Any]:
+    result = _v4_exact_dict(
+        value, V4_BUILD_CAPABILITY_SETS_FIELDS, "V4 build capability sets",
+    )
+    for name in V4_BUILD_CAPABILITY_SET_NAMES:
+        validate_v4_build_capability_set(result[name], cap_last_cap)
+    return result
+
+
+def validate_v4_build_signal_set(
+    value: object, *, blocked: bool = False,
+) -> dict[str, Any]:
+    label = "V4 build blocked signal set" if blocked else "V4 build signal set"
+    require(type(blocked) is bool, "malformed V4 build signal-set context")
+    result = _v4_exact_dict(value, V4_BUILD_SIGNAL_SET_FIELDS, label)
+    raw = _v4_uint(result.get("raw_u64"), 64, f"{label} raw_u64")
+    signals = result.get("signals")
+    require(
+        is_int(result.get("count")) and
+        0 <= result["count"] <= V4_BUILD_SIGNAL_MAX and
+        type(signals) is list and len(signals) == result["count"],
+        f"malformed {label} count/list",
+    )
+    previous = 0
+    derived_raw = 0
+    for index, signal_number in enumerate(signals):
+        require(
+            is_int(signal_number) and
+            V4_BUILD_SIGNAL_MIN <= signal_number <= V4_BUILD_SIGNAL_MAX and
+            previous < signal_number,
+            f"malformed, unordered or duplicate {label} member {index}",
+        )
+        require(
+            not blocked or signal_number not in {9, 19},
+            f"unblockable signal in {label}",
+        )
+        previous = signal_number
+        derived_raw |= 1 << (signal_number - 1)
+    require(raw == derived_raw, f"{label} raw/list mismatch")
+    require(
+        type(result.get("ordered_signal_sha256")) is str and
+        result["ordered_signal_sha256"] == canonical_sha256(signals),
+        f"{label} digest mismatch",
+    )
+    return result
+
+
+def validate_v4_build_signal_action(value: object) -> dict[str, Any]:
+    label = "V4 build signal action"
+    result = _v4_exact_dict(value, V4_BUILD_SIGNAL_ACTION_FIELDS, label)
+    _v4_uint(result.get("handler"), 64, f"{label} handler")
+    flags = _v4_uint(result.get("flags"), 64, f"{label} flags")
+    require(flags & ~V4_BUILD_SIGNAL_ACTION_FLAG_MASK == 0,
+            f"unknown {label} flag")
+    _v4_uint(result.get("restorer"), 64, f"{label} restorer")
+    validate_v4_build_signal_set(result.get("mask"))
+    return result
+
+
+def validate_v4_build_signal_altstack(value: object) -> dict[str, Any]:
+    label = "V4 build signal altstack"
+    result = _v4_exact_dict(value, V4_BUILD_SIGNAL_ALTSTACK_FIELDS, label)
+    sp = _v4_uint(result.get("sp"), 64, f"{label} sp")
+    flags = _v4_uint(result.get("flags"), 32, f"{label} flags")
+    size = _v4_uint(result.get("size"), 64, f"{label} size")
+    require(flags & ~V4_BUILD_SIGNAL_ALTSTACK_FLAG_MASK == 0,
+            f"unknown {label} flag")
+    if flags & 2:
+        require((sp, flags, size) == V4_BUILD_SIGNAL_ALTSTACK_DISABLED,
+                f"noncanonical disabled {label}")
+    else:
+        require(sp > 0 and size > 0, f"malformed enabled {label}")
+    return result
+
+
+def validate_v4_build_robust_list_registration(value: object) -> dict[str, Any]:
+    label = "V4 build robust-list registration"
+    result = _v4_exact_dict(
+        value, V4_BUILD_ROBUST_LIST_REGISTRATION_FIELDS, label,
+    )
+    require(type(result.get("registered")) is bool,
+            f"malformed {label} registration flag")
+    if result["registered"]:
+        head = _v4_uint(result.get("head"), 64, f"{label} head")
+        require(head > 0 and result.get("length") == 24,
+                f"malformed registered {label}")
+    else:
+        require(result.get("head") is None and result.get("length") == 0,
+                f"malformed unregistered {label}")
+    return result
+
+
+def validate_v4_build_rseq_registration(value: object) -> dict[str, Any]:
+    label = "V4 build rseq registration"
+    result = _v4_exact_dict(value, V4_BUILD_RSEQ_REGISTRATION_FIELDS, label)
+    require(type(result.get("registered")) is bool,
+            f"malformed {label} registration flag")
+    if result["registered"]:
+        address = _v4_uint(result.get("address"), 64, f"{label} address")
+        require(
+            address > 0 and result.get("length") == 32 and
+            result.get("flags") == 0 and
+            result.get("signature") == 0x5305_3053,
+            f"malformed registered {label}",
+        )
+    else:
+        require(
+            result.get("address") is None and result.get("length") == 0 and
+            result.get("flags") == 0 and result.get("signature") == 0,
+            f"malformed unregistered {label}",
+        )
+    return result
+
+
 def require_exact_json(value: Any, expected: Any, label: str) -> None:
     try:
         value_bytes = canonical_value_bytes(value)

@@ -1432,6 +1432,135 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "s2_s3_evidence",
         }))
 
+    def test_v4_nested_build_state_validators_reject_hostile_values(self) -> None:
+        empty_digest = subject.canonical_sha256([])
+        groups = {"count": 0, "gids": [], "ordered_gid_sha256": empty_digest}
+        self.assertIs(
+            subject.validate_v4_build_supplementary_groups(groups), groups,
+        )
+        for bad in (
+            {**groups, "count": True},
+            {**groups, "gids": [1], "count": 0},
+            {"count": 2, "gids": [2, 2],
+             "ordered_gid_sha256": subject.canonical_sha256([2, 2])},
+            {**groups, "extra": 0},
+        ):
+            with self.subTest(groups=bad), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_supplementary_groups(bad)
+
+        empty_cap = {
+            "cap_last_cap": 40, "count": 0, "capabilities": [],
+            "ordered_capability_sha256": empty_digest,
+        }
+        capability_sets = {
+            name: copy.deepcopy(empty_cap)
+            for name in subject.V4_BUILD_CAPABILITY_SET_NAMES
+        }
+        self.assertIs(
+            subject.validate_v4_build_capability_sets(capability_sets, 40),
+            capability_sets,
+        )
+        for capabilities in ([1, 1], [41], [True]):
+            bad = {
+                **empty_cap,
+                "count": len(capabilities),
+                "capabilities": capabilities,
+                "ordered_capability_sha256": subject.canonical_sha256(capabilities),
+            }
+            with self.subTest(capabilities=capabilities), self.assertRaises(
+                subject.ProtocolError
+            ):
+                subject.validate_v4_build_capability_set(bad, 40)
+
+        signals = [1, 64]
+        signal_set = {
+            "raw_u64": 1 | (1 << 63), "count": len(signals),
+            "signals": signals,
+            "ordered_signal_sha256": subject.canonical_sha256(signals),
+        }
+        self.assertIs(subject.validate_v4_build_signal_set(signal_set), signal_set)
+        for bad in (
+            {**signal_set, "raw_u64": 1},
+            {**signal_set, "count": True},
+            {
+                "raw_u64": 1 << 8, "count": 1, "signals": [9],
+                "ordered_signal_sha256": subject.canonical_sha256([9]),
+            },
+        ):
+            with self.subTest(signals=bad), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_signal_set(
+                    bad, blocked=bad.get("signals") == [9],
+                )
+
+        empty_signal_set = {
+            "raw_u64": 0, "count": 0, "signals": [],
+            "ordered_signal_sha256": empty_digest,
+        }
+        action = {
+            "handler": 0, "flags": 0, "restorer": 0,
+            "mask": empty_signal_set,
+        }
+        self.assertIs(subject.validate_v4_build_signal_action(action), action)
+        with self.assertRaisesRegex(subject.ProtocolError, "flag"):
+            subject.validate_v4_build_signal_action({
+                **action, "flags": 0x20,
+            })
+
+        disabled_stack = {"sp": 0, "flags": 2, "size": 0}
+        self.assertIs(
+            subject.validate_v4_build_signal_altstack(disabled_stack),
+            disabled_stack,
+        )
+        for bad in (
+            {"sp": 1, "flags": 2, "size": 0},
+            {"sp": 1, "flags": 0, "size": 0},
+            {"sp": 1, "flags": 4, "size": 1},
+        ):
+            with self.subTest(altstack=bad), self.assertRaises(subject.ProtocolError):
+                subject.validate_v4_build_signal_altstack(bad)
+
+        unregistered_robust = {"registered": False, "head": None, "length": 0}
+        registered_robust = {"registered": True, "head": 4096, "length": 24}
+        self.assertIs(
+            subject.validate_v4_build_robust_list_registration(unregistered_robust),
+            unregistered_robust,
+        )
+        self.assertIs(
+            subject.validate_v4_build_robust_list_registration(registered_robust),
+            registered_robust,
+        )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_robust_list_registration({
+                **registered_robust, "length": 16,
+            })
+
+        unregistered_rseq = {
+            "registered": False, "address": None, "length": 0,
+            "flags": 0, "signature": 0,
+        }
+        registered_rseq = {
+            "registered": True, "address": 8192, "length": 32,
+            "flags": 0, "signature": 0x53053053,
+        }
+        self.assertIs(
+            subject.validate_v4_build_rseq_registration(unregistered_rseq),
+            unregistered_rseq,
+        )
+        self.assertIs(
+            subject.validate_v4_build_rseq_registration(registered_rseq),
+            registered_rseq,
+        )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_rseq_registration({
+                **registered_rseq, "flags": 1,
+            })
+
+        for mode in subject.V4_BUILD_LOCK_TYPES:
+            value = {"mode": mode}
+            self.assertIs(subject.validate_v4_build_lock_state(value), value)
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_v4_build_lock_state({"mode": "nonblocking"})
+
     def test_v4_ordered_field_digest_framing_is_exact(self) -> None:
         fixtures = (
             (
