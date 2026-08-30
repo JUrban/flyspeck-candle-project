@@ -138,6 +138,7 @@ class PristineRequestGeneratorTests(unittest.TestCase):
         self.assertNotIn("candle_s1_emit_fingerprint", self.text)
         self.assertNotIn("candle_s1_emit_state_fingerprint", self.text)
         self.assertNotIn("replace", tail.lower())
+        self.assertNotIn("pft", self.text.lower())
 
     def test_nonce_ordinal_names_and_ocaml_escaping_are_not_aliased(self) -> None:
         plan = copy.deepcopy(self.plan)
