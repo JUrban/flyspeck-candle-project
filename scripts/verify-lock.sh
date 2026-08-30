@@ -18,11 +18,19 @@ project_git() {
     /usr/bin/git -c core.fsmonitor=false -c core.untrackedCache=false \
       -c core.preloadIndex=false -C "$project_dir" "$@"
 }
-for project_input in manifest.lock.toml scripts/verify-lock.sh; do
+for project_input in \
+  manifest.lock.toml \
+  scripts/verify-lock.sh \
+  scripts/direct_release_protocol.py \
+  scripts/test-direct-release-protocol.py
+do
   [[ $(project_git ls-files -v -- "$project_input") == "H $project_input" ]]
   project_git cat-file blob "HEAD:$project_input" | \
     /usr/bin/cmp -s - "$project_dir/$project_input"
 done
+/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C.UTF-8 \
+  /usr/bin/python3 -I -S \
+  "$project_dir/scripts/test-direct-release-protocol.py" >/dev/null 2>&1
 /usr/bin/python3 -I -S - "$lock_path" "$workspace_dir" <<'PY'
 import hashlib
 import json
