@@ -76,6 +76,7 @@ ENVIRONMENT_POLICY = (
 SERIALIZATION_ENVIRONMENT_KEY = "FLYSPECK_SERIALIZATION"
 RETAINED_STDOUT_MAX_BYTES = 536870912
 RETAINED_STDERR_MAX_BYTES = 0
+EMPTY_BYTES_SHA256 = hashlib.sha256(b"").hexdigest()
 PRODUCER_ENTRYPOINT_PATH = "scripts/collect-pristine-direct-reference.py"
 PROTOCOL_PATH = "scripts/pristine_direct_reference_protocol.py"
 OUTPUT_PARSER_PATH = "scripts/parse-pristine-direct-reference-output.py"
@@ -795,7 +796,12 @@ def validate_raw_transcript(
         "pristine reference transcript request content",
     )
     _content_record(value.get("stdout"), "reference stdout", allow_empty=True)
-    _content_record(value.get("stderr"), "reference stderr", allow_empty=True)
+    stderr = _content_record(
+        value.get("stderr"), "reference stderr", allow_empty=True,
+    )
+    require(stderr["bytes"] == RETAINED_STDERR_MAX_BYTES and
+            stderr["sha256"] == EMPTY_BYTES_SHA256,
+            "pristine reference stderr is not the exact empty-byte record")
     _validate_action_completions(value.get("action_completions"), plan)
     _validate_lp_successes(value.get("lp_successes"), plan)
     return value
@@ -1109,6 +1115,8 @@ def validate_source_rederivation(
     require(stdout["bytes"] <= plan["retained_stdout_max_bytes"] and
             stderr["bytes"] == plan["retained_stderr_max_bytes"],
             "source-rederivation output content exceeds retained caps")
+    require(stderr["sha256"] == EMPTY_BYTES_SHA256,
+            "source-rederivation stderr is not the exact empty-byte record")
     process_result = value.get("process_result")
     require(isinstance(process_result, dict) and set(process_result) == {
                 "exit_code", "timed_out",
