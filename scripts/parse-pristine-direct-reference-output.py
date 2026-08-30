@@ -315,7 +315,7 @@ def _serialized_hex(value: str, label: str) -> bytes:
         raise OutputProtocolError(f"cannot decode serialized hex for {label}") from error
 
 
-def _framed_decimal(value: bytes, label: str) -> int:
+def _validate_framed_decimal_token(value: bytes, label: str) -> None:
     require(0 < len(value) <= MAX_FRAMED_DECIMAL_DIGITS,
             f"overlong {label}")
     require(all(48 <= byte <= 57 for byte in value) and
@@ -323,6 +323,10 @@ def _framed_decimal(value: bytes, label: str) -> int:
     require(len(value) < len(MAX_FRAMED_VALUE_TOKEN) or
             (len(value) == len(MAX_FRAMED_VALUE_TOKEN) and
              value <= MAX_FRAMED_VALUE_TOKEN), f"oversize {label}")
+
+
+def _framed_decimal(value: bytes, label: str) -> int:
+    _validate_framed_decimal_token(value, label)
     try:
         result = int(value)
     except (ValueError, OverflowError) as error:
@@ -338,10 +342,19 @@ def _read_frame(
 ) -> tuple[bytes, int]:
     colon = data.find(b":", offset)
     require(colon >= offset, f"missing {label} frame delimiter")
-    length = _framed_decimal(data[offset:colon], f"{label} frame length")
+    length_token = data[offset:colon]
+    length_label = f"{label} frame length"
+    _validate_framed_decimal_token(length_token, length_label)
     payload_start = colon + 1
     remaining = len(data) - payload_start
-    require(length <= remaining, f"{label} frame exceeds remaining bytes")
+    remaining_token = str(remaining).encode("ascii")
+    require(
+        len(length_token) < len(remaining_token) or
+        (len(length_token) == len(remaining_token) and
+         length_token <= remaining_token),
+        f"{label} frame exceeds remaining bytes",
+    )
+    length = _framed_decimal(length_token, length_label)
     payload_end = payload_start + length
     return _extract_bounded_payload(data, payload_start, payload_end), payload_end
 
