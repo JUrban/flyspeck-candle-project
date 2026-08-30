@@ -608,6 +608,23 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         ))
 
     def test_v4_identity_reservation_is_exact_and_disjoint(self) -> None:
+        self.assertEqual(subject.RAW_PROTOCOL_SCHEMA, 3)
+        self.assertEqual(
+            subject.PLAN_KIND,
+            "candle-flyspeck-pristine-direct-reference-raw-plan-v3",
+        )
+        self.assertEqual(
+            subject.REQUEST_KIND,
+            "candle-flyspeck-pristine-direct-reference-request-v3",
+        )
+        self.assertEqual(
+            subject.TRANSCRIPT_KIND,
+            "candle-flyspeck-pristine-direct-reference-transcript-v3",
+        )
+        self.assertEqual(
+            subject.MARKER_PROTOCOL,
+            "candle-flyspeck-pristine-direct-reference-markers-v3",
+        )
         self.assertEqual(subject.V4_RAW_PROTOCOL_SCHEMA, 4)
         self.assertEqual(subject.V4_PLAN_KIND,
                          "candle-flyspeck-pristine-direct-reference-raw-plan-v4")
@@ -628,19 +645,20 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertNotEqual(subject.V4_PLAN_KIND, subject.PLAN_KIND)
         self.assertNotEqual(subject.V4_REQUEST_KIND, subject.REQUEST_KIND)
         self.assertNotEqual(subject.V4_MARKER_PROTOCOL, subject.MARKER_PROTOCOL)
-        self.assertEqual(
-            tuple(subject.V4_MARKER_CONTRACT),
-            (
-                "protocol", "session_start", "native_load",
-                "startup_baseline", "strictbuild_complete",
-                "action_complete", "lp_success", "semantic_observation",
-                "session_complete", "nonce_in_every_marker",
-            ),
-        )
-        self.assertTrue(all(
-            type(value) is bool or value.endswith("V4") or value.endswith("-v4")
-            for value in subject.V4_MARKER_CONTRACT.values()
-        ))
+        self.assertEqual(subject.V4_MARKER_CONTRACT, {
+            "protocol": "candle-flyspeck-pristine-direct-reference-markers-v4",
+            "session_start": "CANDLE_PRISTINE_DIRECT_REFERENCE_START_V4",
+            "native_load": "CANDLE_PRISTINE_DIRECT_NATIVE_LOAD_V4",
+            "startup_baseline": "CANDLE_PRISTINE_DIRECT_STARTUP_BASELINE_V4",
+            "strictbuild_complete":
+                "CANDLE_PRISTINE_DIRECT_STRICTBUILD_COMPLETE_V4",
+            "action_complete": "CANDLE_PRISTINE_DIRECT_ACTION_COMPLETE_V4",
+            "lp_success": "CANDLE_PRISTINE_DIRECT_LP_SUCCESS_V4",
+            "semantic_observation": "CANDLE_PRISTINE_DIRECT_SEMANTIC_V4",
+            "session_complete":
+                "CANDLE_PRISTINE_DIRECT_REFERENCE_COMPLETE_V4",
+            "nonce_in_every_marker": True,
+        })
         self.assertEqual(subject.V4_CONTROL_MAX_BYTES, 67_108_864)
         self.assertEqual(subject.V4_CONTROL_READ_MAX_BYTES, 67_108_865)
         self.assertEqual(subject.V4_AUTHORITY_CAPSULE_MAX_BYTES, 587_202_560)
@@ -651,6 +669,11 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertEqual(
             subject.V4_POSTFLIGHT_RESULT_READ_MAX_BYTES, 1_073_741_825,
         )
+        self.assertEqual(
+            subject.V4_TRACE_CHUNK_COUNT_MAX * subject.V4_TRACE_CHUNK_MAX_BYTES,
+            subject.V4_TRACE_TOTAL_MAX_BYTES,
+        )
+        self.assertEqual(subject.V4_TRACE_CHUNK_COUNT_MIN, 1)
 
     def test_all_reserved_v4_consumers_fail_before_decoding(self) -> None:
         one_value = (
@@ -659,6 +682,8 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.validate_v4_pending_candidate,
             subject.validate_v4_capture_completion,
             subject.validate_v4_reference_bundle,
+            subject.validate_v4_distinct_reference_pair,
+            subject.validate_v4_postflight_result,
         )
         canonical = (
             subject.validate_canonical_v4_raw_candidate_bytes,
@@ -666,23 +691,176 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             subject.validate_canonical_v4_pending_candidate_bytes,
             subject.validate_canonical_v4_capture_completion_bytes,
             subject.validate_canonical_v4_reference_bundle_bytes,
+            subject.validate_canonical_v4_distinct_reference_pair_bytes,
+            subject.validate_canonical_postflight_result_bytes,
         )
         for validator in one_value:
             with self.subTest(validator=validator.__name__), self.assertRaisesRegex(
                 subject.ProtocolError, "V4 .* consumption is disabled",
             ):
                 validator(object())
-        for validator in canonical:
-            with self.subTest(validator=validator.__name__), self.assertRaisesRegex(
-                subject.ProtocolError, "V4 .* consumption is disabled",
-            ):
-                validator(b'{"schema":4}')
-        with self.assertRaisesRegex(subject.ProtocolError, "V4 .* disabled"):
-            subject.validate_v4_distinct_reference_pair(object(), object())
-        with self.assertRaisesRegex(subject.ProtocolError, "V4 .* disabled"):
-            subject.validate_canonical_v4_distinct_reference_pair_bytes(
-                b'{"schema":4}',
-            )
+        with mock.patch.object(
+            subject, "decode_object", side_effect=AssertionError("decoded"),
+        ):
+            for validator in canonical:
+                with self.subTest(
+                    validator=validator.__name__,
+                ), self.assertRaisesRegex(
+                    subject.ProtocolError, "V4 .* consumption is disabled",
+                ):
+                    validator(b'{"schema":4}')
+    def test_v4_auxiliary_reservations_are_exact(self) -> None:
+        identities = {
+            "V4_POSTFLIGHT_RESULT_KIND":
+                "candle-flyspeck-pristine-postflight-result-v1",
+            "V4_GENERATION_AUTHORITY_KIND":
+                "candle-flyspeck-pristine-request-generation-authority-v1",
+            "V4_GENERATION_RECEIPT_KIND":
+                "candle-flyspeck-pristine-request-generation-receipt-v1",
+            "V4_COLLECTION_AUTHORITY_KIND":
+                "candle-flyspeck-pristine-full-run-collection-authority-v1",
+            "V4_COLLECTION_RECEIPT_KIND":
+                "candle-flyspeck-pristine-full-run-collection-authority-receipt-v1",
+            "V4_NATIVE_SOURCE_TREE_KIND":
+                "candle-flyspeck-native-source-tree-v1",
+            "V4_NATIVE_BUILD_RECEIPT_KIND":
+                "candle-flyspeck-isolated-native-build-receipt-v1",
+            "V4_PYTHON_RUNTIME_CLOSURE_KIND":
+                "candle-flyspeck-python-runtime-closure-v1",
+            "V4_NATIVE_RUNTIME_CLOSURE_KIND":
+                "candle-flyspeck-native-runtime-closure-v1",
+            "V4_SECCOMP_FILTER_AUTHORITY_KIND":
+                "candle-flyspeck-seccomp-filter-authority-v1",
+            "V4_GLIBC_STUB_PROVENANCE_KIND":
+                "candle-flyspeck-glibc-posix-spawn-stub-provenance-v1",
+            "V4_AUTHORITY_CAPSULE_KIND":
+                "candle-flyspeck-pristine-authority-capsule-v1",
+            "V4_POSITIONAL_REQUEST_BINDING_KIND":
+                "candle-flyspeck-pristine-positional-request-binding-v1",
+            "V4_EMPTY_STDIN_BINDING_KIND":
+                "candle-flyspeck-pristine-empty-stdin-binding-v1",
+            "V4_SOURCE_CONSUMPTION_JOINS_KIND":
+                "candle-flyspeck-pristine-source-consumption-joins-v1",
+            "V4_LP_DESERIALIZER_JOINS_KIND":
+                "candle-flyspeck-pristine-lp-deserializer-joins-v1",
+            "V4_NAMESPACE_REVALIDATION_KIND":
+                "candle-flyspeck-v4-namespace-revalidation-v1",
+            "V4_POSTFLIGHT_RUNTIME_ROOT_RECEIPT_KIND":
+                "candle-flyspeck-postflight-runtime-root-receipt-v1",
+        }
+        for name, expected in identities.items():
+            with self.subTest(name=name):
+                self.assertEqual(getattr(subject, name), expected)
+
+        schemas = (
+            "V4_POSTFLIGHT_RESULT_SCHEMA",
+            "V4_GENERATION_AUTHORITY_SCHEMA",
+            "V4_GENERATION_RECEIPT_SCHEMA",
+            "V4_COLLECTION_AUTHORITY_SCHEMA",
+            "V4_COLLECTION_RECEIPT_SCHEMA",
+        )
+        for name in schemas:
+            with self.subTest(name=name):
+                self.assertEqual(getattr(subject, name), 1)
+
+        policies = {
+            "V4_REQUEST_EXECUTION_POLICY":
+                "private-root-positional-ocaml-script-empty-stdin-v1",
+            "V4_STDIN_POLICY": "supervisor-pipe-exact-eof-v1",
+            "V4_STDOUT_POLICY":
+                "supervisor-pipe-bounded-opaque-with-reserved-markers-v1",
+            "V4_STDERR_POLICY": "supervisor-pipe-exact-empty-v1",
+            "V4_GENERATION_AUTHORITY_POLICY":
+                "captured-fixed-loader-isolated-python-exact-source-v1",
+            "V4_COLLECTION_AUTHORITY_POLICY":
+                "single-native-supervisor-seize-trace-and-postexit-finalize-v1",
+            "V4_AUTHORITY_CAPSULE_POLICY":
+                "retained-inline-canonical-authority-objects-v1",
+            "V4_INVENTORY_NORMALIZATION_POLICY":
+                "preserve-bytes-strip-write-bits-v1",
+            "V4_POSITIONAL_REQUEST_BINDING_POLICY":
+                "same-exec-argv-open-private-immutable-object-v1",
+            "V4_LP_WRAPPER_CONTRACT":
+                "original-deserializer-return-before-marker-v1",
+            "V4_NAMESPACE_REVALIDATION_POLICY":
+                "reopen-all-control-and-authority-inventory-edges-v1",
+            "V4_POSTFLIGHT_RUNTIME_ROOT_POLICY":
+                "retained-python-closure-read-only-pivot-root-v1",
+        }
+        for name, expected in policies.items():
+            with self.subTest(name=name):
+                self.assertEqual(getattr(subject, name), expected)
+        self.assertEqual(subject.V4_REQUEST_SCRIPT_ROLE,
+                         "positional-request-script")
+        self.assertEqual(subject.V4_REQUEST_SCRIPT_PATH,
+                         "/candle-pristine/request.ml")
+        self.assertEqual(subject.V4_REQUEST_SCRIPT_MODE, "100444")
+        self.assertEqual(
+            subject.V4_REQUEST_SCRIPT_INVENTORY_POLICY,
+            "private-root-read-only-object-v1",
+        )
+        self.assertEqual(subject.V4_PUBLICATION_POLICIES, (
+            "publish-envelope-v2",
+            "publish-pending-candidate-v2",
+            "publish-completion-v2",
+        ))
+
+        statuses = {
+            subject.V4_GENERATION_RECEIPT_STATUS:
+                "generated-and-captured-unapproved",
+            subject.V4_COLLECTION_RECEIPT_STATUS:
+                "captured-current-host-collection-authority-unapproved",
+            subject.V4_NATIVE_CLOSURE_STATUS:
+                "full-run-observation-complete-unapproved",
+            subject.V4_SOURCE_REDERIVATION_STATUS: "complete-unapproved",
+            subject.V4_CAPTURE_ENVELOPE_STATUS:
+                "captured-awaiting-postflight-unapproved",
+            subject.V4_PENDING_CANDIDATE_STATUS:
+                "pending-postflight-unapproved",
+            subject.V4_CAPTURE_COMPLETION_STATUS:
+                "capture-complete-unapproved",
+            subject.V4_POSTFLIGHT_RESULT_STATUS: "validated-unapproved",
+            subject.V4_AUTHENTICATION_STATUS: "not-authenticated",
+        }
+        for actual, expected in statuses.items():
+            self.assertEqual(actual, expected)
+
+        caps = {
+            "V4_AUTHORITY_OBJECT_MAX_BYTES": 33_554_432,
+            "V4_AUTHORITY_OBJECT_READ_MAX_BYTES": 33_554_433,
+            "V4_FIXED_SOURCE_MAX_BYTES": 16_777_216,
+            "V4_STARTUP_DESIGN_MAX_BYTES": 1_048_576,
+            "V4_AUTHORITY_CAPSULE_DECODED_MAX_BYTES": 437_256_192,
+            "V4_REQUEST_RESULT_HEADER_BYTES": 38,
+            "V4_COLLECTION_FRAME_MAX_BYTES": 402_653_396,
+            "V4_SOURCE_TREE_MEMBER_MAX": 65_536,
+            "V4_SOURCE_TREE_TOTAL_MAX_BYTES": 4_294_967_296,
+            "V4_INVENTORY_OBJECT_MAX": 131_072,
+            "V4_INVENTORY_TOTAL_MAX_BYTES": 68_719_476_736,
+            "V4_NAMESPACE_EDGE_MAX": 16_384,
+            "V4_POSTFLIGHT_MAPPING_MAX": 262_144,
+            "V4_EMPTY_STDIN_EVENT_MAX": 4_096,
+        }
+        for name, expected in caps.items():
+            with self.subTest(name=name):
+                self.assertEqual(getattr(subject, name), expected)
+
+        self.assertEqual(subject.V4_BUNDLE_FIELDS, frozenset({
+            "schema", "kind", "role", "reference_ordinal", "nonce_kind",
+            "session_nonce", "boundary_id", "plan", "request",
+            "request_generation_receipt", "collection_authority_receipt",
+            "capture_envelope", "source_rederivation", "coverage",
+            "pending_candidate", "capture_completion", "approval_included",
+            "pft_used", "s2_eligible", "s3_eligible", "s2_s3_evidence",
+        }))
+        self.assertEqual(subject.V4_PAIR_FIELDS, frozenset({
+            "schema", "kind", "role", "first", "second",
+            "shared_authority", "shared_evidence_contracts",
+            "distinct_attempt_roots", "distinct_ordinals",
+            "distinct_nonces", "semantic_equal", "coverage_equal",
+            "approval_included", "pft_used", "s2_eligible", "s3_eligible",
+            "s2_s3_evidence",
+        }))
 
     def test_four_available_v3_artifact_schemas_are_canonical(self) -> None:
         bundle = self.bundle
