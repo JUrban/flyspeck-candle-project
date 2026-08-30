@@ -673,9 +673,9 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         })
         self.assertEqual(subject.V4_CONTROL_MAX_BYTES, 67_108_864)
         self.assertEqual(subject.V4_CONTROL_READ_MAX_BYTES, 67_108_865)
-        self.assertEqual(subject.V4_AUTHORITY_CAPSULE_MAX_BYTES, 587_202_560)
+        self.assertEqual(subject.V4_AUTHORITY_CAPSULE_MAX_BYTES, 721_420_288)
         self.assertEqual(
-            subject.V4_AUTHORITY_CAPSULE_READ_MAX_BYTES, 587_202_561,
+            subject.V4_AUTHORITY_CAPSULE_READ_MAX_BYTES, 721_420_289,
         )
         self.assertEqual(subject.V4_POSTFLIGHT_RESULT_MAX_BYTES, 1_073_741_824)
         self.assertEqual(
@@ -842,7 +842,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "V4_AUTHORITY_OBJECT_READ_MAX_BYTES": 33_554_433,
             "V4_FIXED_SOURCE_MAX_BYTES": 16_777_216,
             "V4_STARTUP_DESIGN_MAX_BYTES": 1_048_576,
-            "V4_AUTHORITY_CAPSULE_DECODED_MAX_BYTES": 437_256_192,
+            "V4_AUTHORITY_CAPSULE_DECODED_MAX_BYTES": 537_919_488,
             "V4_REQUEST_RESULT_HEADER_BYTES": 38,
             "V4_COLLECTION_FRAME_MAX_BYTES": 402_653_396,
             "V4_SOURCE_TREE_MEMBER_MAX": 65_536,
@@ -854,6 +854,13 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "V4_BUILD_EXECUTION_EVENT_MAX": 131_072,
             "V4_BUILD_SOURCE_JOIN_MAX": 4_096,
             "V4_BUILD_OUTPUT_JOIN_MAX": 4_096,
+            "V4_BUILD_OUTPUT_GENERATION_MAX": 4_096,
+            "V4_BUILD_FD_PER_TABLE_MAX": 4_096,
+            "V4_BUILD_VMA_PER_ADDRESS_SPACE_MAX": 65_536,
+            "V4_BUILD_TRANSITION_PER_EVENT_MAX": 4_096,
+            "V4_BUILD_TRANSITION_TOTAL_MAX": 524_288,
+            "V4_NATIVE_BUILD_RECEIPT_MAX_BYTES": 134_217_728,
+            "V4_NATIVE_BUILD_RECEIPT_READ_MAX_BYTES": 134_217_729,
             "V4_INVENTORY_OBJECT_MAX": 131_072,
             "V4_INVENTORY_TOTAL_MAX_BYTES": 68_719_476_736,
             "V4_NAMESPACE_EDGE_MAX": 16_384,
@@ -870,7 +877,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         }))
         self.assertEqual(subject.V4_BUILD_FILTER_CLONE_SYSCALL, 56)
         self.assertEqual(
-            subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK, 0x7E820080,
+            subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK, 0x7E820280,
         )
         self.assertEqual(
             tuple(number for number, _ in subject.V4_BUILD_FILTER_DENIED_SYSCALLS),
@@ -889,6 +896,72 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             "PTRACE_O_TRACEEXIT",
             "PTRACE_O_EXITKILL",
         ))
+        self.assertEqual(subject.V4_BUILD_EXECUTION_OBSERVATION_SCHEMA, 2)
+        self.assertTrue({
+            "paired_event_index", "object_edges", "fd_transitions",
+            "mapping_transitions", "fs_transitions", "task_transitions",
+        }.issubset(subject.V4_BUILD_EVENT_FIELDS))
+        self.assertNotIn("exec-tid-rebase", subject.V4_BUILD_EVENT_KINDS)
+        self.assertEqual(
+            subject.V4_BUILD_EVENT_NONNULL_FIELDS["namespace-clone"],
+            (
+                "actor_task_identity", "subject_task_identity",
+                "return_value", "task_transitions",
+            ),
+        )
+        self.assertEqual(
+            set(subject.V4_BUILD_ENTRY_CAPTURE_FIELDS),
+            {
+                "scalar-entry", "path-entry", "exec-entry", "fd-io-entry",
+                "mapping-entry", "fd-control-entry",
+                "seccomp-install-entry",
+            },
+        )
+        self.assertEqual(
+            set(subject.V4_BUILD_TASK_TRANSITION_FIELDS),
+            {
+                "builder-create", "observer-attached-stop", "child-create",
+                "child-attached-stop", "vfork-hold", "vfork-release",
+                "group-listen", "exec-image", "exit-stop", "wait-consumed",
+            },
+        )
+        self.assertEqual(
+            subject.V4_BUILD_PEER_SHARED_STATE_KINDS,
+            ("address-space", "fd-table", "fs-state"),
+        )
+        self.assertEqual(
+            tuple(item[0] for item in subject.V4_BUILD_OUTPUT_MUTATING_SYSCALLS),
+            tuple(sorted(
+                item[0] for item in subject.V4_BUILD_OUTPUT_MUTATING_SYSCALLS
+            )),
+        )
+        self.assertEqual(
+            tuple(
+                (item[0], item[1])
+                for item in subject.V4_BUILD_OUTPUT_OPERATION_CAPTURE_POLICY
+            ),
+            tuple(
+                (item[0], item[1])
+                for item in subject.V4_BUILD_OUTPUT_MUTATING_SYSCALLS
+            ),
+        )
+        self.assertEqual(
+            len(subject.V4_BUILD_OUTPUT_OPERATION_CAPTURE_POLICY_FIELDS), 9,
+        )
+        self.assertEqual(
+            subject.V4_BUILD_OUTPUT_GENERATION_FINAL_STATES,
+            ("published", "deleted"),
+        )
+        self.assertIn(
+            "st_nlink", subject.V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS,
+        )
+        self.assertEqual(
+            subject.V4_BUILD_NETWORK_LOOPBACK_LITERAL,
+            {
+                "list_index": 0, "ifindex": 1, "name": "lo",
+                "mtu": 65_536, "flags": 0x8, "operstate": "down",
+            },
+        )
 
         self.assertEqual(subject.V4_BUNDLE_FIELDS, frozenset({
             "schema", "kind", "role", "reference_ordinal", "nonce_kind",
@@ -928,10 +1001,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         encoded = json.dumps(
             values, sort_keys=True, separators=(",", ":"), allow_nan=False,
         ).encode()
-        self.assertEqual(len(values), 181)
+        self.assertEqual(len(values), 217)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "c8d35ca38a7d1f169909bbb3592c2a3f197ba9f726fd1b8d226f3a4d59b95818",
+            "d7051ff80910fce5678f5a49774aed7161f606c9d0d82121c83df569e64415dc",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:

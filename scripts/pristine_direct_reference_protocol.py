@@ -316,6 +316,11 @@ V4_BUILD_INPUT_CLOSURE_POLICY = (
 V4_BUILD_INPUT_CLOSURE_ENTRY_MAX = 196_608
 V4_BUILD_INPUT_CLOSURE_FILE_MAX_BYTES = 1_073_741_824
 V4_BUILD_INPUT_CLOSURE_TOTAL_MAX_BYTES = 68_719_476_736
+V4_BUILD_INPUT_CLOSURE_ENTRY_FIELDS = (
+    "index", "relative", "object_type", "mode", "bytes", "sha256",
+    "selector", "st_nlink", "parent_descriptor_identity", "mount_id",
+    "st_dev", "st_ino", "stable_generation",
+)
 V4_BUILD_READONLY_DIRECTORY_MODE = 16_749
 V4_BUILD_SOURCE_DIRECTORY = "candle-source"
 V4_BUILD_OUTPUT_DIRECTORY = "candle-output"
@@ -329,7 +334,7 @@ V4_BUILD_FILTER_POLICY = (
 )
 V4_BUILD_FILTER_ERRNO = 1
 V4_BUILD_FILTER_CLONE_SYSCALL = 56
-V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E820080
+V4_BUILD_FILTER_CLONE_NAMESPACE_MASK = 0x7E820280
 V4_BUILD_FILTER_AUDIT_ARCH = 0xC000003E
 V4_BUILD_FILTER_X32_SYSCALL_BIT = 0x40000000
 V4_BUILD_FILTER_INSTRUCTION_COUNT = 134
@@ -402,17 +407,24 @@ V4_BUILD_FILTER_DENIED_SYSCALLS = (
     (438, "pidfd_getfd"),
     (442, "mount_setattr"),
 )
-V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 1
+V4_BUILD_EXECUTION_OBSERVATION_SCHEMA = 2
 V4_BUILD_EXECUTION_OBSERVATION_KIND = (
-    "candle-flyspeck-isolated-native-build-execution-observation-v1"
+    "candle-flyspeck-isolated-native-build-execution-observation-v2"
 )
 V4_BUILD_EXECUTION_OBSERVATION_POLICY = (
-    "outside-parent-all-task-source-consumption-and-output-chronology-v1"
+    "outside-parent-all-task-source-consumption-and-output-chronology-v2"
 )
 V4_BUILD_EXECUTION_TASK_MAX = 4_096
 V4_BUILD_EXECUTION_EVENT_MAX = 131_072
 V4_BUILD_SOURCE_JOIN_MAX = 4_096
 V4_BUILD_OUTPUT_JOIN_MAX = 4_096
+V4_BUILD_OUTPUT_GENERATION_MAX = 4_096
+V4_BUILD_FD_PER_TABLE_MAX = 4_096
+V4_BUILD_VMA_PER_ADDRESS_SPACE_MAX = 65_536
+V4_BUILD_TRANSITION_PER_EVENT_MAX = 4_096
+V4_BUILD_TRANSITION_TOTAL_MAX = 524_288
+V4_NATIVE_BUILD_RECEIPT_MAX_BYTES = 134_217_728
+V4_NATIVE_BUILD_RECEIPT_READ_MAX_BYTES = 134_217_729
 V4_BUILD_NAMESPACE_CLONE_FLAGS = 0x78020011
 V4_BUILD_NAMESPACE_KINDS = (
     "user-namespace",
@@ -421,6 +433,29 @@ V4_BUILD_NAMESPACE_KINDS = (
     "network-namespace",
     "ipc-namespace",
 )
+V4_BUILD_NAMESPACE_INSPECTOR_FIELDS = (
+    "task_identity", "inherited_fds", "namespace_descriptor_identity",
+    "result_pipe_identity", "result_bytes", "raw_wait_status", "exit_code",
+    "complete",
+)
+V4_BUILD_NETWORK_INTERFACE_FIELDS = (
+    "list_index", "ifindex", "name", "mtu", "flags", "operstate",
+    "namespace_identity",
+)
+V4_BUILD_NETWORK_LOOPBACK_LITERAL = {
+    "list_index": 0,
+    "ifindex": 1,
+    "name": "lo",
+    "mtu": 65_536,
+    "flags": 0x8,
+    "operstate": "down",
+}
+V4_BUILD_NETWORK_ROUTE_COUNT = 0
+V4_BUILD_NETWORK_SOCKET_COUNT = 0
+V4_BUILD_IPC_SYSV_SEGMENT_COUNT = 0
+V4_BUILD_IPC_SYSV_SEMAPHORE_COUNT = 0
+V4_BUILD_IPC_SYSV_MESSAGE_COUNT = 0
+V4_BUILD_IPC_MQUEUE_COUNT = 0
 V4_BUILD_PTRACE_OPTIONS = (
     "PTRACE_O_TRACESYSGOOD",
     "PTRACE_O_TRACEFORK",
@@ -433,8 +468,9 @@ V4_BUILD_PTRACE_OPTIONS = (
 )
 V4_BUILD_EVENT_KINDS = (
     "namespace-clone",
-    "initial-stop",
     "interrupt-stop",
+    "peer-interrupt-stop",
+    "child-initial-stop",
     "signal-delivery-stop",
     "group-stop",
     "syscall-entry",
@@ -444,79 +480,392 @@ V4_BUILD_EVENT_KINDS = (
     "clone",
     "vfork-done",
     "exec",
-    "exec-tid-rebase",
     "exit",
     "terminal-wait",
     "pre-output-walk",
     "post-output-walk",
     "output-hash-barrier",
 )
+V4_BUILD_EVENT_FIELDS = frozenset({
+    "index", "kind", "actor_task_identity", "subject_task_identity",
+    "paired_event_index", "syscall_number", "arguments", "return_value",
+    "ptrace_event_message", "raw_wait_status", "signal_number", "siginfo",
+    "reinject_signal", "entry_capture", "exit_capture",
+    "object_edge_count", "object_edges", "fd_transition_count",
+    "fd_transitions", "mapping_transition_count", "mapping_transitions",
+    "fs_transition_count", "fs_transitions", "task_transition_count",
+    "task_transitions",
+})
 V4_BUILD_EVENT_NONNULL_FIELDS = {
     "namespace-clone": (
-        "actor_task_identity", "subject_task_identity",
-        "ptrace_event_message", "task_transition",
-    ),
-    "initial-stop": (
-        "subject_task_identity", "raw_wait_status", "reinject_signal",
-        "task_transition",
+        "actor_task_identity", "subject_task_identity", "return_value",
+        "task_transitions",
     ),
     "interrupt-stop": (
-        "subject_task_identity", "raw_wait_status", "signal_number",
-        "reinject_signal",
+        "actor_task_identity", "subject_task_identity", "raw_wait_status",
+        "signal_number", "reinject_signal", "task_transitions",
+    ),
+    "peer-interrupt-stop": (
+        "actor_task_identity", "subject_task_identity", "raw_wait_status",
+        "signal_number", "reinject_signal",
+    ),
+    "child-initial-stop": (
+        "actor_task_identity", "subject_task_identity", "raw_wait_status",
+        "signal_number", "reinject_signal", "task_transitions",
     ),
     "signal-delivery-stop": (
-        "subject_task_identity", "raw_wait_status", "signal_number",
-        "siginfo", "reinject_signal",
+        "actor_task_identity", "subject_task_identity", "raw_wait_status",
+        "signal_number", "siginfo", "reinject_signal",
     ),
     "group-stop": (
-        "subject_task_identity", "raw_wait_status", "signal_number",
-        "reinject_signal",
+        "actor_task_identity", "subject_task_identity", "raw_wait_status",
+        "signal_number", "reinject_signal", "task_transitions",
     ),
     "syscall-entry": (
-        "subject_task_identity", "syscall_number", "arguments",
-        "entry_capture",
+        "actor_task_identity", "subject_task_identity", "syscall_number",
+        "arguments", "entry_capture",
     ),
     "syscall-exit": (
-        "subject_task_identity", "syscall_number", "return_value",
-        "exit_capture",
+        "actor_task_identity", "subject_task_identity", "paired_event_index",
+        "syscall_number", "return_value", "exit_capture",
     ),
     "fork": (
-        "subject_task_identity", "ptrace_event_message", "task_transition",
+        "actor_task_identity", "subject_task_identity",
+        "ptrace_event_message", "task_transitions",
     ),
     "vfork": (
-        "subject_task_identity", "ptrace_event_message", "task_transition",
+        "actor_task_identity", "subject_task_identity",
+        "ptrace_event_message", "task_transitions",
     ),
     "clone": (
-        "subject_task_identity", "ptrace_event_message", "task_transition",
+        "actor_task_identity", "subject_task_identity",
+        "ptrace_event_message", "task_transitions",
     ),
     "vfork-done": (
-        "subject_task_identity", "ptrace_event_message", "task_transition",
+        "actor_task_identity", "subject_task_identity",
+        "ptrace_event_message", "task_transitions",
     ),
     "exec": (
-        "subject_task_identity", "ptrace_event_message", "task_transition",
-    ),
-    "exec-tid-rebase": (
-        "subject_task_identity", "ptrace_event_message", "task_transition",
+        "actor_task_identity", "subject_task_identity", "paired_event_index",
+        "ptrace_event_message", "task_transitions",
     ),
     "exit": (
-        "subject_task_identity", "ptrace_event_message", "task_transition",
+        "actor_task_identity", "subject_task_identity",
+        "ptrace_event_message", "task_transitions",
     ),
     "terminal-wait": (
-        "subject_task_identity", "raw_wait_status", "task_transition",
+        "actor_task_identity", "subject_task_identity", "raw_wait_status",
+        "task_transitions",
     ),
     "pre-output-walk": (
-        "actor_task_identity", "root_entry_index", "fd_generation",
-        "object_edge",
+        "actor_task_identity", "object_edges",
     ),
     "post-output-walk": (
-        "actor_task_identity", "root_entry_index", "fd_generation",
-        "object_edge",
+        "actor_task_identity", "object_edges",
     ),
     "output-hash-barrier": (
-        "actor_task_identity", "root_entry_index", "fd_generation",
-        "object_edge",
+        "actor_task_identity", "object_edges",
     ),
 }
+V4_BUILD_ENTRY_CAPTURE_FIELDS = {
+    "scalar-entry": ("kind", "operation"),
+    "path-entry": (
+        "kind", "operation", "operand_count", "operands", "scalar_flags",
+        "pointed_struct", "peer_barrier_index",
+    ),
+    "exec-entry": (
+        "kind", "operation", "executable_operand", "execveat_fd",
+        "execveat_fd_generation", "flags", "argv", "environment",
+        "cwd_identity", "umask", "peer_barrier_index",
+    ),
+    "fd-io-entry": (
+        "kind", "operation", "fd", "fd_generation", "object_edge_index",
+        "explicit_offset", "requested_bytes", "iovec_count", "iovecs",
+        "flags", "peer_barrier_index",
+    ),
+    "mapping-entry": (
+        "kind", "operation", "address", "length", "protection", "flags",
+        "fd", "fd_generation", "file_offset", "peer_barrier_index",
+    ),
+    "fd-control-entry": (
+        "kind", "operation", "fd", "fd_generation", "command",
+        "scalar_argument", "pointed_argument", "peer_barrier_index",
+    ),
+    "seccomp-install-entry": (
+        "kind", "operation", "flags", "sock_fprog", "instructions",
+        "peer_barrier_index",
+    ),
+}
+V4_BUILD_EXIT_CAPTURE_FIELDS = {
+    "scalar-exit": ("kind", "operation"),
+    "open-exit": (
+        "kind", "operation", "returned_fd", "returned_fd_generation",
+        "object_edge_index",
+    ),
+    "io-exit": (
+        "kind", "operation", "positive_bytes", "effective_file_offset",
+        "resulting_file_offset", "affected_range",
+    ),
+    "mapping-exit": (
+        "kind", "operation", "returned_address", "affected_range",
+    ),
+    "path-mutation-exit": (
+        "kind", "operation", "created_edge_indices", "removed_edge_indices",
+        "renamed_edge_pairs",
+    ),
+    "seccomp-install-exit": (
+        "kind", "operation", "installed_filter_count", "proc_status_after",
+    ),
+}
+V4_BUILD_PATH_OPERAND_FIELDS = (
+    "index", "argument_index", "dirfd_argument_index", "dirfd",
+    "dirfd_generation", "pointer", "bytes", "sha256", "payload_base64",
+    "nul_terminated", "resolution_role",
+)
+V4_BUILD_OPEN_HOW_FIELDS = (
+    "address", "size", "payload_base64", "sha256", "flags", "mode",
+    "resolve",
+)
+V4_BUILD_IOVEC_FIELDS = (
+    "index", "address", "requested_bytes", "payload_sha256",
+)
+V4_BUILD_PEER_BARRIER_FIELDS = (
+    "index", "actor_task_index", "entry_event_index", "terminal_event_index",
+    "shared_state_kinds", "peer_task_indices", "peer_stop_event_indices",
+    "release_order", "complete",
+)
+V4_BUILD_PEER_SHARED_STATE_KINDS = (
+    "address-space", "fd-table", "fs-state",
+)
+V4_BUILD_FD_TRANSITION_FIELDS = {
+    "fd-table-create": (
+        "kind", "index", "task_index", "table_id", "generation",
+        "source_table_id", "sharing",
+    ),
+    "fd-install": (
+        "kind", "index", "table_id", "before_generation",
+        "after_generation", "fd", "new_fd_generation", "cloexec",
+        "access_mode", "status_flags", "object_edge_index",
+    ),
+    "fd-duplicate": (
+        "kind", "index", "table_id", "before_generation",
+        "after_generation", "source_fd", "source_fd_generation",
+        "destination_fd", "retired_destination_generation",
+        "new_destination_generation", "cloexec",
+    ),
+    "fd-retire": (
+        "kind", "index", "table_id", "before_generation",
+        "after_generation", "fd", "fd_generation", "reason",
+    ),
+    "fd-cloexec-change": (
+        "kind", "index", "table_id", "before_generation",
+        "after_generation", "fd", "fd_generation", "cloexec",
+    ),
+    "fd-status-change": (
+        "kind", "index", "table_id", "before_generation",
+        "after_generation", "fd", "fd_generation", "old_status_flags",
+        "new_status_flags",
+    ),
+    "fd-offset-change": (
+        "kind", "index", "table_id", "before_generation",
+        "after_generation", "fd", "fd_generation", "old_offset",
+        "new_offset",
+    ),
+    "fd-table-unshare": (
+        "kind", "index", "task_index", "old_table_id", "new_table_id",
+        "new_generation",
+    ),
+}
+V4_BUILD_MAPPING_TRANSITION_FIELDS = {
+    "address-space-create": (
+        "kind", "index", "task_index", "address_space_id", "generation",
+        "source_address_space_id", "sharing",
+    ),
+    "mapping-install": (
+        "kind", "index", "address_space_id", "before_generation",
+        "after_generation", "address", "length", "protection", "flags",
+        "file_offset", "fd_generation", "object_edge_index",
+    ),
+    "mapping-remove": (
+        "kind", "index", "address_space_id", "before_generation",
+        "after_generation", "address", "length", "retired_mapping_indices",
+    ),
+    "mapping-remap": (
+        "kind", "index", "address_space_id", "before_generation",
+        "after_generation", "old_address", "old_length", "new_address",
+        "new_length", "mapping_indices",
+    ),
+    "mapping-protect": (
+        "kind", "index", "address_space_id", "before_generation",
+        "after_generation", "address", "length", "old_protection",
+        "new_protection", "mapping_indices",
+    ),
+    "address-space-exec-reset": (
+        "kind", "index", "task_index", "address_space_id",
+        "before_generation", "after_generation", "retired_mapping_indices",
+    ),
+}
+V4_BUILD_FS_TRANSITION_FIELDS = {
+    "fs-state-create": (
+        "kind", "index", "task_index", "fs_state_id", "generation",
+        "source_fs_state_id", "sharing",
+    ),
+    "cwd-change": (
+        "kind", "index", "fs_state_id", "before_generation",
+        "after_generation", "object_edge_index",
+    ),
+    "root-change": (
+        "kind", "index", "fs_state_id", "before_generation",
+        "after_generation", "object_edge_index",
+    ),
+    "umask-change": (
+        "kind", "index", "fs_state_id", "before_generation",
+        "after_generation", "old_umask", "new_umask",
+    ),
+}
+V4_BUILD_TASK_TRANSITION_FIELDS = {
+    "builder-create": (
+        "kind", "index", "task_identity", "clone_flags", "gate_identity",
+    ),
+    "observer-attached-stop": (
+        "kind", "index", "task_index", "ptrace_options",
+    ),
+    "child-create": (
+        "kind", "index", "parent_task_index", "child_task_index",
+        "creation_kind", "creation_event_index",
+    ),
+    "child-attached-stop": (
+        "kind", "index", "task_index", "initial_stop_event_index",
+    ),
+    "vfork-hold": (
+        "kind", "index", "parent_task_index", "child_task_index",
+        "event_index",
+    ),
+    "vfork-release": (
+        "kind", "index", "parent_task_index", "child_task_index",
+        "event_index",
+    ),
+    "group-listen": (
+        "kind", "index", "task_index", "stop_signal",
+    ),
+    "exec-image": (
+        "kind", "index", "old_task_identity", "new_task_identity",
+        "former_tid", "exec_entry_event_index",
+    ),
+    "exit-stop": (
+        "kind", "index", "task_index", "exit_message",
+    ),
+    "wait-consumed": (
+        "kind", "index", "task_index", "raw_wait_status",
+    ),
+}
+V4_BUILD_OUTPUT_MUTATING_SYSCALLS = (
+    (1, "write", "content-write"),
+    (2, "open", "open-create-truncate"),
+    (9, "mmap", "mapping-state"),
+    (10, "mprotect", "mapping-state"),
+    (11, "munmap", "mapping-state"),
+    (18, "pwrite64", "content-write"),
+    (20, "writev", "content-write"),
+    (25, "mremap", "mapping-state"),
+    (26, "msync", "mapping-state"),
+    (76, "truncate", "size-change"),
+    (77, "ftruncate", "size-change"),
+    (82, "rename", "name-change"),
+    (83, "mkdir", "name-create"),
+    (84, "rmdir", "name-remove"),
+    (85, "creat", "open-create-truncate"),
+    (87, "unlink", "name-remove"),
+    (90, "chmod", "mode-change"),
+    (91, "fchmod", "mode-change"),
+    (257, "openat", "open-create-truncate"),
+    (258, "mkdirat", "name-create"),
+    (263, "unlinkat", "name-remove"),
+    (264, "renameat", "name-change"),
+    (268, "fchmodat", "mode-change"),
+    (296, "pwritev", "content-write"),
+    (316, "renameat2", "name-change"),
+    (328, "pwritev2", "content-write"),
+    (437, "openat2", "open-create-truncate"),
+    (452, "fchmodat2", "mode-change"),
+)
+V4_BUILD_OUTPUT_OPERATION_CAPTURE_POLICY = (
+    (1, "write", "fd-io-entry", "io-exit", (1,), (1,), (0,), (0,), (0,)),
+    (2, "open", "path-entry", "open-exit", (1,), (1,), (0,), (0,), (0,)),
+    (9, "mmap", "mapping-entry", "mapping-exit", (0, 1), (0,), (1,), (0,), (0,)),
+    (10, "mprotect", "mapping-entry", "mapping-exit", (0, 1), (0,), (1,), (0,), (0,)),
+    (11, "munmap", "mapping-entry", "mapping-exit", (0, 1), (0,), (1,), (0,), (0,)),
+    (18, "pwrite64", "fd-io-entry", "io-exit", (1,), (0,), (0,), (0,), (0,)),
+    (20, "writev", "fd-io-entry", "io-exit", (1,), (1,), (0,), (0,), (0,)),
+    (25, "mremap", "mapping-entry", "mapping-exit", (0, 1), (0,), (1,), (0,), (0,)),
+    (26, "msync", "mapping-entry", "mapping-exit", (0, 1), (0,), (0,), (0,), (0,)),
+    (76, "truncate", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (77, "ftruncate", "fd-control-entry", "io-exit", (1,), (0,), (0,), (0,), (0,)),
+    (82, "rename", "path-entry", "path-mutation-exit", (2,), (0,), (0,), (0,), (0,)),
+    (83, "mkdir", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (84, "rmdir", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (85, "creat", "path-entry", "open-exit", (1,), (1,), (0,), (0,), (0,)),
+    (87, "unlink", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (90, "chmod", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (91, "fchmod", "fd-control-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (257, "openat", "path-entry", "open-exit", (1,), (1,), (0,), (0,), (0,)),
+    (258, "mkdirat", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (263, "unlinkat", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (264, "renameat", "path-entry", "path-mutation-exit", (2,), (0,), (0,), (0,), (0,)),
+    (268, "fchmodat", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+    (296, "pwritev", "fd-io-entry", "io-exit", (1,), (0,), (0,), (0,), (0,)),
+    (316, "renameat2", "path-entry", "path-mutation-exit", (2,), (0,), (0,), (0,), (0,)),
+    (328, "pwritev2", "fd-io-entry", "io-exit", (1,), (0,), (0,), (0,), (0,)),
+    (437, "openat2", "path-entry", "open-exit", (1,), (1,), (0,), (0,), (0,)),
+    (452, "fchmodat2", "path-entry", "path-mutation-exit", (1,), (0,), (0,), (0,), (0,)),
+)
+V4_BUILD_OUTPUT_OPERATION_CAPTURE_POLICY_FIELDS = (
+    "syscall_number", "operation", "entry_kind", "exit_kind",
+    "object_edge_counts", "fd_transition_counts",
+    "mapping_transition_counts", "fs_transition_counts",
+    "task_transition_counts",
+)
+V4_BUILD_REJECTED_OUTPUT_MUTATION_SYSCALLS = (
+    (16, "ioctl"),
+    (40, "sendfile"),
+    (86, "link"),
+    (88, "symlink"),
+    (92, "chown"),
+    (93, "fchown"),
+    (94, "lchown"),
+    (132, "utime"),
+    (133, "mknod"),
+    (188, "setxattr"),
+    (189, "lsetxattr"),
+    (190, "fsetxattr"),
+    (197, "removexattr"),
+    (198, "lremovexattr"),
+    (199, "fremovexattr"),
+    (235, "utimes"),
+    (259, "mknodat"),
+    (260, "fchownat"),
+    (261, "futimesat"),
+    (265, "linkat"),
+    (266, "symlinkat"),
+    (275, "splice"),
+    (276, "tee"),
+    (278, "vmsplice"),
+    (280, "utimensat"),
+    (285, "fallocate"),
+    (326, "copy_file_range"),
+)
+V4_BUILD_OUTPUT_GENERATION_FIELDS = (
+    "index", "object_type", "creator_task_index", "creation_event_index",
+    "initial_identity", "lifecycle_event_indices", "final_state",
+    "post_tree_entry_index", "final_identity",
+)
+V4_BUILD_OUTPUT_GENERATION_FINAL_STATES = ("published", "deleted")
+V4_BUILD_OUTPUT_JOIN_FIELDS = (
+    "index", "post_tree_entry_index", "output_generation_index",
+    "lifecycle_event_indices", "quiescence_event_index", "final_identity",
+    "final_mode", "final_st_nlink", "final_bytes", "final_sha256",
+    "complete",
+)
 V4_BUILD_OUTPUT_ROLES = (
     "target-executable",
     "intermediate-object",
@@ -629,8 +978,8 @@ V4_BUNDLE_MAX_BYTES = 67_108_864
 V4_SELF_PUBLICATION_MAX_BYTES = 67_108_864
 V4_EVIDENCE_OBJECT_MAX_BYTES = 67_108_864
 V4_FAILED_DIAGNOSTIC_MAX_BYTES = 16_777_216
-V4_AUTHORITY_CAPSULE_MAX_BYTES = 587_202_560
-V4_AUTHORITY_CAPSULE_READ_MAX_BYTES = 587_202_561
+V4_AUTHORITY_CAPSULE_MAX_BYTES = 721_420_288
+V4_AUTHORITY_CAPSULE_READ_MAX_BYTES = 721_420_289
 V4_POSTFLIGHT_RESULT_MAX_BYTES = 1_073_741_824
 V4_POSTFLIGHT_RESULT_READ_MAX_BYTES = 1_073_741_825
 V4_TRACE_CHUNK_MAX_BYTES = 67_108_864
@@ -640,7 +989,7 @@ V4_AUTHORITY_OBJECT_MAX_BYTES = 33_554_432
 V4_AUTHORITY_OBJECT_READ_MAX_BYTES = 33_554_433
 V4_FIXED_SOURCE_MAX_BYTES = 16_777_216
 V4_STARTUP_DESIGN_MAX_BYTES = 1_048_576
-V4_AUTHORITY_CAPSULE_DECODED_MAX_BYTES = 437_256_192
+V4_AUTHORITY_CAPSULE_DECODED_MAX_BYTES = 537_919_488
 V4_EXACT_JSON_TYPE_NODE_MAX = 262_144
 V4_EXACT_JSON_TYPE_DEPTH_MAX = 64
 V4_REQUEST_RESULT_PAYLOAD_MAX_BYTES = 67_108_864
