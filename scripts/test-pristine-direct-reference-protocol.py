@@ -891,6 +891,10 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
+        class AlwaysEqual:
+            def __eq__(self, other: object) -> bool:
+                return True
+
         files = [
             {
                 "index": 0,
@@ -936,6 +940,15 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         mutations = (
             ("unknown key", lambda item: item.update(extra=False)),
             ("bool schema", lambda item: item.update(schema=True)),
+            ("non-JSON kind", lambda item: item.update(kind=AlwaysEqual())),
+            (
+                "non-JSON role",
+                lambda item: item.update(authority_role=AlwaysEqual()),
+            ),
+            (
+                "non-JSON root policy",
+                lambda item: item.update(root_policy=AlwaysEqual()),
+            ),
             ("wrong kind", lambda item: item.update(kind="source-tree-v0")),
             ("wrong role", lambda item: item.update(authority_role="caller")),
             ("wrong root policy", lambda item: item.update(root_policy="open")),
@@ -974,6 +987,34 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             ):
                 subject.validate_native_source_tree(forged)
 
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_native_source_tree(type("Tree", (dict,), {})(tree))
+
+        forged = copy.deepcopy(tree)
+        forged["files"] = type("Files", (list,), {})(forged["files"])
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_native_source_tree(forged)
+
+        forged = copy.deepcopy(tree)
+        forged["files"][0] = type("File", (dict,), {})(forged["files"][0])
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_native_source_tree(forged)
+
+        forged = copy.deepcopy(tree)
+        forged["files"][0]["relative"] = type("Relative", (str,), {})(
+            forged["files"][0]["relative"],
+        )
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_native_source_tree(forged)
+
+        empty = copy.deepcopy(tree)
+        empty["file_count"] = 0
+        empty["total_bytes"] = 0
+        empty["files"] = []
+        empty["ordered_file_sha256"] = subject.canonical_sha256([])
+        with self.assertRaises(subject.ProtocolError):
+            subject.validate_native_source_tree(empty)
+
         for relative in (
             "", "/absolute", "a\\b", ".", "a/../b", "a//b",
             "x" * 256, ("a/" * 2048) + "a",
@@ -982,6 +1023,17 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
             forged["files"][0]["relative"] = relative
             with self.subTest(relative=relative[:40]), self.assertRaises(
                 subject.ProtocolError,
+            ):
+                subject.validate_native_source_tree(forged)
+
+        for relative in ("pft/solver.c", "src/PFT_bridge.c"):
+            forged = copy.deepcopy(tree)
+            forged["files"][0]["relative"] = relative
+            forged["ordered_file_sha256"] = subject.canonical_sha256(
+                forged["files"],
+            )
+            with self.subTest(relative=relative), self.assertRaisesRegex(
+                subject.ProtocolError, "PFT namespace",
             ):
                 subject.validate_native_source_tree(forged)
 

@@ -575,7 +575,7 @@ def _safe_relative(value: object, label: str) -> str:
 
 def _v4_source_tree_relative(value: object, label: str) -> str:
     require(
-        isinstance(value, str) and value and
+        type(value) is str and value and
         all(32 <= ord(character) < 127 for character in value),
         f"malformed {label}",
     )
@@ -593,6 +593,10 @@ def _v4_source_tree_relative(value: object, label: str) -> str:
             for component in components
         ),
         f"unsafe {label}",
+    )
+    require(
+        PFT_NAMESPACE.search(value) is None,
+        f"PFT namespace is forbidden in {label}",
     )
     return value
 
@@ -645,24 +649,30 @@ def _named_content_record(value: object, label: str) -> dict[str, Any]:
 
 def validate_native_source_tree(value: object) -> dict[str, Any]:
     label = "V4 native source tree"
-    require(isinstance(value, dict) and set(value) == {
+    require(type(value) is dict and
+            all(type(key) is str for key in value) and set(value) == {
                 "schema", "kind", "authority_role", "root_policy",
                 "file_count", "total_bytes", "ordered_file_sha256", "files",
             }, f"malformed {label}")
     require(
         is_int(value.get("schema")) and
         value["schema"] == V4_NATIVE_SOURCE_TREE_SCHEMA and
+        type(value.get("kind")) is str and
         value.get("kind") == V4_NATIVE_SOURCE_TREE_KIND and
+        type(value.get("authority_role")) is str and
         value.get("authority_role") in V4_NATIVE_SOURCE_TREE_ROLES and
+        type(value.get("root_policy")) is str and
         value.get("root_policy") == V4_NATIVE_SOURCE_TREE_ROOT_POLICY and
         is_int(value.get("file_count")) and
-        0 <= value["file_count"] <= V4_SOURCE_TREE_MEMBER_MAX and
+        1 <= value["file_count"] <= V4_SOURCE_TREE_MEMBER_MAX and
         is_int(value.get("total_bytes")) and
         0 <= value["total_bytes"] <= V4_SOURCE_TREE_TOTAL_MAX_BYTES and
-        isinstance(value.get("files"), list) and
+        type(value.get("files")) is list and
         len(value["files"]) == value["file_count"],
         f"malformed {label} header",
     )
+    require(type(value.get("ordered_file_sha256")) is str,
+            f"malformed {label} ordered-file SHA-256 type")
     _hex(
         value.get("ordered_file_sha256"), HEX64,
         f"{label} ordered-file SHA-256",
@@ -672,7 +682,8 @@ def validate_native_source_tree(value: object) -> dict[str, Any]:
     previous_relative: bytes | None = None
     for index, record in enumerate(value["files"]):
         record_label = f"{label} file {index}"
-        require(isinstance(record, dict) and set(record) == {
+        require(type(record) is dict and
+                all(type(key) is str for key in record) and set(record) == {
                     "index", "relative", "mode", "bytes", "sha256",
                 }, f"malformed {record_label}")
         require(
@@ -693,6 +704,8 @@ def validate_native_source_tree(value: object) -> dict[str, Any]:
             f"unordered or duplicate {label} relative path",
         )
         previous_relative = relative_bytes
+        require(type(record.get("sha256")) is str,
+                f"malformed {record_label} SHA-256 type")
         _hex(record.get("sha256"), HEX64, f"{record_label} SHA-256")
         total_bytes += record["bytes"]
         require(
