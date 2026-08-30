@@ -3,7 +3,7 @@
 ## Decision
 
 The final runtime build must use Candle
-`6f4345057185214016dd7f051a0f3b503950480e`, CakeML
+`688d9d1738a7021501f95b6f0ed788e014fa726f`, CakeML
 `964406486a52e1a53a94eade4cf86a666dc8055a`, and HOL4
 `a390cbabd3a4521bab4ee20281e3e42933a8a3ae`.  Because the canonical
 bootstrap and native link both use the same final Candle commit, the link must
@@ -33,7 +33,7 @@ an independently observed Bash exit status.  There must then be no live
 
 Use the new ordinary directory
 
-`/project/flyspeck-candle-runs/cakeml-canonical-bootstrap-6f43450-964406486-attempt-001`
+`/project/flyspeck-candle-runs/cakeml-canonical-bootstrap-688d9d1-964406486-attempt-001`
 
 with these initially absent outputs:
 
@@ -87,12 +87,12 @@ immediately before launch and require its JSON result to contain
   --replay-controller-pid 2270138 \
   --replay-process-group 2270138 \
   --candle-root /project/worktrees/candle-runtime-pin-964406486 \
-  --candle-head 6f4345057185214016dd7f051a0f3b503950480e \
+  --candle-head 688d9d1738a7021501f95b6f0ed788e014fa726f \
   --cakeml-root /project/worktrees/cakeml-flyspeck-runtime-stack-v13 \
   --cakeml-head 964406486a52e1a53a94eade4cf86a666dc8055a \
   --hol4-root /project/worktrees/HOL-cakeml-dopen-v13 \
   --hol4-head a390cbabd3a4521bab4ee20281e3e42933a8a3ae \
-  --attempt-root /project/flyspeck-candle-runs/cakeml-canonical-bootstrap-6f43450-964406486-attempt-001 \
+  --attempt-root /project/flyspeck-candle-runs/cakeml-canonical-bootstrap-688d9d1-964406486-attempt-001 \
   --minimum-mem-available-gib 120
 ```
 
@@ -105,7 +105,7 @@ After satisfying the gate, create only the fresh attempt directory and replace
 the launch shell with this exact sanitized controller invocation:
 
 ```sh
-run_root=/project/flyspeck-candle-runs/cakeml-canonical-bootstrap-6f43450-964406486-attempt-001
+run_root=/project/flyspeck-candle-runs/cakeml-canonical-bootstrap-688d9d1-964406486-attempt-001
 mkdir "$run_root"
 exec /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
   /project/worktrees/candle-runtime-pin-964406486/build-local-cakeml-bootstrap.sh \
@@ -143,7 +143,7 @@ the Candle and CakeML heads still exact, run the ordinary final-head linker:
 ```sh
 /project/worktrees/candle-runtime-pin-964406486/build-local-cakeml.sh \
   /project/worktrees/cakeml-flyspeck-runtime-stack-v13 \
-  /project/flyspeck-candle-runs/cakeml-canonical-bootstrap-6f43450-964406486-attempt-001/bootstrap-provenance.json
+  /project/flyspeck-candle-runs/cakeml-canonical-bootstrap-688d9d1-964406486-attempt-001/bootstrap-provenance.json
 ```
 
 This creates ignored files under `candle/build`, including the schema-6
@@ -169,18 +169,18 @@ acceptance.
 
 ## Exact retained parser sequence
 
-The retained plans bind Candle `6f43450` and Flyspeck `1ce0353`; they are valid
+The retained plans bind Candle `688d9d1` and Flyspeck `1ce0353`; they are valid
 only while those exact authority trees remain clean and unchanged.  Their
 published identities are:
 
 - pilot plan SHA-256
-  `599f1bad0bd69e6dce39608d7a8ff90fda9ae5e02e3cf739e04ad8fffa1ed5b3`
+  `cbc0c47d1a2641f75abaadcf02624eadedd9d1e9606ed060abd50fe919318e1f`
   and host-materialization SHA-256
-  `518e3d4f93df4ebd636e7c92bfc3d19477a623faa80b61c08096ca77eeff895c`;
+  `d3868d3327451850e087c2f9d3b07916488f0361f4deb8a2a63f8335e95723bf`;
 - all-inventory plan SHA-256
-  `816f847dd52331f0c93c9d0ffae6e2c53ebaf25a8757498277f187c0454962fd`
+  `45624f61c50086236c9ab199115d18a2e324b32779849534a18cf3305f05fea1`
   and host-materialization SHA-256
-  `b3eee598a7a820654062638d516880577808886022944c6145aacfc548836242`.
+  `a8068689ffc0584c17d00f63cd9dc6d11040727020fd58a4581a9660e6b48ede`.
 
 Run the pilot first, using an absent result root and the controller's explicit
 per-process limits:
@@ -191,12 +191,12 @@ per-process limits:
   /project/worktrees/candle-runtime-pin-964406486/candle/flyspeck_parser_diagnostic.py \
   run \
   --profile pilot \
-  --plan-root /project/flyspeck-candle-runs/parser-pilot-materialization-6f43450 \
+  --plan-root /project/flyspeck-candle-runs/parser-pilot-materialization-688d9d1 \
   --candle-root /project/worktrees/candle-runtime-pin-964406486 \
-  --candle-head 6f4345057185214016dd7f051a0f3b503950480e \
+  --candle-head 688d9d1738a7021501f95b6f0ed788e014fa726f \
   --flyspeck-root /project/worktrees/flyspeck-v13-source \
   --flyspeck-head 1ce0353008eba83d3c76ae9a25c3c242e4802d53 \
-  --output-root /project/flyspeck-candle-runs/parser-pilot-result-6f43450-attempt-001 \
+  --output-root /project/flyspeck-candle-runs/parser-pilot-result-688d9d1-attempt-001 \
   --timeout-seconds 600 \
   --max-cpu-seconds 600 \
   --max-address-space-gib 16 \
@@ -215,12 +215,12 @@ pilot pass permits the corresponding 400-input run:
   /project/worktrees/candle-runtime-pin-964406486/candle/flyspeck_parser_diagnostic.py \
   run \
   --profile all-inventory \
-  --plan-root /project/flyspeck-candle-runs/all-inventory-materialization-6f43450 \
+  --plan-root /project/flyspeck-candle-runs/all-inventory-materialization-688d9d1 \
   --candle-root /project/worktrees/candle-runtime-pin-964406486 \
-  --candle-head 6f4345057185214016dd7f051a0f3b503950480e \
+  --candle-head 688d9d1738a7021501f95b6f0ed788e014fa726f \
   --flyspeck-root /project/worktrees/flyspeck-v13-source \
   --flyspeck-head 1ce0353008eba83d3c76ae9a25c3c242e4802d53 \
-  --output-root /project/flyspeck-candle-runs/parser-all-inventory-result-6f43450-attempt-001 \
+  --output-root /project/flyspeck-candle-runs/parser-all-inventory-result-688d9d1-attempt-001 \
   --timeout-seconds 600 \
   --max-cpu-seconds 600 \
   --max-address-space-gib 16 \
@@ -259,10 +259,10 @@ consumer immediately after the pilot, then again for any later consumption:
   --project-root /project/worktrees/flyspeck-project-runtime-gates-aaeb533 \
   --project-head aaeb533d7a8c6faccedac63f1f979e74db6674b4 \
   --profile pilot \
-  --plan-root /project/flyspeck-candle-runs/parser-pilot-materialization-6f43450 \
-  --result-root /project/flyspeck-candle-runs/parser-pilot-result-6f43450-attempt-001 \
+  --plan-root /project/flyspeck-candle-runs/parser-pilot-materialization-688d9d1 \
+  --result-root /project/flyspeck-candle-runs/parser-pilot-result-688d9d1-attempt-001 \
   --candle-root /project/worktrees/candle-runtime-pin-964406486 \
-  --candle-head 6f4345057185214016dd7f051a0f3b503950480e \
+  --candle-head 688d9d1738a7021501f95b6f0ed788e014fa726f \
   --flyspeck-root /project/worktrees/flyspeck-v13-source \
   --flyspeck-head 1ce0353008eba83d3c76ae9a25c3c242e4802d53
 ```
@@ -278,10 +278,10 @@ corresponding command:
   --project-root /project/worktrees/flyspeck-project-runtime-gates-aaeb533 \
   --project-head aaeb533d7a8c6faccedac63f1f979e74db6674b4 \
   --profile all-inventory \
-  --plan-root /project/flyspeck-candle-runs/all-inventory-materialization-6f43450 \
-  --result-root /project/flyspeck-candle-runs/parser-all-inventory-result-6f43450-attempt-001 \
+  --plan-root /project/flyspeck-candle-runs/all-inventory-materialization-688d9d1 \
+  --result-root /project/flyspeck-candle-runs/parser-all-inventory-result-688d9d1-attempt-001 \
   --candle-root /project/worktrees/candle-runtime-pin-964406486 \
-  --candle-head 6f4345057185214016dd7f051a0f3b503950480e \
+  --candle-head 688d9d1738a7021501f95b6f0ed788e014fa726f \
   --flyspeck-root /project/worktrees/flyspeck-v13-source \
   --flyspeck-head 1ce0353008eba83d3c76ae9a25c3c242e4802d53
 ```

@@ -2,6 +2,13 @@
 
 Date: 2026-08-29 UTC
 
+> Historical preparation record.  Candle
+> `6f4345057185214016dd7f051a0f3b503950480e` and its materializations were
+> superseded by controller-source closure commit
+> `688d9d1738a7021501f95b6f0ed788e014fa726f`.  The live launch identities are
+> maintained in `2026-08-29-canonical-bootstrap-handoff.md`; the old roots below
+> remain preserved as non-current evidence.
+
 ## Result
 
 An isolated Candle branch now pins the complete parser-diagnostic CakeML
