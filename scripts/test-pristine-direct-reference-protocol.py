@@ -865,7 +865,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertEqual(subject.V4_BUILD_FILTER_ERRNO, 1)
         self.assertEqual(subject.V4_BUILD_FILTER_CLONE_SYSCALL, 56)
         self.assertEqual(
-            subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK, 0x7E820000,
+            subject.V4_BUILD_FILTER_CLONE_NAMESPACE_MASK, 0x7E820080,
         )
         self.assertEqual(
             tuple(number for number, _ in subject.V4_BUILD_FILTER_DENIED_SYSCALLS),
@@ -926,7 +926,7 @@ class PristineDirectReferenceProtocolTests(unittest.TestCase):
         self.assertEqual(len(values), 179)
         self.assertEqual(
             hashlib.sha256(encoded).hexdigest(),
-            "64d12dcd484cd20053553366545872ae89e220de19e28a9120219fb289cfbe9a",
+            "4ebd83cb16c36bf7bee12ec6987cb3ab6069976731c9ecb44c69f38aa3b2f972",
         )
 
     def test_v4_native_source_tree_leaf_validator(self) -> None:
