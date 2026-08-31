@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 # From a pristine CakeML worktree, build the base heap and run the exact
 # four-stage CakeML x64 bootstrap proof replay serially.
 
@@ -19,55 +19,82 @@ if [[ $run_root != /* || $cakeml_root != /* || $hol4_root != /* ]]; then
   echo "run, CakeML, and HOL4 roots must be absolute" >&2
   exit 64
 fi
-if [[ -e $run_root ]]; then
-  echo "run root already exists: $run_root" >&2
-  exit 65
-fi
 if [[ $cakeml_root == / || $hol4_root == / ]]; then
   echo "refusing a filesystem root as a source root" >&2
   exit 64
 fi
 
-controller_script=$(/usr/bin/realpath "$0")
-controller_root=$(/usr/bin/git -C "$(/usr/bin/dirname "$controller_script")" \
-  rev-parse --show-toplevel)
-controller_relative=scripts/run-canonical-bootstrap-replay.sh
-controller_head=$(/usr/bin/git -C "$controller_root" rev-parse HEAD)
-if [[ $controller_script != "$controller_root/$controller_relative" ]] ||
-   ! /usr/bin/git -C "$controller_root" \
-      ls-files --error-unmatch "$controller_relative" >/dev/null 2>&1; then
-  echo "replay controller is outside its tracked project authority" >&2
-  exit 65
-fi
-
-git_clean_at_head() {
-  local root=$1
-  local expected=$2
-  local label=$3
-  local observed
-  observed=$(/usr/bin/git -C "$root" rev-parse HEAD)
-  if [[ $observed != "$expected" ]]; then
-    echo "$label head mismatch: $observed" >&2
-    exit 65
-  fi
-  if [[ -n $(/usr/bin/git -C "$root" status --porcelain=v1 --untracked-files=all) ]]; then
-    echo "$label worktree is not clean" >&2
-    exit 65
-  fi
+git_hardened() {
+  /usr/bin/env -i \
+    PATH=/usr/bin:/bin LC_ALL=C \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_TERMINAL_PROMPT=0 GIT_NO_REPLACE_OBJECTS=1 \
+    /usr/bin/git \
+      -c core.fsmonitor=false \
+      -c core.untrackedCache=false \
+      -c core.preloadIndex=false \
+      "$@"
 }
 
-git_clean_at_head "$cakeml_root" "$cakeml_head" CakeML
-git_clean_at_head "$hol4_root" "$hol4_head" HOL4
-git_clean_at_head "$controller_root" "$controller_head" "replay controller"
+controller_invocation=$0
+controller_script=$(/usr/bin/realpath -e "$controller_invocation")
+controller_root=$(git_hardened -C "$(/usr/bin/dirname "$controller_script")" \
+  rev-parse --show-toplevel)
+controller_relative=scripts/run-canonical-bootstrap-replay.sh
+gate_relative=scripts/check-canonical-bootstrap-gate.py
+controller_head=$(git_hardened -C "$controller_root" rev-parse HEAD)
+gate_script=$controller_root/$gate_relative
 
-# Ordinary Git cleanliness deliberately excludes ignored products.  A cold
-# replay must not inherit a base heap or .hol object cache from a recycled
-# CakeML worktree.
-if [[ -n $(/usr/bin/git -C "$cakeml_root" \
-    ls-files --others --ignored --exclude-standard) ]]; then
-  echo "CakeML worktree contains ignored build products" >&2
+if [[ $controller_root != /* ]] ||
+   [[ $controller_invocation != "$controller_script" ]] ||
+   [[ $controller_root != "$(/usr/bin/realpath -e "$controller_root")" ]] ||
+   [[ $controller_script != "$controller_root/$controller_relative" ]] ||
+   [[ $gate_script != "$(/usr/bin/realpath -e "$gate_script")" ]] ||
+   ! git_hardened -C "$controller_root" \
+      ls-files --error-unmatch "$controller_relative" >/dev/null 2>&1 ||
+   ! git_hardened -C "$controller_root" \
+      ls-files --error-unmatch "$gate_relative" >/dev/null 2>&1 ||
+   ! git_hardened -C "$controller_root" \
+      show "$controller_head:$controller_relative" |
+      /usr/bin/cmp -s - "$controller_script" ||
+   ! git_hardened -C "$controller_root" \
+      show "$controller_head:$gate_relative" |
+      /usr/bin/cmp -s - "$gate_script"; then
+  echo "replay controller or gate is outside committed project authority" >&2
   exit 65
 fi
+
+if [[ $cakeml_root != "$(/usr/bin/realpath -e "$cakeml_root")" ]] ||
+   [[ $hol4_root != "$(/usr/bin/realpath -e "$hol4_root")" ]]; then
+  echo "CakeML and HOL4 roots must be exact canonical directories" >&2
+  exit 64
+fi
+
+run_parent=$(/usr/bin/dirname "$run_root")
+run_name=$(/usr/bin/basename "$run_root")
+if [[ $run_name == . || $run_name == .. ]] ||
+   [[ $run_parent != "$(/usr/bin/realpath -e "$run_parent")" ]] ||
+   [[ $run_root != "$run_parent/$run_name" ]]; then
+  echo "run root must be a new direct child of an exact canonical directory" >&2
+  exit 64
+fi
+if [[ -e $run_root || -L $run_root ]]; then
+  echo "run root already exists: $run_root" >&2
+  exit 65
+fi
+
+gate_command=(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+  /usr/bin/python3 -I -S "$gate_script")
+exact_git() {
+  "${gate_command[@]}" --internal-exact-git \
+    --root "$1" --head "$2" --label "$3" "${@:4}" >/dev/null
+}
+
+# This first exact check is intentionally before run-root creation.  In
+# particular, a stale ignored base heap or .hol cache leaves no receipt root.
+exact_git "$controller_root" "$controller_head" "replay controller project"
+exact_git "$cakeml_root" "$cakeml_head" CakeML --require-no-ignored
+exact_git "$hol4_root" "$hol4_head" HOL4
 
 if /usr/bin/pgrep -x Holmake >/dev/null; then
   echo "another Holmake process is live" >&2
@@ -76,18 +103,45 @@ fi
 
 umask 077
 /usr/bin/mkdir "$run_root"
+if [[ $run_root != "$(/usr/bin/realpath -e "$run_root")" ]]; then
+  echo "created run root is not exact" >&2
+  exit 65
+fi
+
+controller_pgid=$(/usr/bin/ps -o pgid= -p "$$")
+controller_pgid=${controller_pgid//[[:space:]]/}
+if [[ ! $controller_pgid =~ ^[0-9]+$ ]] || (( controller_pgid <= 1 )); then
+  echo "could not identify controller process group" >&2
+  exit 65
+fi
+
+/usr/bin/printf '%s\n' "$cakeml_root" >"$run_root/cakeml_root"
 /usr/bin/printf '%s\n' "$cakeml_head" >"$run_root/cakeml_head"
+/usr/bin/printf '%s\n' "$hol4_root" >"$run_root/hol4_root"
 /usr/bin/printf '%s\n' "$hol4_head" >"$run_root/hol4_head"
 /usr/bin/printf '%s\n' "$controller_root" >"$run_root/controller_project_root"
 /usr/bin/printf '%s\n' "$controller_head" >"$run_root/controller_project_head"
-/usr/bin/printf '%s\n' "$controller_relative" >"$run_root/controller_script_relative"
+/usr/bin/printf '%s\n' "$controller_relative" \
+  >"$run_root/controller_script_relative"
+/usr/bin/printf '%s\n' "$gate_relative" >"$run_root/gate_script_relative"
 /usr/bin/sha256sum "$controller_script" | /usr/bin/awk '{print $1}' \
   >"$run_root/controller_script_sha256"
+/usr/bin/sha256sum "$gate_script" | /usr/bin/awk '{print $1}' \
+  >"$run_root/gate_script_sha256"
 /usr/bin/printf '%s\n' none >"$run_root/cakeml_ignored_products_preflight"
 /usr/bin/printf '%s\n' "$$" >"$run_root/controller_pid"
+/usr/bin/printf '%s\n' "$controller_pgid" >"$run_root/controller_pgid"
 /usr/bin/printf '%s\n' "-j1 --mt=1" >"$run_root/build_parallelism"
 /usr/bin/printf '%s\n' "117964800" >"$run_root/address_space_limit_kib"
 /usr/bin/date -u +%FT%TZ >"$run_root/started_utc"
+
+# Revalidate all three tracked trees and publish the authenticated historical
+# empty-product observation immediately before any build command.
+"${gate_command[@]}" --internal-write-preflight \
+  --replay-root "$run_root" \
+  --project-root "$controller_root" --project-head "$controller_head" \
+  --cakeml-root "$cakeml_root" --cakeml-head "$cakeml_head" \
+  --hol4-root "$hol4_root" --hol4-head "$hol4_head" >/dev/null
 
 # 115.2 GiB in KiB. The user-authorized exceptional ceiling is 120 GiB.
 ulimit -v 117964800
@@ -124,5 +178,10 @@ run_stage x64BootstrapProofTheory.uo \
   x64BootstrapProofTheory.uo \
   04-x64BootstrapProof.time 04-x64BootstrapProof.log
 
-/usr/bin/printf '%s\n' complete >"$run_root/stage"
 /usr/bin/date -u +%FT%TZ >"$run_root/finished_utc"
+"${gate_command[@]}" --internal-publish-manifest \
+  --replay-root "$run_root" \
+  --project-root "$controller_root" --project-head "$controller_head" \
+  --cakeml-root "$cakeml_root" --cakeml-head "$cakeml_head" \
+  --hol4-root "$hol4_root" --hol4-head "$hol4_head" >/dev/null
+/usr/bin/printf '%s\n' complete >"$run_root/stage"
