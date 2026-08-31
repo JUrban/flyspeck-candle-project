@@ -509,3 +509,46 @@ timing-record SHA-256 values are
 The isolated branch, head and `.git` pointer passed the postflight check.  A
 deterministic two-selected-child composition was verified in the saved App
 state and focused attempt 007 is replaying that exact proof text.
+
+## App proof replay after exact-domain propagation
+
+Focused attempts 007 through 018 are retained under the corresponding
+`/project/flyspeck-candle-runs/cakeml-source-to-flat-dopen-focused-77b769a99-attempt-NNN`
+directories.  Every executable proof replay used one HOL worker, recorded zero
+swaps and stayed between `943056` and `1709088` KiB maximum RSS.  The ordinary
+replays took between `2:05.36` and `2:27.16`; attempt 008 was a diagnostic SML
+marker setup error and is excluded from proof evidence.
+
+These runs first established that the strengthened suspended-environment
+theorem and both exact-domain append children replay completely.  The later
+failures were all pre-existing order-dependent `FIRST_ASSUM` searches in the
+large App proof after its declaration induction hypothesis acquired the new
+premise.  Diagnostic attempts 009--012 localized and printed the normalized
+Opapp state.  Attempts 013--015 then replaced the ambiguous search with the
+exact normalized expression-evaluation induction hypothesis; markers in 015
+proved selection, all three premises, clock simplification, application of the
+IH result and completion of the entire Opapp branch.
+
+Attempts 016--017 similarly showed that the first five Force `sv_rel` lookups
+complete and printed the sixth unevaluated-error state.  Its intended premise
+is the exact universal relation between `st'.refs` and `TL s'_i1.refs`, at the
+known reference index; attempt 018 passed the resulting full-shape selector.
+It then exposed one later order-dependent search after that witness.  Focused
+attempt 019 is localizing only that next operation.  No theorem statement,
+semantic definition, axiom set or abort case has been weakened during this
+tactic hardening.
+
+For the last four completed replays, the immutable log/timing SHA-256 pairs
+are: attempt 015
+`7d940ddef0c6204521b36ab77ea048481f35acad97ffee41409baae0a35a89a2` /
+`8a0d2358af7dc882c4e1d01b824bbfd76c688154d4b3307ad18383ec2ec4118f`;
+attempt 016
+`793f1a931989c6f7faef6e0637b02303246481c3c2035aa18c030465114a3162` /
+`ece25ac1eb243655ea8aeacbdf35cb5323e210a9c7d46ea3f325c1a0c72f4611`;
+attempt 017
+`843ec790cefc2933879d8b9da2f6b5db375519d3e925c305d52a304903423356` /
+`ea59d4fbf59a9a0a9882de33803a6eb8a6c34239844a57165d36a6b842558179`;
+and attempt 018
+`232abb446b093c032cf21e999dcb64ff98d943f7175dd9f5a1d5e0d4719685ed` /
+`7e677ff3c6cb52dac84a7e694a1cff262d004773fe219122a61fa6855286c353`.
+None is qualification or authorizes a compiler/Candle repin.
