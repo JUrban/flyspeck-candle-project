@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/mount.h>
 #include <sys/ioctl.h>
 #include <sys/ptrace.h>
 #include <sys/syscall.h>
@@ -46,11 +47,15 @@
 #define V4_HB_PROC_STAT_MAX_BYTES 4096U
 #define V4_HB_PROC_STATUS_MAX_BYTES 16384U
 #define V4_HB_PROC_MAP_MAX_BYTES 4096U
+#define V4_HB_PROC_MOUNTINFO_MAX_BYTES 16777216U
+#define V4_HB_PROC_MOUNTINFO_MAX_ROWS 196608U
 #define V4_HB_ABORT_WAIT_LIMIT 16U
 #define V4_HB_WAIT_ATTEMPT_LIMIT 5000U
 #define V4_HB_WAIT_POLL_MILLISECONDS 1
 #define V4_HB_PTRACE_GET_SYSCALL_INFO 0x420e
 #define V4_HB_PTRACE_SYSCALL_INFO_NONE 0U
+#define V4_HB_PTRACE_SYSCALL_INFO_ENTRY 1U
+#define V4_HB_PTRACE_SYSCALL_INFO_EXIT 2U
 #define V4_HB_ROOT_STATUS_FLAGS 0x00230000U
 #define V4_HB_ROOT_FDINFO_FLAGS 0x002b0000U
 
@@ -92,6 +97,12 @@ _Static_assert(CLONE_NEWPID == 0x20000000,
                "unexpected CLONE_NEWPID value");
 _Static_assert(CLONE_NEWNET == 0x40000000,
                "unexpected CLONE_NEWNET value");
+_Static_assert((MS_REC | MS_PRIVATE) == V4_HB_SETUP_MOUNT_FLAGS,
+               "fixed recursive-private mount flags drifted");
+_Static_assert(SYS_mount == 165, "unexpected Linux x86-64 mount syscall");
+_Static_assert(SYS_fchdir == 81, "unexpected Linux x86-64 fchdir syscall");
+_Static_assert(SYS_chroot == 161, "unexpected Linux x86-64 chroot syscall");
+_Static_assert(SYS_chdir == 80, "unexpected Linux x86-64 chdir syscall");
 _Static_assert(
     (CLONE_NEWNS | CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNET |
      CLONE_NEWIPC | SIGCHLD) == V4_HB_FIXED_CLONE_FLAGS,
@@ -146,6 +157,8 @@ struct v4_hb_builder {
     int child_namespace_guards[V4_HB_NAMESPACE_COUNT];
     struct v4_hb_root_anchor_config root_config;
     bool root_inheritance_verified;
+    struct v4_hb_setup_prefix_observation setup_prefix;
+    bool setup_prefix_complete;
 };
 
 struct v4_hb_namespace_specification {
@@ -169,6 +182,52 @@ struct v4_hb_ptrace_syscall_base {
     uint64_t instruction_pointer;
     uint64_t stack_pointer;
 };
+
+struct v4_hb_ptrace_syscall_information {
+    uint8_t operation;
+    uint8_t padding[3];
+    uint32_t architecture;
+    uint64_t instruction_pointer;
+    uint64_t stack_pointer;
+    union {
+        struct {
+            uint64_t number;
+            uint64_t arguments[6];
+        } entry;
+        struct {
+            int64_t return_value;
+            uint8_t is_error;
+        } exit;
+    } detail;
+};
+
+static int v4_hb_get_syscall_information(
+    const struct v4_hb_builder *builder,
+    uint8_t expected_operation,
+    struct v4_hb_ptrace_syscall_information *information,
+    struct v4_hb_error *error
+);
+
+static int v4_hb_validate_stored_setup_prefix(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+);
+
+_Static_assert(sizeof(struct v4_hb_ptrace_syscall_base) == 24U,
+               "ptrace syscall-info base ABI drifted");
+_Static_assert(sizeof(struct v4_hb_ptrace_syscall_information) == 80U,
+               "ptrace syscall-info ABI drifted");
+_Static_assert(
+    offsetof(struct v4_hb_ptrace_syscall_information, detail.entry) +
+        sizeof(((struct v4_hb_ptrace_syscall_information *)0)->detail.entry) ==
+        80U,
+    "ptrace entry syscall-info ABI drifted"
+);
+_Static_assert(
+    offsetof(struct v4_hb_ptrace_syscall_information, detail.exit) +
+        sizeof(int64_t) + sizeof(uint8_t) == 33U,
+    "ptrace exit syscall-info ABI drifted"
+);
 
 static int
 v4_hb_fail(
@@ -2043,9 +2102,37 @@ v4_hb_verify_pidfd_alias(
                       "retained pidfd no longer names its original OFD");
 }
 
-static void
-v4_hb_child_gate_loop(_Atomic unsigned int *gate)
+static long
+v4_hb_child_raw_syscall6(
+    long number,
+    unsigned long argument_1,
+    unsigned long argument_2,
+    unsigned long argument_3,
+    unsigned long argument_4,
+    unsigned long argument_5,
+    unsigned long argument_6
+)
 {
+    register unsigned long register_10 __asm__("r10") = argument_4;
+    register unsigned long register_8 __asm__("r8") = argument_5;
+    register unsigned long register_9 __asm__("r9") = argument_6;
+    long result;
+
+    __asm__ volatile(
+        "syscall"
+        : "=a"(result)
+        : "a"(number), "D"(argument_1), "S"(argument_2), "d"(argument_3),
+          "r"(register_10), "r"(register_8), "r"(register_9)
+        : "rcx", "r11", "memory"
+    );
+    return result;
+}
+
+static void
+v4_hb_child_gate_loop(_Atomic unsigned int *gate, int input_root_fd)
+{
+    static const char root_path[V4_HB_SETUP_PATH_CAP] = {'/', '\0'};
+    static const char current_path[V4_HB_SETUP_PATH_CAP] = {'.', '\0'};
     unsigned int value;
 
     do {
@@ -2054,7 +2141,30 @@ v4_hb_child_gate_loop(_Atomic unsigned int *gate)
         __asm__ volatile("pause" ::: "memory");
 #endif
     } while (value == 0U);
-    (void)syscall(SYS_exit, value == 1U ? 0 : 125);
+    if (value != 1U) {
+        (void)v4_hb_child_raw_syscall6(
+            SYS_exit, 125U, 0U, 0U, 0U, 0U, 0U
+        );
+        __builtin_unreachable();
+    }
+    (void)v4_hb_child_raw_syscall6(
+        SYS_mount, 0U, (unsigned long)(uintptr_t)root_path, 0U,
+        V4_HB_SETUP_MOUNT_FLAGS, 0U, 0U
+    );
+    (void)v4_hb_child_raw_syscall6(
+        SYS_fchdir, (unsigned long)input_root_fd, 0U, 0U, 0U, 0U, 0U
+    );
+    (void)v4_hb_child_raw_syscall6(
+        SYS_chroot, (unsigned long)(uintptr_t)current_path,
+        0U, 0U, 0U, 0U, 0U
+    );
+    (void)v4_hb_child_raw_syscall6(
+        SYS_chdir, (unsigned long)(uintptr_t)root_path,
+        0U, 0U, 0U, 0U, 0U
+    );
+    (void)v4_hb_child_raw_syscall6(
+        SYS_exit, 0U, 0U, 0U, 0U, 0U, 0U
+    );
     __builtin_unreachable();
 }
 
@@ -2322,7 +2432,9 @@ v4_hb_builder_start(
                           "held builder clone failed");
     }
     if (pid == 0) {
-        v4_hb_child_gate_loop(builder->gate);
+        v4_hb_child_gate_loop(
+            builder->gate, builder->root_config.input_root.primary.fd
+        );
     }
     builder->pid = pid;
     pidfd = (int)syscall(SYS_pidfd_open, pid, 0U);
@@ -2637,19 +2749,28 @@ v4_hb_verify_held_internal(
     uint64_t current_start_ticks;
     int unexpected_status;
     pid_t waited;
+    bool setup_stop;
     int code;
 
-    if (builder == NULL ||
-        (builder->state != V4_HB_INTERRUPT_HELD &&
-         builder->state != V4_HB_BOUND_ROOT_WALKS_COMPLETE) ||
+    if (builder == NULL) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "held-builder logical state is malformed");
+    }
+    setup_stop = builder->state == V4_HB_SETUP_PREFIX_COMPLETE;
+    if ((builder->state != V4_HB_INTERRUPT_HELD &&
+         builder->state != V4_HB_BOUND_ROOT_WALKS_COMPLETE &&
+         !setup_stop) ||
         builder->pid <= 0 || builder->pidfd < 0 ||
         builder->start_ticks == 0 || builder->gate == MAP_FAILED ||
-        atomic_load_explicit(builder->gate, memory_order_acquire) != 0U ||
+        atomic_load_explicit(builder->gate, memory_order_acquire) !=
+            (setup_stop ? 1U : 0U) ||
         builder->seize_count != 1 || builder->interrupt_count != 1 ||
         builder->interrupt_event_stop_count != 1 ||
-        builder->resume_count != 0 ||
+        builder->resume_count !=
+            (setup_stop ? V4_HB_SETUP_PREFIX_STOP_COUNT : 0U) ||
         builder->held_stop_consumed != 1 ||
         !builder->root_inheritance_verified ||
+        builder->setup_prefix_complete != setup_stop ||
         !WIFSTOPPED(builder->raw_interrupt_wait_status) ||
         WSTOPSIG(builder->raw_interrupt_wait_status) != SIGTRAP ||
         (unsigned int)builder->raw_interrupt_wait_status >> 16 !=
@@ -2686,6 +2807,60 @@ v4_hb_verify_held_internal(
     code = v4_hb_verify_root_inheritance(builder, false, error);
     if (code != V4_HB_OK) {
         return code;
+    }
+    if (setup_stop) {
+        struct v4_hb_ptrace_syscall_information setup_information;
+        const struct v4_hb_setup_syscall_observation *final_operation =
+            &builder->setup_prefix.operations[
+                V4_HB_SETUP_PREFIX_OPERATION_COUNT - 1U
+            ];
+
+        code = v4_hb_validate_stored_setup_prefix(builder, error);
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        memset(&registers, 0, sizeof(registers));
+        vector.iov_base = &registers;
+        vector.iov_len = sizeof(registers);
+        if (ptrace(PTRACE_GETREGSET, builder->pid,
+                   (void *)(uintptr_t)NT_PRSTATUS, &vector) != 0) {
+            return v4_hb_fail(error, V4_HB_ERROR, errno,
+                              "setup-prefix GETREGSET failed");
+        }
+        if (vector.iov_len != sizeof(registers)) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "setup-prefix register size mismatch");
+        }
+        code = v4_hb_get_syscall_information(
+            builder, V4_HB_PTRACE_SYSCALL_INFO_EXIT,
+            &setup_information, error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        if (setup_information.instruction_pointer != registers.rip ||
+            setup_information.stack_pointer != registers.rsp ||
+            setup_information.instruction_pointer !=
+                final_operation->exit_instruction_pointer ||
+            setup_information.stack_pointer !=
+                final_operation->exit_stack_pointer ||
+            setup_information.detail.exit.return_value != 0 ||
+            setup_information.detail.exit.is_error != 0U) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "final chdir exit stop projection changed");
+        }
+        do {
+            waited = waitpid(builder->pid, &unexpected_status,
+                             __WALL | WNOHANG);
+        } while (waited < 0 && errno == EINTR);
+        if (waited != 0) {
+            return v4_hb_fail(
+                error, V4_HB_ERROR,
+                waited < 0 ? errno : EINVAL,
+                "unexpected setup-prefix wait event"
+            );
+        }
+        return V4_HB_OK;
     }
     memset(&current_siginfo, 0, sizeof(current_siginfo));
     {
@@ -3014,6 +3189,891 @@ v4_hb_builder_run_bound_root_walks(
 }
 
 static int
+v4_hb_verify_traced_stop_boundary(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    uint64_t current_start_ticks;
+    int code;
+
+    if (builder == NULL || builder->pid <= 0 || builder->pidfd < 0 ||
+        builder->start_ticks == 0U || !builder->root_inheritance_verified ||
+        builder->held_stop_consumed != 1U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "traced setup stop state is malformed");
+    }
+    code = v4_hb_verify_pidfd_alias(builder, error);
+    if (code == V4_HB_OK) {
+        code = v4_hb_pidfd_send(builder->pidfd, 0, error);
+    }
+    if (code == V4_HB_OK) {
+        code = v4_hb_read_start_ticks(
+            builder, builder->pid, &current_start_ticks, error
+        );
+    }
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (current_start_ticks != builder->start_ticks) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "traced setup PID/start-ticks identity changed");
+    }
+    code = v4_hb_read_held_proc_status(builder, error);
+    if (code == V4_HB_OK) {
+        code = v4_hb_verify_namespace_boundary(builder, error);
+    }
+    if (code == V4_HB_OK) {
+        code = v4_hb_verify_root_inheritance(builder, false, error);
+    }
+    return code;
+}
+
+static int
+v4_hb_wait_syscall_stop(
+    struct v4_hb_builder *builder,
+    int *raw_status,
+    struct v4_hb_error *error
+)
+{
+    siginfo_t information;
+    unsigned int attempt;
+    int status;
+    pid_t waited;
+
+    for (attempt = 0; attempt < V4_HB_WAIT_ATTEMPT_LIMIT; ++attempt) {
+        memset(&information, 0, sizeof(information));
+        if (waitid(P_PIDFD, (id_t)builder->pidfd, &information,
+                   WSTOPPED | WNOWAIT | WNOHANG) != 0) {
+            int saved_errno = errno;
+            return v4_hb_fail(
+                error,
+                (saved_errno == EINVAL || saved_errno == ENOSYS ||
+                 saved_errno == EPERM) ? V4_HB_UNSUPPORTED : V4_HB_ERROR,
+                saved_errno, "pidfd syscall-stop observation failed"
+            );
+        }
+        if (information.si_pid != 0) {
+            break;
+        }
+        if (poll(NULL, 0, V4_HB_WAIT_POLL_MILLISECONDS) < 0 &&
+            errno != EINTR) {
+            return v4_hb_fail(error, V4_HB_ERROR, errno,
+                              "syscall-stop wait pause failed");
+        }
+    }
+    if (attempt == V4_HB_WAIT_ATTEMPT_LIMIT) {
+        return v4_hb_fail(error, V4_HB_ERROR, ETIMEDOUT,
+                          "ptrace syscall-stop wait timed out");
+    }
+    if (information.si_pid != builder->pid ||
+        information.si_code != CLD_TRAPPED ||
+        information.si_status != (SIGTRAP | 0x80)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "non-TRACESYSGOOD syscall stop observed");
+    }
+    do {
+        waited = waitpid(builder->pid, &status, __WALL | WNOHANG);
+    } while (waited < 0 && errno == EINTR);
+    if (waited != builder->pid || !WIFSTOPPED(status) ||
+        WSTOPSIG(status) != (SIGTRAP | 0x80) ||
+        (unsigned int)status >> 16 != 0U) {
+        return v4_hb_fail(
+            error, V4_HB_ERROR, waited < 0 ? errno : EINVAL,
+            "syscall-stop wait status mismatch"
+        );
+    }
+    builder->held_stop_consumed = 1U;
+    *raw_status = status;
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_resume_to_syscall_stop(
+    struct v4_hb_builder *builder,
+    int *raw_status,
+    struct v4_hb_error *error
+)
+{
+    if (ptrace(PTRACE_SYSCALL, builder->pid, NULL, NULL) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "PTRACE_SYSCALL setup resume failed");
+    }
+    ++builder->resume_count;
+    builder->held_stop_consumed = 0U;
+    return v4_hb_wait_syscall_stop(builder, raw_status, error);
+}
+
+static int
+v4_hb_read_remote_setup_path(
+    const struct v4_hb_builder *builder,
+    uint64_t address,
+    uint8_t expected_character,
+    uint8_t bytes[V4_HB_SETUP_PATH_CAP],
+    struct v4_hb_error *error
+)
+{
+    struct iovec local;
+    struct iovec remote;
+    ssize_t count;
+
+    if (address == 0U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EFAULT,
+                          "setup pathname pointer is null");
+    }
+    memset(bytes, 0, V4_HB_SETUP_PATH_CAP);
+    local.iov_base = bytes;
+    local.iov_len = V4_HB_SETUP_PATH_CAP;
+    remote.iov_base = (void *)(uintptr_t)address;
+    remote.iov_len = V4_HB_SETUP_PATH_CAP;
+    do {
+        count = process_vm_readv(builder->pid, &local, 1U, &remote, 1U, 0U);
+    } while (count < 0 && errno == EINTR);
+    if (count != (ssize_t)V4_HB_SETUP_PATH_CAP) {
+        return v4_hb_fail(
+            error, V4_HB_ERROR, count < 0 ? errno : EFAULT,
+            "bounded setup pathname observation failed"
+        );
+    }
+    if (bytes[0] != expected_character || bytes[1] != '\0') {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "setup pathname bytes mismatch");
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_get_syscall_information(
+    const struct v4_hb_builder *builder,
+    uint8_t expected_operation,
+    struct v4_hb_ptrace_syscall_information *information,
+    struct v4_hb_error *error
+)
+{
+    size_t expected_bytes = expected_operation ==
+            V4_HB_PTRACE_SYSCALL_INFO_ENTRY ? 80U : 33U;
+    long information_bytes;
+
+    memset(information, 0, sizeof(*information));
+    information_bytes = ptrace(
+        (enum __ptrace_request)V4_HB_PTRACE_GET_SYSCALL_INFO,
+        builder->pid, (void *)sizeof(*information), information
+    );
+    if (information_bytes < 0) {
+        int saved_errno = errno;
+        return v4_hb_fail(
+            error,
+            (saved_errno == EIO || saved_errno == EINVAL) ?
+                V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            saved_errno, "ptrace syscall information is unavailable"
+        );
+    }
+    if ((size_t)information_bytes != expected_bytes ||
+        information->operation != expected_operation ||
+        information->architecture != AUDIT_ARCH_X86_64 ||
+        information->instruction_pointer == 0U ||
+        information->stack_pointer == 0U) {
+        return v4_hb_fail(
+            error, V4_HB_ERROR, EINVAL,
+            "ptrace syscall information mismatch: bytes=%ld/%lu op=%u/%u "
+            "arch=%x/%x ip=%llu sp=%llu",
+            information_bytes, (unsigned long)expected_bytes,
+            (unsigned int)information->operation,
+            (unsigned int)expected_operation,
+            information->architecture, AUDIT_ARCH_X86_64,
+            (unsigned long long)information->instruction_pointer,
+            (unsigned long long)information->stack_pointer
+        );
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_validate_setup_entry(
+    const struct v4_hb_builder *builder,
+    uint32_t operation_index,
+    const struct v4_hb_ptrace_syscall_information *information,
+    struct v4_hb_setup_syscall_observation *observation,
+    struct v4_hb_error *error
+)
+{
+    static const uint64_t expected_numbers[
+        V4_HB_SETUP_PREFIX_OPERATION_COUNT
+    ] = {SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir};
+    uint64_t expected_number;
+    uint32_t argument_index;
+    int raw_entry_wait_status = observation->raw_entry_wait_status;
+    int code;
+
+    memset(observation, 0, sizeof(*observation));
+    observation->raw_entry_wait_status = raw_entry_wait_status;
+    observation->operation_index = operation_index;
+    observation->operation =
+        (enum v4_hb_setup_operation)(operation_index + 1U);
+    if (operation_index >= V4_HB_SETUP_PREFIX_OPERATION_COUNT) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "unknown setup operation");
+    }
+    expected_number = expected_numbers[operation_index];
+    if (information->detail.entry.number != expected_number) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "setup syscall order/number mismatch");
+    }
+    switch (observation->operation) {
+    case V4_HB_SETUP_RECURSIVE_PRIVATE:
+        if (information->detail.entry.arguments[0] != 0U ||
+            information->detail.entry.arguments[2] != 0U ||
+            information->detail.entry.arguments[3] !=
+                V4_HB_SETUP_MOUNT_FLAGS ||
+            information->detail.entry.arguments[4] != 0U ||
+            information->detail.entry.arguments[5] != 0U) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "recursive-private mount arguments mismatch");
+        }
+        observation->path_byte_count = V4_HB_SETUP_PATH_CAP;
+        code = v4_hb_read_remote_setup_path(
+            builder, information->detail.entry.arguments[1], '/',
+            observation->path_bytes, error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        break;
+    case V4_HB_SETUP_FCHDIR_INPUT_ROOT:
+        if (information->detail.entry.arguments[0] !=
+                (uint64_t)builder->root_config.input_root.primary.fd) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "fchdir input-root descriptor mismatch");
+        }
+        for (argument_index = 1U; argument_index < 6U; ++argument_index) {
+            if (information->detail.entry.arguments[argument_index] != 0U) {
+                return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                                  "fchdir unused argument mismatch");
+            }
+        }
+        break;
+    case V4_HB_SETUP_CHROOT_DOT:
+        for (argument_index = 1U; argument_index < 6U; ++argument_index) {
+            if (information->detail.entry.arguments[argument_index] != 0U) {
+                return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                                  "chroot unused argument mismatch");
+            }
+        }
+        observation->path_byte_count = V4_HB_SETUP_PATH_CAP;
+        code = v4_hb_read_remote_setup_path(
+            builder, information->detail.entry.arguments[0], '.',
+            observation->path_bytes, error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        break;
+    case V4_HB_SETUP_CHDIR_ROOT:
+        for (argument_index = 1U; argument_index < 6U; ++argument_index) {
+            if (information->detail.entry.arguments[argument_index] != 0U) {
+                return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                                  "chdir unused argument mismatch");
+            }
+        }
+        observation->path_byte_count = V4_HB_SETUP_PATH_CAP;
+        code = v4_hb_read_remote_setup_path(
+            builder, information->detail.entry.arguments[0], '/',
+            observation->path_bytes, error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        break;
+    default:
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "unknown setup operation");
+    }
+    observation->syscall_number = (int64_t)expected_number;
+    memcpy(
+        observation->arguments, information->detail.entry.arguments,
+        sizeof(observation->arguments)
+    );
+    observation->entry_instruction_pointer =
+        information->instruction_pointer;
+    observation->entry_stack_pointer = information->stack_pointer;
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_observe_child_fs_link(
+    const struct v4_hb_builder *builder,
+    const char *link_name,
+    struct v4_hb_setup_fs_projection *projection,
+    struct v4_hb_error *error
+)
+{
+    char path[64];
+    struct stat status;
+    struct statx extended;
+    int count;
+    int fd;
+
+    count = snprintf(path, sizeof(path), "%ld/%s",
+                     (long)builder->pid, link_name);
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child FS observation path exceeds cap");
+    }
+    do {
+        fd = openat(builder->proc_root_fd, path,
+                    O_PATH | O_DIRECTORY | O_CLOEXEC);
+    } while (fd < 0 && errno == EINTR);
+    if (fd < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "child FS observation open failed");
+    }
+    memset(&status, 0, sizeof(status));
+    memset(&extended, 0, sizeof(extended));
+    if (fstat(fd, &status) != 0 ||
+        syscall(SYS_statx, fd, "", AT_EMPTY_PATH | AT_SYMLINK_NOFOLLOW,
+                STATX_BASIC_STATS | STATX_MNT_ID, &extended) != 0) {
+        int saved_errno = errno;
+        (void)close(fd);
+        return v4_hb_fail(error, V4_HB_ERROR, saved_errno,
+                          "child FS fstat/statx observation failed");
+    }
+    if ((extended.stx_mask &
+         (STATX_TYPE | STATX_MODE | STATX_INO | STATX_MNT_ID)) !=
+            (STATX_TYPE | STATX_MODE | STATX_INO | STATX_MNT_ID) ||
+        extended.stx_ino != (uint64_t)status.st_ino ||
+        extended.stx_mode != (uint16_t)status.st_mode ||
+        extended.stx_mnt_id == 0U) {
+        (void)close(fd);
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "child FS fstat/statx projection mismatch");
+    }
+    projection->device = (uint64_t)status.st_dev;
+    projection->inode = (uint64_t)status.st_ino;
+    projection->mount_id = extended.stx_mnt_id;
+    projection->mode = (uint32_t)status.st_mode;
+    if (close(fd) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "child FS observation close failed");
+    }
+    return V4_HB_OK;
+}
+
+static bool
+v4_hb_mount_optional_token_is_nonprivate(
+    const char *token,
+    size_t length
+)
+{
+    static const char *const prefixes[] = {
+        "shared:", "master:", "propagate_from:"
+    };
+    uint32_t index;
+
+    if (length == sizeof("unbindable") - 1U &&
+        memcmp(token, "unbindable", length) == 0) {
+        return true;
+    }
+    for (index = 0U; index < 3U; ++index) {
+        size_t prefix_length = strlen(prefixes[index]);
+        if (length > prefix_length &&
+            memcmp(token, prefixes[index], prefix_length) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int
+v4_hb_observe_recursive_private_mountinfo(
+    const struct v4_hb_builder *builder,
+    uint64_t *byte_count,
+    uint32_t *row_count,
+    struct v4_hb_error *error
+)
+{
+    char path[64];
+    char *payload;
+    char *line;
+    size_t used;
+    uint32_t rows = 0U;
+    int count;
+    int code;
+
+    count = snprintf(path, sizeof(path), "%ld/mountinfo",
+                     (long)builder->pid);
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child mountinfo path exceeds cap");
+    }
+    payload = malloc(V4_HB_PROC_MOUNTINFO_MAX_BYTES + 1U);
+    if (payload == NULL) {
+        return v4_hb_fail(error, V4_HB_ERROR, ENOMEM,
+                          "cannot allocate bounded child mountinfo");
+    }
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, payload, V4_HB_PROC_MOUNTINFO_MAX_BYTES, &used, error
+    );
+    if (code != V4_HB_OK) {
+        free(payload);
+        return code;
+    }
+    if (used == 0U || payload[used - 1U] != '\n') {
+        unsigned int tail = used == 0U ?
+            0U : (unsigned int)(unsigned char)payload[used - 1U];
+        free(payload);
+        return v4_hb_fail(
+            error, V4_HB_ERROR, EINVAL,
+            "child mountinfo is empty or unterminated: bytes=%lu tail=%u",
+            (unsigned long)used, tail
+        );
+    }
+    payload[used] = '\0';
+    line = payload;
+    while (*line != '\0') {
+        char *newline = strchr(line, '\n');
+        char *separator;
+        char *cursor;
+        uint32_t field_index = 0U;
+
+        if (newline == NULL || newline == line) {
+            free(payload);
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "child mountinfo row is malformed");
+        }
+        separator = NULL;
+        for (cursor = line; cursor + 2 < newline; ++cursor) {
+            if (cursor[0] == ' ' && cursor[1] == '-' &&
+                cursor[2] == ' ') {
+                if (separator != NULL) {
+                    free(payload);
+                    return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                                      "child mountinfo repeats separator");
+                }
+                separator = cursor;
+            }
+        }
+        if (separator == NULL) {
+            free(payload);
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "child mountinfo lacks separator");
+        }
+        cursor = line;
+        while (cursor < separator) {
+            char *end = memchr(cursor, ' ', (size_t)(separator - cursor));
+            size_t length;
+            if (end == NULL) {
+                end = separator;
+            }
+            length = (size_t)(end - cursor);
+            if (length == 0U) {
+                free(payload);
+                return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                                  "child mountinfo has an empty token");
+            }
+            ++field_index;
+            if (field_index > 6U &&
+                v4_hb_mount_optional_token_is_nonprivate(cursor, length)) {
+                free(payload);
+                return v4_hb_fail(
+                    error, V4_HB_ERROR, EINVAL,
+                    "child mountinfo retains non-private propagation"
+                );
+            }
+            cursor = end + 1;
+        }
+        if (field_index < 6U || ++rows > V4_HB_PROC_MOUNTINFO_MAX_ROWS) {
+            free(payload);
+            return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                              "child mountinfo row/count mismatch");
+        }
+        line = newline + 1;
+    }
+    free(payload);
+    *byte_count = (uint64_t)used;
+    *row_count = rows;
+    return V4_HB_OK;
+}
+
+static bool
+v4_hb_same_setup_fs_projection(
+    const struct v4_hb_setup_fs_projection *first,
+    const struct v4_hb_setup_fs_projection *second
+)
+{
+    return first->device == second->device &&
+        first->inode == second->inode &&
+        first->mount_id == second->mount_id &&
+        first->mode == second->mode;
+}
+
+static bool
+v4_hb_same_setup_syscall(
+    const struct v4_hb_setup_syscall_observation *first,
+    const struct v4_hb_setup_syscall_observation *second
+)
+{
+    return first->operation_index == second->operation_index &&
+        first->operation == second->operation &&
+        first->syscall_number == second->syscall_number &&
+        memcmp(first->arguments, second->arguments,
+               sizeof(first->arguments)) == 0 &&
+        first->path_byte_count == second->path_byte_count &&
+        memcmp(first->path_bytes, second->path_bytes,
+               sizeof(first->path_bytes)) == 0 &&
+        first->entry_stop_index == second->entry_stop_index &&
+        first->exit_stop_index == second->exit_stop_index &&
+        first->raw_entry_wait_status == second->raw_entry_wait_status &&
+        first->raw_exit_wait_status == second->raw_exit_wait_status &&
+        first->entry_instruction_pointer ==
+            second->entry_instruction_pointer &&
+        first->entry_stack_pointer == second->entry_stack_pointer &&
+        first->exit_instruction_pointer ==
+            second->exit_instruction_pointer &&
+        first->exit_stack_pointer == second->exit_stack_pointer &&
+        first->return_value == second->return_value &&
+        first->return_is_error == second->return_is_error;
+}
+
+static bool
+v4_hb_same_setup_prefix(
+    const struct v4_hb_setup_prefix_observation *first,
+    const struct v4_hb_setup_prefix_observation *second
+)
+{
+    uint32_t index;
+    bool exact = first->operation_count == second->operation_count &&
+        first->stop_count == second->stop_count &&
+        first->ptrace_syscall_resume_count ==
+            second->ptrace_syscall_resume_count &&
+        first->input_root_fd == second->input_root_fd &&
+        first->input_root_fd_generation ==
+            second->input_root_fd_generation &&
+        first->input_root_logical_ofd_id ==
+            second->input_root_logical_ofd_id &&
+        first->input_root_logical_ofd_generation ==
+            second->input_root_logical_ofd_generation &&
+        first->recursive_private_syscall_observed ==
+            second->recursive_private_syscall_observed &&
+        first->private_mountinfo_observed ==
+            second->private_mountinfo_observed &&
+        first->mountinfo_byte_count == second->mountinfo_byte_count &&
+        first->mountinfo_row_count == second->mountinfo_row_count &&
+        v4_hb_same_setup_fs_projection(
+            &first->root_projection, &second->root_projection
+        ) && v4_hb_same_setup_fs_projection(
+            &first->cwd_projection, &second->cwd_projection
+        );
+
+    for (index = 0U; exact &&
+         index < V4_HB_SETUP_PREFIX_OPERATION_COUNT; ++index) {
+        exact = v4_hb_same_setup_syscall(
+            &first->operations[index], &second->operations[index]
+        );
+    }
+    return exact;
+}
+
+static int
+v4_hb_validate_stored_setup_prefix(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    const struct v4_hb_setup_prefix_observation *setup =
+        &builder->setup_prefix;
+    const struct v4_orw_kernel_projection *input =
+        &builder->root_config.input_root.initial_projection;
+    static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
+        SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir
+    };
+    uint32_t index;
+
+    if (!builder->setup_prefix_complete ||
+        setup->operation_count != V4_HB_SETUP_PREFIX_OPERATION_COUNT ||
+        setup->stop_count != V4_HB_SETUP_PREFIX_STOP_COUNT ||
+        setup->ptrace_syscall_resume_count !=
+            V4_HB_SETUP_PREFIX_STOP_COUNT ||
+        setup->input_root_fd !=
+            builder->root_config.input_root.primary.fd ||
+        setup->input_root_fd_generation !=
+            builder->root_config.input_root.primary.fd_generation ||
+        setup->input_root_logical_ofd_id !=
+            builder->root_config.input_root.primary.logical_ofd_id ||
+        setup->input_root_logical_ofd_generation !=
+            builder->root_config.input_root.primary.logical_ofd_generation ||
+        setup->recursive_private_syscall_observed != 1U ||
+        setup->private_mountinfo_observed != 1U ||
+        setup->mountinfo_byte_count == 0U ||
+        setup->mountinfo_byte_count > V4_HB_PROC_MOUNTINFO_MAX_BYTES ||
+        setup->mountinfo_row_count == 0U ||
+        setup->mountinfo_row_count > V4_HB_PROC_MOUNTINFO_MAX_ROWS ||
+        setup->root_projection.device != input->st_dev ||
+        setup->root_projection.inode != input->st_ino ||
+        setup->root_projection.mount_id != input->mount_id ||
+        setup->root_projection.mode != input->st_mode ||
+        !v4_hb_same_setup_fs_projection(
+            &setup->root_projection, &setup->cwd_projection
+        )) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "stored setup-prefix observation is malformed");
+    }
+    for (index = 0U; index < V4_HB_SETUP_PREFIX_OPERATION_COUNT; ++index) {
+        const struct v4_hb_setup_syscall_observation *operation =
+            &setup->operations[index];
+        uint32_t expected_path_bytes = index == 1U ?
+            0U : V4_HB_SETUP_PATH_CAP;
+        uint8_t expected_path = index == 2U ? '.' : '/';
+        bool arguments_exact = true;
+        uint32_t argument_index;
+
+        if (index == 0U) {
+            arguments_exact = operation->arguments[0] == 0U &&
+                operation->arguments[1] != 0U &&
+                operation->arguments[2] == 0U &&
+                operation->arguments[3] == V4_HB_SETUP_MOUNT_FLAGS &&
+                operation->arguments[4] == 0U &&
+                operation->arguments[5] == 0U;
+        } else if (index == 1U) {
+            arguments_exact = operation->arguments[0] ==
+                (uint64_t)builder->root_config.input_root.primary.fd;
+            for (argument_index = 1U; arguments_exact &&
+                 argument_index < 6U; ++argument_index) {
+                arguments_exact = operation->arguments[argument_index] == 0U;
+            }
+        } else {
+            arguments_exact = operation->arguments[0] != 0U;
+            for (argument_index = 1U; arguments_exact &&
+                 argument_index < 6U; ++argument_index) {
+                arguments_exact = operation->arguments[argument_index] == 0U;
+            }
+        }
+
+        if (operation->operation_index != index ||
+            operation->operation !=
+                (enum v4_hb_setup_operation)(index + 1U) ||
+            operation->syscall_number != numbers[index] ||
+            !arguments_exact ||
+            operation->path_byte_count != expected_path_bytes ||
+            (expected_path_bytes != 0U &&
+             (operation->path_bytes[0] != expected_path ||
+              operation->path_bytes[1] != '\0')) ||
+            (expected_path_bytes == 0U &&
+             (operation->path_bytes[0] != 0U ||
+              operation->path_bytes[1] != 0U)) ||
+            operation->entry_stop_index != index * 2U ||
+            operation->exit_stop_index != index * 2U + 1U ||
+            !WIFSTOPPED(operation->raw_entry_wait_status) ||
+            WSTOPSIG(operation->raw_entry_wait_status) !=
+                (SIGTRAP | 0x80) ||
+            (unsigned int)operation->raw_entry_wait_status >> 16 != 0U ||
+            !WIFSTOPPED(operation->raw_exit_wait_status) ||
+            WSTOPSIG(operation->raw_exit_wait_status) !=
+                (SIGTRAP | 0x80) ||
+            (unsigned int)operation->raw_exit_wait_status >> 16 != 0U ||
+            operation->raw_entry_wait_status !=
+                operation->raw_exit_wait_status ||
+            operation->entry_instruction_pointer == 0U ||
+            operation->entry_stack_pointer == 0U ||
+            operation->exit_instruction_pointer == 0U ||
+            operation->exit_stack_pointer == 0U ||
+            operation->entry_instruction_pointer !=
+                operation->exit_instruction_pointer ||
+            operation->entry_stack_pointer !=
+                operation->exit_stack_pointer ||
+            operation->return_value != 0 ||
+            operation->return_is_error != 0U) {
+            return v4_hb_fail(
+                error, V4_HB_ERROR, EINVAL,
+                "stored setup syscall observation is malformed: index=%u "
+                "operation=%u nr=%lld path=%u/%u,%u waits=%x,%x "
+                "ip=%llu,%llu sp=%llu,%llu return=%lld/%u",
+                index, (unsigned int)operation->operation,
+                (long long)operation->syscall_number,
+                operation->path_byte_count,
+                (unsigned int)operation->path_bytes[0],
+                (unsigned int)operation->path_bytes[1],
+                operation->raw_entry_wait_status,
+                operation->raw_exit_wait_status,
+                (unsigned long long)operation->entry_instruction_pointer,
+                (unsigned long long)operation->exit_instruction_pointer,
+                (unsigned long long)operation->entry_stack_pointer,
+                (unsigned long long)operation->exit_stack_pointer,
+                (long long)operation->return_value,
+                operation->return_is_error
+            );
+        }
+    }
+    return V4_HB_OK;
+}
+
+int
+v4_hb_builder_run_setup_prefix(
+    struct v4_hb_builder *builder,
+    struct v4_hb_setup_prefix_observation *observation,
+    struct v4_hb_error *error
+)
+{
+    struct v4_hb_setup_prefix_observation setup;
+    unsigned int old_gate;
+    uint32_t index;
+    int code;
+
+    v4_hb_error_clear(error);
+    if (builder == NULL || observation == NULL ||
+        builder->state != V4_HB_BOUND_ROOT_WALKS_COMPLETE ||
+        builder->setup_prefix_complete || builder->resume_count != 0U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EPERM,
+                          "setup prefix requires completed held root walks");
+    }
+    code = v4_hb_verify_held_internal(builder, error);
+    if (code != V4_HB_OK) {
+        builder->state = V4_HB_POISONED;
+        return code;
+    }
+    memset(&setup, 0, sizeof(setup));
+    setup.operation_count = V4_HB_SETUP_PREFIX_OPERATION_COUNT;
+    setup.stop_count = V4_HB_SETUP_PREFIX_STOP_COUNT;
+    setup.input_root_fd = builder->root_config.input_root.primary.fd;
+    setup.input_root_fd_generation =
+        builder->root_config.input_root.primary.fd_generation;
+    setup.input_root_logical_ofd_id =
+        builder->root_config.input_root.primary.logical_ofd_id;
+    setup.input_root_logical_ofd_generation =
+        builder->root_config.input_root.primary.logical_ofd_generation;
+    old_gate = atomic_exchange_explicit(
+        builder->gate, 1U, memory_order_release
+    );
+    if (old_gate != 0U) {
+        builder->state = V4_HB_POISONED;
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "setup gate was already released");
+    }
+    for (index = 0U; index < V4_HB_SETUP_PREFIX_OPERATION_COUNT; ++index) {
+        struct v4_hb_ptrace_syscall_information information;
+        struct v4_hb_setup_syscall_observation *operation =
+            &setup.operations[index];
+
+        code = v4_hb_resume_to_syscall_stop(
+            builder, &operation->raw_entry_wait_status, error
+        );
+        if (code == V4_HB_OK) {
+            code = v4_hb_verify_traced_stop_boundary(builder, error);
+        }
+        if (code == V4_HB_OK) {
+            code = v4_hb_get_syscall_information(
+                builder, V4_HB_PTRACE_SYSCALL_INFO_ENTRY,
+                &information, error
+            );
+        }
+        if (code == V4_HB_OK) {
+            code = v4_hb_validate_setup_entry(
+                builder, index, &information, operation, error
+            );
+        }
+        if (code != V4_HB_OK) {
+            builder->state = V4_HB_POISONED;
+            return code;
+        }
+        operation->entry_stop_index = index * 2U;
+        operation->exit_stop_index = index * 2U + 1U;
+        code = v4_hb_resume_to_syscall_stop(
+            builder, &operation->raw_exit_wait_status, error
+        );
+        if (code == V4_HB_OK) {
+            code = v4_hb_verify_traced_stop_boundary(builder, error);
+        }
+        if (code == V4_HB_OK) {
+            code = v4_hb_get_syscall_information(
+                builder, V4_HB_PTRACE_SYSCALL_INFO_EXIT,
+                &information, error
+            );
+        }
+        if (code != V4_HB_OK) {
+            builder->state = V4_HB_POISONED;
+            return code;
+        }
+        operation->exit_instruction_pointer =
+            information.instruction_pointer;
+        operation->exit_stack_pointer = information.stack_pointer;
+        operation->return_value = information.detail.exit.return_value;
+        operation->return_is_error = information.detail.exit.is_error;
+        if (operation->return_value != 0 ||
+            operation->return_is_error != 0U) {
+            builder->state = V4_HB_POISONED;
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "setup syscall did not return exact zero");
+        }
+        if (index == 0U) {
+            setup.recursive_private_syscall_observed = 1U;
+            code = v4_hb_observe_recursive_private_mountinfo(
+                builder, &setup.mountinfo_byte_count,
+                &setup.mountinfo_row_count, error
+            );
+            if (code != V4_HB_OK) {
+                builder->state = V4_HB_POISONED;
+                return code;
+            }
+            setup.private_mountinfo_observed = 1U;
+        }
+    }
+    setup.ptrace_syscall_resume_count = builder->resume_count;
+    code = v4_hb_observe_child_fs_link(
+        builder, "root", &setup.root_projection, error
+    );
+    if (code == V4_HB_OK) {
+        code = v4_hb_observe_child_fs_link(
+            builder, "cwd", &setup.cwd_projection, error
+        );
+    }
+    if (code != V4_HB_OK) {
+        builder->state = V4_HB_POISONED;
+        return code;
+    }
+    builder->setup_prefix = setup;
+    builder->setup_prefix_complete = true;
+    builder->state = V4_HB_SETUP_PREFIX_COMPLETE;
+    code = v4_hb_validate_stored_setup_prefix(builder, error);
+    if (code == V4_HB_OK) {
+        code = v4_hb_verify_held_internal(builder, error);
+    }
+    if (code != V4_HB_OK) {
+        builder->state = V4_HB_POISONED;
+        return code;
+    }
+    *observation = builder->setup_prefix;
+    return V4_HB_OK;
+}
+
+int
+v4_hb_builder_verify_setup_prefix(
+    const struct v4_hb_builder *builder,
+    const struct v4_hb_setup_prefix_observation *expected,
+    struct v4_hb_error *error
+)
+{
+    int code;
+
+    v4_hb_error_clear(error);
+    if (builder == NULL || expected == NULL ||
+        builder->state != V4_HB_SETUP_PREFIX_COMPLETE) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "setup-prefix verification input is malformed");
+    }
+    code = v4_hb_verify_held_internal(builder, error);
+    if (code == V4_HB_OK) {
+        code = v4_hb_validate_stored_setup_prefix(builder, error);
+    }
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (!v4_hb_same_setup_prefix(&builder->setup_prefix, expected)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "setup-prefix observation splice rejected");
+    }
+    return V4_HB_OK;
+}
+
+static int
 v4_hb_waitid_pidfd_exit(
     const struct v4_hb_builder *builder,
     struct v4_hb_error *error
@@ -3064,7 +4124,6 @@ v4_hb_builder_release_and_reap(
 {
     uint64_t current_start_ticks;
     unsigned long event_message = 0UL;
-    unsigned int old_gate;
     int status;
     int extra_status;
     pid_t waited;
@@ -3073,9 +4132,9 @@ v4_hb_builder_release_and_reap(
 
     v4_hb_error_clear(error);
     if (builder == NULL || completion == NULL ||
-        builder->state != V4_HB_BOUND_ROOT_WALKS_COMPLETE) {
+        builder->state != V4_HB_SETUP_PREFIX_COMPLETE) {
         return v4_hb_fail(error, V4_HB_ERROR, EPERM,
-                          "gate release requires both completed root walks");
+                          "release requires the held setup prefix");
     }
     code = v4_hb_verify_held_internal(builder, error);
     if (code != V4_HB_OK) {
@@ -3083,13 +4142,10 @@ v4_hb_builder_release_and_reap(
         return code;
     }
     memset(completion, 0, sizeof(*completion));
-    old_gate = atomic_exchange_explicit(
-        builder->gate, 1U, memory_order_release
-    );
-    if (old_gate != 0U) {
+    if (atomic_load_explicit(builder->gate, memory_order_acquire) != 1U) {
         builder->state = V4_HB_POISONED;
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
-                          "held-builder gate was already released");
+                          "setup gate is not in its released state");
     }
     builder->state = V4_HB_RELEASED;
     if (ptrace(PTRACE_CONT, builder->pid, NULL, NULL) != 0) {
@@ -3097,7 +4153,7 @@ v4_hb_builder_release_and_reap(
         return v4_hb_fail(error, V4_HB_ERROR, errno,
                           "held-builder release resume failed");
     }
-    builder->resume_count = 1;
+    ++builder->resume_count;
     builder->held_stop_consumed = 0;
     code = v4_hb_waitid_pidfd_ptrace_event(
         builder, PTRACE_EVENT_EXIT, error
@@ -3148,7 +4204,7 @@ v4_hb_builder_release_and_reap(
         return v4_hb_fail(error, V4_HB_ERROR, errno,
                           "held-builder final exit resume failed");
     }
-    builder->resume_count = 2;
+    ++builder->resume_count;
     builder->held_stop_consumed = 0;
     code = v4_hb_waitid_pidfd_exit(builder, error);
     if (code != V4_HB_OK) {

@@ -586,6 +586,200 @@ hold_and_prewalk(
     return V4_HB_OK;
 }
 
+static bool
+setup_prefix_is_exact(
+    const struct v4_hb_setup_prefix_observation *setup,
+    const struct v4_hb_root_anchor_config *config
+)
+{
+    static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
+        SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir
+    };
+    uint32_t index;
+
+    if (setup->operation_count != V4_HB_SETUP_PREFIX_OPERATION_COUNT ||
+        setup->stop_count != V4_HB_SETUP_PREFIX_STOP_COUNT ||
+        setup->ptrace_syscall_resume_count !=
+            V4_HB_SETUP_PREFIX_STOP_COUNT ||
+        setup->input_root_fd != config->input_root.primary.fd ||
+        setup->input_root_fd_generation !=
+            config->input_root.primary.fd_generation ||
+        setup->input_root_logical_ofd_id !=
+            config->input_root.primary.logical_ofd_id ||
+        setup->input_root_logical_ofd_generation !=
+            config->input_root.primary.logical_ofd_generation ||
+        setup->recursive_private_syscall_observed != 1U ||
+        setup->private_mountinfo_observed != 1U ||
+        setup->mountinfo_byte_count == 0U ||
+        setup->mountinfo_row_count == 0U ||
+        setup->root_projection.device !=
+            config->input_root.initial_projection.st_dev ||
+        setup->root_projection.inode !=
+            config->input_root.initial_projection.st_ino ||
+        setup->root_projection.mount_id !=
+            config->input_root.initial_projection.mount_id ||
+        setup->root_projection.mode !=
+            config->input_root.initial_projection.st_mode ||
+        setup->cwd_projection.device != setup->root_projection.device ||
+        setup->cwd_projection.inode != setup->root_projection.inode ||
+        setup->cwd_projection.mount_id != setup->root_projection.mount_id ||
+        setup->cwd_projection.mode != setup->root_projection.mode) {
+        return false;
+    }
+    for (index = 0U; index < V4_HB_SETUP_PREFIX_OPERATION_COUNT; ++index) {
+        const struct v4_hb_setup_syscall_observation *operation =
+            &setup->operations[index];
+        uint32_t argument_index;
+        uint32_t path_count = index == 1U ? 0U : V4_HB_SETUP_PATH_CAP;
+        uint8_t path = index == 2U ? '.' : '/';
+
+        if (operation->operation_index != index ||
+            operation->operation !=
+                (enum v4_hb_setup_operation)(index + 1U) ||
+            operation->syscall_number != numbers[index] ||
+            operation->path_byte_count != path_count ||
+            (path_count != 0U &&
+             (operation->path_bytes[0] != path ||
+              operation->path_bytes[1] != '\0')) ||
+            (path_count == 0U &&
+             (operation->path_bytes[0] != 0U ||
+              operation->path_bytes[1] != 0U)) ||
+            operation->entry_stop_index != index * 2U ||
+            operation->exit_stop_index != index * 2U + 1U ||
+            !WIFSTOPPED(operation->raw_entry_wait_status) ||
+            WSTOPSIG(operation->raw_entry_wait_status) !=
+                (SIGTRAP | 0x80) ||
+            !WIFSTOPPED(operation->raw_exit_wait_status) ||
+            WSTOPSIG(operation->raw_exit_wait_status) !=
+                (SIGTRAP | 0x80) ||
+            operation->entry_instruction_pointer == 0U ||
+            operation->entry_stack_pointer == 0U ||
+            operation->exit_instruction_pointer == 0U ||
+            operation->exit_stack_pointer == 0U ||
+            operation->return_value != 0 ||
+            operation->return_is_error != 0U) {
+            return false;
+        }
+        if (index == 0U) {
+            if (operation->arguments[0] != 0U ||
+                operation->arguments[1] == 0U ||
+                operation->arguments[2] != 0U ||
+                operation->arguments[3] != V4_HB_SETUP_MOUNT_FLAGS ||
+                operation->arguments[4] != 0U ||
+                operation->arguments[5] != 0U) {
+                return false;
+            }
+        } else if (index == 1U) {
+            if (operation->arguments[0] !=
+                    (uint64_t)config->input_root.primary.fd) {
+                return false;
+            }
+            for (argument_index = 1U; argument_index < 6U;
+                 ++argument_index) {
+                if (operation->arguments[argument_index] != 0U) {
+                    return false;
+                }
+            }
+        } else {
+            if (operation->arguments[0] == 0U) {
+                return false;
+            }
+            for (argument_index = 1U; argument_index < 6U;
+                 ++argument_index) {
+                if (operation->arguments[argument_index] != 0U) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+
+static int
+expect_setup_prefix_splices_reject(
+    struct v4_hb_builder *builder,
+    const struct v4_hb_setup_prefix_observation *setup,
+    struct v4_hb_error *error
+)
+{
+    struct v4_hb_setup_prefix_observation splice;
+
+#define V4_HB_EXPECT_SETUP_SPLICE_REJECT(statement) \
+    do { \
+        splice = *setup; \
+        statement; \
+        if (v4_hb_builder_verify_setup_prefix( \
+                builder, &splice, error \
+            ) != V4_HB_ERROR) { \
+            return -1; \
+        } \
+    } while (0)
+
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operation_count);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.stop_count);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.ptrace_syscall_resume_count);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.input_root_fd);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.input_root_fd_generation);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.input_root_logical_ofd_generation
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.recursive_private_syscall_observed = 0U
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.private_mountinfo_observed = 0U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.mountinfo_byte_count);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.mountinfo_row_count);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.root_projection.inode);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.cwd_projection.mount_id);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[0].operation_index);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[0].exit_stop_index);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[1].syscall_number);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[1].arguments[0]);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[2].path_bytes[0] = '/');
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.operations[3].raw_entry_wait_status ^= 1
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.operations[3].exit_instruction_pointer
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[0].return_value = -1);
+#undef V4_HB_EXPECT_SETUP_SPLICE_REJECT
+
+    return v4_hb_builder_verify_setup_prefix(builder, setup, error) ==
+        V4_HB_OK ? 0 : -1;
+}
+
+static int
+run_setup_prefix(
+    struct v4_hb_builder *builder,
+    const struct v4_hb_root_anchor_config *config,
+    struct v4_hb_setup_prefix_observation *setup,
+    struct v4_hb_snapshot *snapshot,
+    struct v4_hb_error *error
+)
+{
+    struct v4_hb_setup_prefix_observation forbidden_second;
+    int code = v4_hb_builder_run_setup_prefix(builder, setup, error);
+
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (!setup_prefix_is_exact(setup, config) ||
+        v4_hb_builder_run_setup_prefix(
+            builder, &forbidden_second, error
+        ) != V4_HB_ERROR ||
+        expect_setup_prefix_splices_reject(builder, setup, error) != 0 ||
+        v4_hb_builder_snapshot(builder, snapshot, error) != V4_HB_OK ||
+        snapshot->state != V4_HB_SETUP_PREFIX_COMPLETE ||
+        snapshot->gate_value != 1U ||
+        snapshot->resume_count != V4_HB_SETUP_PREFIX_STOP_COUNT ||
+        snapshot->held_stop_consumed != 1U ||
+        v4_hb_builder_verify_held(builder, snapshot, error) != V4_HB_OK) {
+        return V4_HB_ERROR;
+    }
+    return V4_HB_OK;
+}
+
 static int
 expect_start_rejection(
     const struct v4_hb_root_anchor_config *config,
@@ -753,6 +947,8 @@ main(void)
     struct v4_hb_snapshot initial;
     struct v4_hb_snapshot held;
     struct v4_hb_snapshot completed;
+    struct v4_hb_snapshot setup_snapshot;
+    struct v4_hb_setup_prefix_observation setup;
     struct v4_hb_completion completion;
     struct v4_hb_error error;
     int root_fd = -1;
@@ -1310,6 +1506,24 @@ main(void)
         );
         goto cleanup_anchor;
     }
+    code = run_setup_prefix(
+        builder, &config, &setup, &setup_snapshot, &error
+    );
+    if (code == V4_HB_UNSUPPORTED) {
+        status = test_skip(error.message);
+        goto cleanup_anchor;
+    }
+    if (code != V4_HB_OK ||
+        setup_snapshot.pid != completed.pid ||
+        setup_snapshot.start_ticks != completed.start_ticks ||
+        setup_snapshot.raw_interrupt_wait_status !=
+            completed.raw_interrupt_wait_status) {
+        (void)fprintf(
+            stderr, "FAIL: traced setup prefix is malformed: code=%d %s\n",
+            code, error.message
+        );
+        goto cleanup_anchor;
+    }
     saved_pidfd = completed.pidfd;
     for (namespace_index = 0;
          namespace_index < V4_HB_NAMESPACE_COUNT;
@@ -1357,6 +1571,48 @@ main(void)
     builder = NULL;
 
     code = v4_hb_builder_start(&config, &attack_builder, &error);
+    if (code != V4_HB_OK ||
+        hold_and_prewalk(
+            attack_builder, &config, &held, &error
+        ) != V4_HB_OK) {
+        (void)test_fail("cannot establish setup-stop attack boundary");
+        goto cleanup_anchor;
+    }
+    {
+        char rejection[sizeof(error.message)];
+        int setup_code;
+        int rejection_errno;
+        int abort_code;
+
+        if (syscall(SYS_pidfd_send_signal, held.pidfd,
+                    SIGUSR1, NULL, 0) != 0) {
+            (void)test_fail("cannot queue intermediate setup signal");
+            goto cleanup_anchor;
+        }
+        setup_code = v4_hb_builder_run_setup_prefix(
+            attack_builder, &setup, &error
+        );
+        rejection_errno = error.saved_errno;
+        (void)snprintf(rejection, sizeof(rejection), "%s", error.message);
+        abort_code = v4_hb_builder_abort(attack_builder, &error);
+        if (setup_code != V4_HB_ERROR || rejection_errno != EINVAL ||
+            strcmp(rejection,
+                   "non-TRACESYSGOOD syscall stop observed") != 0 ||
+            abort_code != V4_HB_OK) {
+            (void)fprintf(
+                stderr,
+                "FAIL: intermediate setup stop code=%d errno=%d abort=%d "
+                "message=%s/%s\n",
+                setup_code, rejection_errno, abort_code, rejection,
+                error.message
+            );
+            goto cleanup_anchor;
+        }
+    }
+    v4_hb_builder_destroy(attack_builder);
+    attack_builder = NULL;
+
+    code = v4_hb_builder_start(&config, &attack_builder, &error);
     if (code != V4_HB_OK) {
         if (code == V4_HB_UNSUPPORTED) {
             status = test_skip(error.message);
@@ -1370,6 +1626,13 @@ main(void)
     );
     if (code != V4_HB_OK) {
         (void)test_fail("cannot establish unexpected-stop boundary");
+        goto cleanup_anchor;
+    }
+    code = run_setup_prefix(
+        attack_builder, &config, &setup, &setup_snapshot, &error
+    );
+    if (code != V4_HB_OK) {
+        (void)test_fail("cannot establish unexpected-stop setup boundary");
         goto cleanup_anchor;
     }
     if (syscall(SYS_pidfd_send_signal, held.pidfd, SIGUSR1, NULL, 0) != 0 ||
@@ -1397,6 +1660,13 @@ main(void)
     );
     if (code != V4_HB_OK) {
         (void)test_fail("cannot establish unexpected-exit boundary");
+        goto cleanup_anchor;
+    }
+    code = run_setup_prefix(
+        exit_builder, &config, &setup, &setup_snapshot, &error
+    );
+    if (code != V4_HB_OK) {
+        (void)test_fail("cannot establish unexpected-exit setup boundary");
         goto cleanup_anchor;
     }
     if (syscall(SYS_pidfd_send_signal, held.pidfd, SIGKILL, NULL, 0) != 0 ||

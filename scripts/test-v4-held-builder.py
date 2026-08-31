@@ -91,7 +91,17 @@ class V4HeldBuilderTests(unittest.TestCase):
         self.assertNotIn("CLONE_FILES", source)
         self.assertNotIn("CLONE_FS", source)
         self.assertNotIn("CLONE_VM", source)
-        self.assertNotIn("ptrace(PTRACE_SYSCALL", source)
+        self.assertIn("ptrace(PTRACE_SYSCALL", source)
+        self.assertIn("v4_hb_child_raw_syscall6", source)
+        self.assertIn("SYS_mount", source)
+        self.assertIn("V4_HB_SETUP_MOUNT_FLAGS", source)
+        self.assertIn("SYS_fchdir", source)
+        self.assertIn("SYS_chroot", source)
+        self.assertIn("SYS_chdir", source)
+        self.assertIn("process_vm_readv", source)
+        self.assertIn("V4_HB_SETUP_PREFIX_STOP_COUNT", header)
+        self.assertIn("v4_hb_builder_run_setup_prefix", header)
+        self.assertNotIn("PTRACE_SETREG", source)
         self.assertNotIn("seccomp", source.lower())
         self.assertIn("getpid(), builder->pid, KCMP_FILE", source)
         self.assertIn("V4_HB_ROOT_STATUS_FLAGS", source)
@@ -114,6 +124,19 @@ class V4HeldBuilderTests(unittest.TestCase):
         )
         self.assertLess(interrupt, event_consumed)
         self.assertLess(event_consumed, map_capture)
+        child = source[
+            source.index("v4_hb_child_gate_loop("):
+            source.index("v4_hb_discard_resources(")
+        ]
+        mount_setup = child.index("SYS_mount")
+        fchdir_setup = child.index("SYS_fchdir")
+        chroot_setup = child.index("SYS_chroot")
+        chdir_setup = child.index("SYS_chdir")
+        exit_setup = child.index("SYS_exit", chdir_setup)
+        self.assertLess(mount_setup, fchdir_setup)
+        self.assertLess(fchdir_setup, chroot_setup)
+        self.assertLess(chroot_setup, chdir_setup)
+        self.assertLess(chdir_setup, exit_setup)
 
 
 if __name__ == "__main__":
