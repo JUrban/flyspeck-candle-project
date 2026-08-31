@@ -651,3 +651,66 @@ The immutable log/timing SHA-256 pairs are:
 Attempt 038 remains focused failed development evidence because the complete
 target has not yet replayed.  It does not qualify a compiler or authorize a
 Candle repin or corpus gate.
+
+## Complete source-to-flat proof closure and warm replay 003
+
+Focused attempts 039--044 completed the remaining declaration proof and its
+immediate/downstream consumers in the isolated proof worktree.  Attempt 039
+selected both declaration induction results but exposed the missing exact
+domain premise for the second result.  Attempt 040 printed that premise as
+`env_domain_eq (extend_env new_env1 comp_map) (env1 +++ env)`.  Attempt 041
+proved it with `env_domain_eq_append`, crossed every declaration-entry marker,
+and was then deliberately terminated after an old broad `Metis` search in
+`Dlocal` made no progress for more than six minutes.  Exact process-group
+identity was checked before termination; this is retained diagnostic evidence,
+not a proof failure or pass.
+
+The explicit matching `Dlocal` append premise allowed attempt 042 to save the
+entire strengthened `compile_correct` theorem for the first time.  It then
+failed normally at `compile_prog_correct`, whose `init_global_env_inv` premise
+needed to expose the new exact-domain conjunct.  That one explicit
+`init_global_env_inv_def` child closed the consumer.  Attempt 043, with
+diagnostics still present, exported the complete `source_to_flatProof` theory,
+including `compile_correct`, `compile_prog_correct`, all semantic theorems and
+all later distinctness/binding results.  It passed in `2:51.36`, used at most
+`1248280` KiB RSS and recorded zero swaps.
+
+After every `goalStack.note_tac` marker was removed, clean attempt 044 exported
+the same complete theory in `2:49.49`, used at most `1152756` KiB RSS and
+recorded zero swaps.  Its immutable artifact is:
+
+`/project/flyspeck-candle-runs/cakeml-source-to-flat-dopen-focused-77b769a99-attempt-044-clean`
+
+The clean log SHA-256 is
+`df1368431f9d9b51e8960e29398f7d91e7f969b9a62409a17d684d0fd4805920`;
+the timing SHA-256 is
+`f5238f2a4f1e03377181b015ff7ecf9ac18a76d5fdd0017a384ffce0a7adec13`.
+The one-file proof diff passes `git diff --check` and contains no admission,
+cheat, new axiom or diagnostic tactic.  The exact-domain premise strengthens
+rather than weakens declaration correctness and is propagated through stored
+oracle environments, dynamic evaluation, declaration sequencing, `Dlocal`
+and initial compilation.
+
+The honest isolated commit is
+`944eaac605bc291c1e2685071cd40f70ef16f640`; it was independently inspected
+and cherry-picked without change onto the main runtime-stack branch as
+`480a9f4fcdeaea0d50ed2b6e1fc7998371610ded`.  Warm reverse-dependency attempt
+003 is active at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-dopen-warm-proof-480a9f4fc-attempt-003`
+
+It runs the serial x64 bootstrap proof target with a `117964800` KiB virtual
+address-space ceiling and hashes the four reused stage-3 products before and
+after.  This remains a developer warm regression only.  No Candle repin or
+20/400 gate is authorized until it passes, followed by the fresh clean
+four-stage replay and all postconditions.
+
+For the failed/diagnostic progression, immutable log/timing SHA-256 pairs are:
+
+```text
+039 a7ad9e15f570b7e5d33f4a345f25564c3919d599ec1122dba09408d7de6b49e3 / 6763c535478804b01bc0b237416aab4915f121eb901264e79c8b2531673cd9fe
+040 88fcab8c9ca264b818feaa6014e93b026601809eb043197abf0590ae28f61bba / 6a3cf01678f44e5b6557698a9c2a8ad94ce937d838b525170a81c2fae69b8066
+041 e62a628384659370de01e4abf00d0334afa9d0655f509ba03dac508234c65c4a / e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+042 424135bd209fc8d008caf2907f7ddd2f8af12ca6dd139740a306158ca55d2719 / efec389906821cfaf551a0fd7bad4304594dafa61b1103646c250fc977021559
+043 32f8518efba340db3f658c668506a50af559260b3b7e804cfff528cfd7477665 / 8296ee12e904dab22d90a7bfa1549d7b5f933786c6017d693d7b24fcae882e52
+```
