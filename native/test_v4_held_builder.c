@@ -1225,6 +1225,133 @@ test_status_credential_parser(void)
     return 0;
 }
 
+static int
+expect_status_capability_rejection(
+    const char *payload,
+    size_t payload_bytes,
+    int expected_errno,
+    const char *expected_message
+)
+{
+    struct v4_hb_status_capability_masks masks;
+    struct v4_hb_error error;
+    int code = v4_hb_parse_status_capability_rows(
+        payload, payload_bytes, &masks, &error
+    );
+
+    if (code != V4_HB_ERROR || error.saved_errno != expected_errno ||
+        strcmp(error.message, expected_message) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int
+test_status_capability_parser(void)
+{
+    static const char valid[] =
+        "Name:\tbuilder\n"
+        "CapInh:\t0000000000000001\n"
+        "CapPrm:\t0000000000000010\n"
+        "CapEff:\t0000000000000100\n"
+        "CapBnd:\t0000000000001000\n"
+        "CapAmb:\t8000000000000000\n"
+        "State:\tt (tracing stop)\n";
+    static const char duplicate[] =
+        "CapInh:\t0000000000000000\n"
+        "CapInh:\t0000000000000000\n"
+        "CapPrm:\t0000000000000000\n"
+        "CapEff:\t0000000000000000\n"
+        "CapBnd:\t0000000000000000\n"
+        "CapAmb:\t0000000000000000\n";
+    static const char missing[] =
+        "CapInh:\t0000000000000000\n"
+        "CapPrm:\t0000000000000000\n"
+        "CapEff:\t0000000000000000\n"
+        "CapBnd:\t0000000000000000\n";
+    static const char reversed[] =
+        "CapPrm:\t0000000000000000\n"
+        "CapInh:\t0000000000000000\n"
+        "CapEff:\t0000000000000000\n"
+        "CapBnd:\t0000000000000000\n"
+        "CapAmb:\t0000000000000000\n";
+    static const char uppercase[] =
+        "CapInh:\t000000000000000A\n"
+        "CapPrm:\t0000000000000000\n"
+        "CapEff:\t0000000000000000\n"
+        "CapBnd:\t0000000000000000\n"
+        "CapAmb:\t0000000000000000\n";
+    static const char short_value[] =
+        "CapInh:\t000000000000000\n"
+        "CapPrm:\t0000000000000000\n"
+        "CapEff:\t0000000000000000\n"
+        "CapBnd:\t0000000000000000\n"
+        "CapAmb:\t0000000000000000\n";
+    static const char extra_token[] =
+        "CapInh:\t0000000000000000 0\n"
+        "CapPrm:\t0000000000000000\n"
+        "CapEff:\t0000000000000000\n"
+        "CapBnd:\t0000000000000000\n"
+        "CapAmb:\t0000000000000000\n";
+    static const char bad_name[] =
+        "CapFoo:\t0000000000000000\n"
+        "CapInh:\t0000000000000000\n"
+        "CapPrm:\t0000000000000000\n"
+        "CapEff:\t0000000000000000\n"
+        "CapBnd:\t0000000000000000\n"
+        "CapAmb:\t0000000000000000\n";
+    static const char embedded_nul[] =
+        "CapInh:\t0000000000000000\n"
+        "CapPrm:\t0000000000000000\n"
+        "CapEff:\t00000000\0" "00000000\n"
+        "CapBnd:\t0000000000000000\n"
+        "CapAmb:\t0000000000000000\n";
+    struct v4_hb_status_capability_masks masks;
+    struct v4_hb_error error;
+    char over_cap[16385U];
+
+    memset(over_cap, 'X', sizeof(over_cap));
+    over_cap[sizeof(over_cap) - 1U] = '\n';
+    if (v4_hb_parse_status_capability_rows(
+            valid, sizeof(valid) - 1U, &masks, &error
+        ) != V4_HB_OK || masks.inheritable != UINT64_C(0x1) ||
+        masks.permitted != UINT64_C(0x10) ||
+        masks.effective != UINT64_C(0x100) ||
+        masks.bounding != UINT64_C(0x1000) ||
+        masks.ambient != UINT64_C(0x8000000000000000) ||
+        expect_status_capability_rejection(
+            duplicate, sizeof(duplicate) - 1U, EINVAL,
+            "status capability row order is malformed"
+        ) != 0 || expect_status_capability_rejection(
+            missing, sizeof(missing) - 1U, EINVAL,
+            "status capability rows are incomplete"
+        ) != 0 || expect_status_capability_rejection(
+            reversed, sizeof(reversed) - 1U, EINVAL,
+            "status capability row order is malformed"
+        ) != 0 || expect_status_capability_rejection(
+            uppercase, sizeof(uppercase) - 1U, EINVAL,
+            "status capability row value is malformed"
+        ) != 0 || expect_status_capability_rejection(
+            short_value, sizeof(short_value) - 1U, EINVAL,
+            "status capability row value is malformed"
+        ) != 0 || expect_status_capability_rejection(
+            extra_token, sizeof(extra_token) - 1U, EINVAL,
+            "status capability row value is malformed"
+        ) != 0 || expect_status_capability_rejection(
+            bad_name, sizeof(bad_name) - 1U, EINVAL,
+            "status capability row name is malformed"
+        ) != 0 || expect_status_capability_rejection(
+            embedded_nul, sizeof(embedded_nul) - 1U, EINVAL,
+            "status capability payload is not exact text"
+        ) != 0 || expect_status_capability_rejection(
+            over_cap, sizeof(over_cap), EOVERFLOW,
+            "status capability payload exceeds cap"
+        ) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
 enum hostile_literal_kind {
     HOSTILE_LITERAL_MISSING = 0,
     HOSTILE_LITERAL_SYMLINK = 1,
@@ -1362,6 +1489,9 @@ main(void)
     }
     if (test_status_credential_parser() != 0) {
         return test_fail("status credential parser hostility failed");
+    }
+    if (test_status_capability_parser() != 0) {
+        return test_fail("status capability parser hostility failed");
     }
     if (mkdtemp(temporary) == NULL) {
         return test_fail("mkdtemp failed");

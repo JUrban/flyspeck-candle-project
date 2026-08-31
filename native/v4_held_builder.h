@@ -139,6 +139,15 @@ struct v4_hb_status_credential_ids {
     uint32_t filesystem_gid;
 };
 
+/* Exact hexadecimal capability masks projected by Linux /proc/<pid>/status. */
+struct v4_hb_status_capability_masks {
+    uint64_t inheritable;
+    uint64_t permitted;
+    uint64_t effective;
+    uint64_t bounding;
+    uint64_t ambient;
+};
+
 struct v4_hb_setup_prefix_observation {
     uint32_t operation_count;
     uint32_t stop_count;
@@ -218,6 +227,14 @@ int v4_hb_parse_status_credential_rows(
     const char *payload,
     size_t payload_bytes,
     struct v4_hb_status_credential_ids *observer_ids,
+    struct v4_hb_error *error
+);
+
+/* Pure structural parser used by the live descriptor-rooted status reader. */
+int v4_hb_parse_status_capability_rows(
+    const char *payload,
+    size_t payload_bytes,
+    struct v4_hb_status_capability_masks *masks,
     struct v4_hb_error *error
 );
 

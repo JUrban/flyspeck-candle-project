@@ -659,6 +659,119 @@ v4_hb_parse_status_credential_rows(
     return V4_HB_OK;
 }
 
+static int
+v4_hb_parse_exact_hex_u64(
+    const char *begin,
+    const char *end,
+    uint64_t *value
+)
+{
+    const char *cursor;
+    uint64_t result = 0U;
+
+    if (begin == NULL || end == NULL || value == NULL ||
+        end - begin != 16) {
+        return -1;
+    }
+    for (cursor = begin; cursor < end; ++cursor) {
+        unsigned int digit;
+
+        if (*cursor >= '0' && *cursor <= '9') {
+            digit = (unsigned int)(*cursor - '0');
+        } else if (*cursor >= 'a' && *cursor <= 'f') {
+            digit = (unsigned int)(*cursor - 'a') + 10U;
+        } else {
+            return -1;
+        }
+        result = result * 16U + digit;
+    }
+    *value = result;
+    return 0;
+}
+
+int
+v4_hb_parse_status_capability_rows(
+    const char *payload,
+    size_t payload_bytes,
+    struct v4_hb_status_capability_masks *masks,
+    struct v4_hb_error *error
+)
+{
+    static const char *const names[5] = {
+        "CapInh:", "CapPrm:", "CapEff:", "CapBnd:", "CapAmb:",
+    };
+    uint64_t values[5] = {0U, 0U, 0U, 0U, 0U};
+    const char *cursor;
+    const char *end;
+    uint32_t expected_index = 0U;
+
+    v4_hb_error_clear(error);
+    if (payload == NULL || masks == NULL || payload_bytes == 0U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "status capability parser input is malformed");
+    }
+    if (payload_bytes > V4_HB_PROC_STATUS_MAX_BYTES) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "status capability payload exceeds cap");
+    }
+    if (payload[payload_bytes - 1U] != '\n' ||
+        memchr(payload, '\0', payload_bytes) != NULL) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "status capability payload is not exact text");
+    }
+    memset(masks, 0, sizeof(*masks));
+    cursor = payload;
+    end = payload + payload_bytes;
+    while (cursor < end) {
+        const char *newline = memchr(cursor, '\n', (size_t)(end - cursor));
+        uint32_t index;
+        bool capability_like;
+
+        if (newline == NULL) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status capability row is unterminated");
+        }
+        capability_like = newline - cursor >= 3 &&
+            memcmp(cursor, "Cap", 3U) == 0;
+        if (!capability_like) {
+            cursor = newline + 1;
+            continue;
+        }
+        for (index = 0U; index < 5U; ++index) {
+            if (newline - cursor >= 7 &&
+                memcmp(cursor, names[index], 7U) == 0) {
+                break;
+            }
+        }
+        if (index == 5U) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status capability row name is malformed");
+        }
+        if (index != expected_index) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status capability row order is malformed");
+        }
+        if (newline - cursor != 24 || cursor[7] != '\t' ||
+            v4_hb_parse_exact_hex_u64(cursor + 8, newline, &values[index]) !=
+                0) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status capability row value is malformed");
+        }
+        ++expected_index;
+        cursor = newline + 1;
+    }
+    if (expected_index != 5U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "status capability rows are incomplete");
+    }
+    masks->inheritable = values[0];
+    masks->permitted = values[1];
+    masks->effective = values[2];
+    masks->bounding = values[3];
+    masks->ambient = values[4];
+    return V4_HB_OK;
+}
+
 static bool
 v4_hb_same_root_projection(
     const struct v4_orw_kernel_projection *first,
