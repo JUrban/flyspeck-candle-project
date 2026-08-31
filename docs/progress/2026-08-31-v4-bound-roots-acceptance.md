@@ -45,9 +45,35 @@ child FD surface, credential/capability/filter transitions, compiler exec,
 V2 receipt producer or positive authority consumer.  All enclosing approval
 consumers remain absent or fail closed.
 
-The next functional slice is therefore the exact declared nested output-mount
-edge: admit only literal `candle-output` during the held input traversal, bind
-it to the separately retained output anchor, refuse to recurse through that
-edge, reject every other nested mount, and retain the exact-empty output
-prewalk.  That work is active in parallel and will stop for another
-independent review before child setup is added.
+## Declared nested-output acceptance
+
+That next slice is now independently accepted.  Functional commit
+`8e2450a93f6481ce8e29fc15a0035cd3558f2abc` admits only the exact literal
+`candle-output` mount edge, binds its complete mount/object/descriptor
+projection to the separately retained writable output anchor, records its
+same-OFD anchor alias, never recurses through it, and preserves the separately
+held exact-empty output walk.  Functional/test successor
+`94f670266c5928134efa4e5c26c4ad359db111be` closes the audit's two P2 gaps
+with exact errno/message cases for writable input, read-only output,
+missing/symbolic/regular literal edges, the same object through a different
+mount instance, and an undeclared nested mount.
+
+Independent replay from report head
+`baaaa40ab4c40df95177b0cf35d8a2ce97d8feff` passed 105/105 tests, ordinary
+and combined ASan/UBSan native executions, strict C, both `-fanalyzer`
+compilations, `py_compile`, tree/source identity and `git diff --check`.  The
+retained artifact is:
+
+`/project/flyspeck-candle-runs/v4-nested-output-independent-94f6702-attempt-003`
+
+Its `independent.log` SHA-256 is
+`ef3762cb27ae7d9cb28029ed36508430707cec7a6f00fb7aa7fa67a73a25dc49`.
+V4 acceptance commit is
+`c91c671fefb067178f5137c50884c57f5af998c5`; no P0/P1 defect remains in this
+scoped prerequisite.
+
+The next functional slice is the parent-traced child setup prefix: prove the
+exact setup syscall sequence and observations for private recursive mount
+propagation, inherited input-root `fchdir`, `chroot(".")`, and final
+`chdir("/")`.  FD-surface closure, credentials/capabilities, filters, exec,
+V2 receipt production and outside-parent authority remain later gates.
