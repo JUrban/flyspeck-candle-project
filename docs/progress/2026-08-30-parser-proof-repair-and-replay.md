@@ -2,6 +2,12 @@
 
 ## Status
 
+> Cold-replay hardening update on 2026-08-31: the prepared qualification
+> worktree remains deliberately idle and the cold run remains on **HOLD**.
+> Functional controller/gate hardening is committed at `8645695` with the
+> test-entrypoint mode preservation at `efa0c8e`; independent acceptance is
+> still required before launch.  No cold `Holmake` was run for this work.
+
 > Update at 03:08 UTC: the `ca67ffaa...` replay described below exposed a
 > second, narrower proof obligation and is now retained as a failed attempt.
 > The current repair is CakeML `586e06883d44f5c447793597bdaf0aa76e7a9952`,
@@ -739,26 +745,48 @@ after.  This remains a developer warm regression only.  No Candle repin or
 20/400 gate is authorized until it passes, followed by the fresh clean
 four-stage replay and all postconditions.
 
-The cold controller is hardened for that genuinely fresh replay.  It rejects
-any ignored CakeML build product before launch, freshly builds
-`misc/cakeml-heap` with receipt `00-cakeml-heap.time`, and only then performs
-the four release-gating targets.  The read-only canonical gate correspondingly
-requires all five zero-exit receipts and seven concrete output postconditions.
-This keeps the four proof/bootstrap gates unchanged while preventing an old
-base heap or `.hol` object cache from making a nominally new worktree warm.
-The replay also authenticates its tracked, clean controller project, records
-that exact project head/path/source digest and the empty ignored-product
-preflight, and the later read-only canonical gate rederives all four joins.
-The gate's focused hostile suite is 14/14, including changed preflight and
-controller-digest rejection.
+The cold controller is hardened for that genuinely fresh replay.  Before it
+creates a run root, it checks the exact controller, CakeML and HOL4 roots and
+heads and rejects every CakeML ignored product.  Its shared exact-tree verifier
+does not trust `git status`: under a cleared global/system Git configuration it
+rejects assume-unchanged, skip-worktree, fsmonitor-valid, non-stage-zero,
+resolve-undo and sparse/special index states, then independently compares the
+pinned tree, index and filesystem path type, Git mode and blob content for
+every tracked path.  It freshly builds `misc/cakeml-heap` with receipt
+`00-cakeml-heap.time`, and only then performs the four release-gating targets.
+
+Immediately before the first build command, the controller publishes a
+canonical pristine preflight that binds the exact project, CakeML and HOL4
+roots, heads and tracked trees, the zero ignored-product observation, and the
+committed controller and gate source hashes.  After the base heap and four
+fixed stages, it revalidates all three tracked trees and exclusively publishes
+a terminal manifest.  That manifest fixes the stage order and working
+directories and records hashes and sizes for the pristine preflight, all five
+time receipts, all five logs and all seven concrete output postconditions.  A
+failure cannot acquire the final `stage=complete` marker because that marker
+is written only after the manifest is published.
+
+The later read-only canonical gate authenticates the committed controller and
+gate plus the canonical preflight and terminal manifest.  It does **not**
+claim to independently rederive the historical empty-product observation
+after products have been built.  It instead authenticates that observation as
+part of the committed controller's pre-build record while independently
+rederiving the current project/CakeML/HOL4 tracked trees, all receipt formats,
+and current receipt/log/product hashes and sizes.  The focused hostile suite
+passes 24/24, including wrong recorded roots and heads, source-digest changes,
+valid receipt and product splicing, hidden tracked drift under both
+assume-unchanged and skip-worktree, tracked path-type and mode changes, stale
+ignored-cache rejection before run-root creation, and a fake-Holmake-only
+base-before-four-stage replay.  No real `Holmake` is invoked by that suite.
 
 The detached qualification worktree is prepared but deliberately unbuilt at
 `/project/worktrees/cakeml-flyspeck-runtime-stack-cold-480a9f4-v13`.  It is
 exact CakeML head `480a9f4fcdeaea0d50ed2b6e1fc7998371610ded`, tree
 `c81371cd44e1a09bcadd14866bdefc3e4bb56c06`, with empty ordinary status, zero
 ignored products and all seven cold postconditions absent.  It remains idle
-until warm attempt 003 succeeds; a warm failure supersedes this prepared root
-instead of permitting a replay from the wrong source head.
+until warm attempt 003 succeeds and the hardened controller/gate receives
+independent acceptance; a warm failure supersedes this prepared root instead
+of permitting a replay from the wrong source head.
 
 For the failed/diagnostic progression, immutable log/timing SHA-256 pairs are:
 
