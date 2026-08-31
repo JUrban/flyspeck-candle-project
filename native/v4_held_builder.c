@@ -50,6 +50,8 @@
 #define V4_HB_WAIT_POLL_MILLISECONDS 1
 #define V4_HB_PTRACE_GET_SYSCALL_INFO 0x420e
 #define V4_HB_PTRACE_SYSCALL_INFO_NONE 0U
+#define V4_HB_ROOT_STATUS_FLAGS 0x00230000U
+#define V4_HB_ROOT_FDINFO_FLAGS 0x002b0000U
 
 _Static_assert(ATOMIC_INT_LOCK_FREE == 2,
                "the inherited four-byte userspace gate must be lock-free");
@@ -73,6 +75,12 @@ _Static_assert(PTRACE_O_EXITKILL == 0x00100000,
                "unexpected PTRACE_O_EXITKILL value");
 _Static_assert(AUDIT_ARCH_X86_64 == 0xc000003eU,
                "unexpected Linux x86-64 audit architecture");
+_Static_assert((O_PATH | O_DIRECTORY | O_NOFOLLOW) ==
+                   V4_HB_ROOT_STATUS_FLAGS,
+               "unexpected root-anchor status flags");
+_Static_assert((O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) ==
+                   V4_HB_ROOT_FDINFO_FLAGS,
+               "unexpected root-anchor fdinfo flags");
 _Static_assert(CLONE_NEWNS == 0x00020000,
                "unexpected CLONE_NEWNS value");
 _Static_assert(CLONE_NEWIPC == 0x08000000,
@@ -135,6 +143,8 @@ struct v4_hb_builder {
     ];
     int parent_namespace_guards[V4_HB_NAMESPACE_COUNT];
     int child_namespace_guards[V4_HB_NAMESPACE_COUNT];
+    struct v4_hb_root_anchor_config root_config;
+    bool root_inheritance_verified;
 };
 
 struct v4_hb_namespace_specification {
@@ -430,6 +440,534 @@ v4_hb_parse_decimal_u64(
     }
     *value = result;
     return 0;
+}
+
+static bool
+v4_hb_same_root_projection(
+    const struct v4_orw_kernel_projection *first,
+    const struct v4_orw_kernel_projection *second
+)
+{
+    return first->st_dev == second->st_dev &&
+        first->st_ino == second->st_ino &&
+        first->st_nlink == second->st_nlink &&
+        first->st_mode == second->st_mode &&
+        first->st_size == second->st_size &&
+        first->mtime_seconds == second->mtime_seconds &&
+        first->mtime_nanoseconds == second->mtime_nanoseconds &&
+        first->ctime_seconds == second->ctime_seconds &&
+        first->ctime_nanoseconds == second->ctime_nanoseconds &&
+        first->statx_dev_major == second->statx_dev_major &&
+        first->statx_dev_minor == second->statx_dev_minor &&
+        first->mount_id == second->mount_id &&
+        first->fd_flags == second->fd_flags &&
+        first->status_flags == second->status_flags &&
+        first->fdinfo.position == second->fdinfo.position &&
+        first->fdinfo.flags == second->fdinfo.flags &&
+        first->fdinfo.mount_id == second->fdinfo.mount_id &&
+        first->fdinfo.inode == second->fdinfo.inode;
+}
+
+static bool
+v4_hb_same_logical_descriptor(
+    const struct v4_orw_logical_descriptor *first,
+    const struct v4_orw_logical_descriptor *second
+)
+{
+    return first->fd == second->fd &&
+        first->fd_generation == second->fd_generation &&
+        first->logical_ofd_id == second->logical_ofd_id &&
+        first->logical_ofd_generation == second->logical_ofd_generation;
+}
+
+static bool
+v4_hb_same_root_anchor(
+    const struct v4_orw_output_anchor *first,
+    const struct v4_orw_output_anchor *second
+)
+{
+    return first->live == second->live &&
+        v4_hb_same_logical_descriptor(&first->primary, &second->primary) &&
+        v4_hb_same_logical_descriptor(&first->guard, &second->guard) &&
+        v4_hb_same_root_projection(
+            &first->initial_projection, &second->initial_projection
+        ) && v4_hb_same_root_projection(
+            &first->guard_initial_projection,
+            &second->guard_initial_projection
+        );
+}
+
+static int
+v4_hb_translate_root_result(
+    int result,
+    bool unsupported_allowed,
+    const struct v4_orw_error *root_error,
+    const char *message,
+    struct v4_hb_error *error
+)
+{
+    int code = result == V4_ORW_UNSUPPORTED && unsupported_allowed ?
+        V4_HB_UNSUPPORTED : V4_HB_ERROR;
+    return v4_hb_fail(
+        error, code, root_error->saved_errno,
+        "%s: %s", message, root_error->message
+    );
+}
+
+static bool
+v4_hb_exact_anchor_flags(const struct v4_orw_kernel_projection *projection)
+{
+    return projection->fd_flags == FD_CLOEXEC &&
+        projection->status_flags == V4_HB_ROOT_STATUS_FLAGS &&
+        projection->fdinfo.position == 0U &&
+        projection->fdinfo.flags == V4_HB_ROOT_FDINFO_FLAGS &&
+        projection->fdinfo.mount_id == projection->mount_id &&
+        projection->fdinfo.inode == projection->st_ino &&
+        S_ISDIR((mode_t)projection->st_mode);
+}
+
+static int
+v4_hb_validate_root_config(
+    const struct v4_hb_root_anchor_config *config,
+    bool unsupported_allowed,
+    struct v4_hb_error *error
+)
+{
+    const struct v4_orw_output_anchor *input;
+    const struct v4_orw_output_anchor *output;
+    struct v4_orw_kernel_projection current;
+    struct v4_orw_error root_error;
+    const int *fds[4];
+    const uint64_t *fd_generations[4];
+    uint64_t maximum_fd_generation;
+    uint32_t first;
+    uint32_t second;
+    int result;
+
+    if (config == NULL) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "root-anchor config is null");
+    }
+    input = &config->input_root;
+    output = &config->output_root;
+    if (input->live != 1 || output->live != 1 ||
+        input->primary.fd < 0 || input->guard.fd < 0 ||
+        output->primary.fd < 0 || output->guard.fd < 0 ||
+        input->primary.fd_generation == 0 ||
+        input->guard.fd_generation == 0 ||
+        output->primary.fd_generation == 0 ||
+        output->guard.fd_generation == 0 ||
+        input->primary.logical_ofd_id == 0 ||
+        output->primary.logical_ofd_id == 0 ||
+        input->primary.logical_ofd_generation == 0 ||
+        output->primary.logical_ofd_generation == 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "root-anchor config has malformed logical state");
+    }
+    fds[0] = &input->primary.fd;
+    fds[1] = &input->guard.fd;
+    fds[2] = &output->primary.fd;
+    fds[3] = &output->guard.fd;
+    fd_generations[0] = &input->primary.fd_generation;
+    fd_generations[1] = &input->guard.fd_generation;
+    fd_generations[2] = &output->primary.fd_generation;
+    fd_generations[3] = &output->guard.fd_generation;
+    for (first = 0; first < 4U; ++first) {
+        for (second = first + 1U; second < 4U; ++second) {
+            if (*fds[first] == *fds[second] ||
+                *fd_generations[first] == *fd_generations[second]) {
+                return v4_hb_fail(
+                    error, V4_HB_ERROR, EINVAL,
+                    "root descriptors/generations are not pairwise distinct"
+                );
+            }
+        }
+    }
+    if (input->primary.logical_ofd_id != input->guard.logical_ofd_id ||
+        output->primary.logical_ofd_id != output->guard.logical_ofd_id ||
+        input->primary.logical_ofd_generation !=
+            input->guard.logical_ofd_generation ||
+        output->primary.logical_ofd_generation !=
+            output->guard.logical_ofd_generation ||
+        input->primary.logical_ofd_id == output->primary.logical_ofd_id ||
+        input->primary.logical_ofd_generation ==
+            output->primary.logical_ofd_generation) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "root anchors lack distinct logical OFDs");
+    }
+    if (!v4_hb_exact_anchor_flags(&input->initial_projection) ||
+        !v4_hb_exact_anchor_flags(&input->guard_initial_projection) ||
+        !v4_hb_exact_anchor_flags(&output->initial_projection) ||
+        !v4_hb_exact_anchor_flags(&output->guard_initial_projection) ||
+        !v4_hb_same_root_projection(
+            &input->initial_projection, &input->guard_initial_projection
+        ) || !v4_hb_same_root_projection(
+            &output->initial_projection, &output->guard_initial_projection
+        )) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "root anchors lack exact O_PATH directory form");
+    }
+    if (input->initial_projection.st_dev ==
+            output->initial_projection.st_dev &&
+        input->initial_projection.st_ino ==
+            output->initial_projection.st_ino) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "input and output root objects are not distinct");
+    }
+    maximum_fd_generation = input->primary.fd_generation;
+#define V4_HB_TAKE_MAX_FD_GENERATION(descriptor) \
+    do { \
+        if ((descriptor).fd_generation > maximum_fd_generation) { \
+            maximum_fd_generation = (descriptor).fd_generation; \
+        } \
+    } while (0)
+    V4_HB_TAKE_MAX_FD_GENERATION(input->guard);
+    V4_HB_TAKE_MAX_FD_GENERATION(output->primary);
+    V4_HB_TAKE_MAX_FD_GENERATION(output->guard);
+#undef V4_HB_TAKE_MAX_FD_GENERATION
+    if (config->logical_ledger.next_fd_generation == 0 ||
+        config->logical_ledger.next_ofd_id == 0 ||
+        config->logical_ledger.next_ofd_generation == 0 ||
+        config->logical_ledger.next_fd_generation <= maximum_fd_generation ||
+        config->logical_ledger.next_ofd_id <=
+            input->primary.logical_ofd_id ||
+        config->logical_ledger.next_ofd_id <=
+            output->primary.logical_ofd_id ||
+        config->logical_ledger.next_ofd_generation <=
+            input->primary.logical_ofd_generation ||
+        config->logical_ledger.next_ofd_generation <=
+            output->primary.logical_ofd_generation) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "root-anchor logical ledger is not a successor");
+    }
+    result = v4_orw_output_anchor_revalidate(input, &root_error);
+    if (result != V4_ORW_OK) {
+        return v4_hb_translate_root_result(
+            result, unsupported_allowed, &root_error,
+            "input root revalidation failed", error
+        );
+    }
+    result = v4_orw_output_anchor_snapshot(input, &current, &root_error);
+    if (result != V4_ORW_OK) {
+        return v4_hb_translate_root_result(
+            result, unsupported_allowed, &root_error,
+            "input root snapshot failed", error
+        );
+    }
+    if (!v4_hb_same_root_projection(&current, &input->initial_projection)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "input root full projection changed");
+    }
+    result = v4_orw_output_anchor_revalidate(output, &root_error);
+    if (result != V4_ORW_OK) {
+        return v4_hb_translate_root_result(
+            result, unsupported_allowed, &root_error,
+            "output root revalidation failed", error
+        );
+    }
+    result = v4_orw_output_anchor_snapshot(output, &current, &root_error);
+    if (result != V4_ORW_OK) {
+        return v4_hb_translate_root_result(
+            result, unsupported_allowed, &root_error,
+            "output root snapshot failed", error
+        );
+    }
+    if (!v4_hb_same_root_projection(&current, &output->initial_projection)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "output root full projection changed");
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_verify_root_descriptor_disjointness(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    const int root_fds[4] = {
+        builder->root_config.input_root.primary.fd,
+        builder->root_config.input_root.guard.fd,
+        builder->root_config.output_root.primary.fd,
+        builder->root_config.output_root.guard.fd,
+    };
+    uint32_t root_index;
+    uint32_t namespace_index;
+
+    for (root_index = 0; root_index < 4U; ++root_index) {
+        int root_fd = root_fds[root_index];
+
+        if (root_fd < 0 || root_fd == builder->pidfd ||
+            root_fd == builder->pidfd_guard ||
+            root_fd == builder->proc_root_fd ||
+            root_fd == builder->proc_root_guard) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "root descriptor overlaps retained control fd");
+        }
+        for (namespace_index = 0;
+             namespace_index < V4_HB_NAMESPACE_COUNT;
+             ++namespace_index) {
+            if (root_fd ==
+                    builder->parent_namespaces[namespace_index].descriptor ||
+                root_fd == builder->parent_namespace_guards[namespace_index] ||
+                root_fd ==
+                    builder->child_namespaces[namespace_index].descriptor ||
+                root_fd == builder->child_namespace_guards[namespace_index]) {
+                return v4_hb_fail(
+                    error, V4_HB_ERROR, EINVAL,
+                    "root descriptor overlaps retained namespace fd"
+                );
+            }
+        }
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_parse_octal_u64(
+    const char *begin,
+    const char *end,
+    uint64_t *value
+)
+{
+    uint64_t result = 0;
+    const char *cursor;
+
+    if (begin == NULL || end == NULL || begin >= end || value == NULL) {
+        return -1;
+    }
+    for (cursor = begin; cursor < end; ++cursor) {
+        unsigned int digit;
+        if (*cursor < '0' || *cursor > '7') {
+            return -1;
+        }
+        digit = (unsigned int)(*cursor - '0');
+        if (result > (UINT64_MAX - digit) / 8U) {
+            return -1;
+        }
+        result = result * 8U + digit;
+    }
+    *value = result;
+    return 0;
+}
+
+static int
+v4_hb_read_child_fdinfo(
+    const struct v4_hb_builder *builder,
+    int descriptor,
+    bool unsupported_allowed,
+    struct v4_orw_fdinfo_projection *projection,
+    struct v4_hb_error *error
+)
+{
+    char path[96];
+    char buffer[V4_HB_PROC_MAP_MAX_BYTES + 1U];
+    char *cursor;
+    size_t used;
+    bool seen_position = false;
+    bool seen_flags = false;
+    bool seen_mount_id = false;
+    bool seen_inode = false;
+    int count;
+    int code;
+
+    if (builder == NULL || builder->pid <= 0 || descriptor < 0 ||
+        projection == NULL) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "malformed child fdinfo request");
+    }
+    count = snprintf(
+        path, sizeof(path), "%ld/fdinfo/%d",
+        (long)builder->pid, descriptor
+    );
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child fdinfo path exceeds cap");
+    }
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, buffer, V4_HB_PROC_MAP_MAX_BYTES, &used, error
+    );
+    if (code != V4_HB_OK) {
+        if (unsupported_allowed && error != NULL &&
+            v4_hb_unsupported_observation_errno(error->saved_errno)) {
+            int saved_errno = error->saved_errno;
+            return v4_hb_fail(
+                error, V4_HB_UNSUPPORTED, saved_errno,
+                "child fdinfo observation is unavailable"
+            );
+        }
+        return code;
+    }
+    buffer[used] = '\0';
+    memset(projection, 0, sizeof(*projection));
+    cursor = buffer;
+    while (*cursor != '\0') {
+        char *newline = strchr(cursor, '\n');
+        char *separator;
+        const char *value;
+        uint64_t parsed;
+        bool *seen;
+        uint64_t *target;
+
+        if (newline == NULL) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "child fdinfo has unterminated line");
+        }
+        separator = memchr(cursor, ':', (size_t)(newline - cursor));
+        if (separator == NULL) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "child fdinfo line is malformed");
+        }
+        value = separator + 1;
+        while (value < newline && (*value == ' ' || *value == '\t')) {
+            ++value;
+        }
+        seen = NULL;
+        target = NULL;
+        if ((size_t)(separator - cursor) == sizeof("pos") - 1U &&
+            memcmp(cursor, "pos", sizeof("pos") - 1U) == 0) {
+            seen = &seen_position;
+            target = &projection->position;
+            code = v4_hb_parse_decimal_u64(value, newline, &parsed);
+        } else if ((size_t)(separator - cursor) == sizeof("flags") - 1U &&
+                   memcmp(cursor, "flags", sizeof("flags") - 1U) == 0) {
+            seen = &seen_flags;
+            target = &projection->flags;
+            code = v4_hb_parse_octal_u64(value, newline, &parsed);
+        } else if ((size_t)(separator - cursor) == sizeof("mnt_id") - 1U &&
+                   memcmp(cursor, "mnt_id", sizeof("mnt_id") - 1U) == 0) {
+            seen = &seen_mount_id;
+            target = &projection->mount_id;
+            code = v4_hb_parse_decimal_u64(value, newline, &parsed);
+        } else if ((size_t)(separator - cursor) == sizeof("ino") - 1U &&
+                   memcmp(cursor, "ino", sizeof("ino") - 1U) == 0) {
+            seen = &seen_inode;
+            target = &projection->inode;
+            code = v4_hb_parse_decimal_u64(value, newline, &parsed);
+        } else {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "child fdinfo has unknown field");
+        }
+        if (code != 0 || *seen) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "child fdinfo field is duplicate or malformed");
+        }
+        *seen = true;
+        *target = parsed;
+        cursor = newline + 1;
+    }
+    if (!seen_position || !seen_flags || !seen_mount_id || !seen_inode) {
+        return v4_hb_fail(
+            error,
+            unsupported_allowed ? V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            ENOTSUP,
+                          "child fdinfo projection is incomplete");
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_compare_inherited_root_ofd(
+    const struct v4_hb_builder *builder,
+    int descriptor,
+    bool unsupported_allowed,
+    struct v4_hb_error *error
+)
+{
+    long comparison = syscall(
+        SYS_kcmp, getpid(), builder->pid, KCMP_FILE,
+        (unsigned long)descriptor, (unsigned long)descriptor
+    );
+
+    if (comparison == 0) {
+        return V4_HB_OK;
+    }
+    if (comparison < 0) {
+        int saved_errno = errno;
+        return v4_hb_fail(
+            error,
+            unsupported_allowed &&
+                (saved_errno == ENOSYS || saved_errno == EPERM ||
+                 saved_errno == EACCES) ?
+                V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            saved_errno,
+            "cross-process KCMP_FILE cannot prove root inheritance"
+        );
+    }
+    return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                      "child root fd does not share the inherited OFD");
+}
+
+static int
+v4_hb_verify_root_inheritance(
+    const struct v4_hb_builder *builder,
+    bool unsupported_allowed,
+    struct v4_hb_error *error
+)
+{
+    const struct v4_orw_output_anchor *anchors[2] = {
+        &builder->root_config.input_root,
+        &builder->root_config.output_root,
+    };
+    uint32_t anchor_index;
+    int code;
+
+    code = v4_hb_validate_root_config(
+        &builder->root_config, unsupported_allowed, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    code = v4_hb_verify_root_descriptor_disjointness(builder, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    for (anchor_index = 0; anchor_index < 2U; ++anchor_index) {
+        const struct v4_orw_output_anchor *anchor = anchors[anchor_index];
+        const struct v4_orw_logical_descriptor *descriptors[2] = {
+            &anchor->primary, &anchor->guard,
+        };
+        const struct v4_orw_kernel_projection *projections[2] = {
+            &anchor->initial_projection, &anchor->guard_initial_projection,
+        };
+        uint32_t descriptor_index;
+
+        for (descriptor_index = 0; descriptor_index < 2U;
+             ++descriptor_index) {
+            struct v4_orw_fdinfo_projection child_fdinfo;
+
+            code = v4_hb_compare_inherited_root_ofd(
+                builder, descriptors[descriptor_index]->fd,
+                unsupported_allowed, error
+            );
+            if (code != V4_HB_OK) {
+                return code;
+            }
+            code = v4_hb_read_child_fdinfo(
+                builder, descriptors[descriptor_index]->fd,
+                unsupported_allowed,
+                &child_fdinfo, error
+            );
+            if (code != V4_HB_OK) {
+                return code;
+            }
+            if (child_fdinfo.position !=
+                    projections[descriptor_index]->fdinfo.position ||
+                child_fdinfo.flags !=
+                    projections[descriptor_index]->fdinfo.flags ||
+                child_fdinfo.mount_id !=
+                    projections[descriptor_index]->fdinfo.mount_id ||
+                child_fdinfo.inode !=
+                    projections[descriptor_index]->fdinfo.inode ||
+                child_fdinfo.flags != V4_HB_ROOT_FDINFO_FLAGS) {
+                return v4_hb_fail(
+                    error, V4_HB_ERROR, EINVAL,
+                    "child inherited root fdinfo projection changed"
+                );
+            }
+        }
+    }
+    return V4_HB_OK;
 }
 
 static bool
@@ -1657,6 +2195,7 @@ v4_hb_reap_untraced_child(pid_t pid)
 
 int
 v4_hb_builder_start(
+    const struct v4_hb_root_anchor_config *config,
     struct v4_hb_builder **builder_out,
     struct v4_hb_error *error
 )
@@ -1671,11 +2210,15 @@ v4_hb_builder_start(
     int code;
 
     v4_hb_error_clear(error);
-    if (builder_out == NULL) {
+    if (builder_out == NULL || config == NULL) {
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
-                          "builder output is null");
+                          "builder start input is null");
     }
     *builder_out = NULL;
+    code = v4_hb_validate_root_config(config, true, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
     builder = calloc(1, sizeof(*builder));
     if (builder == NULL) {
         return v4_hb_fail(error, V4_HB_ERROR, ENOMEM,
@@ -1685,6 +2228,7 @@ v4_hb_builder_start(
     builder->pidfd_guard = -1;
     builder->proc_root_fd = -1;
     builder->proc_root_guard = -1;
+    builder->root_config = *config;
     for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
         builder->parent_namespaces[index].descriptor = -1;
         builder->child_namespaces[index].descriptor = -1;
@@ -1712,6 +2256,14 @@ v4_hb_builder_start(
             builder, 0, builder->parent_namespaces,
             builder->parent_namespace_guards, error
         );
+    }
+    if (code == V4_HB_OK) {
+        code = v4_hb_validate_root_config(
+            &builder->root_config, true, error
+        );
+    }
+    if (code == V4_HB_OK) {
+        code = v4_hb_verify_root_descriptor_disjointness(builder, error);
     }
     if (code != V4_HB_OK) {
         v4_hb_discard_resources(builder);
@@ -1789,6 +2341,9 @@ v4_hb_builder_start(
         code = v4_hb_verify_pidfd_alias(builder, error);
     }
     if (code == V4_HB_OK) {
+        code = v4_hb_verify_root_descriptor_disjointness(builder, error);
+    }
+    if (code == V4_HB_OK) {
         code = v4_hb_pidfd_send(pidfd, 0, error);
     }
     if (code == V4_HB_OK) {
@@ -1860,6 +2415,8 @@ v4_hb_builder_snapshot(
         (uint32_t)builder->observer_effective_gid;
     snapshot->observer_setgroups_denied =
         builder->observer_setgroups_denied ? 1U : 0U;
+    snapshot->root_inheritance_verified =
+        builder->root_inheritance_verified ? 1U : 0U;
     snapshot->child_nspid = builder->child_nspid;
     snapshot->uid_map_write_count = builder->uid_map_write_count;
     snapshot->setgroups_deny_write_count =
@@ -1876,6 +2433,8 @@ v4_hb_builder_snapshot(
             builder->parent_namespaces[index];
         snapshot->child_namespaces[index] = builder->child_namespaces[index];
     }
+    snapshot->input_root = builder->root_config.input_root;
+    snapshot->output_root = builder->root_config.output_root;
     return V4_HB_OK;
 }
 
@@ -1905,6 +2464,8 @@ v4_hb_exact_snapshot(
         first->observer_effective_gid == second->observer_effective_gid &&
         first->observer_setgroups_denied ==
             second->observer_setgroups_denied &&
+        first->root_inheritance_verified ==
+            second->root_inheritance_verified &&
         first->child_nspid == second->child_nspid &&
         first->uid_map_write_count == second->uid_map_write_count &&
         first->setgroups_deny_write_count ==
@@ -1930,7 +2491,9 @@ v4_hb_exact_snapshot(
             &second->child_namespaces[index], true
         );
     }
-    return exact;
+    return exact &&
+        v4_hb_same_root_anchor(&first->input_root, &second->input_root) &&
+        v4_hb_same_root_anchor(&first->output_root, &second->output_root);
 }
 
 static int
@@ -2060,7 +2623,7 @@ v4_hb_verify_held_internal(
 
     if (builder == NULL ||
         (builder->state != V4_HB_INTERRUPT_HELD &&
-         builder->state != V4_HB_EMPTY_PREWALK_COMPLETE) ||
+         builder->state != V4_HB_BOUND_ROOT_WALKS_COMPLETE) ||
         builder->pid <= 0 || builder->pidfd < 0 ||
         builder->start_ticks == 0 || builder->gate == MAP_FAILED ||
         atomic_load_explicit(builder->gate, memory_order_acquire) != 0U ||
@@ -2068,6 +2631,7 @@ v4_hb_verify_held_internal(
         builder->interrupt_event_stop_count != 1 ||
         builder->resume_count != 0 ||
         builder->held_stop_consumed != 1 ||
+        !builder->root_inheritance_verified ||
         !WIFSTOPPED(builder->raw_interrupt_wait_status) ||
         WSTOPSIG(builder->raw_interrupt_wait_status) != SIGTRAP ||
         (unsigned int)builder->raw_interrupt_wait_status >> 16 !=
@@ -2098,6 +2662,10 @@ v4_hb_verify_held_internal(
         return code;
     }
     code = v4_hb_verify_namespace_boundary(builder, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    code = v4_hb_verify_root_inheritance(builder, false, error);
     if (code != V4_HB_OK) {
         return code;
     }
@@ -2311,10 +2879,14 @@ v4_hb_builder_seize_interrupt(
     if (code == V4_HB_OK) {
         code = v4_hb_verify_namespace_boundary(builder, error);
     }
+    if (code == V4_HB_OK) {
+        code = v4_hb_verify_root_inheritance(builder, true, error);
+    }
     if (code != V4_HB_OK) {
         builder->state = V4_HB_POISONED;
         return code;
     }
+    builder->root_inheritance_verified = true;
     builder->raw_interrupt_wait_status = status;
     builder->interrupt_event_stop_count = 1;
     builder->state = V4_HB_INTERRUPT_HELD;
@@ -2326,12 +2898,20 @@ v4_hb_builder_seize_interrupt(
     return v4_hb_builder_snapshot(builder, held_snapshot, error);
 }
 
+void
+v4_hb_bound_root_walks_destroy(struct v4_hb_bound_root_walks *walks)
+{
+    if (walks == NULL) {
+        return;
+    }
+    v4_orw_walk_result_destroy(&walks->input_root);
+    v4_orw_walk_result_destroy(&walks->output_root);
+}
+
 int
-v4_hb_builder_run_empty_prewalk(
+v4_hb_builder_run_bound_root_walks(
     struct v4_hb_builder *builder,
-    const struct v4_orw_output_anchor *anchor,
-    struct v4_orw_logical_ledger *ledger,
-    struct v4_orw_walk_result *walk,
+    struct v4_hb_bound_root_walks *walks,
     struct v4_hb_error *error
 )
 {
@@ -2339,17 +2919,24 @@ v4_hb_builder_run_empty_prewalk(
     int code;
 
     v4_hb_error_clear(error);
-    if (walk == NULL || builder == NULL ||
+    if (walks == NULL || builder == NULL ||
         builder->state != V4_HB_INTERRUPT_HELD) {
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
-                          "empty pre-walk is not at the held boundary");
+                          "bound root walks are not at the held boundary");
     }
+    memset(walks, 0, sizeof(*walks));
+    walks->input_root.root_walk_descriptor.fd = -1;
+    walks->output_root.root_walk_descriptor.fd = -1;
     code = v4_hb_verify_held_internal(builder, error);
     if (code != V4_HB_OK) {
         builder->state = V4_HB_POISONED;
         return code;
     }
-    code = v4_orw_output_root_walk(anchor, ledger, walk, &walk_error);
+    code = v4_orw_output_root_walk(
+        &builder->root_config.input_root,
+        &builder->root_config.logical_ledger,
+        &walks->input_root, &walk_error
+    );
     if (code != V4_ORW_OK) {
         builder->state = V4_HB_POISONED;
         return v4_hb_fail(
@@ -2357,24 +2944,47 @@ v4_hb_builder_run_empty_prewalk(
             code == V4_ORW_UNSUPPORTED ?
                 V4_HB_UNSUPPORTED : V4_HB_ERROR,
             walk_error.saved_errno,
-            "held empty pre-walk failed: %s", walk_error.message
+            "held input-root walk failed: %s", walk_error.message
         );
     }
-    if (walk->entry_count != 0 || walk->total_relative_bytes != 0 ||
-        walk->directory_eof_count != 1 ||
-        walk->opened_descriptor_count != 1) {
-        v4_orw_walk_result_destroy(walk);
+    code = v4_hb_verify_held_internal(builder, error);
+    if (code != V4_HB_OK) {
+        v4_hb_bound_root_walks_destroy(walks);
+        builder->state = V4_HB_POISONED;
+        return code;
+    }
+    code = v4_orw_output_root_walk(
+        &builder->root_config.output_root,
+        &builder->root_config.logical_ledger,
+        &walks->output_root, &walk_error
+    );
+    if (code != V4_ORW_OK) {
+        v4_hb_bound_root_walks_destroy(walks);
+        builder->state = V4_HB_POISONED;
+        return v4_hb_fail(
+            error,
+            code == V4_ORW_UNSUPPORTED ?
+                V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            walk_error.saved_errno,
+            "held output-root pre-walk failed: %s", walk_error.message
+        );
+    }
+    if (walks->output_root.entry_count != 0 ||
+        walks->output_root.total_relative_bytes != 0 ||
+        walks->output_root.directory_eof_count != 1 ||
+        walks->output_root.opened_descriptor_count != 1) {
+        v4_hb_bound_root_walks_destroy(walks);
         builder->state = V4_HB_POISONED;
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "held output-root pre-walk is not exactly empty");
     }
     code = v4_hb_verify_held_internal(builder, error);
     if (code != V4_HB_OK) {
-        v4_orw_walk_result_destroy(walk);
+        v4_hb_bound_root_walks_destroy(walks);
         builder->state = V4_HB_POISONED;
         return code;
     }
-    builder->state = V4_HB_EMPTY_PREWALK_COMPLETE;
+    builder->state = V4_HB_BOUND_ROOT_WALKS_COMPLETE;
     return V4_HB_OK;
 }
 
@@ -2438,9 +3048,9 @@ v4_hb_builder_release_and_reap(
 
     v4_hb_error_clear(error);
     if (builder == NULL || completion == NULL ||
-        builder->state != V4_HB_EMPTY_PREWALK_COMPLETE) {
+        builder->state != V4_HB_BOUND_ROOT_WALKS_COMPLETE) {
         return v4_hb_fail(error, V4_HB_ERROR, EPERM,
-                          "gate release requires a completed held pre-walk");
+                          "gate release requires both completed root walks");
     }
     code = v4_hb_verify_held_internal(builder, error);
     if (code != V4_HB_OK) {

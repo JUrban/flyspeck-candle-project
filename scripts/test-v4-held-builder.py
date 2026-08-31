@@ -68,6 +68,7 @@ class V4HeldBuilderTests(unittest.TestCase):
 
     def test_slice_remains_below_protocol_and_exec(self) -> None:
         source = (NATIVE / "v4_held_builder.c").read_text(encoding="utf-8")
+        header = (NATIVE / "v4_held_builder.h").read_text(encoding="utf-8")
         self.assertNotIn("PTRACE_TRACEME", source)
         self.assertNotIn("PTRACE_ATTACH", source)
         self.assertNotIn("fork(", source)
@@ -89,6 +90,10 @@ class V4HeldBuilderTests(unittest.TestCase):
         self.assertNotIn("CLONE_VM", source)
         self.assertNotIn("ptrace(PTRACE_SYSCALL", source)
         self.assertNotIn("seccomp", source.lower())
+        self.assertIn("getpid(), builder->pid, KCMP_FILE", source)
+        self.assertIn("V4_HB_ROOT_STATUS_FLAGS", source)
+        self.assertIn("v4_hb_builder_run_bound_root_walks", header)
+        self.assertNotIn("v4_hb_builder_run_empty_prewalk", header)
         uid_order = source.index("uid_map_write_order = 1U")
         setgroups_order = source.index("setgroups_deny_write_order = 2U")
         gid_order = source.index("gid_map_write_order = 3U")

@@ -25,6 +25,100 @@ static const unsigned long expected_namespace_flags[V4_HB_NAMESPACE_COUNT] = {
     CLONE_NEWIPC,
 };
 
+static bool
+root_anchor_snapshot_is_exact(
+    const struct v4_orw_output_anchor *actual,
+    const struct v4_orw_output_anchor *expected
+)
+{
+    return actual->live == 1 && expected->live == 1 &&
+        actual->primary.fd == expected->primary.fd &&
+        actual->primary.fd_generation == expected->primary.fd_generation &&
+        actual->primary.logical_ofd_id == expected->primary.logical_ofd_id &&
+        actual->primary.logical_ofd_generation ==
+            expected->primary.logical_ofd_generation &&
+        actual->guard.fd == expected->guard.fd &&
+        actual->guard.fd_generation == expected->guard.fd_generation &&
+        actual->guard.logical_ofd_id == expected->guard.logical_ofd_id &&
+        actual->guard.logical_ofd_generation ==
+            expected->guard.logical_ofd_generation &&
+        actual->initial_projection.st_dev ==
+            expected->initial_projection.st_dev &&
+        actual->initial_projection.st_ino ==
+            expected->initial_projection.st_ino &&
+        actual->initial_projection.mount_id ==
+            expected->initial_projection.mount_id &&
+        actual->initial_projection.fd_flags == FD_CLOEXEC &&
+        actual->initial_projection.status_flags ==
+            (uint64_t)(O_PATH | O_DIRECTORY | O_NOFOLLOW) &&
+        actual->initial_projection.fdinfo.flags ==
+            (uint64_t)(O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC) &&
+        actual->guard_initial_projection.st_dev ==
+            expected->guard_initial_projection.st_dev &&
+        actual->guard_initial_projection.st_ino ==
+            expected->guard_initial_projection.st_ino &&
+        actual->guard_initial_projection.mount_id ==
+            expected->guard_initial_projection.mount_id &&
+        actual->guard_initial_projection.fd_flags == FD_CLOEXEC &&
+        actual->guard_initial_projection.status_flags ==
+            (uint64_t)(O_PATH | O_DIRECTORY | O_NOFOLLOW) &&
+        actual->guard_initial_projection.fdinfo.flags ==
+            (uint64_t)(O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+}
+
+static bool
+root_binding_snapshot_is_exact(
+    const struct v4_hb_snapshot *snapshot,
+    const struct v4_hb_root_anchor_config *config,
+    uint32_t inheritance_verified
+)
+{
+    const int fds[4] = {
+        snapshot->input_root.primary.fd,
+        snapshot->input_root.guard.fd,
+        snapshot->output_root.primary.fd,
+        snapshot->output_root.guard.fd,
+    };
+    uint32_t first;
+    uint32_t second;
+
+    if (snapshot->root_inheritance_verified != inheritance_verified ||
+        !root_anchor_snapshot_is_exact(
+            &snapshot->input_root, &config->input_root
+        ) || !root_anchor_snapshot_is_exact(
+            &snapshot->output_root, &config->output_root
+        ) ||
+        (snapshot->input_root.initial_projection.st_dev ==
+             snapshot->output_root.initial_projection.st_dev &&
+         snapshot->input_root.initial_projection.st_ino ==
+             snapshot->output_root.initial_projection.st_ino)) {
+        return false;
+    }
+    for (first = 0; first < 4U; ++first) {
+        uint32_t namespace_index;
+
+        if (fds[first] == snapshot->pidfd) {
+            return false;
+        }
+        for (namespace_index = 0;
+             namespace_index < V4_HB_NAMESPACE_COUNT;
+             ++namespace_index) {
+            if (fds[first] ==
+                    snapshot->parent_namespaces[namespace_index].descriptor ||
+                fds[first] ==
+                    snapshot->child_namespaces[namespace_index].descriptor) {
+                return false;
+            }
+        }
+        for (second = first + 1U; second < 4U; ++second) {
+            if (fds[first] == fds[second]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 static int
 test_fail(const char *message)
 {
@@ -61,6 +155,33 @@ write_text_file(const char *path, const char *text)
         offset += (size_t)count;
     }
     return close(fd);
+}
+
+static int
+write_file_at(int directory_fd, const char *relative, const char *text)
+{
+    size_t length = strlen(text);
+    size_t offset = 0;
+    int descriptor = openat(
+        directory_fd, relative,
+        O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, 0600
+    );
+
+    if (descriptor < 0) {
+        return -1;
+    }
+    while (offset < length) {
+        ssize_t count = write(descriptor, text + offset, length - offset);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            (void)close(descriptor);
+            return -1;
+        }
+        offset += (size_t)count;
+    }
+    return close(descriptor);
 }
 
 static int
@@ -208,7 +329,10 @@ namespace_boundary_is_exact(const struct v4_hb_snapshot *snapshot)
 }
 
 static bool
-initial_snapshot_is_exact(const struct v4_hb_snapshot *snapshot)
+initial_snapshot_is_exact(
+    const struct v4_hb_snapshot *snapshot,
+    const struct v4_hb_root_anchor_config *config
+)
 {
     return snapshot->pid > 0 && snapshot->start_ticks > 0 &&
         snapshot->pidfd >= 0 && snapshot->state == V4_HB_GATE_SPINNING &&
@@ -216,11 +340,15 @@ initial_snapshot_is_exact(const struct v4_hb_snapshot *snapshot)
         snapshot->seize_count == 0 && snapshot->interrupt_count == 0 &&
         snapshot->interrupt_event_stop_count == 0 &&
         snapshot->resume_count == 0 && snapshot->held_stop_consumed == 0 &&
-        initial_namespace_capture_is_exact(snapshot);
+        initial_namespace_capture_is_exact(snapshot) &&
+        root_binding_snapshot_is_exact(snapshot, config, 0U);
 }
 
 static bool
-held_snapshot_is_exact(const struct v4_hb_snapshot *snapshot)
+held_snapshot_is_exact(
+    const struct v4_hb_snapshot *snapshot,
+    const struct v4_hb_root_anchor_config *config
+)
 {
     return snapshot->state == V4_HB_INTERRUPT_HELD &&
         snapshot->gate_value == 0 && snapshot->seize_count == 1 &&
@@ -230,7 +358,8 @@ held_snapshot_is_exact(const struct v4_hb_snapshot *snapshot)
         WIFSTOPPED(snapshot->raw_interrupt_wait_status) &&
         WSTOPSIG(snapshot->raw_interrupt_wait_status) == SIGTRAP &&
         (unsigned int)snapshot->raw_interrupt_wait_status >> 16 ==
-            PTRACE_EVENT_STOP && namespace_boundary_is_exact(snapshot);
+            PTRACE_EVENT_STOP && namespace_boundary_is_exact(snapshot) &&
+        root_binding_snapshot_is_exact(snapshot, config, 1U);
 }
 
 static int
@@ -307,27 +436,84 @@ expect_snapshot_splices_reject(
     if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
         return -1;
     }
+    splice = *held;
+    ++splice.input_root.primary.fd_generation;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    ++splice.output_root.initial_projection.st_ino;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    {
+        struct v4_orw_output_anchor swapped = splice.input_root;
+        splice.input_root = splice.output_root;
+        splice.output_root = swapped;
+    }
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
     return v4_hb_builder_verify_held(builder, held, error) == V4_HB_OK ?
         0 : -1;
 }
 
 static int
+expect_root_config_splices_reject(
+    const struct v4_hb_root_anchor_config *config,
+    struct v4_hb_error *error
+)
+{
+    struct v4_hb_root_anchor_config splice;
+    struct v4_hb_builder *unexpected = NULL;
+
+#define V4_HB_EXPECT_CONFIG_REJECT() \
+    do { \
+        if (v4_hb_builder_start(&splice, &unexpected, error) != \
+                V4_HB_ERROR || unexpected != NULL) { \
+            if (unexpected != NULL) { \
+                (void)v4_hb_builder_abort(unexpected, error); \
+                v4_hb_builder_destroy(unexpected); \
+            } \
+            return -1; \
+        } \
+    } while (0)
+
+    splice = *config;
+    splice.output_root = splice.input_root;
+    V4_HB_EXPECT_CONFIG_REJECT();
+    splice = *config;
+    splice.input_root.guard.fd_generation =
+        splice.input_root.primary.fd_generation;
+    V4_HB_EXPECT_CONFIG_REJECT();
+    splice = *config;
+    splice.input_root.initial_projection.status_flags ^= O_NONBLOCK;
+    V4_HB_EXPECT_CONFIG_REJECT();
+    splice = *config;
+    splice.logical_ledger.next_fd_generation =
+        splice.output_root.guard.fd_generation;
+    V4_HB_EXPECT_CONFIG_REJECT();
+#undef V4_HB_EXPECT_CONFIG_REJECT
+    return 0;
+}
+
+static int
 hold_and_prewalk(
     struct v4_hb_builder *builder,
-    const struct v4_orw_output_anchor *anchor,
-    struct v4_orw_logical_ledger *ledger,
+    const struct v4_hb_root_anchor_config *config,
     struct v4_hb_snapshot *held,
     struct v4_hb_error *error
 )
 {
-    struct v4_orw_walk_result walk;
+    struct v4_hb_bound_root_walks walks;
     struct v4_hb_completion forbidden_completion;
     int code = v4_hb_builder_seize_interrupt(builder, held, error);
 
     if (code != V4_HB_OK) {
         return code;
     }
-    if (!held_snapshot_is_exact(held) ||
+    if (!held_snapshot_is_exact(held, config) ||
         v4_hb_builder_seize_interrupt(builder, held, error) != V4_HB_ERROR ||
         expect_snapshot_splices_reject(builder, held, error) != 0 ||
         v4_hb_builder_release_and_reap(
@@ -335,17 +521,32 @@ hold_and_prewalk(
         ) != V4_HB_ERROR) {
         return V4_HB_ERROR;
     }
-    code = v4_hb_builder_run_empty_prewalk(
-        builder, anchor, ledger, &walk, error
-    );
+    code = v4_hb_builder_run_bound_root_walks(builder, &walks, error);
     if (code != V4_HB_OK) {
         return code;
     }
-    if (walk.entry_count != 0 || walk.directory_eof_count != 1) {
-        v4_orw_walk_result_destroy(&walk);
+    if (walks.input_root.entry_count != 3U ||
+        walks.input_root.opened_descriptor_count != 5U ||
+        walks.input_root.directory_eof_count != 2U ||
+        walks.input_root.total_relative_bytes != 24U ||
+        walks.input_root.root_walk_descriptor.fd_generation == 0U ||
+        walks.input_root.root_walk_descriptor.logical_ofd_id == 0U ||
+        strcmp(walks.input_root.entries[0].relative, "alpha.txt") != 0 ||
+        walks.input_root.entries[0].object_type != V4_ORW_REGULAR_FILE ||
+        strcmp(walks.input_root.entries[1].relative, "sub") != 0 ||
+        walks.input_root.entries[1].object_type != V4_ORW_DIRECTORY ||
+        strcmp(walks.input_root.entries[2].relative, "sub/beta.txt") != 0 ||
+        walks.input_root.entries[2].object_type != V4_ORW_REGULAR_FILE ||
+        walks.output_root.entry_count != 0 ||
+        walks.output_root.directory_eof_count != 1 ||
+        walks.output_root.opened_descriptor_count != 1 ||
+        walks.output_root.root_walk_descriptor.fd_generation <=
+            walks.input_root.entries[2].descriptor.fd_generation ||
+        walks.output_root.root_walk_descriptor.logical_ofd_id == 0U) {
+        v4_hb_bound_root_walks_destroy(&walks);
         return V4_HB_ERROR;
     }
-    v4_orw_walk_result_destroy(&walk);
+    v4_hb_bound_root_walks_destroy(&walks);
     return V4_HB_OK;
 }
 
@@ -354,18 +555,25 @@ main(void)
 {
     char temporary[] = "/tmp/candle-v4-held-builder.XXXXXX";
     struct v4_orw_logical_ledger ledger;
-    struct v4_orw_output_anchor anchor;
+    struct v4_orw_output_anchor input_anchor;
+    struct v4_orw_output_anchor output_anchor;
+    struct v4_orw_output_anchor nonempty_output_anchor;
+    struct v4_hb_root_anchor_config config;
+    struct v4_hb_root_anchor_config expected_config;
+    struct v4_hb_root_anchor_config nonempty_config;
     struct v4_orw_error walk_error;
     struct v4_hb_builder *builder = NULL;
     struct v4_hb_builder *attack_builder = NULL;
     struct v4_hb_builder *exit_builder = NULL;
     struct v4_hb_builder *alias_builder = NULL;
+    struct v4_hb_builder *nonempty_builder = NULL;
     struct v4_hb_snapshot initial;
     struct v4_hb_snapshot held;
     struct v4_hb_snapshot completed;
     struct v4_hb_completion completion;
     struct v4_hb_error error;
     int root_fd = -1;
+    int input_fd = -1;
     int saved_pidfd = -1;
     int saved_parent_namespace_fds[V4_HB_NAMESPACE_COUNT];
     int saved_child_namespace_fds[V4_HB_NAMESPACE_COUNT];
@@ -394,47 +602,149 @@ main(void)
         return test_skip("private tmpfs mount unavailable");
     }
     mounted = true;
+    memset(&input_anchor, 0, sizeof(input_anchor));
+    memset(&output_anchor, 0, sizeof(output_anchor));
+    memset(&nonempty_output_anchor, 0, sizeof(nonempty_output_anchor));
+    input_anchor.primary.fd = -1;
+    input_anchor.guard.fd = -1;
+    output_anchor.primary.fd = -1;
+    output_anchor.guard.fd = -1;
+    nonempty_output_anchor.primary.fd = -1;
+    nonempty_output_anchor.guard.fd = -1;
     root_fd = open(temporary,
                    O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
-    if (root_fd < 0 || mkdirat(root_fd, "candle-output", 0700) != 0 ||
+    if (root_fd < 0 || mkdirat(root_fd, "candle-input", 0700) != 0 ||
+        mkdirat(root_fd, "candle-output", 0700) != 0 ||
+        mkdirat(root_fd, "candle-nonempty-output", 0700) != 0 ||
         v4_orw_logical_ledger_init(&ledger, &walk_error) != V4_ORW_OK) {
-        (void)test_fail("cannot construct held-builder output root");
+        (void)test_fail("cannot construct held-builder roots");
+        goto cleanup;
+    }
+    input_fd = openat(
+        root_fd, "candle-input",
+        O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+    );
+    if (input_fd < 0 || mkdirat(input_fd, "sub", 0700) != 0 ||
+        write_file_at(input_fd, "alpha.txt", "alpha\n") != 0 ||
+        write_file_at(input_fd, "sub/beta.txt", "beta\n") != 0) {
+        (void)test_fail("cannot populate deterministic input root");
+        goto cleanup;
+    }
+    if (write_file_at(
+            root_fd, "candle-nonempty-output/unexpected", "unexpected\n"
+        ) != 0) {
+        (void)test_fail("cannot populate hostile nonempty output root");
         goto cleanup;
     }
     code = v4_orw_output_anchor_open(
-        root_fd, "candle-output", &ledger, &anchor, &walk_error
+        root_fd, "candle-input", &ledger, &input_anchor, &walk_error
     );
     if (code == V4_ORW_UNSUPPORTED) {
         status = test_skip(walk_error.message);
         goto cleanup;
     }
     if (code != V4_ORW_OK) {
-        (void)test_fail("cannot retain output anchor");
+        (void)test_fail("cannot retain input anchor");
         goto cleanup;
     }
+    code = v4_orw_output_anchor_open(
+        root_fd, "candle-output", &ledger, &output_anchor, &walk_error
+    );
+    if (code == V4_ORW_UNSUPPORTED) {
+        status = test_skip(walk_error.message);
+        goto cleanup_anchor;
+    }
+    if (code != V4_ORW_OK) {
+        (void)test_fail("cannot retain output anchor");
+        goto cleanup_anchor;
+    }
+    code = v4_orw_output_anchor_open(
+        root_fd, "candle-nonempty-output", &ledger,
+        &nonempty_output_anchor, &walk_error
+    );
+    if (code != V4_ORW_OK) {
+        if (code == V4_ORW_UNSUPPORTED) {
+            status = test_skip(walk_error.message);
+        } else {
+            (void)test_fail("cannot retain hostile nonempty output anchor");
+        }
+        goto cleanup_anchor;
+    }
+    config.input_root = input_anchor;
+    config.output_root = output_anchor;
+    config.logical_ledger = ledger;
+    expected_config = config;
+    nonempty_config = config;
+    nonempty_config.output_root = nonempty_output_anchor;
+    if (expect_root_config_splices_reject(&config, &error) != 0) {
+        (void)test_fail("malformed root-anchor config was accepted");
+        goto cleanup_anchor;
+    }
+    if (close(input_fd) != 0) {
+        (void)test_fail("cannot retire input fixture setup descriptor");
+        goto cleanup_anchor;
+    }
+    input_fd = -1;
+    if (close(root_fd) != 0) {
+        (void)test_fail("cannot retire fixture root setup descriptor");
+        goto cleanup_anchor;
+    }
+    root_fd = -1;
 
-    code = v4_hb_builder_start(&builder, &error);
+    code = v4_hb_builder_start(
+        &nonempty_config, &nonempty_builder, &error
+    );
+    if (code != V4_HB_OK) {
+        if (code == V4_HB_UNSUPPORTED) {
+            status = test_skip(error.message);
+        } else {
+            (void)test_fail("cannot start nonempty-output hostile builder");
+        }
+        goto cleanup_anchor;
+    }
+    {
+        struct v4_hb_bound_root_walks rejected_walks;
+
+        if (v4_hb_builder_seize_interrupt(
+                nonempty_builder, &held, &error
+            ) != V4_HB_OK ||
+            !held_snapshot_is_exact(&held, &nonempty_config) ||
+            v4_hb_builder_run_bound_root_walks(
+                nonempty_builder, &rejected_walks, &error
+            ) != V4_HB_ERROR ||
+            v4_hb_builder_abort(nonempty_builder, &error) != V4_HB_OK) {
+            (void)test_fail("nonempty held output root did not fail closed");
+            goto cleanup_anchor;
+        }
+        v4_hb_bound_root_walks_destroy(&rejected_walks);
+    }
+    v4_hb_builder_destroy(nonempty_builder);
+    nonempty_builder = NULL;
+
+    code = v4_hb_builder_start(&config, &builder, &error);
     if (code == V4_HB_UNSUPPORTED) {
         status = test_skip(error.message);
         goto cleanup_anchor;
     }
+    ++config.input_root.primary.fd_generation;
     if (code != V4_HB_OK ||
         v4_hb_builder_snapshot(builder, &initial, &error) != V4_HB_OK ||
-        !initial_snapshot_is_exact(&initial) ||
+        !initial_snapshot_is_exact(&initial, &expected_config) ||
         v4_hb_builder_release_and_reap(
             builder, &completion, &error
         ) != V4_HB_ERROR) {
         (void)test_fail("initial userspace-gate boundary is malformed");
         goto cleanup_anchor;
     }
-    code = hold_and_prewalk(builder, &anchor, &ledger, &held, &error);
+    config = expected_config;
+    code = hold_and_prewalk(builder, &config, &held, &error);
     if (code == V4_HB_UNSUPPORTED) {
         status = test_skip(error.message);
         goto cleanup_anchor;
     }
     if (code != V4_HB_OK ||
         v4_hb_builder_snapshot(builder, &completed, &error) != V4_HB_OK ||
-        completed.state != V4_HB_EMPTY_PREWALK_COMPLETE ||
+        completed.state != V4_HB_BOUND_ROOT_WALKS_COMPLETE ||
         completed.gate_value != 0 || completed.pid != held.pid ||
         completed.start_ticks != held.start_ticks ||
         completed.raw_interrupt_wait_status !=
@@ -487,10 +797,19 @@ main(void)
             goto cleanup_anchor;
         }
     }
+    if (v4_orw_output_anchor_revalidate(
+            &input_anchor, &walk_error
+        ) != V4_ORW_OK ||
+        v4_orw_output_anchor_revalidate(
+            &output_anchor, &walk_error
+        ) != V4_ORW_OK) {
+        (void)test_fail("builder ambiguously consumed caller-owned anchors");
+        goto cleanup_anchor;
+    }
     v4_hb_builder_destroy(builder);
     builder = NULL;
 
-    code = v4_hb_builder_start(&attack_builder, &error);
+    code = v4_hb_builder_start(&config, &attack_builder, &error);
     if (code != V4_HB_OK) {
         if (code == V4_HB_UNSUPPORTED) {
             status = test_skip(error.message);
@@ -500,7 +819,7 @@ main(void)
         goto cleanup_anchor;
     }
     code = hold_and_prewalk(
-        attack_builder, &anchor, &ledger, &held, &error
+        attack_builder, &config, &held, &error
     );
     if (code != V4_HB_OK) {
         (void)test_fail("cannot establish unexpected-stop boundary");
@@ -517,7 +836,7 @@ main(void)
     v4_hb_builder_destroy(attack_builder);
     attack_builder = NULL;
 
-    code = v4_hb_builder_start(&exit_builder, &error);
+    code = v4_hb_builder_start(&config, &exit_builder, &error);
     if (code != V4_HB_OK) {
         if (code == V4_HB_UNSUPPORTED) {
             status = test_skip(error.message);
@@ -527,7 +846,7 @@ main(void)
         goto cleanup_anchor;
     }
     code = hold_and_prewalk(
-        exit_builder, &anchor, &ledger, &held, &error
+        exit_builder, &config, &held, &error
     );
     if (code != V4_HB_OK) {
         (void)test_fail("cannot establish unexpected-exit boundary");
@@ -544,10 +863,10 @@ main(void)
     v4_hb_builder_destroy(exit_builder);
     exit_builder = NULL;
 
-    code = v4_hb_builder_start(&alias_builder, &error);
+    code = v4_hb_builder_start(&config, &alias_builder, &error);
     if (code != V4_HB_OK ||
         hold_and_prewalk(
-            alias_builder, &anchor, &ledger, &held, &error
+            alias_builder, &config, &held, &error
         ) != V4_HB_OK) {
         (void)test_fail("cannot establish pidfd-substitution boundary");
         goto cleanup_anchor;
@@ -591,10 +910,10 @@ main(void)
     v4_hb_builder_destroy(alias_builder);
     alias_builder = NULL;
 
-    code = v4_hb_builder_start(&alias_builder, &error);
+    code = v4_hb_builder_start(&config, &alias_builder, &error);
     if (code != V4_HB_OK ||
         hold_and_prewalk(
-            alias_builder, &anchor, &ledger, &held, &error
+            alias_builder, &config, &held, &error
         ) != V4_HB_OK) {
         (void)test_fail("cannot establish namespace-OFD boundary");
         goto cleanup_anchor;
@@ -617,9 +936,8 @@ main(void)
             (void)test_fail("cannot force namespace-OFD number reuse");
             goto cleanup_anchor;
         }
-        if (v4_hb_builder_verify_held(
-                alias_builder, &held, &error
-            ) != V4_HB_ERROR ||
+        code = v4_hb_builder_verify_held(alias_builder, &held, &error);
+        if (code != V4_HB_ERROR ||
             v4_hb_builder_abort(alias_builder, &error) != V4_HB_OK) {
             (void)test_fail("namespace-OFD substitution did not fail closed");
             goto cleanup_anchor;
@@ -628,10 +946,10 @@ main(void)
     v4_hb_builder_destroy(alias_builder);
     alias_builder = NULL;
 
-    code = v4_hb_builder_start(&alias_builder, &error);
+    code = v4_hb_builder_start(&config, &alias_builder, &error);
     if (code != V4_HB_OK ||
         hold_and_prewalk(
-            alias_builder, &anchor, &ledger, &held, &error
+            alias_builder, &config, &held, &error
         ) != V4_HB_OK) {
         (void)test_fail("cannot establish namespace-splice boundary");
         goto cleanup_anchor;
@@ -652,10 +970,74 @@ main(void)
     v4_hb_builder_destroy(alias_builder);
     alias_builder = NULL;
 
+    code = v4_hb_builder_start(&config, &alias_builder, &error);
+    if (code != V4_HB_OK ||
+        hold_and_prewalk(
+            alias_builder, &config, &held, &error
+        ) != V4_HB_OK) {
+        (void)test_fail("cannot establish root-anchor reuse boundary");
+        goto cleanup_anchor;
+    }
+    {
+        char input_path[256];
+        int primary = config.input_root.primary.fd;
+        int guard = config.input_root.guard.fd;
+        int replacement;
+        int path_count = snprintf(
+            input_path, sizeof(input_path), "%s/candle-input", temporary
+        );
+
+        if (path_count < 0 || (size_t)path_count >= sizeof(input_path) ||
+            close(primary) != 0 || close(guard) != 0) {
+            (void)test_fail("cannot close parent input anchor pair for attack");
+            goto cleanup_anchor;
+        }
+        replacement = open(
+            input_path, O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+        );
+        if (replacement < 0 ||
+            (replacement != primary &&
+             (dup3(replacement, primary, O_CLOEXEC) < 0 ||
+              close(replacement) != 0)) ||
+            dup3(primary, guard, O_CLOEXEC) < 0) {
+            (void)test_fail("cannot force parent root-fd number reuse");
+            goto cleanup_anchor;
+        }
+        code = v4_hb_builder_verify_held(alias_builder, &held, &error);
+        {
+            char verify_message[sizeof(error.message)];
+            int abort_code;
+
+            (void)snprintf(
+                verify_message, sizeof(verify_message), "%s", error.message
+            );
+            abort_code = v4_hb_builder_abort(alias_builder, &error);
+            if (code != V4_HB_ERROR ||
+                strcmp(
+                    verify_message,
+                    "child root fd does not share the inherited OFD"
+                ) != 0 ||
+                abort_code != V4_HB_OK) {
+                (void)fprintf(
+                    stderr,
+                    "FAIL: parent root-fd reuse verify=%d abort=%d: %s / %s\n",
+                    code, abort_code, verify_message, error.message
+                );
+                goto cleanup_anchor;
+            }
+        }
+    }
+    v4_hb_builder_destroy(alias_builder);
+    alias_builder = NULL;
+
     status = 0;
     (void)fprintf(stdout, "PASS: native V4 held-builder boundary\n");
 
 cleanup_anchor:
+    if (nonempty_builder != NULL) {
+        (void)v4_hb_builder_abort(nonempty_builder, &error);
+        v4_hb_builder_destroy(nonempty_builder);
+    }
     if (alias_builder != NULL) {
         (void)v4_hb_builder_abort(alias_builder, &error);
         v4_hb_builder_destroy(alias_builder);
@@ -672,8 +1054,13 @@ cleanup_anchor:
         (void)v4_hb_builder_abort(builder, &error);
         v4_hb_builder_destroy(builder);
     }
-    v4_orw_output_anchor_close(&anchor);
+    v4_orw_output_anchor_close(&nonempty_output_anchor);
+    v4_orw_output_anchor_close(&output_anchor);
+    v4_orw_output_anchor_close(&input_anchor);
 cleanup:
+    if (input_fd >= 0) {
+        (void)close(input_fd);
+    }
     if (root_fd >= 0) {
         (void)close(root_fd);
     }

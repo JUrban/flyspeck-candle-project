@@ -29,7 +29,7 @@ enum v4_hb_result {
 enum v4_hb_state {
     V4_HB_GATE_SPINNING = 1,
     V4_HB_INTERRUPT_HELD = 2,
-    V4_HB_EMPTY_PREWALK_COMPLETE = 3,
+    V4_HB_BOUND_ROOT_WALKS_COMPLETE = 3,
     V4_HB_RELEASED = 4,
     V4_HB_POISONED = 5,
     V4_HB_CLOSED = 6,
@@ -60,6 +60,22 @@ struct v4_hb_id_map_projection {
     uint32_t length;
 };
 
+/*
+ * The caller owns and must keep all four anchor descriptors live until the
+ * builder reaches CLOSED.  Start takes a detached value snapshot; it neither
+ * closes the caller's descriptors nor observes later config-struct changes.
+ */
+struct v4_hb_root_anchor_config {
+    struct v4_orw_output_anchor input_root;
+    struct v4_orw_output_anchor output_root;
+    struct v4_orw_logical_ledger logical_ledger;
+};
+
+struct v4_hb_bound_root_walks {
+    struct v4_orw_walk_result input_root;
+    struct v4_orw_walk_result output_root;
+};
+
 struct v4_hb_snapshot {
     pid_t pid;
     uint64_t start_ticks;
@@ -77,6 +93,7 @@ struct v4_hb_snapshot {
     uint32_t observer_effective_uid;
     uint32_t observer_effective_gid;
     uint32_t observer_setgroups_denied;
+    uint32_t root_inheritance_verified;
     uint32_t child_nspid;
     uint32_t uid_map_write_count;
     uint32_t setgroups_deny_write_count;
@@ -92,6 +109,8 @@ struct v4_hb_snapshot {
     struct v4_hb_namespace_projection child_namespaces[
         V4_HB_NAMESPACE_COUNT
     ];
+    struct v4_orw_output_anchor input_root;
+    struct v4_orw_output_anchor output_root;
 };
 
 struct v4_hb_completion {
@@ -106,6 +125,7 @@ struct v4_hb_builder;
 void v4_hb_error_clear(struct v4_hb_error *error);
 
 int v4_hb_builder_start(
+    const struct v4_hb_root_anchor_config *config,
     struct v4_hb_builder **builder,
     struct v4_hb_error *error
 );
@@ -128,12 +148,14 @@ int v4_hb_builder_verify_held(
     struct v4_hb_error *error
 );
 
-int v4_hb_builder_run_empty_prewalk(
+int v4_hb_builder_run_bound_root_walks(
     struct v4_hb_builder *builder,
-    const struct v4_orw_output_anchor *anchor,
-    struct v4_orw_logical_ledger *ledger,
-    struct v4_orw_walk_result *walk,
+    struct v4_hb_bound_root_walks *walks,
     struct v4_hb_error *error
+);
+
+void v4_hb_bound_root_walks_destroy(
+    struct v4_hb_bound_root_walks *walks
 );
 
 int v4_hb_builder_release_and_reap(
