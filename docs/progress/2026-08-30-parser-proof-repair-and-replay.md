@@ -772,12 +772,14 @@ claim to independently rederive the historical empty-product observation
 after products have been built.  It instead authenticates that observation as
 part of the committed controller's pre-build record while independently
 rederiving the current project/CakeML/HOL4 tracked trees, all receipt formats,
-and current receipt/log/product hashes and sizes.  The focused hostile suite
-passes 24/24, including wrong recorded roots and heads, source-digest changes,
-valid receipt and product splicing, hidden tracked drift under both
-assume-unchanged and skip-worktree, tracked path-type and mode changes, stale
-ignored-cache rejection before run-root creation, and a fake-Holmake-only
-base-before-four-stage replay.  No real `Holmake` is invoked by that suite.
+and current receipt/log/product hashes and sizes.  At the pre-publication-
+authority checkpoint, the focused hostile suite passed 24/24, including wrong
+recorded roots and heads, source-digest changes, valid receipt and product
+splicing, hidden tracked drift under both assume-unchanged and skip-worktree,
+tracked path-type and mode changes, stale ignored-cache rejection before
+run-root creation, and a fake-Holmake-only base-before-four-stage replay.  The
+accepted publication-authority successor and its expanded suite are recorded
+below.  No real `Holmake` is invoked by either suite.
 
 The detached qualification worktree is prepared but deliberately unbuilt at
 `/project/worktrees/cakeml-flyspeck-runtime-stack-cold-480a9f4-v13`.  It is
@@ -797,3 +799,52 @@ For the failed/diagnostic progression, immutable log/timing SHA-256 pairs are:
 042 424135bd209fc8d008caf2907f7ddd2f8af12ca6dd139740a306158ca55d2719 / efec389906821cfaf551a0fd7bad4304594dafa61b1103646c250fc977021559
 043 32f8518efba340db3f658c668506a50af559260b3b7e804cfff528cfd7477665 / 8296ee12e904dab22d90a7bfa1549d7b5f933786c6017d693d7b24fcae882e52
 ```
+
+## Independently accepted cold-controller publication authority
+
+The repaired functional controller/gate is commit
+`7cd15bb75dbecefdca4b6bd2c3fdfa5dfc1c7a61`, tree
+`84ea80dbe294e21e1d91a83f336df0815b2ce7d5`.  It replaces the earlier
+self-published V1 records with disjoint V2 preflight and terminal-manifest
+records and closes both independent P1 findings.  Each publisher now
+authenticates its direct live parent before and after reading bounded
+`/proc` projections: PID, process group, start ticks, exact
+`/bin/bash -p` command line and launch arguments, Bash executable inode, and
+read-only descriptor 9 bound to the exact committed controller source.  The
+controller closes that descriptor in every build-stage subshell.  Thus a dead
+controller, arbitrary shell, recycled PID, changed command line/executable or
+changed source descriptor cannot use the public internal dispatch paths to
+replace a publication.
+
+The terminal publisher emits the exact terminal-manifest SHA-256 to its
+trusted caller.  The later gate requires that externally retained digest in
+addition to rebuilding and comparing the live manifest.  Consequently a
+same-UID rewrite of a receipt or product followed by reconstruction of both
+JSON publications still fails against the original external pin.  This is an
+explicit trust boundary, not cryptographic storage: replacing the trusted
+external digest authorizes the replacement, and hostile same-UID
+ptrace/process-memory tampering remains outside the process-origin claim.
+
+The former unbounded-read P2 is also closed.  Small-file reads use
+`O_NONBLOCK`, reject non-regular objects from descriptor metadata before
+reading, enforce their size cap before and during streaming, and recheck
+identity and metadata afterward.  `/proc` stat and command-line reads have
+separate small caps; expected large logs and products are hashed as streaming
+records rather than accumulated in memory.
+
+Independent rereview accepted the functional commit with no P0 or P1 finding.
+Its only P2 was the now-corrected stale documentation of the old heads and
+24-test count.  A fresh committed fake-Holmake suite passed 34/34 in 37.732s;
+the separate authority/file hostile probe, full-publication recreation probe,
+217-record exact-tree verification, `bash -n`, `py_compile` and both diff
+checks passed.  No real `Holmake` was launched.  The frozen read-only artifact
+is
+`/project/flyspeck-candle-runs/cold-controller-cross-audit-7cd15bb-attempt-001`;
+its `SHA256SUMS` file has SHA-256
+`84e8c325c9fd5aa40537b7f45944f96a5f283e1ee3a091bfee29d99ffaa5c313`.
+
+The controller is accepted for the pristine cold replay, but launch remains
+conditional on a clean completion of warm reverse-dependency attempt 003.
+The trusted launcher must retain the original PID, process group, start ticks
+and emitted terminal-manifest digest outside the writable replay root for the
+final gate.
