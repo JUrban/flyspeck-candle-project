@@ -284,16 +284,31 @@ v4_orw_read_fdinfo(
         used += (size_t)count;
         if (used == V4_ORW_FDINFO_MAX_BYTES) {
             char extra;
-            ssize_t extra_count = read(info_fd, &extra, 1);
-            (void)close(info_fd);
-            if (extra_count != 0) {
+            ssize_t extra_count;
+            do {
+                extra_count = read(info_fd, &extra, 1);
+            } while (extra_count < 0 && errno == EINTR);
+            int extra_errno = extra_count < 0 ? errno : 0;
+            int close_result = close(info_fd);
+            int close_errno = close_result != 0 ? errno : 0;
+
+            info_fd = -1;
+            if (extra_count < 0) {
+                return v4_orw_fail(error, V4_ORW_ERROR, extra_errno,
+                                   "cannot finish fdinfo projection");
+            }
+            if (extra_count > 0) {
                 return v4_orw_fail(error, V4_ORW_ERROR, EOVERFLOW,
                                    "fdinfo projection exceeds cap");
+            }
+            if (close_result != 0) {
+                return v4_orw_fail(error, V4_ORW_ERROR, close_errno,
+                                   "cannot close fdinfo projection");
             }
             break;
         }
     }
-    if (close(info_fd) != 0) {
+    if (info_fd >= 0 && close(info_fd) != 0) {
         return v4_orw_fail(error, V4_ORW_ERROR, errno,
                            "cannot close fdinfo projection");
     }
@@ -484,6 +499,32 @@ v4_orw_same_anchor_projection(
     return first->st_dev == second->st_dev &&
         first->st_ino == second->st_ino &&
         first->st_mode == second->st_mode &&
+        first->statx_dev_major == second->statx_dev_major &&
+        first->statx_dev_minor == second->statx_dev_minor &&
+        first->mount_id == second->mount_id &&
+        first->fd_flags == second->fd_flags &&
+        first->status_flags == second->status_flags &&
+        first->fdinfo.position == second->fdinfo.position &&
+        first->fdinfo.flags == second->fdinfo.flags &&
+        first->fdinfo.mount_id == second->fdinfo.mount_id &&
+        first->fdinfo.inode == second->fdinfo.inode;
+}
+
+static bool
+v4_orw_same_full_projection(
+    const struct v4_orw_kernel_projection *first,
+    const struct v4_orw_kernel_projection *second
+)
+{
+    return first->st_dev == second->st_dev &&
+        first->st_ino == second->st_ino &&
+        first->st_nlink == second->st_nlink &&
+        first->st_mode == second->st_mode &&
+        first->st_size == second->st_size &&
+        first->mtime_seconds == second->mtime_seconds &&
+        first->mtime_nanoseconds == second->mtime_nanoseconds &&
+        first->ctime_seconds == second->ctime_seconds &&
+        first->ctime_nanoseconds == second->ctime_nanoseconds &&
         first->statx_dev_major == second->statx_dev_major &&
         first->statx_dev_minor == second->statx_dev_minor &&
         first->mount_id == second->mount_id &&
@@ -948,6 +989,8 @@ v4_orw_walk_append(
     }
     entry = &walk->entries[walk->entry_count];
     memset(entry, 0, sizeof(*entry));
+    entry->directory_walk_descriptor.fd = -1;
+    entry->declared_anchor_alias_descriptor.fd = -1;
     entry->relative = relative;
     entry->object_type = S_ISDIR((mode_t)projection->st_mode) ?
         V4_ORW_DIRECTORY : V4_ORW_REGULAR_FILE;
@@ -956,6 +999,72 @@ v4_orw_walk_append(
     ++walk->entry_count;
     walk->total_relative_bytes += length;
     return V4_ORW_OK;
+}
+
+static int
+v4_orw_bind_declared_mount_edge(
+    const struct v4_orw_output_anchor *output_anchor,
+    struct v4_orw_logical_ledger *ledger,
+    struct v4_orw_walk_result *walk,
+    struct v4_orw_error *error
+)
+{
+    struct v4_orw_walk_entry *entry;
+    struct v4_orw_logical_descriptor alias_descriptor;
+    struct v4_orw_kernel_projection alias_projection;
+    int alias_fd;
+    int code;
+
+    if (output_anchor == NULL || ledger == NULL || walk == NULL ||
+        walk->entry_count == 0U || walk->declared_mount_edge_count != 0U) {
+        return v4_orw_fail(error, V4_ORW_ERROR, EINVAL,
+                           "declared mount-edge binding is malformed");
+    }
+    entry = &walk->entries[walk->entry_count - 1U];
+    if (strcmp(entry->relative, V4_ORW_DECLARED_OUTPUT_EDGE) != 0 ||
+        entry->object_type != V4_ORW_DIRECTORY ||
+        entry->has_directory_walk_descriptor != 0 ||
+        !v4_orw_same_full_projection(
+            &entry->projection, &output_anchor->initial_projection
+        )) {
+        return v4_orw_fail(error, V4_ORW_ERROR, EINVAL,
+                           "declared mount edge does not match output root");
+    }
+    alias_fd = fcntl(output_anchor->primary.fd, F_DUPFD_CLOEXEC, 3);
+    if (alias_fd < 0) {
+        return v4_orw_fail(error, V4_ORW_ERROR, errno,
+                           "cannot duplicate declared output anchor");
+    }
+    code = v4_orw_allocate_duplicate(
+        alias_fd, &output_anchor->primary, ledger, &alias_descriptor, error
+    );
+    if (code == V4_ORW_OK) {
+        ++walk->opened_descriptor_count;
+        code = v4_orw_snapshot_fd(alias_fd, &alias_projection, error);
+    }
+    if (code == V4_ORW_OK &&
+        !v4_orw_same_full_projection(
+            &alias_projection, &output_anchor->initial_projection
+        )) {
+        code = v4_orw_fail(error, V4_ORW_ERROR, EINVAL,
+                           "declared output alias projection changed");
+    }
+    if (code == V4_ORW_OK) {
+        code = v4_orw_same_open_file_description(
+            alias_fd, output_anchor->primary.fd, error
+        );
+    }
+    if (code == V4_ORW_OK) {
+        entry->is_declared_mount_edge = 1;
+        entry->declared_anchor_alias_descriptor = alias_descriptor;
+        entry->declared_anchor_alias_projection = alias_projection;
+        ++walk->declared_mount_edge_count;
+    }
+    if (close(alias_fd) != 0 && code == V4_ORW_OK) {
+        code = v4_orw_fail(error, V4_ORW_ERROR, errno,
+                           "cannot close declared output alias");
+    }
+    return code;
 }
 
 void
@@ -999,9 +1108,10 @@ v4_orw_open_walk_directory(
     return V4_ORW_OK;
 }
 
-int
-v4_orw_output_root_walk(
+static int
+v4_orw_root_walk(
     const struct v4_orw_output_anchor *anchor,
+    const struct v4_orw_output_anchor *declared_output_anchor,
     struct v4_orw_logical_ledger *ledger,
     struct v4_orw_walk_result *result,
     struct v4_orw_error *error
@@ -1011,6 +1121,7 @@ v4_orw_output_root_walk(
     struct v4_orw_name_vector root_names;
     struct v4_orw_pending_vector pending;
     struct v4_orw_logical_descriptor root_walk_descriptor;
+    bool declared_edge_seen = false;
     int code;
 
     v4_orw_error_clear(error);
@@ -1025,6 +1136,25 @@ v4_orw_output_root_walk(
     code = v4_orw_output_anchor_revalidate(anchor, error);
     if (code != V4_ORW_OK) {
         return code;
+    }
+    if (declared_output_anchor != NULL) {
+        code = v4_orw_output_anchor_revalidate(
+            declared_output_anchor, error
+        );
+        if (code != V4_ORW_OK) {
+            return code;
+        }
+        if (anchor->initial_projection.mount_id ==
+                declared_output_anchor->initial_projection.mount_id ||
+            (anchor->initial_projection.st_dev ==
+                 declared_output_anchor->initial_projection.st_dev &&
+             anchor->initial_projection.st_ino ==
+                 declared_output_anchor->initial_projection.st_ino)) {
+            return v4_orw_fail(
+                error, V4_ORW_ERROR, EINVAL,
+                "declared output root is not a distinct nested mount"
+            );
+        }
     }
     code = v4_orw_open_walk_directory(
         anchor->primary.fd, ledger, &root_walk_descriptor, error
@@ -1065,14 +1195,21 @@ v4_orw_output_root_walk(
         char *relative = pending.paths[--pending.count];
         struct v4_orw_logical_descriptor object_descriptor;
         struct v4_orw_kernel_projection projection;
+        bool is_declared_edge = declared_output_anchor != NULL &&
+            strcmp(relative, V4_ORW_DECLARED_OUTPUT_EDGE) == 0;
+        uint64_t resolve = RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS |
+            RESOLVE_NO_MAGICLINKS;
         int object_fd;
 
         pending.total_path_bytes -= strlen(relative);
+        if (!is_declared_edge) {
+            resolve |= RESOLVE_NO_XDEV;
+        }
         object_fd = v4_orw_openat2(
             anchor->primary.fd, relative,
-            O_PATH | O_NOFOLLOW | O_CLOEXEC,
-            RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS |
-                RESOLVE_NO_MAGICLINKS | RESOLVE_NO_XDEV,
+            O_PATH | O_NOFOLLOW | O_CLOEXEC |
+                (is_declared_edge ? O_DIRECTORY : 0),
+            resolve,
             error
         );
         if (object_fd < 0) {
@@ -1088,10 +1225,22 @@ v4_orw_output_root_walk(
             ++result->opened_descriptor_count;
             code = v4_orw_snapshot_fd(object_fd, &projection, error);
         }
-        if (code == V4_ORW_OK &&
+        if (code == V4_ORW_OK && !is_declared_edge &&
             projection.mount_id != anchor->initial_projection.mount_id) {
             code = v4_orw_fail(error, V4_ORW_ERROR, EXDEV,
-                               "nested output mount is forbidden");
+                               "undeclared nested mount is forbidden");
+        }
+        if (code == V4_ORW_OK && is_declared_edge &&
+            (declared_edge_seen ||
+             !v4_orw_same_full_projection(
+                 &projection,
+                 &declared_output_anchor->initial_projection
+             ) || projection.mount_id ==
+                    anchor->initial_projection.mount_id)) {
+            code = v4_orw_fail(
+                error, V4_ORW_ERROR, EINVAL,
+                "literal output edge does not match its declared mount"
+            );
         }
         if (code == V4_ORW_OK &&
             !S_ISDIR((mode_t)projection.st_mode) &&
@@ -1112,7 +1261,16 @@ v4_orw_output_root_walk(
                 relative = NULL;
             }
         }
-        if (code == V4_ORW_OK && S_ISDIR((mode_t)projection.st_mode)) {
+        if (code == V4_ORW_OK && is_declared_edge) {
+            code = v4_orw_bind_declared_mount_edge(
+                declared_output_anchor, ledger, result, error
+            );
+            if (code == V4_ORW_OK) {
+                declared_edge_seen = true;
+            }
+        }
+        if (code == V4_ORW_OK && !is_declared_edge &&
+            S_ISDIR((mode_t)projection.st_mode)) {
             struct v4_orw_logical_descriptor directory_descriptor;
             struct v4_orw_kernel_projection directory_projection;
             struct v4_orw_name_vector names;
@@ -1169,13 +1327,53 @@ v4_orw_output_root_walk(
         }
     }
     v4_orw_pending_destroy(&pending);
+    if (code == V4_ORW_OK && declared_output_anchor != NULL &&
+        (!declared_edge_seen || result->declared_mount_edge_count != 1U)) {
+        code = v4_orw_fail(error, V4_ORW_ERROR, ENOENT,
+                           "declared output mount edge is missing");
+    }
     if (code == V4_ORW_OK) {
         code = v4_orw_output_anchor_revalidate(anchor, error);
+    }
+    if (code == V4_ORW_OK && declared_output_anchor != NULL) {
+        code = v4_orw_output_anchor_revalidate(
+            declared_output_anchor, error
+        );
     }
     if (code != V4_ORW_OK) {
         v4_orw_walk_result_destroy(result);
     }
     return code;
+}
+
+int
+v4_orw_output_root_walk(
+    const struct v4_orw_output_anchor *anchor,
+    struct v4_orw_logical_ledger *ledger,
+    struct v4_orw_walk_result *result,
+    struct v4_orw_error *error
+)
+{
+    return v4_orw_root_walk(anchor, NULL, ledger, result, error);
+}
+
+int
+v4_orw_input_root_walk(
+    const struct v4_orw_output_anchor *input_anchor,
+    const struct v4_orw_output_anchor *output_anchor,
+    struct v4_orw_logical_ledger *ledger,
+    struct v4_orw_walk_result *result,
+    struct v4_orw_error *error
+)
+{
+    if (output_anchor == NULL) {
+        v4_orw_error_clear(error);
+        return v4_orw_fail(error, V4_ORW_ERROR, EINVAL,
+                           "declared output anchor is null");
+    }
+    return v4_orw_root_walk(
+        input_anchor, output_anchor, ledger, result, error
+    );
 }
 
 void

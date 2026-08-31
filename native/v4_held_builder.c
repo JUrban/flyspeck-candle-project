@@ -24,6 +24,7 @@
 #include <sys/syscall.h>
 #include <sys/stat.h>
 #include <sys/statfs.h>
+#include <sys/statvfs.h>
 #include <sys/uio.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -537,6 +538,8 @@ v4_hb_validate_root_config(
     const struct v4_orw_output_anchor *output;
     struct v4_orw_kernel_projection current;
     struct v4_orw_error root_error;
+    struct statvfs input_filesystem;
+    struct statvfs output_filesystem;
     const int *fds[4];
     const uint64_t *fd_generations[4];
     uint64_t maximum_fd_generation;
@@ -613,6 +616,21 @@ v4_hb_validate_root_config(
             output->initial_projection.st_ino) {
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "input and output root objects are not distinct");
+    }
+    if (input->initial_projection.mount_id ==
+            output->initial_projection.mount_id) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "output root is not a separate nested mount");
+    }
+    if (fstatvfs(input->primary.fd, &input_filesystem) != 0 ||
+        fstatvfs(output->primary.fd, &output_filesystem) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "root mount access projection failed");
+    }
+    if ((input_filesystem.f_flag & ST_RDONLY) == 0U ||
+        (output_filesystem.f_flag & ST_RDONLY) != 0U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EROFS,
+                          "input/output root mount access is not closed");
     }
     maximum_fd_generation = input->primary.fd_generation;
 #define V4_HB_TAKE_MAX_FD_GENERATION(descriptor) \
@@ -2932,8 +2950,9 @@ v4_hb_builder_run_bound_root_walks(
         builder->state = V4_HB_POISONED;
         return code;
     }
-    code = v4_orw_output_root_walk(
+    code = v4_orw_input_root_walk(
         &builder->root_config.input_root,
+        &builder->root_config.output_root,
         &builder->root_config.logical_ledger,
         &walks->input_root, &walk_error
     );
@@ -2946,6 +2965,12 @@ v4_hb_builder_run_bound_root_walks(
             walk_error.saved_errno,
             "held input-root walk failed: %s", walk_error.message
         );
+    }
+    if (walks->input_root.declared_mount_edge_count != 1U) {
+        v4_hb_bound_root_walks_destroy(walks);
+        builder->state = V4_HB_POISONED;
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "held input root lacks its one output mount edge");
     }
     code = v4_hb_verify_held_internal(builder, error);
     if (code != V4_HB_OK) {

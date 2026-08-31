@@ -277,6 +277,7 @@ main(void)
     if (code != V4_ORW_OK || walk.entry_count != 0 ||
         walk.directory_eof_count != 1 ||
         walk.opened_descriptor_count != 1 ||
+        walk.declared_mount_edge_count != 0 ||
         walk.root_walk_descriptor.fd < 0 ||
         walk.root_walk_descriptor.fd_generation == 0 ||
         walk.root_walk_projection.mount_id !=
@@ -307,10 +308,16 @@ main(void)
         walk.entries[0].descriptor.fd_generation <=
             walk.root_walk_descriptor.fd_generation ||
         walk.entries[0].has_directory_walk_descriptor != 1 ||
+        walk.entries[0].is_declared_mount_edge != 0 ||
+        walk.entries[0].declared_anchor_alias_descriptor.fd != -1 ||
         walk.entries[0].directory_walk_descriptor.fd_generation <=
             walk.entries[0].descriptor.fd_generation ||
         walk.entries[1].has_directory_walk_descriptor != 0 ||
+        walk.entries[1].is_declared_mount_edge != 0 ||
+        walk.entries[1].declared_anchor_alias_descriptor.fd != -1 ||
         walk.entries[2].has_directory_walk_descriptor != 0 ||
+        walk.entries[2].is_declared_mount_edge != 0 ||
+        walk.entries[2].declared_anchor_alias_descriptor.fd != -1 ||
         walk.entries[0].projection.mount_id !=
             anchor.initial_projection.mount_id ||
         walk.entries[1].projection.st_nlink != 1 ||

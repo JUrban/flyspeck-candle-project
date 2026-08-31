@@ -88,6 +88,12 @@ root_binding_snapshot_is_exact(
         ) || !root_anchor_snapshot_is_exact(
             &snapshot->output_root, &config->output_root
         ) ||
+        snapshot->input_root.initial_projection.mount_id ==
+            snapshot->output_root.initial_projection.mount_id ||
+        (snapshot->input_root.initial_projection.st_mode &
+             (S_IFMT | 07777U)) != (S_IFDIR | 0555U) ||
+        (snapshot->output_root.initial_projection.st_mode &
+             (S_IFMT | 07777U)) != (S_IFDIR | 0700U) ||
         (snapshot->input_root.initial_projection.st_dev ==
              snapshot->output_root.initial_projection.st_dev &&
          snapshot->input_root.initial_projection.st_ino ==
@@ -525,23 +531,53 @@ hold_and_prewalk(
     if (code != V4_HB_OK) {
         return code;
     }
-    if (walks.input_root.entry_count != 3U ||
-        walks.input_root.opened_descriptor_count != 5U ||
+    if (walks.input_root.entry_count != 4U ||
+        walks.input_root.opened_descriptor_count != 7U ||
         walks.input_root.directory_eof_count != 2U ||
-        walks.input_root.total_relative_bytes != 24U ||
+        walks.input_root.declared_mount_edge_count != 1U ||
+        walks.input_root.total_relative_bytes != 37U ||
         walks.input_root.root_walk_descriptor.fd_generation == 0U ||
         walks.input_root.root_walk_descriptor.logical_ofd_id == 0U ||
         strcmp(walks.input_root.entries[0].relative, "alpha.txt") != 0 ||
         walks.input_root.entries[0].object_type != V4_ORW_REGULAR_FILE ||
-        strcmp(walks.input_root.entries[1].relative, "sub") != 0 ||
+        (walks.input_root.entries[0].projection.st_mode &
+             (S_IFMT | 07777U)) != (S_IFREG | 0444U) ||
+        strcmp(walks.input_root.entries[1].relative,
+               V4_ORW_DECLARED_OUTPUT_EDGE) != 0 ||
         walks.input_root.entries[1].object_type != V4_ORW_DIRECTORY ||
-        strcmp(walks.input_root.entries[2].relative, "sub/beta.txt") != 0 ||
-        walks.input_root.entries[2].object_type != V4_ORW_REGULAR_FILE ||
+        (walks.input_root.entries[1].projection.st_mode &
+             (S_IFMT | 07777U)) != (S_IFDIR | 0700U) ||
+        walks.input_root.entries[1].is_declared_mount_edge != 1 ||
+        walks.input_root.entries[1].has_directory_walk_descriptor != 0 ||
+        walks.input_root.entries[1].projection.mount_id !=
+            config->output_root.initial_projection.mount_id ||
+        walks.input_root.entries[1].projection.st_dev !=
+            config->output_root.initial_projection.st_dev ||
+        walks.input_root.entries[1].projection.st_ino !=
+            config->output_root.initial_projection.st_ino ||
+        walks.input_root.entries[1].declared_anchor_alias_descriptor.
+                logical_ofd_id !=
+            config->output_root.primary.logical_ofd_id ||
+        walks.input_root.entries[1].declared_anchor_alias_descriptor.
+                logical_ofd_generation !=
+            config->output_root.primary.logical_ofd_generation ||
+        walks.input_root.entries[1].declared_anchor_alias_projection.
+                mount_id !=
+            config->output_root.initial_projection.mount_id ||
+        strcmp(walks.input_root.entries[2].relative, "sub") != 0 ||
+        walks.input_root.entries[2].object_type != V4_ORW_DIRECTORY ||
+        (walks.input_root.entries[2].projection.st_mode &
+             (S_IFMT | 07777U)) != (S_IFDIR | 0555U) ||
+        strcmp(walks.input_root.entries[3].relative, "sub/beta.txt") != 0 ||
+        walks.input_root.entries[3].object_type != V4_ORW_REGULAR_FILE ||
+        (walks.input_root.entries[3].projection.st_mode &
+             (S_IFMT | 07777U)) != (S_IFREG | 0444U) ||
         walks.output_root.entry_count != 0 ||
+        walks.output_root.declared_mount_edge_count != 0U ||
         walks.output_root.directory_eof_count != 1 ||
         walks.output_root.opened_descriptor_count != 1 ||
         walks.output_root.root_walk_descriptor.fd_generation <=
-            walks.input_root.entries[2].descriptor.fd_generation ||
+            walks.input_root.entries[3].descriptor.fd_generation ||
         walks.output_root.root_walk_descriptor.logical_ofd_id == 0U) {
         v4_hb_bound_root_walks_destroy(&walks);
         return V4_HB_ERROR;
@@ -554,19 +590,27 @@ int
 main(void)
 {
     char temporary[] = "/tmp/candle-v4-held-builder.XXXXXX";
+    char input_path[512] = {0};
+    char output_path[512] = {0};
+    char wrong_output_path[512] = {0};
+    char nested_attack_path[512] = {0};
     struct v4_orw_logical_ledger ledger;
     struct v4_orw_output_anchor input_anchor;
     struct v4_orw_output_anchor output_anchor;
-    struct v4_orw_output_anchor nonempty_output_anchor;
+    struct v4_orw_output_anchor wrong_output_anchor;
+    struct v4_orw_output_anchor same_mount_anchor;
     struct v4_hb_root_anchor_config config;
     struct v4_hb_root_anchor_config expected_config;
     struct v4_hb_root_anchor_config nonempty_config;
+    struct v4_hb_root_anchor_config wrong_output_config;
+    struct v4_hb_root_anchor_config same_mount_config;
     struct v4_orw_error walk_error;
     struct v4_hb_builder *builder = NULL;
     struct v4_hb_builder *attack_builder = NULL;
     struct v4_hb_builder *exit_builder = NULL;
     struct v4_hb_builder *alias_builder = NULL;
     struct v4_hb_builder *nonempty_builder = NULL;
+    struct v4_hb_builder *wrong_output_builder = NULL;
     struct v4_hb_snapshot initial;
     struct v4_hb_snapshot held;
     struct v4_hb_snapshot completed;
@@ -579,7 +623,10 @@ main(void)
     int saved_child_namespace_fds[V4_HB_NAMESPACE_COUNT];
     uint32_t namespace_index;
     int status = 1;
-    bool mounted = false;
+    bool input_mounted = false;
+    bool output_mounted = false;
+    bool wrong_output_mounted = false;
+    bool nested_attack_mounted = false;
     int code;
 
     if (V4_HB_FIXED_PTRACE_OPTIONS_MASK != 0x0010007fUL ||
@@ -595,44 +642,78 @@ main(void)
         (void)rmdir(temporary);
         return test_skip("unprivileged user/mount namespaces unavailable");
     }
-    if (mount("tmpfs", temporary, "tmpfs",
-              MS_NOSUID | MS_NODEV | MS_NOEXEC,
-              "size=16777216,mode=0700") != 0) {
-        (void)rmdir(temporary);
-        return test_skip("private tmpfs mount unavailable");
-    }
-    mounted = true;
     memset(&input_anchor, 0, sizeof(input_anchor));
     memset(&output_anchor, 0, sizeof(output_anchor));
-    memset(&nonempty_output_anchor, 0, sizeof(nonempty_output_anchor));
+    memset(&wrong_output_anchor, 0, sizeof(wrong_output_anchor));
+    memset(&same_mount_anchor, 0, sizeof(same_mount_anchor));
     input_anchor.primary.fd = -1;
     input_anchor.guard.fd = -1;
     output_anchor.primary.fd = -1;
     output_anchor.guard.fd = -1;
-    nonempty_output_anchor.primary.fd = -1;
-    nonempty_output_anchor.guard.fd = -1;
+    wrong_output_anchor.primary.fd = -1;
+    wrong_output_anchor.guard.fd = -1;
+    same_mount_anchor.primary.fd = -1;
+    same_mount_anchor.guard.fd = -1;
     root_fd = open(temporary,
                    O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (root_fd < 0 || mkdirat(root_fd, "candle-input", 0700) != 0 ||
-        mkdirat(root_fd, "candle-output", 0700) != 0 ||
-        mkdirat(root_fd, "candle-nonempty-output", 0700) != 0 ||
-        v4_orw_logical_ledger_init(&ledger, &walk_error) != V4_ORW_OK) {
+        mkdirat(root_fd, "wrong-output", 0700) != 0 ||
+        snprintf(input_path, sizeof(input_path), "%s/candle-input",
+                 temporary) < 0 ||
+        snprintf(output_path, sizeof(output_path),
+                 "%s/candle-input/%s", temporary,
+                 V4_ORW_DECLARED_OUTPUT_EDGE) < 0 ||
+        snprintf(wrong_output_path, sizeof(wrong_output_path),
+                 "%s/wrong-output", temporary) < 0 ||
+        snprintf(nested_attack_path, sizeof(nested_attack_path),
+                 "%s/candle-input/sub", temporary) < 0) {
         (void)test_fail("cannot construct held-builder roots");
         goto cleanup;
     }
+    if (mount("tmpfs", input_path, "tmpfs",
+              MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              "size=16777216,mode=0700") != 0) {
+        status = test_skip("private input tmpfs mount unavailable");
+        goto cleanup;
+    }
+    input_mounted = true;
+    if (mount("tmpfs", wrong_output_path, "tmpfs",
+              MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              "size=1048576,mode=0700") != 0) {
+        status = test_skip("private hostile output mount unavailable");
+        goto cleanup;
+    }
+    wrong_output_mounted = true;
     input_fd = openat(
         root_fd, "candle-input",
         O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
     );
     if (input_fd < 0 || mkdirat(input_fd, "sub", 0700) != 0 ||
+        mkdirat(input_fd, V4_ORW_DECLARED_OUTPUT_EDGE, 0700) != 0 ||
         write_file_at(input_fd, "alpha.txt", "alpha\n") != 0 ||
-        write_file_at(input_fd, "sub/beta.txt", "beta\n") != 0) {
+        write_file_at(input_fd, "sub/beta.txt", "beta\n") != 0 ||
+        fchmodat(input_fd, "alpha.txt", 0444, 0) != 0 ||
+        fchmodat(input_fd, "sub/beta.txt", 0444, 0) != 0 ||
+        fchmodat(input_fd, "sub", 0555, 0) != 0 ||
+        fchmodat(root_fd, "candle-input", 0555, 0) != 0) {
         (void)test_fail("cannot populate deterministic input root");
         goto cleanup;
     }
+    if (mount("tmpfs", output_path, "tmpfs",
+              MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              "size=1048576,mode=0700") != 0) {
+        status = test_skip("private nested output tmpfs mount unavailable");
+        goto cleanup;
+    }
+    output_mounted = true;
     if (write_file_at(
-            root_fd, "candle-nonempty-output/unexpected", "unexpected\n"
-        ) != 0) {
+            input_fd, V4_ORW_DECLARED_OUTPUT_EDGE "/unexpected",
+            "unexpected\n"
+        ) != 0 ||
+        mount(NULL, input_path, NULL,
+              MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              NULL) != 0 ||
+        v4_orw_logical_ledger_init(&ledger, &walk_error) != V4_ORW_OK) {
         (void)test_fail("cannot populate hostile nonempty output root");
         goto cleanup;
     }
@@ -648,7 +729,8 @@ main(void)
         goto cleanup;
     }
     code = v4_orw_output_anchor_open(
-        root_fd, "candle-output", &ledger, &output_anchor, &walk_error
+        input_fd, V4_ORW_DECLARED_OUTPUT_EDGE,
+        &ledger, &output_anchor, &walk_error
     );
     if (code == V4_ORW_UNSUPPORTED) {
         status = test_skip(walk_error.message);
@@ -658,28 +740,9 @@ main(void)
         (void)test_fail("cannot retain output anchor");
         goto cleanup_anchor;
     }
-    code = v4_orw_output_anchor_open(
-        root_fd, "candle-nonempty-output", &ledger,
-        &nonempty_output_anchor, &walk_error
-    );
-    if (code != V4_ORW_OK) {
-        if (code == V4_ORW_UNSUPPORTED) {
-            status = test_skip(walk_error.message);
-        } else {
-            (void)test_fail("cannot retain hostile nonempty output anchor");
-        }
-        goto cleanup_anchor;
-    }
-    config.input_root = input_anchor;
-    config.output_root = output_anchor;
-    config.logical_ledger = ledger;
-    expected_config = config;
-    nonempty_config = config;
-    nonempty_config.output_root = nonempty_output_anchor;
-    if (expect_root_config_splices_reject(&config, &error) != 0) {
-        (void)test_fail("malformed root-anchor config was accepted");
-        goto cleanup_anchor;
-    }
+    nonempty_config.input_root = input_anchor;
+    nonempty_config.output_root = output_anchor;
+    nonempty_config.logical_ledger = ledger;
     if (close(input_fd) != 0) {
         (void)test_fail("cannot retire input fixture setup descriptor");
         goto cleanup_anchor;
@@ -704,15 +767,27 @@ main(void)
     }
     {
         struct v4_hb_bound_root_walks rejected_walks;
+        char rejection[sizeof(error.message)];
+        int walk_code;
+        int abort_code;
 
         if (v4_hb_builder_seize_interrupt(
                 nonempty_builder, &held, &error
             ) != V4_HB_OK ||
-            !held_snapshot_is_exact(&held, &nonempty_config) ||
-            v4_hb_builder_run_bound_root_walks(
-                nonempty_builder, &rejected_walks, &error
-            ) != V4_HB_ERROR ||
-            v4_hb_builder_abort(nonempty_builder, &error) != V4_HB_OK) {
+            !held_snapshot_is_exact(&held, &nonempty_config)) {
+            (void)test_fail("cannot establish nonempty output boundary");
+            goto cleanup_anchor;
+        }
+        walk_code = v4_hb_builder_run_bound_root_walks(
+            nonempty_builder, &rejected_walks, &error
+        );
+        (void)snprintf(rejection, sizeof(rejection), "%s", error.message);
+        abort_code = v4_hb_builder_abort(nonempty_builder, &error);
+        if (walk_code != V4_HB_ERROR ||
+            strcmp(
+                rejection,
+                "held output-root pre-walk is not exactly empty"
+            ) != 0 || abort_code != V4_HB_OK) {
             (void)test_fail("nonempty held output root did not fail closed");
             goto cleanup_anchor;
         }
@@ -720,6 +795,166 @@ main(void)
     }
     v4_hb_builder_destroy(nonempty_builder);
     nonempty_builder = NULL;
+
+    if (unlinkat(
+            output_anchor.primary.fd, "unexpected", 0
+        ) != 0) {
+        (void)test_fail("cannot clear the hostile output fixture");
+        goto cleanup_anchor;
+    }
+    v4_orw_output_anchor_close(&output_anchor);
+    v4_orw_output_anchor_close(&input_anchor);
+    root_fd = open(temporary,
+                   O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
+    input_fd = root_fd < 0 ? -1 : openat(
+        root_fd, "candle-input",
+        O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+    );
+    if (root_fd < 0 || input_fd < 0 ||
+        v4_orw_output_anchor_open(
+            root_fd, "candle-input", &ledger,
+            &input_anchor, &walk_error
+        ) != V4_ORW_OK ||
+        v4_orw_output_anchor_open(
+            input_fd, V4_ORW_DECLARED_OUTPUT_EDGE, &ledger,
+            &output_anchor, &walk_error
+        ) != V4_ORW_OK ||
+        v4_orw_output_anchor_open(
+            root_fd, "wrong-output", &ledger,
+            &wrong_output_anchor, &walk_error
+        ) != V4_ORW_OK ||
+        v4_orw_output_anchor_open(
+            input_fd, "sub", &ledger,
+            &same_mount_anchor, &walk_error
+        ) != V4_ORW_OK) {
+        (void)test_fail("cannot retain production/hostile root anchors");
+        goto cleanup_anchor;
+    }
+    config.input_root = input_anchor;
+    config.output_root = output_anchor;
+    config.logical_ledger = ledger;
+    expected_config = config;
+    wrong_output_config = config;
+    wrong_output_config.output_root = wrong_output_anchor;
+    same_mount_config = config;
+    same_mount_config.output_root = same_mount_anchor;
+    if (expect_root_config_splices_reject(&config, &error) != 0) {
+        (void)test_fail("malformed root-anchor config was accepted");
+        goto cleanup_anchor;
+    }
+    {
+        struct v4_hb_builder *unexpected = NULL;
+        int same_mount_code = v4_hb_builder_start(
+            &same_mount_config, &unexpected, &error
+        );
+
+        if (same_mount_code != V4_HB_ERROR || unexpected != NULL ||
+            strcmp(
+                error.message,
+                "output root is not a separate nested mount"
+            ) != 0) {
+            if (unexpected != NULL) {
+                (void)v4_hb_builder_abort(unexpected, &error);
+                v4_hb_builder_destroy(unexpected);
+            }
+            (void)test_fail("same-mount output root was accepted");
+            goto cleanup_anchor;
+        }
+    }
+    if (close(input_fd) != 0 || close(root_fd) != 0) {
+        (void)test_fail("cannot retire production fixture descriptors");
+        goto cleanup_anchor;
+    }
+    input_fd = -1;
+    root_fd = -1;
+    v4_orw_output_anchor_close(&same_mount_anchor);
+
+    code = v4_hb_builder_start(
+        &wrong_output_config, &wrong_output_builder, &error
+    );
+    if (code != V4_HB_OK) {
+        (void)test_fail("cannot start wrong-output hostile builder");
+        goto cleanup_anchor;
+    }
+    {
+        struct v4_hb_bound_root_walks rejected_walks;
+        char rejection[sizeof(error.message)];
+        int walk_code;
+        int abort_code;
+
+        if (v4_hb_builder_seize_interrupt(
+                wrong_output_builder, &held, &error
+            ) != V4_HB_OK) {
+            (void)test_fail("cannot establish wrong-output boundary");
+            goto cleanup_anchor;
+        }
+        walk_code = v4_hb_builder_run_bound_root_walks(
+            wrong_output_builder, &rejected_walks, &error
+        );
+        (void)snprintf(rejection, sizeof(rejection), "%s", error.message);
+        abort_code = v4_hb_builder_abort(wrong_output_builder, &error);
+        if (walk_code != V4_HB_ERROR ||
+            strcmp(
+                rejection,
+                "held input-root walk failed: literal output edge does not "
+                "match its declared mount"
+            ) != 0 || abort_code != V4_HB_OK) {
+            (void)test_fail("wrong output edge did not fail closed");
+            goto cleanup_anchor;
+        }
+        v4_hb_bound_root_walks_destroy(&rejected_walks);
+    }
+    v4_hb_builder_destroy(wrong_output_builder);
+    wrong_output_builder = NULL;
+    v4_orw_output_anchor_close(&wrong_output_anchor);
+
+    if (mount("tmpfs", nested_attack_path, "tmpfs",
+              MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              "size=1048576,mode=0555") != 0) {
+        (void)test_fail("cannot construct undeclared nested-mount attack");
+        goto cleanup_anchor;
+    }
+    nested_attack_mounted = true;
+    code = v4_hb_builder_start(&config, &attack_builder, &error);
+    if (code != V4_HB_OK) {
+        (void)test_fail("cannot start nested-mount hostile builder");
+        goto cleanup_anchor;
+    }
+    {
+        struct v4_hb_bound_root_walks rejected_walks;
+        char rejection[sizeof(error.message)];
+        int walk_code;
+        int abort_code;
+
+        if (v4_hb_builder_seize_interrupt(
+                attack_builder, &held, &error
+            ) != V4_HB_OK) {
+            (void)test_fail("cannot establish nested-mount boundary");
+            goto cleanup_anchor;
+        }
+        walk_code = v4_hb_builder_run_bound_root_walks(
+            attack_builder, &rejected_walks, &error
+        );
+        (void)snprintf(rejection, sizeof(rejection), "%s", error.message);
+        abort_code = v4_hb_builder_abort(attack_builder, &error);
+        if (walk_code != V4_HB_ERROR ||
+            strcmp(
+                rejection,
+                "held input-root walk failed: openat2 rejected "
+                "descriptor-rooted path"
+            ) != 0 || abort_code != V4_HB_OK) {
+            (void)test_fail("undeclared nested mount did not fail closed");
+            goto cleanup_anchor;
+        }
+        v4_hb_bound_root_walks_destroy(&rejected_walks);
+    }
+    v4_hb_builder_destroy(attack_builder);
+    attack_builder = NULL;
+    if (umount2(nested_attack_path, MNT_DETACH) != 0) {
+        (void)test_fail("cannot detach undeclared nested-mount attack");
+        goto cleanup_anchor;
+    }
+    nested_attack_mounted = false;
 
     code = v4_hb_builder_start(&config, &builder, &error);
     if (code == V4_HB_UNSUPPORTED) {
@@ -752,7 +987,7 @@ main(void)
         v4_hb_builder_verify_held(builder, &completed, &error) != V4_HB_OK) {
         (void)fprintf(
             stderr,
-            "FAIL: held empty pre-walk boundary is malformed: code=%d "
+            "FAIL: held bound-root walk boundary is malformed: code=%d "
             "state=%d gate=%u pid=%ld/%ld ticks=%llu/%llu wait=%x/%x %s\n",
             code, (int)completed.state, completed.gate_value,
             (long)completed.pid, (long)held.pid,
@@ -979,21 +1214,16 @@ main(void)
         goto cleanup_anchor;
     }
     {
-        char input_path[256];
-        int primary = config.input_root.primary.fd;
-        int guard = config.input_root.guard.fd;
+        int primary = config.output_root.primary.fd;
+        int guard = config.output_root.guard.fd;
         int replacement;
-        int path_count = snprintf(
-            input_path, sizeof(input_path), "%s/candle-input", temporary
-        );
 
-        if (path_count < 0 || (size_t)path_count >= sizeof(input_path) ||
-            close(primary) != 0 || close(guard) != 0) {
-            (void)test_fail("cannot close parent input anchor pair for attack");
+        if (close(primary) != 0 || close(guard) != 0) {
+            (void)test_fail("cannot close parent output anchor pair for attack");
             goto cleanup_anchor;
         }
         replacement = open(
-            input_path, O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+            output_path, O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
         );
         if (replacement < 0 ||
             (replacement != primary &&
@@ -1034,6 +1264,10 @@ main(void)
     (void)fprintf(stdout, "PASS: native V4 held-builder boundary\n");
 
 cleanup_anchor:
+    if (wrong_output_builder != NULL) {
+        (void)v4_hb_builder_abort(wrong_output_builder, &error);
+        v4_hb_builder_destroy(wrong_output_builder);
+    }
     if (nonempty_builder != NULL) {
         (void)v4_hb_builder_abort(nonempty_builder, &error);
         v4_hb_builder_destroy(nonempty_builder);
@@ -1054,7 +1288,8 @@ cleanup_anchor:
         (void)v4_hb_builder_abort(builder, &error);
         v4_hb_builder_destroy(builder);
     }
-    v4_orw_output_anchor_close(&nonempty_output_anchor);
+    v4_orw_output_anchor_close(&same_mount_anchor);
+    v4_orw_output_anchor_close(&wrong_output_anchor);
     v4_orw_output_anchor_close(&output_anchor);
     v4_orw_output_anchor_close(&input_anchor);
 cleanup:
@@ -1064,8 +1299,23 @@ cleanup:
     if (root_fd >= 0) {
         (void)close(root_fd);
     }
-    if (mounted) {
-        (void)umount2(temporary, MNT_DETACH);
+    if (nested_attack_mounted) {
+        (void)umount2(nested_attack_path, MNT_DETACH);
+    }
+    if (output_mounted) {
+        (void)umount2(output_path, MNT_DETACH);
+    }
+    if (input_mounted) {
+        (void)umount2(input_path, MNT_DETACH);
+    }
+    if (wrong_output_mounted) {
+        (void)umount2(wrong_output_path, MNT_DETACH);
+    }
+    if (input_path[0] != '\0') {
+        (void)rmdir(input_path);
+    }
+    if (wrong_output_path[0] != '\0') {
+        (void)rmdir(wrong_output_path);
     }
     (void)rmdir(temporary);
     return status;

@@ -16,6 +16,7 @@
 #define V4_ORW_MAX_RELATIVE_BYTES 4096U
 #define V4_ORW_MAX_COMPONENT_BYTES 255U
 #define V4_ORW_MAX_TOTAL_PATH_BYTES 33554432U
+#define V4_ORW_DECLARED_OUTPUT_EDGE "candle-output"
 
 enum v4_orw_result {
     V4_ORW_OK = 0,
@@ -89,6 +90,14 @@ struct v4_orw_walk_entry {
     /* Historical and populated only for a directory entry. */
     struct v4_orw_logical_descriptor directory_walk_descriptor;
     struct v4_orw_kernel_projection directory_walk_projection;
+    int is_declared_mount_edge;
+    /*
+     * Historical duplicate of the separately retained output anchor.  It is
+     * populated only for the one declared mount edge and is closed before
+     * return.  Its logical OFD values intentionally equal that anchor.
+     */
+    struct v4_orw_logical_descriptor declared_anchor_alias_descriptor;
+    struct v4_orw_kernel_projection declared_anchor_alias_projection;
 };
 
 struct v4_orw_walk_result {
@@ -100,6 +109,7 @@ struct v4_orw_walk_result {
     size_t entry_capacity;
     size_t total_relative_bytes;
     size_t directory_eof_count;
+    size_t declared_mount_edge_count;
     struct v4_orw_walk_entry *entries;
 };
 
@@ -131,6 +141,19 @@ int v4_orw_output_anchor_revalidate(
 
 int v4_orw_output_root_walk(
     const struct v4_orw_output_anchor *anchor,
+    struct v4_orw_logical_ledger *ledger,
+    struct v4_orw_walk_result *result,
+    struct v4_orw_error *error
+);
+
+/*
+ * Walk an input closure that contains exactly one admitted nested mount at
+ * V4_ORW_DECLARED_OUTPUT_EDGE.  The edge is bound to output_anchor and is
+ * not traversed; every other mount transition remains forbidden.
+ */
+int v4_orw_input_root_walk(
+    const struct v4_orw_output_anchor *input_anchor,
+    const struct v4_orw_output_anchor *output_anchor,
     struct v4_orw_logical_ledger *ledger,
     struct v4_orw_walk_result *result,
     struct v4_orw_error *error
