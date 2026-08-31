@@ -686,10 +686,44 @@ The clean log SHA-256 is
 the timing SHA-256 is
 `f5238f2a4f1e03377181b015ff7ecf9ac18a76d5fdd0017a384ffce0a7adec13`.
 The one-file proof diff passes `git diff --check` and contains no admission,
-cheat, new axiom or diagnostic tactic.  The exact-domain premise strengthens
-rather than weakens declaration correctness and is propagated through stored
-oracle environments, dynamic evaluation, declaration sequencing, `Dlocal`
-and initial compilation.
+cheat, new axiom or diagnostic tactic.  The exact-domain premise is propagated
+through stored oracle environments, dynamic evaluation, declaration
+sequencing, `Dlocal` and initial compilation.
+
+An independent static audit found no P0 or P1 issue and one P2 contract
+finding: adding `env_domain_eq` to `compile_correct` and
+`init_global_env_inv` narrows the public correctness precondition, even though
+the displayed downstream theorem forms remain unchanged through their use of
+`precondition1`.  That loss of applicability is real and must not be described
+as a non-weakening interface change.  It is also the intended soundness repair:
+the old one-way lookup invariant admitted a compiler namespace with an extra
+module absent from the source namespace; that extra prefix can shadow a later
+outer binding after `nsAppend`, so the former assumptions cannot justify
+`Dopen`.  The fixed primitive environment path discharges the exact-domain
+condition computationally in `backendProof`, and the active reverse-dependency
+replay must reprove those top-level consumers before acceptance.  The audit's
+stable patch ID is
+`877db352232f5453e18ac6150dfd3fd612f6d752`; raw diff SHA-256 is
+`6b5e1f0ea7ff4d8e26335fc97f51bc2bf280c665f707412abffa712737325f13`.
+
+A follow-up countermodel confirms that retaining the old generalized contract
+would be unsound, not merely inconvenient.  Let the source have outer `y=a`
+and module `M` containing only `x`; let the related compiler namespace also
+contain a compiler-only `M.y=b`, with distinct literals `a` and `b`.  The old
+one-way `global_env_inv` holds because source lookup never asks for `M.y`.
+For declarations `Dopen M; Dlet z = y`, however, source lookup falls through
+the opened delta to outer `y=a`, while the compiler-only opened `y` shadows it
+and records `z=b`.  The former successful conclusion is therefore false.
+Exact value and module domains rule out precisely this case.
+
+The canonical primitive path is not lost: `prim_sem_env_eq` and the evaluated
+`prim_src_config` establish matching primitive domains at both actual backend
+entry points, while later declaration and Eval environments preserve them.
+The P2 is accepted as a necessary public-contract correction, not a correctness
+regression.  A future cleanup may expose named primitive-start/domain lemmas or
+a Dopen-free compatibility corollary; changing the now-replaying proof solely
+for API ergonomics would discard qualification progress without strengthening
+the current result.
 
 The honest isolated commit is
 `944eaac605bc291c1e2685071cd40f70ef16f640`; it was independently inspected
