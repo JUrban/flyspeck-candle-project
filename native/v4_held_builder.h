@@ -19,8 +19,8 @@
 #define V4_HB_FIXED_PTRACE_OPTIONS_MASK 0x0010007fUL
 #define V4_HB_NAMESPACE_COUNT 5U
 #define V4_HB_FIXED_CLONE_FLAGS 0x78020011UL
-#define V4_HB_SETUP_PREFIX_OPERATION_COUNT 4U
-#define V4_HB_SETUP_PREFIX_STOP_COUNT 8U
+#define V4_HB_SETUP_PREFIX_OPERATION_COUNT 6U
+#define V4_HB_SETUP_PREFIX_STOP_COUNT 12U
 #define V4_HB_SETUP_PATH_CAP 2U
 #define V4_HB_SETUP_MOUNT_FLAGS 0x00044000UL
 
@@ -45,6 +45,8 @@ enum v4_hb_setup_operation {
     V4_HB_SETUP_FCHDIR_INPUT_ROOT = 2,
     V4_HB_SETUP_CHROOT_DOT = 3,
     V4_HB_SETUP_CHDIR_ROOT = 4,
+    V4_HB_SETUP_SETRESGID_ZERO = 5,
+    V4_HB_SETUP_SETRESUID_ZERO = 6,
 };
 
 struct v4_hb_error {
@@ -89,7 +91,7 @@ struct v4_hb_bound_root_walks {
 };
 
 /*
- * These are detached, process-local observations of four successful traced
+ * These are detached, process-local observations of six successful traced
  * syscalls.  They are neither a serialized receipt nor complete mount-graph
  * authority.  The logical generation is the pre-clone userspace ledger value
  * bound to the inherited input descriptor, not a kernel generation ID.
@@ -120,6 +122,18 @@ struct v4_hb_setup_fs_projection {
     uint32_t mode;
 };
 
+/* One complete UID/GID projection; the enclosing field names its namespace. */
+struct v4_hb_status_credential_ids {
+    uint32_t real_uid;
+    uint32_t effective_uid;
+    uint32_t saved_uid;
+    uint32_t filesystem_uid;
+    uint32_t real_gid;
+    uint32_t effective_gid;
+    uint32_t saved_gid;
+    uint32_t filesystem_gid;
+};
+
 struct v4_hb_setup_prefix_observation {
     uint32_t operation_count;
     uint32_t stop_count;
@@ -132,6 +146,10 @@ struct v4_hb_setup_prefix_observation {
     uint32_t private_mountinfo_observed;
     uint64_t mountinfo_byte_count;
     uint32_t mountinfo_row_count;
+    uint64_t credential_status_byte_count;
+    uint32_t credential_status_row_count;
+    struct v4_hb_status_credential_ids observer_credential_ids;
+    struct v4_hb_status_credential_ids inner_credential_ids;
     struct v4_hb_setup_fs_projection root_projection;
     struct v4_hb_setup_fs_projection cwd_projection;
     struct v4_hb_setup_syscall_observation operations[
@@ -186,6 +204,14 @@ struct v4_hb_completion {
 struct v4_hb_builder;
 
 void v4_hb_error_clear(struct v4_hb_error *error);
+
+/* Pure structural parser used by the live descriptor-rooted status reader. */
+int v4_hb_parse_status_credential_rows(
+    const char *payload,
+    size_t payload_bytes,
+    struct v4_hb_status_credential_ids *observer_ids,
+    struct v4_hb_error *error
+);
 
 int v4_hb_builder_start(
     const struct v4_hb_root_anchor_config *config,

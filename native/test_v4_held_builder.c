@@ -593,7 +593,8 @@ setup_prefix_is_exact(
 )
 {
     static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
-        SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir
+        SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
+        SYS_setresgid, SYS_setresuid
     };
     uint32_t index;
 
@@ -612,6 +613,24 @@ setup_prefix_is_exact(
         setup->private_mountinfo_observed != 1U ||
         setup->mountinfo_byte_count == 0U ||
         setup->mountinfo_row_count == 0U ||
+        setup->credential_status_byte_count == 0U ||
+        setup->credential_status_row_count != 2U ||
+        setup->observer_credential_ids.real_uid != (uint32_t)geteuid() ||
+        setup->observer_credential_ids.effective_uid != (uint32_t)geteuid() ||
+        setup->observer_credential_ids.saved_uid != (uint32_t)geteuid() ||
+        setup->observer_credential_ids.filesystem_uid != (uint32_t)geteuid() ||
+        setup->observer_credential_ids.real_gid != (uint32_t)getegid() ||
+        setup->observer_credential_ids.effective_gid != (uint32_t)getegid() ||
+        setup->observer_credential_ids.saved_gid != (uint32_t)getegid() ||
+        setup->observer_credential_ids.filesystem_gid != (uint32_t)getegid() ||
+        setup->inner_credential_ids.real_uid != 0U ||
+        setup->inner_credential_ids.effective_uid != 0U ||
+        setup->inner_credential_ids.saved_uid != 0U ||
+        setup->inner_credential_ids.filesystem_uid != 0U ||
+        setup->inner_credential_ids.real_gid != 0U ||
+        setup->inner_credential_ids.effective_gid != 0U ||
+        setup->inner_credential_ids.saved_gid != 0U ||
+        setup->inner_credential_ids.filesystem_gid != 0U ||
         setup->root_projection.device !=
             config->input_root.initial_projection.st_dev ||
         setup->root_projection.inode !=
@@ -630,7 +649,9 @@ setup_prefix_is_exact(
         const struct v4_hb_setup_syscall_observation *operation =
             &setup->operations[index];
         uint32_t argument_index;
-        uint32_t path_count = index == 1U ? 0U : V4_HB_SETUP_PATH_CAP;
+        uint32_t path_count =
+            (index == 0U || index == 2U || index == 3U) ?
+                V4_HB_SETUP_PATH_CAP : 0U;
         uint8_t path = index == 2U ? '.' : '/';
 
         if (operation->operation_index != index ||
@@ -680,11 +701,18 @@ setup_prefix_is_exact(
                     return false;
                 }
             }
-        } else {
+        } else if (index == 2U || index == 3U) {
             if (operation->arguments[0] == 0U) {
                 return false;
             }
             for (argument_index = 1U; argument_index < 6U;
+                 ++argument_index) {
+                if (operation->arguments[argument_index] != 0U) {
+                    return false;
+                }
+            }
+        } else {
+            for (argument_index = 0U; argument_index < 6U;
                  ++argument_index) {
                 if (operation->arguments[argument_index] != 0U) {
                     return false;
@@ -729,12 +757,23 @@ expect_setup_prefix_splices_reject(
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.private_mountinfo_observed = 0U);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.mountinfo_byte_count);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.mountinfo_row_count);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.credential_status_byte_count);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.credential_status_row_count);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.observer_credential_ids.saved_uid
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.inner_credential_ids.filesystem_gid
+    );
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.root_projection.inode);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.cwd_projection.mount_id);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[0].operation_index);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[0].exit_stop_index);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[1].syscall_number);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[1].arguments[0]);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[4].syscall_number);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[4].arguments[5]);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[5].arguments[0]);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[2].path_bytes[0] = '/');
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(
         splice.operations[3].raw_entry_wait_status ^= 1
@@ -896,6 +935,117 @@ expect_bound_walk_rejection(
     return 0;
 }
 
+static int
+expect_status_credential_rejection(
+    const char *payload,
+    size_t payload_bytes,
+    int expected_errno,
+    const char *expected_message
+)
+{
+    struct v4_hb_status_credential_ids ids;
+    struct v4_hb_error error;
+    int code = v4_hb_parse_status_credential_rows(
+        payload, payload_bytes, &ids, &error
+    );
+
+    if (code != V4_HB_ERROR || error.saved_errno != expected_errno ||
+        strcmp(error.message, expected_message) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int
+test_status_credential_parser(void)
+{
+    static const char valid[] =
+        "Name:\tbuilder\n"
+        "Uid:\t11\t12\t13\t14\n"
+        "Gid:\t21\t22\t23\t24\n"
+        "State:\tt (tracing stop)\n";
+    static const char duplicate[] =
+        "Uid:\t1\t1\t1\t1\nUid:\t1\t1\t1\t1\nGid:\t2\t2\t2\t2\n";
+    static const char missing[] = "Uid:\t1\t1\t1\t1\n";
+    static const char bad_prefix[] =
+        "Uid: 1\t1\t1\t1\nGid:\t2\t2\t2\t2\n";
+    static const char extra_token[] =
+        "Uid:\t1\t1\t1\t1\t1\nGid:\t2\t2\t2\t2\n";
+    static const char overflow[] =
+        "Uid:\t4294967296\t1\t1\t1\nGid:\t2\t2\t2\t2\n";
+    static const char reversed[] =
+        "Gid:\t2\t2\t2\t2\nUid:\t1\t1\t1\t1\n";
+    static const char leading_zero[] =
+        "Uid:\t01\t1\t1\t1\nGid:\t2\t2\t2\t2\n";
+    static const char empty_token[] =
+        "Uid:\t1\t\t1\t1\nGid:\t2\t2\t2\t2\n";
+    static const char unterminated[] =
+        "Uid:\t1\t1\t1\t1\nGid:\t2\t2\t2\t2";
+    static const char embedded_nul[] =
+        "Uid:\t1\t1\0\t1\t1\nGid:\t2\t2\t2\t2\n";
+    struct v4_hb_status_credential_ids ids;
+    struct v4_hb_error error;
+    char over_cap[16385U];
+
+    memset(over_cap, 'X', sizeof(over_cap));
+    over_cap[sizeof(over_cap) - 1U] = '\n';
+
+    if (v4_hb_parse_status_credential_rows(
+            valid, sizeof(valid) - 1U, &ids, &error
+        ) != V4_HB_OK ||
+        ids.real_uid != 11U || ids.effective_uid != 12U ||
+        ids.saved_uid != 13U || ids.filesystem_uid != 14U ||
+        ids.real_gid != 21U || ids.effective_gid != 22U ||
+        ids.saved_gid != 23U || ids.filesystem_gid != 24U ||
+        expect_status_credential_rejection(
+            duplicate, sizeof(duplicate) - 1U, EINVAL,
+            "status credential row is duplicate"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            missing, sizeof(missing) - 1U, EINVAL,
+            "status credential rows are incomplete"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            bad_prefix, sizeof(bad_prefix) - 1U, EINVAL,
+            "status credential row prefix is malformed"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            extra_token, sizeof(extra_token) - 1U, EINVAL,
+            "status credential row values are malformed"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            overflow, sizeof(overflow) - 1U, EINVAL,
+            "status credential row values are malformed"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            reversed, sizeof(reversed) - 1U, EINVAL,
+            "status credential row order is malformed"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            leading_zero, sizeof(leading_zero) - 1U, EINVAL,
+            "status credential row values are malformed"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            empty_token, sizeof(empty_token) - 1U, EINVAL,
+            "status credential row values are malformed"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            unterminated, sizeof(unterminated) - 1U, EINVAL,
+            "status credential payload is not exact text"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            embedded_nul, sizeof(embedded_nul) - 1U, EINVAL,
+            "status credential payload is not exact text"
+        ) != 0 ||
+        expect_status_credential_rejection(
+            over_cap, sizeof(over_cap), EOVERFLOW,
+            "status credential payload exceeds cap"
+        ) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
 enum hostile_literal_kind {
     HOSTILE_LITERAL_MISSING = 0,
     HOSTILE_LITERAL_SYMLINK = 1,
@@ -1005,8 +1155,13 @@ main(void)
     if (V4_HB_FIXED_PTRACE_OPTIONS_MASK != 0x0010007fUL ||
         V4_HB_PTRACE_OPTION_COUNT != 8U ||
         V4_HB_FIXED_CLONE_FLAGS != 0x78020011UL ||
-        V4_HB_NAMESPACE_COUNT != 5U) {
+        V4_HB_NAMESPACE_COUNT != 5U ||
+        V4_HB_SETUP_PREFIX_OPERATION_COUNT != 6U ||
+        V4_HB_SETUP_PREFIX_STOP_COUNT != 12U) {
         return test_fail("fixed V4 ptrace/namespace identity drifted");
+    }
+    if (test_status_credential_parser() != 0) {
+        return test_fail("status credential parser hostility failed");
     }
     if (mkdtemp(temporary) == NULL) {
         return test_fail("mkdtemp failed");
@@ -1614,7 +1769,9 @@ main(void)
     }
     {
         char rejection[sizeof(error.message)];
+        struct v4_hb_snapshot poisoned;
         int setup_code;
+        int snapshot_code;
         int rejection_errno;
         int abort_code;
 
@@ -1628,10 +1785,17 @@ main(void)
         );
         rejection_errno = error.saved_errno;
         (void)snprintf(rejection, sizeof(rejection), "%s", error.message);
+        snapshot_code = v4_hb_builder_snapshot(
+            attack_builder, &poisoned, &error
+        );
         abort_code = v4_hb_builder_abort(attack_builder, &error);
         if (setup_code != V4_HB_ERROR || rejection_errno != EINVAL ||
             strcmp(rejection,
                    "non-TRACESYSGOOD syscall stop observed") != 0 ||
+            snapshot_code != V4_HB_OK ||
+            poisoned.state != V4_HB_POISONED ||
+            poisoned.gate_value != 1U || poisoned.resume_count != 1U ||
+            poisoned.held_stop_consumed != 0U ||
             abort_code != V4_HB_OK) {
             (void)fprintf(
                 stderr,

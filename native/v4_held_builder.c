@@ -103,6 +103,10 @@ _Static_assert(SYS_mount == 165, "unexpected Linux x86-64 mount syscall");
 _Static_assert(SYS_fchdir == 81, "unexpected Linux x86-64 fchdir syscall");
 _Static_assert(SYS_chroot == 161, "unexpected Linux x86-64 chroot syscall");
 _Static_assert(SYS_chdir == 80, "unexpected Linux x86-64 chdir syscall");
+_Static_assert(SYS_setresgid == 119,
+               "unexpected Linux x86-64 setresgid syscall");
+_Static_assert(SYS_setresuid == 117,
+               "unexpected Linux x86-64 setresuid syscall");
 _Static_assert(
     (CLONE_NEWNS | CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNET |
      CLONE_NEWIPC | SIGCHLD) == V4_HB_FIXED_CLONE_FLAGS,
@@ -518,6 +522,119 @@ v4_hb_parse_decimal_u64(
     }
     *value = result;
     return 0;
+}
+
+static int
+v4_hb_parse_status_id_row(
+    const char *begin,
+    const char *end,
+    uint32_t values[4]
+)
+{
+    const char *cursor = begin;
+    uint32_t index;
+
+    for (index = 0U; index < 4U; ++index) {
+        const char *delimiter = index < 3U ?
+            memchr(cursor, '\t', (size_t)(end - cursor)) : end;
+        uint64_t parsed;
+
+        if (delimiter == NULL || delimiter <= cursor ||
+            (delimiter - cursor > 1 && cursor[0] == '0') ||
+            v4_hb_parse_decimal_u64(cursor, delimiter, &parsed) != 0 ||
+            parsed > UINT32_MAX) {
+            return -1;
+        }
+        values[index] = (uint32_t)parsed;
+        cursor = index < 3U ? delimiter + 1 : delimiter;
+    }
+    return cursor == end ? 0 : -1;
+}
+
+int
+v4_hb_parse_status_credential_rows(
+    const char *payload,
+    size_t payload_bytes,
+    struct v4_hb_status_credential_ids *observer_ids,
+    struct v4_hb_error *error
+)
+{
+    const char *cursor;
+    const char *end;
+    bool seen_uid = false;
+    bool seen_gid = false;
+
+    v4_hb_error_clear(error);
+    if (payload == NULL || observer_ids == NULL || payload_bytes == 0U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "status credential parser input is malformed");
+    }
+    if (payload_bytes > V4_HB_PROC_STATUS_MAX_BYTES) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "status credential payload exceeds cap");
+    }
+    if (payload[payload_bytes - 1U] != '\n' ||
+        memchr(payload, '\0', payload_bytes) != NULL) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "status credential payload is not exact text");
+    }
+    memset(observer_ids, 0, sizeof(*observer_ids));
+    cursor = payload;
+    end = payload + payload_bytes;
+    while (cursor < end) {
+        const char *newline = memchr(cursor, '\n', (size_t)(end - cursor));
+        const char *values_begin;
+        uint32_t values[4];
+        bool is_uid;
+
+        if (newline == NULL) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status credential row is unterminated");
+        }
+        if ((size_t)(newline - cursor) < 4U ||
+            (memcmp(cursor, "Uid:", 4U) != 0 &&
+             memcmp(cursor, "Gid:", 4U) != 0)) {
+            cursor = newline + 1;
+            continue;
+        }
+        is_uid = memcmp(cursor, "Uid:", 4U) == 0;
+        if ((is_uid && seen_uid) || (!is_uid && seen_gid)) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status credential row is duplicate");
+        }
+        if ((!is_uid && !seen_uid) || (is_uid && seen_gid)) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status credential row order is malformed");
+        }
+        if ((size_t)(newline - cursor) < 5U || cursor[4] != '\t') {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status credential row prefix is malformed");
+        }
+        values_begin = cursor + 5;
+        if (v4_hb_parse_status_id_row(values_begin, newline, values) != 0) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "status credential row values are malformed");
+        }
+        if (is_uid) {
+            observer_ids->real_uid = values[0];
+            observer_ids->effective_uid = values[1];
+            observer_ids->saved_uid = values[2];
+            observer_ids->filesystem_uid = values[3];
+            seen_uid = true;
+        } else {
+            observer_ids->real_gid = values[0];
+            observer_ids->effective_gid = values[1];
+            observer_ids->saved_gid = values[2];
+            observer_ids->filesystem_gid = values[3];
+            seen_gid = true;
+        }
+        cursor = newline + 1;
+    }
+    if (!seen_uid || !seen_gid) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "status credential rows are incomplete");
+    }
+    return V4_HB_OK;
 }
 
 static bool
@@ -2181,6 +2298,12 @@ v4_hb_child_gate_loop(_Atomic unsigned int *gate, int input_root_fd)
         0U, 0U, 0U, 0U, 0U
     );
     (void)v4_hb_child_raw_syscall6(
+        SYS_setresgid, 0U, 0U, 0U, 0U, 0U, 0U
+    );
+    (void)v4_hb_child_raw_syscall6(
+        SYS_setresuid, 0U, 0U, 0U, 0U, 0U, 0U
+    );
+    (void)v4_hb_child_raw_syscall6(
         SYS_exit, 0U, 0U, 0U, 0U, 0U, 0U
     );
     __builtin_unreachable();
@@ -2867,7 +2990,7 @@ v4_hb_verify_held_internal(
             setup_information.detail.exit.return_value != 0 ||
             setup_information.detail.exit.is_error != 0U) {
             return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
-                              "final chdir exit stop projection changed");
+                              "final setresuid exit stop projection changed");
         }
         do {
             waited = waitpid(builder->pid, &unexpected_status,
@@ -3419,7 +3542,10 @@ v4_hb_validate_setup_entry(
 {
     static const uint64_t expected_numbers[
         V4_HB_SETUP_PREFIX_OPERATION_COUNT
-    ] = {SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir};
+    ] = {
+        SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
+        SYS_setresgid, SYS_setresuid
+    };
     uint64_t expected_number;
     uint32_t argument_index;
     int raw_entry_wait_status = observation->raw_entry_wait_status;
@@ -3504,6 +3630,19 @@ v4_hb_validate_setup_entry(
             return code;
         }
         break;
+    case V4_HB_SETUP_SETRESGID_ZERO:
+    case V4_HB_SETUP_SETRESUID_ZERO:
+        for (argument_index = 0U; argument_index < 6U; ++argument_index) {
+            if (information->detail.entry.arguments[argument_index] != 0U) {
+                return v4_hb_fail(
+                    error, V4_HB_ERROR, EINVAL,
+                    observation->operation == V4_HB_SETUP_SETRESGID_ZERO ?
+                        "setresgid argument is not exact zero" :
+                        "setresuid argument is not exact zero"
+                );
+            }
+        }
+        break;
     default:
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "unknown setup operation");
@@ -3575,6 +3714,85 @@ v4_hb_observe_child_fs_link(
         return v4_hb_fail(error, V4_HB_ERROR, errno,
                           "child FS observation close failed");
     }
+    return V4_HB_OK;
+}
+
+static bool
+v4_hb_same_status_credential_ids(
+    const struct v4_hb_status_credential_ids *first,
+    const struct v4_hb_status_credential_ids *second
+)
+{
+    return first->real_uid == second->real_uid &&
+        first->effective_uid == second->effective_uid &&
+        first->saved_uid == second->saved_uid &&
+        first->filesystem_uid == second->filesystem_uid &&
+        first->real_gid == second->real_gid &&
+        first->effective_gid == second->effective_gid &&
+        first->saved_gid == second->saved_gid &&
+        first->filesystem_gid == second->filesystem_gid;
+}
+
+static int
+v4_hb_observe_child_credentials(
+    const struct v4_hb_builder *builder,
+    uint64_t *payload_bytes,
+    uint32_t *row_count,
+    struct v4_hb_status_credential_ids *observer_ids,
+    struct v4_hb_status_credential_ids *inner_ids,
+    struct v4_hb_error *error
+)
+{
+    char path[64];
+    char payload[V4_HB_PROC_STATUS_MAX_BYTES];
+    size_t used;
+    uint32_t outside_uid;
+    uint32_t outside_gid;
+    int count;
+    int code;
+
+    count = snprintf(path, sizeof(path), "%ld/status", (long)builder->pid);
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child credential status path exceeds cap");
+    }
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, payload, sizeof(payload), &used, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    code = v4_hb_parse_status_credential_rows(
+        payload, used, observer_ids, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (builder->uid_map.inside_id != 0U ||
+        builder->uid_map.length != 1U ||
+        builder->gid_map.inside_id != 0U ||
+        builder->gid_map.length != 1U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "credential derivation maps are malformed");
+    }
+    outside_uid = builder->uid_map.outside_id;
+    outside_gid = builder->gid_map.outside_id;
+    if (observer_ids->real_uid != outside_uid ||
+        observer_ids->effective_uid != outside_uid ||
+        observer_ids->saved_uid != outside_uid ||
+        observer_ids->filesystem_uid != outside_uid ||
+        observer_ids->real_gid != outside_gid ||
+        observer_ids->effective_gid != outside_gid ||
+        observer_ids->saved_gid != outside_gid ||
+        observer_ids->filesystem_gid != outside_gid) {
+        return v4_hb_fail(
+            error, V4_HB_ERROR, EINVAL,
+            "observer credential projection differs from map outside IDs"
+        );
+    }
+    memset(inner_ids, 0, sizeof(*inner_ids));
+    *payload_bytes = (uint64_t)used;
+    *row_count = 2U;
     return V4_HB_OK;
 }
 
@@ -3778,6 +3996,17 @@ v4_hb_same_setup_prefix(
             second->private_mountinfo_observed &&
         first->mountinfo_byte_count == second->mountinfo_byte_count &&
         first->mountinfo_row_count == second->mountinfo_row_count &&
+        first->credential_status_byte_count ==
+            second->credential_status_byte_count &&
+        first->credential_status_row_count ==
+            second->credential_status_row_count &&
+        v4_hb_same_status_credential_ids(
+            &first->observer_credential_ids,
+            &second->observer_credential_ids
+        ) && v4_hb_same_status_credential_ids(
+            &first->inner_credential_ids,
+            &second->inner_credential_ids
+        ) &&
         v4_hb_same_setup_fs_projection(
             &first->root_projection, &second->root_projection
         ) && v4_hb_same_setup_fs_projection(
@@ -3803,8 +4032,15 @@ v4_hb_validate_setup_prefix_observation(
     const struct v4_orw_kernel_projection *input =
         &builder->root_config.input_root.initial_projection;
     static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
-        SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir
+        SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
+        SYS_setresgid, SYS_setresuid
     };
+    const struct v4_hb_status_credential_ids *observer_ids =
+        &setup->observer_credential_ids;
+    const struct v4_hb_status_credential_ids *inner_ids =
+        &setup->inner_credential_ids;
+    uint32_t outside_uid = builder->uid_map.outside_id;
+    uint32_t outside_gid = builder->gid_map.outside_id;
     uint32_t index;
 
     if (!builder->setup_prefix_complete ||
@@ -3826,6 +4062,22 @@ v4_hb_validate_setup_prefix_observation(
         setup->mountinfo_byte_count > V4_HB_PROC_MOUNTINFO_MAX_BYTES ||
         setup->mountinfo_row_count == 0U ||
         setup->mountinfo_row_count > V4_HB_PROC_MOUNTINFO_MAX_ROWS ||
+        setup->credential_status_byte_count == 0U ||
+        setup->credential_status_byte_count >
+            V4_HB_PROC_STATUS_MAX_BYTES ||
+        setup->credential_status_row_count != 2U ||
+        observer_ids->real_uid != outside_uid ||
+        observer_ids->effective_uid != outside_uid ||
+        observer_ids->saved_uid != outside_uid ||
+        observer_ids->filesystem_uid != outside_uid ||
+        observer_ids->real_gid != outside_gid ||
+        observer_ids->effective_gid != outside_gid ||
+        observer_ids->saved_gid != outside_gid ||
+        observer_ids->filesystem_gid != outside_gid ||
+        inner_ids->real_uid != 0U || inner_ids->effective_uid != 0U ||
+        inner_ids->saved_uid != 0U || inner_ids->filesystem_uid != 0U ||
+        inner_ids->real_gid != 0U || inner_ids->effective_gid != 0U ||
+        inner_ids->saved_gid != 0U || inner_ids->filesystem_gid != 0U ||
         setup->root_projection.device != input->st_dev ||
         setup->root_projection.inode != input->st_ino ||
         setup->root_projection.mount_id != input->mount_id ||
@@ -3839,8 +4091,9 @@ v4_hb_validate_setup_prefix_observation(
     for (index = 0U; index < V4_HB_SETUP_PREFIX_OPERATION_COUNT; ++index) {
         const struct v4_hb_setup_syscall_observation *operation =
             &setup->operations[index];
-        uint32_t expected_path_bytes = index == 1U ?
-            0U : V4_HB_SETUP_PATH_CAP;
+        uint32_t expected_path_bytes =
+            (index == 0U || index == 2U || index == 3U) ?
+                V4_HB_SETUP_PATH_CAP : 0U;
         uint8_t expected_path = index == 2U ? '.' : '/';
         bool arguments_exact = true;
         uint32_t argument_index;
@@ -3859,9 +4112,14 @@ v4_hb_validate_setup_prefix_observation(
                  argument_index < 6U; ++argument_index) {
                 arguments_exact = operation->arguments[argument_index] == 0U;
             }
-        } else {
+        } else if (index == 2U || index == 3U) {
             arguments_exact = operation->arguments[0] != 0U;
             for (argument_index = 1U; arguments_exact &&
+                 argument_index < 6U; ++argument_index) {
+                arguments_exact = operation->arguments[argument_index] == 0U;
+            }
+        } else {
+            for (argument_index = 0U; arguments_exact &&
                  argument_index < 6U; ++argument_index) {
                 arguments_exact = operation->arguments[argument_index] == 0U;
             }
@@ -4036,9 +4294,17 @@ v4_hb_builder_run_setup_prefix(
         }
     }
     setup.ptrace_syscall_resume_count = builder->resume_count;
-    code = v4_hb_observe_child_fs_link(
-        builder, "root", &setup.root_projection, error
+    code = v4_hb_observe_child_credentials(
+        builder, &setup.credential_status_byte_count,
+        &setup.credential_status_row_count,
+        &setup.observer_credential_ids,
+        &setup.inner_credential_ids, error
     );
+    if (code == V4_HB_OK) {
+        code = v4_hb_observe_child_fs_link(
+            builder, "root", &setup.root_projection, error
+        );
+    }
     if (code == V4_HB_OK) {
         code = v4_hb_observe_child_fs_link(
             builder, "cwd", &setup.cwd_projection, error
