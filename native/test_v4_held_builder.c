@@ -17,6 +17,14 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+static const unsigned long expected_namespace_flags[V4_HB_NAMESPACE_COUNT] = {
+    CLONE_NEWUSER,
+    CLONE_NEWNS,
+    CLONE_NEWPID,
+    CLONE_NEWNET,
+    CLONE_NEWIPC,
+};
+
 static int
 test_fail(const char *message)
 {
@@ -86,6 +94,120 @@ enter_private_mount_namespace(void)
 }
 
 static bool
+initial_namespace_capture_is_exact(const struct v4_hb_snapshot *snapshot)
+{
+    uint32_t index;
+
+    if (snapshot->clone_flags != V4_HB_FIXED_CLONE_FLAGS ||
+        snapshot->namespace_count != V4_HB_NAMESPACE_COUNT ||
+        snapshot->observer_effective_uid != (uint32_t)geteuid() ||
+        snapshot->observer_effective_gid != (uint32_t)getegid() ||
+        snapshot->observer_setgroups_denied > 1U ||
+        snapshot->child_nspid != 0U ||
+        snapshot->uid_map_write_count != 0U ||
+        snapshot->setgroups_deny_write_count != 0U ||
+        snapshot->gid_map_write_count != 0U ||
+        snapshot->uid_map_write_order != 0U ||
+        snapshot->setgroups_deny_write_order != 0U ||
+        snapshot->gid_map_write_order != 0U) {
+        return false;
+    }
+    for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
+        const struct v4_hb_namespace_projection *parent =
+            &snapshot->parent_namespaces[index];
+        const struct v4_hb_namespace_projection *child =
+            &snapshot->child_namespaces[index];
+
+        if (parent->index != index ||
+            parent->clone_flag != expected_namespace_flags[index] ||
+            parent->descriptor < 0 ||
+            parent->descriptor_flags != FD_CLOEXEC ||
+            (parent->status_flags & O_ACCMODE) != O_RDONLY ||
+            parent->device == 0U || parent->inode == 0U ||
+            parent->link_count != 1U ||
+            (parent->mode & S_IFMT) != S_IFREG ||
+            (parent->mode & 07777U) != 0444U ||
+            parent->namespace_type != (int)expected_namespace_flags[index] ||
+            child->descriptor != -1) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool
+namespace_boundary_is_exact(const struct v4_hb_snapshot *snapshot)
+{
+    uint32_t first;
+
+    if (snapshot->clone_flags != V4_HB_FIXED_CLONE_FLAGS ||
+        snapshot->namespace_count != V4_HB_NAMESPACE_COUNT ||
+        snapshot->observer_effective_uid != (uint32_t)geteuid() ||
+        snapshot->observer_effective_gid != (uint32_t)getegid() ||
+        snapshot->observer_setgroups_denied > 1U ||
+        snapshot->child_nspid != 1U ||
+        snapshot->uid_map_write_count != 1U ||
+        snapshot->setgroups_deny_write_count != 1U ||
+        snapshot->gid_map_write_count != 1U ||
+        snapshot->uid_map_write_order != 1U ||
+        snapshot->setgroups_deny_write_order != 2U ||
+        snapshot->gid_map_write_order != 3U ||
+        snapshot->uid_map.inside_id != 0U ||
+        snapshot->uid_map.outside_id != (uint32_t)geteuid() ||
+        snapshot->uid_map.length != 1U ||
+        snapshot->gid_map.inside_id != 0U ||
+        snapshot->gid_map.outside_id != (uint32_t)getegid() ||
+        snapshot->gid_map.length != 1U) {
+        return false;
+    }
+    for (first = 0; first < V4_HB_NAMESPACE_COUNT; ++first) {
+        const struct v4_hb_namespace_projection *parent =
+            &snapshot->parent_namespaces[first];
+        const struct v4_hb_namespace_projection *child =
+            &snapshot->child_namespaces[first];
+        uint32_t second;
+
+        if (parent->index != first || child->index != first ||
+            parent->clone_flag != expected_namespace_flags[first] ||
+            child->clone_flag != expected_namespace_flags[first] ||
+            parent->descriptor < 0 || child->descriptor < 0 ||
+            parent->descriptor == child->descriptor ||
+            parent->descriptor_flags != FD_CLOEXEC ||
+            child->descriptor_flags != FD_CLOEXEC ||
+            (parent->status_flags & O_ACCMODE) != O_RDONLY ||
+            (child->status_flags & O_ACCMODE) != O_RDONLY ||
+            parent->device == 0U || parent->inode == 0U ||
+            child->device == 0U || child->inode == 0U ||
+            parent->link_count != 1U || child->link_count != 1U ||
+            (parent->mode & S_IFMT) != S_IFREG ||
+            (child->mode & S_IFMT) != S_IFREG ||
+            (parent->mode & 07777U) != 0444U ||
+            (child->mode & 07777U) != 0444U ||
+            parent->filesystem_type != child->filesystem_type ||
+            parent->namespace_type != (int)expected_namespace_flags[first] ||
+            child->namespace_type != (int)expected_namespace_flags[first] ||
+            (parent->device == child->device &&
+             parent->inode == child->inode)) {
+            return false;
+        }
+        for (second = 0; second < V4_HB_NAMESPACE_COUNT; ++second) {
+            if (first != second &&
+                (parent->descriptor ==
+                     snapshot->parent_namespaces[second].descriptor ||
+                 child->descriptor ==
+                     snapshot->child_namespaces[second].descriptor ||
+                 parent->descriptor ==
+                     snapshot->child_namespaces[second].descriptor ||
+                 child->descriptor ==
+                     snapshot->parent_namespaces[second].descriptor)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool
 initial_snapshot_is_exact(const struct v4_hb_snapshot *snapshot)
 {
     return snapshot->pid > 0 && snapshot->start_ticks > 0 &&
@@ -93,7 +215,8 @@ initial_snapshot_is_exact(const struct v4_hb_snapshot *snapshot)
         snapshot->gate_value == 0 && snapshot->raw_interrupt_wait_status == 0 &&
         snapshot->seize_count == 0 && snapshot->interrupt_count == 0 &&
         snapshot->interrupt_event_stop_count == 0 &&
-        snapshot->resume_count == 0 && snapshot->held_stop_consumed == 0;
+        snapshot->resume_count == 0 && snapshot->held_stop_consumed == 0 &&
+        initial_namespace_capture_is_exact(snapshot);
 }
 
 static bool
@@ -107,7 +230,7 @@ held_snapshot_is_exact(const struct v4_hb_snapshot *snapshot)
         WIFSTOPPED(snapshot->raw_interrupt_wait_status) &&
         WSTOPSIG(snapshot->raw_interrupt_wait_status) == SIGTRAP &&
         (unsigned int)snapshot->raw_interrupt_wait_status >> 16 ==
-            PTRACE_EVENT_STOP;
+            PTRACE_EVENT_STOP && namespace_boundary_is_exact(snapshot);
 }
 
 static int
@@ -136,6 +259,51 @@ expect_snapshot_splices_reject(
     }
     splice = *held;
     ++splice.pidfd;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    splice.clone_flags ^= CLONE_NEWUTS;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    --splice.namespace_count;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    ++splice.observer_effective_uid;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    splice.observer_setgroups_denied ^= 1U;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    ++splice.child_nspid;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    ++splice.uid_map.outside_id;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    ++splice.setgroups_deny_write_order;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    ++splice.child_namespaces[0].inode;
+    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
+        return -1;
+    }
+    splice = *held;
+    ++splice.parent_namespaces[1].descriptor;
     if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
         return -1;
     }
@@ -199,13 +367,18 @@ main(void)
     struct v4_hb_error error;
     int root_fd = -1;
     int saved_pidfd = -1;
+    int saved_parent_namespace_fds[V4_HB_NAMESPACE_COUNT];
+    int saved_child_namespace_fds[V4_HB_NAMESPACE_COUNT];
+    uint32_t namespace_index;
     int status = 1;
     bool mounted = false;
     int code;
 
     if (V4_HB_FIXED_PTRACE_OPTIONS_MASK != 0x0010007fUL ||
-        V4_HB_PTRACE_OPTION_COUNT != 8U) {
-        return test_fail("fixed V4 ptrace option identity drifted");
+        V4_HB_PTRACE_OPTION_COUNT != 8U ||
+        V4_HB_FIXED_CLONE_FLAGS != 0x78020011UL ||
+        V4_HB_NAMESPACE_COUNT != 5U) {
+        return test_fail("fixed V4 ptrace/namespace identity drifted");
     }
     if (mkdtemp(temporary) == NULL) {
         return test_fail("mkdtemp failed");
@@ -281,6 +454,14 @@ main(void)
         goto cleanup_anchor;
     }
     saved_pidfd = completed.pidfd;
+    for (namespace_index = 0;
+         namespace_index < V4_HB_NAMESPACE_COUNT;
+         ++namespace_index) {
+        saved_parent_namespace_fds[namespace_index] =
+            completed.parent_namespaces[namespace_index].descriptor;
+        saved_child_namespace_fds[namespace_index] =
+            completed.child_namespaces[namespace_index].descriptor;
+    }
     if (v4_hb_builder_release_and_reap(
             builder, &completion, &error
         ) != V4_HB_OK ||
@@ -294,6 +475,17 @@ main(void)
         fcntl(saved_pidfd, F_GETFD) != -1 || errno != EBADF) {
         (void)fprintf(stderr, "FAIL: controlled release: %s\n", error.message);
         goto cleanup_anchor;
+    }
+    for (namespace_index = 0;
+         namespace_index < V4_HB_NAMESPACE_COUNT;
+         ++namespace_index) {
+        if (fcntl(saved_parent_namespace_fds[namespace_index], F_GETFD) != -1 ||
+            errno != EBADF ||
+            fcntl(saved_child_namespace_fds[namespace_index], F_GETFD) != -1 ||
+            errno != EBADF) {
+            (void)test_fail("retained namespace descriptors were not closed");
+            goto cleanup_anchor;
+        }
     }
     v4_hb_builder_destroy(builder);
     builder = NULL;
@@ -393,6 +585,67 @@ main(void)
                 stderr, "FAIL: pidfd substitution abort=%d: %s\n",
                 code, error.message
             );
+            goto cleanup_anchor;
+        }
+    }
+    v4_hb_builder_destroy(alias_builder);
+    alias_builder = NULL;
+
+    code = v4_hb_builder_start(&alias_builder, &error);
+    if (code != V4_HB_OK ||
+        hold_and_prewalk(
+            alias_builder, &anchor, &ledger, &held, &error
+        ) != V4_HB_OK) {
+        (void)test_fail("cannot establish namespace-OFD boundary");
+        goto cleanup_anchor;
+    }
+    {
+        char path[64];
+        int replacement;
+        int primary = held.child_namespaces[0].descriptor;
+
+        if (snprintf(path, sizeof(path), "/proc/%ld/ns/user",
+                     (long)held.pid) < 0 || close(primary) != 0) {
+            (void)test_fail("cannot begin namespace-OFD substitution");
+            goto cleanup_anchor;
+        }
+        replacement = open(path, O_RDONLY | O_CLOEXEC);
+        if (replacement < 0 ||
+            (replacement != primary &&
+             (dup3(replacement, primary, O_CLOEXEC) < 0 ||
+              close(replacement) != 0))) {
+            (void)test_fail("cannot force namespace-OFD number reuse");
+            goto cleanup_anchor;
+        }
+        if (v4_hb_builder_verify_held(
+                alias_builder, &held, &error
+            ) != V4_HB_ERROR ||
+            v4_hb_builder_abort(alias_builder, &error) != V4_HB_OK) {
+            (void)test_fail("namespace-OFD substitution did not fail closed");
+            goto cleanup_anchor;
+        }
+    }
+    v4_hb_builder_destroy(alias_builder);
+    alias_builder = NULL;
+
+    code = v4_hb_builder_start(&alias_builder, &error);
+    if (code != V4_HB_OK ||
+        hold_and_prewalk(
+            alias_builder, &anchor, &ledger, &held, &error
+        ) != V4_HB_OK) {
+        (void)test_fail("cannot establish namespace-splice boundary");
+        goto cleanup_anchor;
+    }
+    {
+        int child_descriptor = held.child_namespaces[0].descriptor;
+        int parent_descriptor = held.parent_namespaces[0].descriptor;
+
+        if (dup3(parent_descriptor, child_descriptor, O_CLOEXEC) < 0 ||
+            v4_hb_builder_verify_held(
+                alias_builder, &held, &error
+            ) != V4_HB_ERROR ||
+            v4_hb_builder_abort(alias_builder, &error) != V4_HB_OK) {
+            (void)test_fail("parent/child namespace splice did not fail closed");
             goto cleanup_anchor;
         }
     }

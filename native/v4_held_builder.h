@@ -8,12 +8,17 @@
 
 /*
  * This is a process-local lifecycle primitive, not an authority record.
- * start_ticks is observed from procfs.  The counters and state are logical
- * values owned by this one long-lived native parent.
+ * start_ticks, namespace projections and ID maps are live kernel/procfs
+ * observations retained and rejoined by this one long-lived native parent.
+ * Counters and state are process-local logical values; it does not claim a
+ * kernel descriptor/OFD generation.  Nothing in this header is a serialized
+ * receipt or authority record.
  */
 
 #define V4_HB_PTRACE_OPTION_COUNT 8U
 #define V4_HB_FIXED_PTRACE_OPTIONS_MASK 0x0010007fUL
+#define V4_HB_NAMESPACE_COUNT 5U
+#define V4_HB_FIXED_CLONE_FLAGS 0x78020011UL
 
 enum v4_hb_result {
     V4_HB_OK = 0,
@@ -35,6 +40,26 @@ struct v4_hb_error {
     char message[256];
 };
 
+struct v4_hb_namespace_projection {
+    uint32_t index;
+    unsigned long clone_flag;
+    int descriptor;
+    int descriptor_flags;
+    int status_flags;
+    uint64_t device;
+    uint64_t inode;
+    uint64_t link_count;
+    uint32_t mode;
+    long filesystem_type;
+    int namespace_type;
+};
+
+struct v4_hb_id_map_projection {
+    uint32_t inside_id;
+    uint32_t outside_id;
+    uint32_t length;
+};
+
 struct v4_hb_snapshot {
     pid_t pid;
     uint64_t start_ticks;
@@ -47,6 +72,26 @@ struct v4_hb_snapshot {
     uint32_t interrupt_event_stop_count;
     uint32_t resume_count;
     uint32_t held_stop_consumed;
+    unsigned long clone_flags;
+    uint32_t namespace_count;
+    uint32_t observer_effective_uid;
+    uint32_t observer_effective_gid;
+    uint32_t observer_setgroups_denied;
+    uint32_t child_nspid;
+    uint32_t uid_map_write_count;
+    uint32_t setgroups_deny_write_count;
+    uint32_t gid_map_write_count;
+    uint32_t uid_map_write_order;
+    uint32_t setgroups_deny_write_order;
+    uint32_t gid_map_write_order;
+    struct v4_hb_id_map_projection uid_map;
+    struct v4_hb_id_map_projection gid_map;
+    struct v4_hb_namespace_projection parent_namespaces[
+        V4_HB_NAMESPACE_COUNT
+    ];
+    struct v4_hb_namespace_projection child_namespaces[
+        V4_HB_NAMESPACE_COUNT
+    ];
 };
 
 struct v4_hb_completion {

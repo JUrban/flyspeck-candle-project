@@ -77,6 +77,32 @@ class V4HeldBuilderTests(unittest.TestCase):
         self.assertIn("PTRACE_INTERRUPT", source)
         self.assertIn("PTRACE_EVENT_STOP", source)
         self.assertIn("SYS_clone", source)
+        self.assertIn("V4_HB_FIXED_CLONE_FLAGS", source)
+        self.assertIn("CLONE_NEWNS", source)
+        self.assertIn("CLONE_NEWUSER", source)
+        self.assertIn("CLONE_NEWPID", source)
+        self.assertIn("CLONE_NEWNET", source)
+        self.assertIn("CLONE_NEWIPC", source)
+        self.assertNotIn("CLONE_NEWUTS", source)
+        self.assertNotIn("CLONE_FILES", source)
+        self.assertNotIn("CLONE_FS", source)
+        self.assertNotIn("CLONE_VM", source)
+        self.assertNotIn("ptrace(PTRACE_SYSCALL", source)
+        self.assertNotIn("seccomp", source.lower())
+        uid_order = source.index("uid_map_write_order = 1U")
+        setgroups_order = source.index("setgroups_deny_write_order = 2U")
+        gid_order = source.index("gid_map_write_order = 3U")
+        self.assertLess(uid_order, setgroups_order)
+        self.assertLess(setgroups_order, gid_order)
+        interrupt = source.index("if (ptrace(PTRACE_INTERRUPT")
+        event_consumed = source.index(
+            "builder->held_stop_consumed = 1", interrupt
+        )
+        map_capture = source.index(
+            "code = v4_hb_configure_child_id_maps", event_consumed
+        )
+        self.assertLess(interrupt, event_consumed)
+        self.assertLess(event_consumed, map_capture)
 
 
 if __name__ == "__main__":

@@ -7,7 +7,10 @@
 #include <fcntl.h>
 #include <linux/audit.h>
 #include <linux/kcmp.h>
+#include <linux/magic.h>
+#include <linux/nsfs.h>
 #include <poll.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdatomic.h>
@@ -16,8 +19,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/ioctl.h>
 #include <sys/ptrace.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/uio.h>
 #include <sys/user.h>
 #include <sys/wait.h>
@@ -38,6 +44,7 @@
 
 #define V4_HB_PROC_STAT_MAX_BYTES 4096U
 #define V4_HB_PROC_STATUS_MAX_BYTES 16384U
+#define V4_HB_PROC_MAP_MAX_BYTES 4096U
 #define V4_HB_ABORT_WAIT_LIMIT 16U
 #define V4_HB_WAIT_ATTEMPT_LIMIT 5000U
 #define V4_HB_WAIT_POLL_MILLISECONDS 1
@@ -66,6 +73,21 @@ _Static_assert(PTRACE_O_EXITKILL == 0x00100000,
                "unexpected PTRACE_O_EXITKILL value");
 _Static_assert(AUDIT_ARCH_X86_64 == 0xc000003eU,
                "unexpected Linux x86-64 audit architecture");
+_Static_assert(CLONE_NEWNS == 0x00020000,
+               "unexpected CLONE_NEWNS value");
+_Static_assert(CLONE_NEWIPC == 0x08000000,
+               "unexpected CLONE_NEWIPC value");
+_Static_assert(CLONE_NEWUSER == 0x10000000,
+               "unexpected CLONE_NEWUSER value");
+_Static_assert(CLONE_NEWPID == 0x20000000,
+               "unexpected CLONE_NEWPID value");
+_Static_assert(CLONE_NEWNET == 0x40000000,
+               "unexpected CLONE_NEWNET value");
+_Static_assert(
+    (CLONE_NEWNS | CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNET |
+     CLONE_NEWIPC | SIGCHLD) == V4_HB_FIXED_CLONE_FLAGS,
+    "fixed V4 five-namespace clone flags drifted"
+);
 _Static_assert(
     (PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK |
      PTRACE_O_TRACECLONE | PTRACE_O_TRACEVFORKDONE | PTRACE_O_TRACEEXEC |
@@ -90,6 +112,43 @@ struct v4_hb_builder {
     uint32_t interrupt_event_stop_count;
     uint32_t resume_count;
     uint32_t held_stop_consumed;
+    int proc_root_fd;
+    int proc_root_guard;
+    int proc_root_status_flags;
+    uid_t observer_effective_uid;
+    gid_t observer_effective_gid;
+    bool observer_setgroups_denied;
+    uint32_t child_nspid;
+    uint32_t uid_map_write_count;
+    uint32_t setgroups_deny_write_count;
+    uint32_t gid_map_write_count;
+    uint32_t uid_map_write_order;
+    uint32_t setgroups_deny_write_order;
+    uint32_t gid_map_write_order;
+    struct v4_hb_id_map_projection uid_map;
+    struct v4_hb_id_map_projection gid_map;
+    struct v4_hb_namespace_projection parent_namespaces[
+        V4_HB_NAMESPACE_COUNT
+    ];
+    struct v4_hb_namespace_projection child_namespaces[
+        V4_HB_NAMESPACE_COUNT
+    ];
+    int parent_namespace_guards[V4_HB_NAMESPACE_COUNT];
+    int child_namespace_guards[V4_HB_NAMESPACE_COUNT];
+};
+
+struct v4_hb_namespace_specification {
+    const char *name;
+    unsigned long clone_flag;
+};
+
+static const struct v4_hb_namespace_specification
+v4_hb_namespace_specifications[V4_HB_NAMESPACE_COUNT] = {
+    {"user", CLONE_NEWUSER},
+    {"mnt", CLONE_NEWNS},
+    {"pid", CLONE_NEWPID},
+    {"net", CLONE_NEWNET},
+    {"ipc", CLONE_NEWIPC},
 };
 
 struct v4_hb_ptrace_syscall_base {
@@ -130,9 +189,94 @@ v4_hb_error_clear(struct v4_hb_error *error)
     }
 }
 
+static bool
+v4_hb_unsupported_observation_errno(int saved_errno)
+{
+    return saved_errno == ENOSYS || saved_errno == EINVAL ||
+        saved_errno == ENOENT || saved_errno == ENOTTY ||
+        saved_errno == EPERM || saved_errno == EACCES;
+}
+
 static int
-v4_hb_read_bounded_proc(
-    const char *path,
+v4_hb_verify_same_ofd(
+    int primary,
+    int guard,
+    const char *label,
+    struct v4_hb_error *error
+)
+{
+    struct stat primary_status;
+    struct stat guard_status;
+    int primary_descriptor_flags;
+    int guard_descriptor_flags;
+    int primary_status_flags;
+    int guard_status_flags;
+    long comparison;
+
+    if (primary < 0 || guard < 0 || primary == guard) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "%s descriptor pair is malformed", label);
+    }
+    primary_descriptor_flags = fcntl(primary, F_GETFD);
+    if (primary_descriptor_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "%s primary F_GETFD failed", label);
+    }
+    guard_descriptor_flags = fcntl(guard, F_GETFD);
+    if (guard_descriptor_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "%s guard F_GETFD failed", label);
+    }
+    primary_status_flags = fcntl(primary, F_GETFL);
+    if (primary_status_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "%s primary F_GETFL failed", label);
+    }
+    guard_status_flags = fcntl(guard, F_GETFL);
+    if (guard_status_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "%s guard F_GETFL failed", label);
+    }
+    if (fstat(primary, &primary_status) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "%s primary fstat failed", label);
+    }
+    if (fstat(guard, &guard_status) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "%s guard fstat failed", label);
+    }
+    if (primary_descriptor_flags != FD_CLOEXEC ||
+        guard_descriptor_flags != FD_CLOEXEC ||
+        primary_status_flags != guard_status_flags ||
+        primary_status.st_dev != guard_status.st_dev ||
+        primary_status.st_ino != guard_status.st_ino ||
+        primary_status.st_mode != guard_status.st_mode ||
+        primary_status.st_nlink != guard_status.st_nlink) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "%s guarded projection changed", label);
+    }
+    comparison = syscall(
+        SYS_kcmp, getpid(), getpid(), KCMP_FILE,
+        (unsigned long)primary, (unsigned long)guard
+    );
+    if (comparison == 0) {
+        return V4_HB_OK;
+    }
+    if (comparison < 0 &&
+        (errno == ENOSYS || errno == EPERM || errno == EACCES)) {
+        return v4_hb_fail(error, V4_HB_UNSUPPORTED, errno,
+                          "KCMP_FILE cannot verify %s alias", label);
+    }
+    return v4_hb_fail(
+        error, V4_HB_ERROR, comparison < 0 ? errno : EINVAL,
+        "%s descriptor no longer names its guarded OFD", label
+    );
+}
+
+static int
+v4_hb_read_bounded_proc_at(
+    const struct v4_hb_builder *builder,
+    const char *relative_path,
     char *buffer,
     size_t capacity,
     size_t *used,
@@ -140,15 +284,22 @@ v4_hb_read_bounded_proc(
 )
 {
     size_t offset = 0;
-    int fd = open(path, O_RDONLY | O_CLOEXEC);
+    int fd;
 
+    if (builder == NULL || builder->proc_root_fd < 0 ||
+        relative_path == NULL || relative_path[0] == '/' ||
+        buffer == NULL || capacity == 0 || used == NULL) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "malformed descriptor-rooted proc read");
+    }
+    do {
+        fd = openat(builder->proc_root_fd, relative_path,
+                    O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    } while (fd < 0 && errno == EINTR);
     if (fd < 0) {
         int saved_errno = errno;
-        int code = (saved_errno == ENOENT || saved_errno == EACCES ||
-                    saved_errno == EPERM) ?
-            V4_HB_UNSUPPORTED : V4_HB_ERROR;
-        return v4_hb_fail(error, code, saved_errno,
-                          "required proc observation is unavailable");
+        return v4_hb_fail(error, V4_HB_ERROR, saved_errno,
+                          "descriptor-rooted proc read open failed");
     }
     for (;;) {
         ssize_t count = read(fd, buffer + offset, capacity - offset);
@@ -159,7 +310,7 @@ v4_hb_read_bounded_proc(
             int saved_errno = errno;
             (void)close(fd);
             return v4_hb_fail(error, V4_HB_ERROR, saved_errno,
-                              "required proc observation read failed");
+                              "descriptor-rooted proc read failed");
         }
         if (count == 0) {
             break;
@@ -167,40 +318,90 @@ v4_hb_read_bounded_proc(
         offset += (size_t)count;
         if (offset == capacity) {
             char extra;
-            int close_errno;
-            int close_result;
-            int extra_errno;
             ssize_t extra_count;
             do {
                 extra_count = read(fd, &extra, 1);
             } while (extra_count < 0 && errno == EINTR);
-            extra_errno = extra_count < 0 ? errno : 0;
-            close_result = close(fd);
-            close_errno = close_result != 0 ? errno : 0;
             if (extra_count < 0) {
+                int saved_errno = errno;
+                (void)close(fd);
                 return v4_hb_fail(
-                    error, V4_HB_ERROR, extra_errno,
-                    "required proc observation cap probe failed"
+                    error, V4_HB_ERROR, saved_errno,
+                    "descriptor-rooted proc cap probe failed"
                 );
             }
-            if (extra_count > 0) {
+            if (extra_count != 0) {
+                (void)close(fd);
                 return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
-                                  "required proc observation exceeds cap");
+                                  "descriptor-rooted proc read exceeds cap");
             }
-            if (close_result != 0) {
-                return v4_hb_fail(error, V4_HB_ERROR, close_errno,
-                                  "required proc observation close failed");
-            }
-            *used = offset;
-            return V4_HB_OK;
+            break;
         }
     }
     if (close(fd) != 0) {
         return v4_hb_fail(error, V4_HB_ERROR, errno,
-                          "required proc observation close failed");
+                          "descriptor-rooted proc read close failed");
     }
     *used = offset;
     return V4_HB_OK;
+}
+
+static int
+v4_hb_capture_proc_root(
+    struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    struct statfs filesystem;
+    int descriptor_flags;
+
+    do {
+        builder->proc_root_fd = open(
+            "/proc", O_PATH | O_DIRECTORY | O_CLOEXEC | O_NOFOLLOW
+        );
+    } while (builder->proc_root_fd < 0 && errno == EINTR);
+    if (builder->proc_root_fd < 0) {
+        int saved_errno = errno;
+        return v4_hb_fail(
+            error,
+            v4_hb_unsupported_observation_errno(saved_errno) ?
+                V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            saved_errno, "cannot retain the proc root descriptor"
+        );
+    }
+    descriptor_flags = fcntl(builder->proc_root_fd, F_GETFD);
+    if (descriptor_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "proc root F_GETFD failed");
+    }
+    builder->proc_root_status_flags = fcntl(builder->proc_root_fd, F_GETFL);
+    if (builder->proc_root_status_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "proc root F_GETFL failed");
+    }
+    if (descriptor_flags != FD_CLOEXEC ||
+        (builder->proc_root_status_flags & O_PATH) != O_PATH) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "proc root fcntl projection is malformed");
+    }
+    if (fstatfs(builder->proc_root_fd, &filesystem) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "proc root fstatfs failed");
+    }
+    if ((unsigned long)filesystem.f_type != (unsigned long)PROC_SUPER_MAGIC) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "retained proc root is not procfs");
+    }
+    builder->proc_root_guard = fcntl(
+        builder->proc_root_fd, F_DUPFD_CLOEXEC, 3
+    );
+    if (builder->proc_root_guard < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "cannot retain proc root guard alias");
+    }
+    return v4_hb_verify_same_ofd(
+        builder->proc_root_fd, builder->proc_root_guard, "proc root", error
+    );
 }
 
 static int
@@ -231,8 +432,320 @@ v4_hb_parse_decimal_u64(
     return 0;
 }
 
+static bool
+v4_hb_same_namespace_projection(
+    const struct v4_hb_namespace_projection *first,
+    const struct v4_hb_namespace_projection *second,
+    bool include_descriptor
+)
+{
+    return first->index == second->index &&
+        first->clone_flag == second->clone_flag &&
+        (!include_descriptor || first->descriptor == second->descriptor) &&
+        first->descriptor_flags == second->descriptor_flags &&
+        first->status_flags == second->status_flags &&
+        first->device == second->device &&
+        first->inode == second->inode &&
+        first->link_count == second->link_count &&
+        first->mode == second->mode &&
+        first->filesystem_type == second->filesystem_type &&
+        first->namespace_type == second->namespace_type;
+}
+
+static int
+v4_hb_observe_namespace_descriptor(
+    int descriptor,
+    uint32_t index,
+    unsigned long clone_flag,
+    bool unsupported_allowed,
+    struct v4_hb_namespace_projection *projection,
+    struct v4_hb_error *error
+)
+{
+    struct stat status;
+    struct statfs filesystem;
+    int descriptor_flags;
+    int status_flags;
+    int namespace_type;
+
+    if (descriptor < 0 || index >= V4_HB_NAMESPACE_COUNT ||
+        projection == NULL ||
+        clone_flag != v4_hb_namespace_specifications[index].clone_flag) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "malformed namespace projection request");
+    }
+    descriptor_flags = fcntl(descriptor, F_GETFD);
+    if (descriptor_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "namespace F_GETFD failed");
+    }
+    status_flags = fcntl(descriptor, F_GETFL);
+    if (status_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "namespace F_GETFL failed");
+    }
+    if (fstat(descriptor, &status) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "namespace fstat failed");
+    }
+    if (fstatfs(descriptor, &filesystem) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "namespace fstatfs failed");
+    }
+    namespace_type = ioctl(descriptor, NS_GET_NSTYPE);
+    if (namespace_type < 0) {
+        int saved_errno = errno;
+        return v4_hb_fail(
+            error,
+            unsupported_allowed &&
+                v4_hb_unsupported_observation_errno(saved_errno) ?
+                V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            saved_errno, "NS_GET_NSTYPE is unavailable"
+        );
+    }
+    if (descriptor_flags != FD_CLOEXEC ||
+        (status_flags & O_ACCMODE) != O_RDONLY ||
+        !S_ISREG(status.st_mode) ||
+        (status.st_mode & 07777U) != 0444U || status.st_nlink != 1 ||
+        (unsigned long)filesystem.f_type != (unsigned long)NSFS_MAGIC ||
+        (unsigned long)namespace_type != clone_flag) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "namespace descriptor projection is not exact");
+    }
+    memset(projection, 0, sizeof(*projection));
+    projection->index = index;
+    projection->clone_flag = clone_flag;
+    projection->descriptor = descriptor;
+    projection->descriptor_flags = descriptor_flags;
+    projection->status_flags = status_flags;
+    projection->device = (uint64_t)status.st_dev;
+    projection->inode = (uint64_t)status.st_ino;
+    projection->link_count = (uint64_t)status.st_nlink;
+    projection->mode = (uint32_t)status.st_mode;
+    projection->filesystem_type = filesystem.f_type;
+    projection->namespace_type = namespace_type;
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_namespace_relative_path(
+    char *path,
+    size_t capacity,
+    pid_t pid,
+    uint32_t index
+)
+{
+    int count;
+
+    if (path == NULL || capacity == 0 ||
+        index >= V4_HB_NAMESPACE_COUNT || pid < 0) {
+        return -1;
+    }
+    if (pid == 0) {
+        count = snprintf(
+            path, capacity, "self/ns/%s",
+            v4_hb_namespace_specifications[index].name
+        );
+    } else {
+        count = snprintf(
+            path, capacity, "%ld/ns/%s", (long)pid,
+            v4_hb_namespace_specifications[index].name
+        );
+    }
+    return count >= 0 && (size_t)count < capacity ? 0 : -1;
+}
+
+static int
+v4_hb_capture_namespace_set(
+    struct v4_hb_builder *builder,
+    pid_t pid,
+    struct v4_hb_namespace_projection projections[V4_HB_NAMESPACE_COUNT],
+    int guards[V4_HB_NAMESPACE_COUNT],
+    struct v4_hb_error *error
+)
+{
+    uint32_t index;
+
+    for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
+        char path[64];
+        int descriptor;
+        int code;
+
+        if (v4_hb_namespace_relative_path(
+                path, sizeof(path), pid, index
+            ) != 0) {
+            return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                              "namespace proc path exceeds its cap");
+        }
+        do {
+            descriptor = openat(
+                builder->proc_root_fd, path, O_RDONLY | O_CLOEXEC
+            );
+        } while (descriptor < 0 && errno == EINTR);
+        if (descriptor < 0) {
+            int saved_errno = errno;
+            return v4_hb_fail(
+                error,
+                pid == 0 &&
+                    v4_hb_unsupported_observation_errno(saved_errno) ?
+                    V4_HB_UNSUPPORTED : V4_HB_ERROR,
+                saved_errno, "cannot retain namespace descriptor"
+            );
+        }
+        projections[index].descriptor = descriptor;
+        code = v4_hb_observe_namespace_descriptor(
+            descriptor, index,
+            v4_hb_namespace_specifications[index].clone_flag,
+            true,
+            &projections[index], error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        guards[index] = fcntl(descriptor, F_DUPFD_CLOEXEC, 3);
+        if (guards[index] < 0) {
+            return v4_hb_fail(error, V4_HB_ERROR, errno,
+                              "cannot retain namespace guard alias");
+        }
+        code = v4_hb_verify_same_ofd(
+            descriptor, guards[index], "namespace", error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_verify_proc_root(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    struct statfs filesystem;
+    int descriptor_flags;
+    int status_flags;
+    int code;
+
+    if (builder == NULL || builder->proc_root_fd < 0 ||
+        builder->proc_root_guard < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "retained proc root state is malformed");
+    }
+    descriptor_flags = fcntl(builder->proc_root_fd, F_GETFD);
+    if (descriptor_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "retained proc root F_GETFD failed");
+    }
+    status_flags = fcntl(builder->proc_root_fd, F_GETFL);
+    if (status_flags < 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "retained proc root F_GETFL failed");
+    }
+    if (descriptor_flags != FD_CLOEXEC ||
+        status_flags != builder->proc_root_status_flags) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "retained proc root projection changed");
+    }
+    if (fstatfs(builder->proc_root_fd, &filesystem) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "retained proc root fstatfs failed");
+    }
+    if ((unsigned long)filesystem.f_type !=
+        (unsigned long)PROC_SUPER_MAGIC) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "retained proc root is no longer procfs");
+    }
+    code = v4_hb_verify_same_ofd(
+        builder->proc_root_fd, builder->proc_root_guard, "proc root", error
+    );
+    return code;
+}
+
+static int
+v4_hb_verify_namespace_set(
+    const struct v4_hb_builder *builder,
+    pid_t pid,
+    const struct v4_hb_namespace_projection projections[
+        V4_HB_NAMESPACE_COUNT
+    ],
+    const int guards[V4_HB_NAMESPACE_COUNT],
+    struct v4_hb_error *error
+)
+{
+    uint32_t index;
+
+    for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
+        struct v4_hb_namespace_projection retained;
+        struct v4_hb_namespace_projection current;
+        char path[64];
+        int current_fd;
+        int code;
+
+        code = v4_hb_observe_namespace_descriptor(
+            projections[index].descriptor, index,
+            v4_hb_namespace_specifications[index].clone_flag,
+            false,
+            &retained, error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        if (!v4_hb_same_namespace_projection(
+                &retained, &projections[index], true
+            )) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "retained namespace projection changed");
+        }
+        code = v4_hb_verify_same_ofd(
+            projections[index].descriptor, guards[index],
+            "namespace", error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        if (v4_hb_namespace_relative_path(
+                path, sizeof(path), pid, index
+            ) != 0) {
+            return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                              "namespace rejoin path exceeds cap");
+        }
+        do {
+            current_fd = openat(
+                builder->proc_root_fd, path, O_RDONLY | O_CLOEXEC
+            );
+        } while (current_fd < 0 && errno == EINTR);
+        if (current_fd < 0) {
+            return v4_hb_fail(error, V4_HB_ERROR, errno,
+                              "cannot reopen namespace for rejoin");
+        }
+        code = v4_hb_observe_namespace_descriptor(
+            current_fd, index,
+            v4_hb_namespace_specifications[index].clone_flag,
+            false,
+            &current, error
+        );
+        if (close(current_fd) != 0 && code == V4_HB_OK) {
+            code = v4_hb_fail(error, V4_HB_ERROR, errno,
+                              "namespace rejoin descriptor close failed");
+        }
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        if (!v4_hb_same_namespace_projection(
+                &current, &projections[index], false
+            )) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "live namespace does not match retained one");
+        }
+    }
+    return V4_HB_OK;
+}
+
 static int
 v4_hb_read_start_ticks(
+    const struct v4_hb_builder *builder,
     pid_t pid,
     uint64_t *start_ticks,
     struct v4_hb_error *error
@@ -247,13 +760,13 @@ v4_hb_read_start_ticks(
     unsigned int field;
     int code;
 
-    if (pid <= 0 || start_ticks == NULL ||
-        snprintf(path, sizeof(path), "/proc/%ld/stat", (long)pid) < 0) {
+    if (builder == NULL || pid <= 0 || start_ticks == NULL ||
+        snprintf(path, sizeof(path), "%ld/stat", (long)pid) < 0) {
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "malformed proc stat request");
     }
-    code = v4_hb_read_bounded_proc(
-        path, buffer, V4_HB_PROC_STAT_MAX_BYTES, &used, error
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, buffer, V4_HB_PROC_STAT_MAX_BYTES, &used, error
     );
     if (code != V4_HB_OK) {
         return code;
@@ -297,6 +810,600 @@ v4_hb_read_start_ticks(
     }
     return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                       "missing proc start ticks");
+}
+
+static int
+v4_hb_write_proc_record(
+    struct v4_hb_builder *builder,
+    const char *relative_path,
+    const char *record,
+    size_t length,
+    struct v4_hb_error *error
+)
+{
+    int descriptor;
+    int descriptor_flags;
+    int status_flags;
+    ssize_t written;
+
+    if (builder == NULL || builder->proc_root_fd < 0 ||
+        relative_path == NULL || relative_path[0] == '/' ||
+        record == NULL || length == 0 || length > 128U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "malformed descriptor-rooted proc write");
+    }
+    do {
+        descriptor = openat(
+            builder->proc_root_fd, relative_path,
+            O_WRONLY | O_CLOEXEC | O_NOFOLLOW
+        );
+    } while (descriptor < 0 && errno == EINTR);
+    if (descriptor < 0) {
+        int saved_errno = errno;
+        return v4_hb_fail(
+            error,
+            v4_hb_unsupported_observation_errno(saved_errno) ?
+                V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            saved_errno, "descriptor-rooted proc write open failed"
+        );
+    }
+    descriptor_flags = fcntl(descriptor, F_GETFD);
+    if (descriptor_flags < 0) {
+        int saved_errno = errno;
+        (void)close(descriptor);
+        return v4_hb_fail(error, V4_HB_ERROR, saved_errno,
+                          "proc write F_GETFD failed");
+    }
+    status_flags = fcntl(descriptor, F_GETFL);
+    if (status_flags < 0) {
+        int saved_errno = errno;
+        (void)close(descriptor);
+        return v4_hb_fail(error, V4_HB_ERROR, saved_errno,
+                          "proc write F_GETFL failed");
+    }
+    if (descriptor_flags != FD_CLOEXEC ||
+        (status_flags & O_ACCMODE) != O_WRONLY) {
+        (void)close(descriptor);
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "proc write fcntl projection is malformed");
+    }
+    do {
+        written = write(descriptor, record, length);
+    } while (written < 0 && errno == EINTR);
+    if (written < 0) {
+        int saved_errno = errno;
+        (void)close(descriptor);
+        return v4_hb_fail(
+            error,
+            v4_hb_unsupported_observation_errno(saved_errno) ?
+                V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            saved_errno, "proc record write failed"
+        );
+    }
+    if ((size_t)written != length) {
+        (void)close(descriptor);
+        return v4_hb_fail(error, V4_HB_ERROR, EIO,
+                          "proc record write was partial");
+    }
+    if (close(descriptor) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, errno,
+                          "proc write descriptor close failed");
+    }
+    return V4_HB_OK;
+}
+
+static const char *
+v4_hb_skip_horizontal_space(const char *cursor, const char *end)
+{
+    while (cursor < end && (*cursor == ' ' || *cursor == '\t')) {
+        ++cursor;
+    }
+    return cursor;
+}
+
+static int
+v4_hb_parse_id_map(
+    const char *buffer,
+    size_t used,
+    struct v4_hb_id_map_projection *projection
+)
+{
+    uint64_t values[3];
+    const char *cursor = buffer;
+    const char *end = buffer + used;
+    unsigned int index;
+
+    if (buffer == NULL || projection == NULL || used == 0 ||
+        buffer[used - 1] != '\n') {
+        return -1;
+    }
+    for (index = 0; index < 3U; ++index) {
+        const char *token_end;
+        cursor = v4_hb_skip_horizontal_space(cursor, end);
+        token_end = cursor;
+        while (token_end < end && *token_end >= '0' && *token_end <= '9') {
+            ++token_end;
+        }
+        if (v4_hb_parse_decimal_u64(cursor, token_end, &values[index]) != 0 ||
+            values[index] > UINT32_MAX) {
+            return -1;
+        }
+        cursor = token_end;
+    }
+    cursor = v4_hb_skip_horizontal_space(cursor, end);
+    if (cursor + 1 != end || *cursor != '\n') {
+        return -1;
+    }
+    projection->inside_id = (uint32_t)values[0];
+    projection->outside_id = (uint32_t)values[1];
+    projection->length = (uint32_t)values[2];
+    return 0;
+}
+
+static int
+v4_hb_read_setgroups_policy(
+    const struct v4_hb_builder *builder,
+    const char *relative_path,
+    bool initial_observation,
+    bool *denied,
+    struct v4_hb_error *error
+)
+{
+    char buffer[16];
+    size_t used;
+    int code;
+
+    code = v4_hb_read_bounded_proc_at(
+        builder, relative_path, buffer, sizeof(buffer), &used, error
+    );
+    if (code != V4_HB_OK) {
+        if (initial_observation && error != NULL &&
+            v4_hb_unsupported_observation_errno(error->saved_errno)) {
+            return v4_hb_fail(
+                error, V4_HB_UNSUPPORTED, error->saved_errno,
+                "setgroups policy observation is unavailable"
+            );
+        }
+        return code;
+    }
+    if (used == sizeof("allow\n") - 1U &&
+        memcmp(buffer, "allow\n", used) == 0) {
+        *denied = false;
+        return V4_HB_OK;
+    }
+    if (used == sizeof("deny\n") - 1U &&
+        memcmp(buffer, "deny\n", used) == 0) {
+        *denied = true;
+        return V4_HB_OK;
+    }
+    return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                      "setgroups policy projection is malformed");
+}
+
+static int
+v4_hb_require_child_proc_record(
+    const struct v4_hb_builder *builder,
+    const char *name,
+    const char *expected,
+    size_t expected_bytes,
+    struct v4_hb_error *error
+)
+{
+    char path[64];
+    char buffer[V4_HB_PROC_MAP_MAX_BYTES];
+    size_t used;
+    int count;
+    int code;
+
+    count = snprintf(
+        path, sizeof(path), "%ld/%s", (long)builder->pid, name
+    );
+    if (count < 0 || (size_t)count >= sizeof(path) ||
+        expected_bytes > sizeof(buffer) ||
+        (expected_bytes != 0 && expected == NULL)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child proc record request exceeds cap");
+    }
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, buffer, sizeof(buffer), &used, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (used != expected_bytes ||
+        (used != 0 && memcmp(buffer, expected, used) != 0)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "child %s precondition mismatch: bytes=%lu/%lu "
+                          "prefix=%02x%02x%02x%02x%02x%02x",
+                          name, (unsigned long)used,
+                          (unsigned long)expected_bytes,
+                          used > 0 ? (unsigned char)buffer[0] : 0U,
+                          used > 1 ? (unsigned char)buffer[1] : 0U,
+                          used > 2 ? (unsigned char)buffer[2] : 0U,
+                          used > 3 ? (unsigned char)buffer[3] : 0U,
+                          used > 4 ? (unsigned char)buffer[4] : 0U,
+                          used > 5 ? (unsigned char)buffer[5] : 0U);
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_read_child_map(
+    const struct v4_hb_builder *builder,
+    const char *name,
+    struct v4_hb_id_map_projection *projection,
+    struct v4_hb_error *error
+)
+{
+    char path[64];
+    char buffer[V4_HB_PROC_MAP_MAX_BYTES];
+    size_t used;
+    int count;
+    int code;
+
+    count = snprintf(
+        path, sizeof(path), "%ld/%s", (long)builder->pid, name
+    );
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child map proc path exceeds cap");
+    }
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, buffer, sizeof(buffer), &used, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (v4_hb_parse_id_map(buffer, used, projection) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "child ID map is malformed");
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_read_setgroups_deny(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    char path[64];
+    char buffer[V4_HB_PROC_MAP_MAX_BYTES];
+    size_t used;
+    int count;
+    int code;
+
+    count = snprintf(
+        path, sizeof(path), "%ld/setgroups", (long)builder->pid
+    );
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child setgroups proc path exceeds cap");
+    }
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, buffer, sizeof(buffer), &used, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (used != sizeof("deny\n") - 1U ||
+        memcmp(buffer, "deny\n", sizeof("deny\n") - 1U) != 0) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "child setgroups state is not exact deny");
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_read_child_nspid(
+    const struct v4_hb_builder *builder,
+    uint32_t *child_nspid,
+    struct v4_hb_error *error
+)
+{
+    char path[64];
+    char buffer[V4_HB_PROC_STATUS_MAX_BYTES + 1U];
+    char *cursor;
+    size_t used;
+    uint32_t nspid_field_count = 0;
+    uint32_t parsed_child_nspid = 0;
+    int count;
+    int code;
+
+    count = snprintf(path, sizeof(path), "%ld/status", (long)builder->pid);
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child status proc path exceeds cap");
+    }
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, buffer, V4_HB_PROC_STATUS_MAX_BYTES, &used, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    buffer[used] = '\0';
+    cursor = buffer;
+    while (cursor < buffer + used) {
+        char *line_end = memchr(cursor, '\n', (size_t)(buffer + used - cursor));
+        if (line_end == NULL) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "child status has an unterminated line");
+        }
+        if ((size_t)(line_end - cursor) >= sizeof("NSpid:") - 1U &&
+            memcmp(cursor, "NSpid:", sizeof("NSpid:") - 1U) == 0) {
+            const char *field = cursor + sizeof("NSpid:") - 1U;
+            uint64_t previous = 0;
+            uint64_t last = 0;
+            uint32_t depth = 0;
+
+            ++nspid_field_count;
+            if (nspid_field_count != 1U) {
+                return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                                  "child status repeats NSpid");
+            }
+
+            while (field < line_end) {
+                const char *token_end;
+                uint64_t value;
+                field = v4_hb_skip_horizontal_space(field, line_end);
+                if (field == line_end) {
+                    break;
+                }
+                token_end = field;
+                while (token_end < line_end &&
+                       *token_end >= '0' && *token_end <= '9') {
+                    ++token_end;
+                }
+                if (v4_hb_parse_decimal_u64(
+                        field, token_end, &value
+                    ) != 0 || value == 0 || value > UINT32_MAX ||
+                    depth == UINT32_MAX) {
+                    return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                                      "child NSpid list is malformed");
+                }
+                previous = last;
+                last = value;
+                ++depth;
+                field = token_end;
+            }
+            if (depth < 2U || previous != (uint64_t)builder->pid ||
+                last != 1U) {
+                return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                                  "child NSpid tail is not outer-pid/1");
+            }
+            parsed_child_nspid = (uint32_t)last;
+        }
+        cursor = line_end + 1;
+    }
+    if (nspid_field_count == 1U) {
+        *child_nspid = parsed_child_nspid;
+        return V4_HB_OK;
+    }
+    return v4_hb_fail(
+        error,
+        builder->child_nspid == 0U ? V4_HB_UNSUPPORTED : V4_HB_ERROR,
+        ENOTSUP,
+                      "child NSpid observation is unavailable");
+}
+
+static int
+v4_hb_configure_child_id_maps(
+    struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    char path[64];
+    char record[128];
+    int count;
+    int code;
+
+    code = v4_hb_require_child_proc_record(
+        builder, "uid_map", NULL, 0U, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    count = snprintf(
+        record, sizeof(record), "0 %lu 1\n",
+        (unsigned long)builder->observer_effective_uid
+    );
+    if (count < 0 || (size_t)count >= sizeof(record)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child uid-map record exceeds cap");
+    }
+    count = snprintf(path, sizeof(path), "%ld/uid_map", (long)builder->pid);
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child uid-map path exceeds cap");
+    }
+    code = v4_hb_write_proc_record(
+        builder, path, record, strlen(record), error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    builder->uid_map_write_count = 1U;
+    builder->uid_map_write_order = 1U;
+
+    code = v4_hb_require_child_proc_record(
+        builder, "setgroups",
+        builder->observer_setgroups_denied ? "deny\n" : "allow\n",
+        builder->observer_setgroups_denied ?
+            sizeof("deny\n") - 1U : sizeof("allow\n") - 1U,
+        error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    count = snprintf(path, sizeof(path), "%ld/setgroups", (long)builder->pid);
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child setgroups path exceeds cap");
+    }
+    code = v4_hb_write_proc_record(
+        builder, path, "deny\n", sizeof("deny\n") - 1U, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    builder->setgroups_deny_write_count = 1U;
+    builder->setgroups_deny_write_order = 2U;
+
+    code = v4_hb_require_child_proc_record(
+        builder, "gid_map", NULL, 0U, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    count = snprintf(
+        record, sizeof(record), "0 %lu 1\n",
+        (unsigned long)builder->observer_effective_gid
+    );
+    if (count < 0 || (size_t)count >= sizeof(record)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child gid-map record exceeds cap");
+    }
+    count = snprintf(path, sizeof(path), "%ld/gid_map", (long)builder->pid);
+    if (count < 0 || (size_t)count >= sizeof(path)) {
+        return v4_hb_fail(error, V4_HB_ERROR, EOVERFLOW,
+                          "child gid-map path exceeds cap");
+    }
+    code = v4_hb_write_proc_record(
+        builder, path, record, strlen(record), error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    builder->gid_map_write_count = 1U;
+    builder->gid_map_write_order = 3U;
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_verify_child_id_maps(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    struct v4_hb_id_map_projection uid_map;
+    struct v4_hb_id_map_projection gid_map;
+    uint32_t child_nspid;
+    int code;
+
+    if (builder->uid_map_write_count != 1U ||
+        builder->setgroups_deny_write_count != 1U ||
+        builder->gid_map_write_count != 1U ||
+        builder->uid_map_write_order != 1U ||
+        builder->setgroups_deny_write_order != 2U ||
+        builder->gid_map_write_order != 3U ||
+        geteuid() != builder->observer_effective_uid ||
+        getegid() != builder->observer_effective_gid) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "child ID-map authority state is malformed");
+    }
+    code = v4_hb_read_child_map(builder, "uid_map", &uid_map, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    code = v4_hb_read_setgroups_deny(builder, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    code = v4_hb_read_child_map(builder, "gid_map", &gid_map, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (uid_map.inside_id != 0U ||
+        uid_map.outside_id != (uint32_t)builder->observer_effective_uid ||
+        uid_map.length != 1U || gid_map.inside_id != 0U ||
+        gid_map.outside_id != (uint32_t)builder->observer_effective_gid ||
+        gid_map.length != 1U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "child ID maps do not match observer effective IDs");
+    }
+    if (uid_map.inside_id != builder->uid_map.inside_id ||
+        uid_map.outside_id != builder->uid_map.outside_id ||
+        uid_map.length != builder->uid_map.length ||
+        gid_map.inside_id != builder->gid_map.inside_id ||
+        gid_map.outside_id != builder->gid_map.outside_id ||
+        gid_map.length != builder->gid_map.length) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "child ID-map projection changed");
+    }
+    code = v4_hb_read_child_nspid(builder, &child_nspid, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (child_nspid != 1U || child_nspid != builder->child_nspid) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "child NSpid projection changed");
+    }
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_verify_parent_namespace_boundary(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    bool current_setgroups_denied;
+    int code;
+
+    if (builder == NULL || geteuid() != builder->observer_effective_uid ||
+        getegid() != builder->observer_effective_gid) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "observer identity changed at namespace boundary");
+    }
+    code = v4_hb_verify_proc_root(builder, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    code = v4_hb_read_setgroups_policy(
+        builder, "self/setgroups", false, &current_setgroups_denied, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    if (current_setgroups_denied != builder->observer_setgroups_denied) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "observer setgroups policy changed");
+    }
+    return v4_hb_verify_namespace_set(
+        builder, 0, builder->parent_namespaces,
+        builder->parent_namespace_guards, error
+    );
+}
+
+static int
+v4_hb_verify_namespace_boundary(
+    const struct v4_hb_builder *builder,
+    struct v4_hb_error *error
+)
+{
+    uint32_t index;
+    int code = v4_hb_verify_parent_namespace_boundary(builder, error);
+
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    code = v4_hb_verify_namespace_set(
+        builder, builder->pid, builder->child_namespaces,
+        builder->child_namespace_guards, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
+        if (builder->parent_namespaces[index].device ==
+                builder->child_namespaces[index].device &&
+            builder->parent_namespaces[index].inode ==
+                builder->child_namespaces[index].inode) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "child namespace is not distinct from parent");
+        }
+    }
+    return v4_hb_verify_child_id_maps(builder, error);
 }
 
 static int
@@ -398,6 +1505,8 @@ v4_hb_child_gate_loop(_Atomic unsigned int *gate)
 static void
 v4_hb_discard_resources(struct v4_hb_builder *builder)
 {
+    uint32_t index;
+
     if (builder->pidfd >= 0) {
         (void)close(builder->pidfd);
         builder->pidfd = -1;
@@ -405,6 +1514,32 @@ v4_hb_discard_resources(struct v4_hb_builder *builder)
     if (builder->pidfd_guard >= 0) {
         (void)close(builder->pidfd_guard);
         builder->pidfd_guard = -1;
+    }
+    for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
+        if (builder->parent_namespaces[index].descriptor >= 0) {
+            (void)close(builder->parent_namespaces[index].descriptor);
+            builder->parent_namespaces[index].descriptor = -1;
+        }
+        if (builder->parent_namespace_guards[index] >= 0) {
+            (void)close(builder->parent_namespace_guards[index]);
+            builder->parent_namespace_guards[index] = -1;
+        }
+        if (builder->child_namespaces[index].descriptor >= 0) {
+            (void)close(builder->child_namespaces[index].descriptor);
+            builder->child_namespaces[index].descriptor = -1;
+        }
+        if (builder->child_namespace_guards[index] >= 0) {
+            (void)close(builder->child_namespace_guards[index]);
+            builder->child_namespace_guards[index] = -1;
+        }
+    }
+    if (builder->proc_root_fd >= 0) {
+        (void)close(builder->proc_root_fd);
+        builder->proc_root_fd = -1;
+    }
+    if (builder->proc_root_guard >= 0) {
+        (void)close(builder->proc_root_guard);
+        builder->proc_root_guard = -1;
     }
     if (builder->gate != MAP_FAILED && builder->gate != NULL) {
         (void)munmap((void *)builder->gate, builder->gate_mapping_bytes);
@@ -420,6 +1555,7 @@ v4_hb_close_resources_checked(
 )
 {
     int saved_errno = 0;
+    uint32_t index;
 
     if (builder->pidfd >= 0) {
         if (close(builder->pidfd) != 0) {
@@ -432,6 +1568,48 @@ v4_hb_close_resources_checked(
             saved_errno = errno;
         }
         builder->pidfd_guard = -1;
+    }
+    for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
+        if (builder->parent_namespaces[index].descriptor >= 0) {
+            if (close(builder->parent_namespaces[index].descriptor) != 0 &&
+                saved_errno == 0) {
+                saved_errno = errno;
+            }
+            builder->parent_namespaces[index].descriptor = -1;
+        }
+        if (builder->parent_namespace_guards[index] >= 0) {
+            if (close(builder->parent_namespace_guards[index]) != 0 &&
+                saved_errno == 0) {
+                saved_errno = errno;
+            }
+            builder->parent_namespace_guards[index] = -1;
+        }
+        if (builder->child_namespaces[index].descriptor >= 0) {
+            if (close(builder->child_namespaces[index].descriptor) != 0 &&
+                saved_errno == 0) {
+                saved_errno = errno;
+            }
+            builder->child_namespaces[index].descriptor = -1;
+        }
+        if (builder->child_namespace_guards[index] >= 0) {
+            if (close(builder->child_namespace_guards[index]) != 0 &&
+                saved_errno == 0) {
+                saved_errno = errno;
+            }
+            builder->child_namespace_guards[index] = -1;
+        }
+    }
+    if (builder->proc_root_fd >= 0) {
+        if (close(builder->proc_root_fd) != 0 && saved_errno == 0) {
+            saved_errno = errno;
+        }
+        builder->proc_root_fd = -1;
+    }
+    if (builder->proc_root_guard >= 0) {
+        if (close(builder->proc_root_guard) != 0 && saved_errno == 0) {
+            saved_errno = errno;
+        }
+        builder->proc_root_guard = -1;
     }
     if (builder->gate != MAP_FAILED && builder->gate != NULL) {
         if (munmap((void *)builder->gate, builder->gate_mapping_bytes) != 0 &&
@@ -485,6 +1663,9 @@ v4_hb_builder_start(
 {
     struct v4_hb_builder *builder;
     uint64_t second_start_ticks;
+    uint64_t observer_uid;
+    uint64_t observer_gid;
+    uint32_t index;
     pid_t pid;
     int pidfd;
     int code;
@@ -502,6 +1683,41 @@ v4_hb_builder_start(
     }
     builder->pidfd = -1;
     builder->pidfd_guard = -1;
+    builder->proc_root_fd = -1;
+    builder->proc_root_guard = -1;
+    for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
+        builder->parent_namespaces[index].descriptor = -1;
+        builder->child_namespaces[index].descriptor = -1;
+        builder->parent_namespace_guards[index] = -1;
+        builder->child_namespace_guards[index] = -1;
+    }
+    observer_uid = (uint64_t)geteuid();
+    observer_gid = (uint64_t)getegid();
+    if (observer_uid > UINT32_MAX || observer_gid > UINT32_MAX) {
+        free(builder);
+        return v4_hb_fail(error, V4_HB_UNSUPPORTED, EOVERFLOW,
+                          "observer effective IDs exceed V4 uint32 bounds");
+    }
+    builder->observer_effective_uid = (uid_t)observer_uid;
+    builder->observer_effective_gid = (gid_t)observer_gid;
+    code = v4_hb_capture_proc_root(builder, error);
+    if (code == V4_HB_OK) {
+        code = v4_hb_read_setgroups_policy(
+            builder, "self/setgroups", true,
+            &builder->observer_setgroups_denied, error
+        );
+    }
+    if (code == V4_HB_OK) {
+        code = v4_hb_capture_namespace_set(
+            builder, 0, builder->parent_namespaces,
+            builder->parent_namespace_guards, error
+        );
+    }
+    if (code != V4_HB_OK) {
+        v4_hb_discard_resources(builder);
+        free(builder);
+        return code;
+    }
     builder->gate_mapping_bytes = sizeof(*builder->gate);
     builder->gate = mmap(
         NULL, builder->gate_mapping_bytes, PROT_READ | PROT_WRITE,
@@ -509,6 +1725,7 @@ v4_hb_builder_start(
     );
     if (builder->gate == MAP_FAILED) {
         int saved_errno = errno;
+        v4_hb_discard_resources(builder);
         free(builder);
         return v4_hb_fail(
             error,
@@ -520,7 +1737,7 @@ v4_hb_builder_start(
     }
     atomic_init(builder->gate, 0U);
     pid = (pid_t)syscall(
-        SYS_clone, (unsigned long)SIGCHLD, NULL, NULL, NULL, 0UL
+        SYS_clone, V4_HB_FIXED_CLONE_FLAGS, NULL, NULL, NULL, 0UL
     );
     if (pid < 0) {
         int saved_errno = errno;
@@ -576,11 +1793,13 @@ v4_hb_builder_start(
     }
     if (code == V4_HB_OK) {
         code = v4_hb_read_start_ticks(
-            pid, &builder->start_ticks, error
+            builder, pid, &builder->start_ticks, error
         );
     }
     if (code == V4_HB_OK) {
-        code = v4_hb_read_start_ticks(pid, &second_start_ticks, error);
+        code = v4_hb_read_start_ticks(
+            builder, pid, &second_start_ticks, error
+        );
     }
     if (code == V4_HB_OK && second_start_ticks != builder->start_ticks) {
         code = v4_hb_fail(error, V4_HB_ERROR, EINVAL,
@@ -610,6 +1829,8 @@ v4_hb_builder_snapshot(
     struct v4_hb_error *error
 )
 {
+    uint32_t index;
+
     v4_hb_error_clear(error);
     if (builder == NULL || snapshot == NULL ||
         builder->gate == NULL || builder->gate == MAP_FAILED) {
@@ -631,6 +1852,30 @@ v4_hb_builder_snapshot(
         builder->interrupt_event_stop_count;
     snapshot->resume_count = builder->resume_count;
     snapshot->held_stop_consumed = builder->held_stop_consumed;
+    snapshot->clone_flags = V4_HB_FIXED_CLONE_FLAGS;
+    snapshot->namespace_count = V4_HB_NAMESPACE_COUNT;
+    snapshot->observer_effective_uid =
+        (uint32_t)builder->observer_effective_uid;
+    snapshot->observer_effective_gid =
+        (uint32_t)builder->observer_effective_gid;
+    snapshot->observer_setgroups_denied =
+        builder->observer_setgroups_denied ? 1U : 0U;
+    snapshot->child_nspid = builder->child_nspid;
+    snapshot->uid_map_write_count = builder->uid_map_write_count;
+    snapshot->setgroups_deny_write_count =
+        builder->setgroups_deny_write_count;
+    snapshot->gid_map_write_count = builder->gid_map_write_count;
+    snapshot->uid_map_write_order = builder->uid_map_write_order;
+    snapshot->setgroups_deny_write_order =
+        builder->setgroups_deny_write_order;
+    snapshot->gid_map_write_order = builder->gid_map_write_order;
+    snapshot->uid_map = builder->uid_map;
+    snapshot->gid_map = builder->gid_map;
+    for (index = 0; index < V4_HB_NAMESPACE_COUNT; ++index) {
+        snapshot->parent_namespaces[index] =
+            builder->parent_namespaces[index];
+        snapshot->child_namespaces[index] = builder->child_namespaces[index];
+    }
     return V4_HB_OK;
 }
 
@@ -640,7 +1885,8 @@ v4_hb_exact_snapshot(
     const struct v4_hb_snapshot *second
 )
 {
-    return first->pid == second->pid &&
+    uint32_t index;
+    bool exact = first->pid == second->pid &&
         first->start_ticks == second->start_ticks &&
         first->pidfd == second->pidfd &&
         first->state == second->state &&
@@ -652,7 +1898,39 @@ v4_hb_exact_snapshot(
         first->interrupt_event_stop_count ==
             second->interrupt_event_stop_count &&
         first->resume_count == second->resume_count &&
-        first->held_stop_consumed == second->held_stop_consumed;
+        first->held_stop_consumed == second->held_stop_consumed &&
+        first->clone_flags == second->clone_flags &&
+        first->namespace_count == second->namespace_count &&
+        first->observer_effective_uid == second->observer_effective_uid &&
+        first->observer_effective_gid == second->observer_effective_gid &&
+        first->observer_setgroups_denied ==
+            second->observer_setgroups_denied &&
+        first->child_nspid == second->child_nspid &&
+        first->uid_map_write_count == second->uid_map_write_count &&
+        first->setgroups_deny_write_count ==
+            second->setgroups_deny_write_count &&
+        first->gid_map_write_count == second->gid_map_write_count &&
+        first->uid_map_write_order == second->uid_map_write_order &&
+        first->setgroups_deny_write_order ==
+            second->setgroups_deny_write_order &&
+        first->gid_map_write_order == second->gid_map_write_order &&
+        first->uid_map.inside_id == second->uid_map.inside_id &&
+        first->uid_map.outside_id == second->uid_map.outside_id &&
+        first->uid_map.length == second->uid_map.length &&
+        first->gid_map.inside_id == second->gid_map.inside_id &&
+        first->gid_map.outside_id == second->gid_map.outside_id &&
+        first->gid_map.length == second->gid_map.length;
+
+    for (index = 0; exact && index < V4_HB_NAMESPACE_COUNT; ++index) {
+        exact = v4_hb_same_namespace_projection(
+            &first->parent_namespaces[index],
+            &second->parent_namespaces[index], true
+        ) && v4_hb_same_namespace_projection(
+            &first->child_namespaces[index],
+            &second->child_namespaces[index], true
+        );
+    }
+    return exact;
 }
 
 static int
@@ -721,13 +1999,13 @@ v4_hb_read_held_proc_status(
     unsigned int tracer_count = 0;
     int code;
 
-    if (snprintf(path, sizeof(path), "/proc/%ld/status",
+    if (snprintf(path, sizeof(path), "%ld/status",
                  (long)builder->pid) < 0) {
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "cannot format builder proc status path");
     }
-    code = v4_hb_read_bounded_proc(
-        path, buffer, V4_HB_PROC_STATUS_MAX_BYTES, &used, error
+    code = v4_hb_read_bounded_proc_at(
+        builder, path, buffer, V4_HB_PROC_STATUS_MAX_BYTES, &used, error
     );
     if (code != V4_HB_OK) {
         return code;
@@ -806,7 +2084,7 @@ v4_hb_verify_held_internal(
         return code;
     }
     code = v4_hb_read_start_ticks(
-        builder->pid, &current_start_ticks, error
+        builder, builder->pid, &current_start_ticks, error
     );
     if (code != V4_HB_OK) {
         return code;
@@ -816,6 +2094,10 @@ v4_hb_verify_held_internal(
                           "held-builder PID/start-ticks identity changed");
     }
     code = v4_hb_read_held_proc_status(builder, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    code = v4_hb_verify_namespace_boundary(builder, error);
     if (code != V4_HB_OK) {
         return code;
     }
@@ -939,6 +2221,10 @@ v4_hb_builder_seize_interrupt(
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "held builder is not at its seize boundary");
     }
+    code = v4_hb_verify_parent_namespace_boundary(builder, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
     if (ptrace(PTRACE_SEIZE, builder->pid, NULL,
                (void *)(uintptr_t)V4_HB_FIXED_PTRACE_OPTIONS_MASK) != 0) {
         int saved_errno = errno;
@@ -992,7 +2278,7 @@ v4_hb_builder_seize_interrupt(
                           "interrupt event siginfo signal mismatch");
     }
     code = v4_hb_read_start_ticks(
-        builder->pid, &current_start_ticks, error
+        builder, builder->pid, &current_start_ticks, error
     );
     if (code != V4_HB_OK || current_start_ticks != builder->start_ticks) {
         builder->state = V4_HB_POISONED;
@@ -1001,6 +2287,33 @@ v4_hb_builder_seize_interrupt(
                              "builder identity changed at interrupt stop");
         }
         return code == V4_HB_UNSUPPORTED ? V4_HB_UNSUPPORTED : V4_HB_ERROR;
+    }
+    code = v4_hb_configure_child_id_maps(builder, error);
+    if (code == V4_HB_OK) {
+        builder->uid_map.inside_id = 0U;
+        builder->uid_map.outside_id =
+            (uint32_t)builder->observer_effective_uid;
+        builder->uid_map.length = 1U;
+        builder->gid_map.inside_id = 0U;
+        builder->gid_map.outside_id =
+            (uint32_t)builder->observer_effective_gid;
+        builder->gid_map.length = 1U;
+        code = v4_hb_capture_namespace_set(
+            builder, builder->pid, builder->child_namespaces,
+            builder->child_namespace_guards, error
+        );
+    }
+    if (code == V4_HB_OK) {
+        code = v4_hb_read_child_nspid(
+            builder, &builder->child_nspid, error
+        );
+    }
+    if (code == V4_HB_OK) {
+        code = v4_hb_verify_namespace_boundary(builder, error);
+    }
+    if (code != V4_HB_OK) {
+        builder->state = V4_HB_POISONED;
+        return code;
     }
     builder->raw_interrupt_wait_status = status;
     builder->interrupt_event_stop_count = 1;
@@ -1183,7 +2496,7 @@ v4_hb_builder_release_and_reap(
                           "held-builder exit event message mismatch");
     }
     code = v4_hb_read_start_ticks(
-        builder->pid, &current_start_ticks, error
+        builder, builder->pid, &current_start_ticks, error
     );
     if (code != V4_HB_OK || current_start_ticks != builder->start_ticks) {
         builder->state = V4_HB_POISONED;
