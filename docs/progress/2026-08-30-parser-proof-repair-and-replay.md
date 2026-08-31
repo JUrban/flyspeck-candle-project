@@ -746,6 +746,11 @@ the four release-gating targets.  The read-only canonical gate correspondingly
 requires all five zero-exit receipts and seven concrete output postconditions.
 This keeps the four proof/bootstrap gates unchanged while preventing an old
 base heap or `.hol` object cache from making a nominally new worktree warm.
+The replay also authenticates its tracked, clean controller project, records
+that exact project head/path/source digest and the empty ignored-product
+preflight, and the later read-only canonical gate rederives all four joins.
+The gate's focused hostile suite is 14/14, including changed preflight and
+controller-digest rejection.
 
 The detached qualification worktree is prepared but deliberately unbuilt at
 `/project/worktrees/cakeml-flyspeck-runtime-stack-cold-480a9f4-v13`.  It is

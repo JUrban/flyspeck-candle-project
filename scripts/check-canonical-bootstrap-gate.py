@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import errno
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -79,6 +80,7 @@ CAKEML_POSTCONDITIONS = (
         "x64BootstrapProofTheory.uo"
     ),
 )
+REPLAY_CONTROLLER_RELATIVE = "scripts/run-canonical-bootstrap-replay.sh"
 
 
 class GateError(RuntimeError):
@@ -279,6 +281,45 @@ def validate_inherited_limits() -> dict[str, str]:
     return observed
 
 
+def validate_replay_controller_authority(
+    replay: Path, project_root: Path, project_head: str,
+) -> str:
+    require(stable_file_bytes(
+                replay / "controller_project_root",
+                "cold replay controller project root",
+            ) == f"{project_root}\n".encode(),
+            "cold replay controller project root mismatch")
+    require(stable_file_bytes(
+                replay / "controller_project_head",
+                "cold replay controller project head",
+            ) == f"{project_head}\n".encode(),
+            "cold replay controller project head mismatch")
+    require(stable_file_bytes(
+                replay / "controller_script_relative",
+                "cold replay controller relative path",
+            ) == f"{REPLAY_CONTROLLER_RELATIVE}\n".encode(),
+            "cold replay controller relative path mismatch")
+    require(stable_file_bytes(
+                replay / "cakeml_ignored_products_preflight",
+                "cold replay ignored-product preflight",
+            ) == b"none\n",
+            "cold replay did not record an empty ignored-product preflight")
+    controller = project_root / REPLAY_CONTROLLER_RELATIVE
+    live = stable_file_bytes(controller, "cold replay controller source")
+    committed = git_output(
+        project_root, "show", f"{project_head}:{REPLAY_CONTROLLER_RELATIVE}",
+    ).encode()
+    require(live == committed,
+            "cold replay controller source differs from committed authority")
+    digest = hashlib.sha256(live).hexdigest()
+    require(stable_file_bytes(
+                replay / "controller_script_sha256",
+                "cold replay controller source digest",
+            ) == f"{digest}\n".encode(),
+            "cold replay controller source digest mismatch")
+    return digest
+
+
 def memory_available_kib(proc_root: Path) -> int:
     try:
         fields = {
@@ -310,10 +351,16 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
     cakeml = ordinary_exact_directory(arguments.cakeml_root, "CakeML root")
     hol4 = ordinary_exact_directory(arguments.hol4_root, "HOL4 root")
     proc_root = ordinary_exact_directory(arguments.proc_root, "proc root")
+    project_root = ordinary_exact_directory(
+        arguments.project_root, "project gate root",
+    )
 
     validate_git(candle, arguments.candle_head, "Candle")
     validate_git(cakeml, arguments.cakeml_head, "CakeML")
     validate_git(hol4, arguments.hol4_head, "HOL4")
+    controller_digest = validate_replay_controller_authority(
+        replay, project_root, arguments.project_head,
+    )
 
     require(stable_file_bytes(
                 replay / "stage", "cold replay stage",
@@ -368,6 +415,7 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
         "live_holmake_pids": holmake,
         "live_replay_process_group_members": group_members,
         "inherited_soft_limits": inherited_limits,
+        "replay_controller_sha256": controller_digest,
     }
 
 

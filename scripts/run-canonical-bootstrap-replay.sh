@@ -28,6 +28,18 @@ if [[ $cakeml_root == / || $hol4_root == / ]]; then
   exit 64
 fi
 
+controller_script=$(/usr/bin/realpath "$0")
+controller_root=$(/usr/bin/git -C "$(/usr/bin/dirname "$controller_script")" \
+  rev-parse --show-toplevel)
+controller_relative=scripts/run-canonical-bootstrap-replay.sh
+controller_head=$(/usr/bin/git -C "$controller_root" rev-parse HEAD)
+if [[ $controller_script != "$controller_root/$controller_relative" ]] ||
+   ! /usr/bin/git -C "$controller_root" \
+      ls-files --error-unmatch "$controller_relative" >/dev/null 2>&1; then
+  echo "replay controller is outside its tracked project authority" >&2
+  exit 65
+fi
+
 git_clean_at_head() {
   local root=$1
   local expected=$2
@@ -46,6 +58,7 @@ git_clean_at_head() {
 
 git_clean_at_head "$cakeml_root" "$cakeml_head" CakeML
 git_clean_at_head "$hol4_root" "$hol4_head" HOL4
+git_clean_at_head "$controller_root" "$controller_head" "replay controller"
 
 # Ordinary Git cleanliness deliberately excludes ignored products.  A cold
 # replay must not inherit a base heap or .hol object cache from a recycled
@@ -65,6 +78,12 @@ umask 077
 /usr/bin/mkdir "$run_root"
 /usr/bin/printf '%s\n' "$cakeml_head" >"$run_root/cakeml_head"
 /usr/bin/printf '%s\n' "$hol4_head" >"$run_root/hol4_head"
+/usr/bin/printf '%s\n' "$controller_root" >"$run_root/controller_project_root"
+/usr/bin/printf '%s\n' "$controller_head" >"$run_root/controller_project_head"
+/usr/bin/printf '%s\n' "$controller_relative" >"$run_root/controller_script_relative"
+/usr/bin/sha256sum "$controller_script" | /usr/bin/awk '{print $1}' \
+  >"$run_root/controller_script_sha256"
+/usr/bin/printf '%s\n' none >"$run_root/cakeml_ignored_products_preflight"
 /usr/bin/printf '%s\n' "$$" >"$run_root/controller_pid"
 /usr/bin/printf '%s\n' "-j1 --mt=1" >"$run_root/build_parallelism"
 /usr/bin/printf '%s\n' "117964800" >"$run_root/address_space_limit_kib"

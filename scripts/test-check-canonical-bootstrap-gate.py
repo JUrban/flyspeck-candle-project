@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -44,6 +45,39 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
         candle, candle_head = self.make_git_root(parent, "candle")
         cakeml, cakeml_head = self.make_git_root(parent, "cakeml")
         hol4, hol4_head = self.make_git_root(parent, "hol4")
+        project, _project_initial_head = self.make_git_root(parent, "project")
+        controller = project / subject.REPLAY_CONTROLLER_RELATIVE
+        controller.parent.mkdir()
+        controller.write_bytes(
+            Path(__file__).with_name("run-canonical-bootstrap-replay.sh").read_bytes()
+        )
+        subprocess.run([
+            "git", "-C", str(project), "add", subject.REPLAY_CONTROLLER_RELATIVE,
+        ], check=True)
+        subprocess.run([
+            "git", "-C", str(project), "-c", "user.name=Gate Test", "-c",
+            "user.email=gate@example.invalid", "commit", "-qm", "controller",
+        ], check=True)
+        project_head = subprocess.run(
+            ["git", "-C", str(project), "rev-parse", "HEAD"], check=True,
+            text=True, stdout=subprocess.PIPE,
+        ).stdout.strip()
+        (replay / "controller_project_root").write_text(
+            f"{project}\n", encoding="utf-8",
+        )
+        (replay / "controller_project_head").write_text(
+            f"{project_head}\n", encoding="ascii",
+        )
+        (replay / "controller_script_relative").write_text(
+            f"{subject.REPLAY_CONTROLLER_RELATIVE}\n", encoding="ascii",
+        )
+        (replay / "controller_script_sha256").write_text(
+            f"{hashlib.sha256(controller.read_bytes()).hexdigest()}\n",
+            encoding="ascii",
+        )
+        (replay / "cakeml_ignored_products_preflight").write_text(
+            "none\n", encoding="ascii",
+        )
         for relative, target in zip(
             subject.TIME_RECEIPTS, subject.TIME_TARGETS, strict=True,
         ):
@@ -89,6 +123,8 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
             "attempt_root": parent / "attempt-001",
             "minimum_mem_available_gib": 120,
             "proc_root": proc,
+            "project_root": project,
+            "project_head": project_head,
         })()
         return arguments
 
@@ -124,6 +160,24 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
             arguments = self.fixture(Path(temporary))
             arguments.attempt_root.mkdir()
             with self.assertRaisesRegex(subject.GateError, "already exists"):
+                subject.validate_gate(arguments)
+
+    def test_nonempty_ignored_product_preflight_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = self.fixture(Path(temporary))
+            (arguments.replay_root / "cakeml_ignored_products_preflight").write_text(
+                "present\n", encoding="ascii",
+            )
+            with self.assertRaisesRegex(subject.GateError, "empty ignored-product"):
+                subject.validate_gate(arguments)
+
+    def test_replay_controller_digest_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = self.fixture(Path(temporary))
+            (arguments.replay_root / "controller_script_sha256").write_text(
+                f"{'0' * 64}\n", encoding="ascii",
+            )
+            with self.assertRaisesRegex(subject.GateError, "digest mismatch"):
                 subject.validate_gate(arguments)
 
     def test_nonzero_time_receipt_fails(self):
