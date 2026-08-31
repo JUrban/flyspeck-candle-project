@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mount.h>
+#include <sys/prctl.h>
 #include <sys/ptrace.h>
 #include <sys/stat.h>
 #ifdef V4_HB_TEST_PROC_NLINK_CHURN
@@ -655,7 +656,7 @@ setup_prefix_is_exact(
 {
     static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
         SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
-        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask
+        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask, SYS_prctl
     };
     static const uint8_t empty_signal_mask[V4_HB_KERNEL_SIGSET_BYTES] = {0};
     uint32_t index;
@@ -677,6 +678,10 @@ setup_prefix_is_exact(
         setup->mountinfo_row_count == 0U ||
         setup->credential_status_byte_count == 0U ||
         setup->credential_status_row_count != 2U ||
+        setup->capability_status_row_count != 5U ||
+        setup->ambient_before_status_byte_count == 0U ||
+        setup->ambient_before_credential_row_count != 2U ||
+        setup->ambient_before_capability_row_count != 5U ||
         setup->observer_credential_ids.real_uid != (uint32_t)geteuid() ||
         setup->observer_credential_ids.effective_uid != (uint32_t)geteuid() ||
         setup->observer_credential_ids.saved_uid != (uint32_t)geteuid() ||
@@ -693,6 +698,24 @@ setup_prefix_is_exact(
         setup->inner_credential_ids.effective_gid != 0U ||
         setup->inner_credential_ids.saved_gid != 0U ||
         setup->inner_credential_ids.filesystem_gid != 0U ||
+        memcmp(&setup->ambient_before_observer_credential_ids,
+               &setup->observer_credential_ids,
+               sizeof(setup->observer_credential_ids)) != 0 ||
+        memcmp(&setup->ambient_before_inner_credential_ids,
+               &setup->inner_credential_ids,
+               sizeof(setup->inner_credential_ids)) != 0 ||
+        setup->ambient_before_capability_masks.inheritable !=
+            setup->capability_masks.inheritable ||
+        setup->ambient_before_capability_masks.permitted !=
+            setup->capability_masks.permitted ||
+        setup->ambient_before_capability_masks.effective !=
+            setup->capability_masks.effective ||
+        setup->ambient_before_capability_masks.bounding !=
+            setup->capability_masks.bounding ||
+        setup->capability_masks.ambient != 0U ||
+        setup->ambient_clear_syscall_observed != 1U ||
+        setup->ambient_clear_idempotent !=
+            (setup->ambient_before_capability_masks.ambient == 0U ? 1U : 0U) ||
         setup->live_signal_mask_observed != 1U ||
         setup->live_signal_mask_byte_count != V4_HB_KERNEL_SIGSET_BYTES ||
         memcmp(setup->live_signal_mask_bytes, empty_signal_mask,
@@ -789,12 +812,21 @@ setup_prefix_is_exact(
                     return false;
                 }
             }
-        } else if (operation->arguments[0] != SIG_SETMASK ||
+        } else if (index == 6U &&
+                   (operation->arguments[0] != SIG_SETMASK ||
                    operation->arguments[1] == 0U ||
                    operation->arguments[2] != 0U ||
                    operation->arguments[3] != V4_HB_KERNEL_SIGSET_BYTES ||
                    operation->arguments[4] != 0U ||
-                   operation->arguments[5] != 0U) {
+                   operation->arguments[5] != 0U)) {
+            return false;
+        } else if (index == 7U &&
+                   (operation->arguments[0] != PR_CAP_AMBIENT ||
+                    operation->arguments[1] != PR_CAP_AMBIENT_CLEAR_ALL ||
+                    operation->arguments[2] != 0U ||
+                    operation->arguments[3] != 0U ||
+                    operation->arguments[4] != 0U ||
+                    operation->arguments[5] != 0U)) {
             return false;
         }
     }
@@ -845,10 +877,42 @@ expect_setup_prefix_splices_reject(
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.credential_status_byte_count);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.credential_status_row_count);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.ambient_before_status_byte_count
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.ambient_before_credential_row_count
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.ambient_before_capability_row_count
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
         ++splice.observer_credential_ids.saved_uid
     );
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(
         ++splice.inner_credential_ids.filesystem_gid
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.ambient_before_observer_credential_ids.saved_uid
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.ambient_before_inner_credential_ids.filesystem_gid
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.ambient_before_capability_masks.effective
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.capability_status_row_count
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.capability_masks.bounding);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.capability_masks.ambient = 1U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.ambient_clear_syscall_observed = 0U
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.ambient_clear_idempotent ^= 1U
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.ambient_clear_idempotent = 2U
     );
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(
         splice.live_signal_mask_observed = 0U
@@ -894,6 +958,30 @@ expect_setup_prefix_splices_reject(
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[6].return_value = -1);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(
         splice.operations[6].return_is_error = 1U
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[7].operation);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[7].syscall_number);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[7].arguments[0] = 0U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[7].arguments[1] = 0U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[7].arguments[2] = 1U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[7].arguments[3] = 1U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[7].arguments[4] = 1U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[7].arguments[5] = 1U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        ++splice.operations[7].payload_byte_count
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        --splice.operations[7].entry_stop_index
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        --splice.operations[7].exit_stop_index
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.operations[7].raw_exit_wait_status ^= 1
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[7].return_value = -1);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.operations[7].return_is_error = 1U
     );
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[2].path_bytes[0] = '/');
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(
@@ -1483,8 +1571,8 @@ main(void)
         V4_HB_PTRACE_OPTION_COUNT != 8U ||
         V4_HB_FIXED_CLONE_FLAGS != 0x78020011UL ||
         V4_HB_NAMESPACE_COUNT != 5U ||
-        V4_HB_SETUP_PREFIX_OPERATION_COUNT != 7U ||
-        V4_HB_SETUP_PREFIX_STOP_COUNT != 14U) {
+        V4_HB_SETUP_PREFIX_OPERATION_COUNT != 8U ||
+        V4_HB_SETUP_PREFIX_STOP_COUNT != 16U) {
         return test_fail("fixed V4 ptrace/namespace identity drifted");
     }
     if (test_status_credential_parser() != 0) {

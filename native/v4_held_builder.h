@@ -19,8 +19,8 @@
 #define V4_HB_FIXED_PTRACE_OPTIONS_MASK 0x0010007fUL
 #define V4_HB_NAMESPACE_COUNT 5U
 #define V4_HB_FIXED_CLONE_FLAGS 0x78020011UL
-#define V4_HB_SETUP_PREFIX_OPERATION_COUNT 7U
-#define V4_HB_SETUP_PREFIX_STOP_COUNT 14U
+#define V4_HB_SETUP_PREFIX_OPERATION_COUNT 8U
+#define V4_HB_SETUP_PREFIX_STOP_COUNT 16U
 #define V4_HB_SETUP_PATH_CAP 2U
 #define V4_HB_SETUP_PAYLOAD_CAP 8U
 #define V4_HB_KERNEL_SIGSET_BYTES 8U
@@ -50,6 +50,7 @@ enum v4_hb_setup_operation {
     V4_HB_SETUP_SETRESGID_ZERO = 5,
     V4_HB_SETUP_SETRESUID_ZERO = 6,
     V4_HB_SETUP_EMPTY_SIGNAL_MASK = 7,
+    V4_HB_SETUP_CLEAR_AMBIENT_CAPABILITIES = 8,
 };
 
 struct v4_hb_error {
@@ -94,7 +95,7 @@ struct v4_hb_bound_root_walks {
 };
 
 /*
- * These are detached, process-local observations of seven successful traced
+ * These are detached, process-local observations of eight successful traced
  * syscalls.  They are neither a serialized receipt nor complete mount-graph
  * authority.  The logical generation is the pre-clone userspace ledger value
  * bound to the inherited input descriptor, not a kernel generation ID.
@@ -164,6 +165,17 @@ struct v4_hb_setup_prefix_observation {
     uint32_t credential_status_row_count;
     struct v4_hb_status_credential_ids observer_credential_ids;
     struct v4_hb_status_credential_ids inner_credential_ids;
+    uint64_t ambient_before_status_byte_count;
+    uint32_t ambient_before_credential_row_count;
+    uint32_t ambient_before_capability_row_count;
+    struct v4_hb_status_credential_ids
+        ambient_before_observer_credential_ids;
+    struct v4_hb_status_credential_ids ambient_before_inner_credential_ids;
+    struct v4_hb_status_capability_masks ambient_before_capability_masks;
+    uint32_t capability_status_row_count;
+    struct v4_hb_status_capability_masks capability_masks;
+    uint32_t ambient_clear_syscall_observed;
+    uint32_t ambient_clear_idempotent;
     uint32_t live_signal_mask_observed;
     uint32_t live_signal_mask_byte_count;
     uint8_t live_signal_mask_bytes[V4_HB_KERNEL_SIGSET_BYTES];

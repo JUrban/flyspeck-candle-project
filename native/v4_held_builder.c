@@ -20,6 +20,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/mount.h>
+#include <sys/prctl.h>
 #include <sys/ioctl.h>
 #include <sys/ptrace.h>
 #include <sys/syscall.h>
@@ -109,6 +110,12 @@ _Static_assert(SYS_setresuid == 117,
                "unexpected Linux x86-64 setresuid syscall");
 _Static_assert(SYS_rt_sigprocmask == 14,
                "unexpected Linux x86-64 rt_sigprocmask syscall");
+_Static_assert(SYS_prctl == 157,
+               "unexpected Linux x86-64 prctl syscall");
+_Static_assert(PR_CAP_AMBIENT == 47,
+               "unexpected Linux PR_CAP_AMBIENT value");
+_Static_assert(PR_CAP_AMBIENT_CLEAR_ALL == 4,
+               "unexpected Linux PR_CAP_AMBIENT_CLEAR_ALL value");
 _Static_assert(SIG_SETMASK == 2,
                "unexpected Linux x86-64 SIG_SETMASK value");
 _Static_assert(PTRACE_GETSIGMASK == 0x420a,
@@ -234,6 +241,27 @@ static int v4_hb_observe_child_signal_mask(
     uint32_t *payload_bytes,
     uint8_t bytes[V4_HB_KERNEL_SIGSET_BYTES],
     struct v4_hb_error *error
+);
+
+static int v4_hb_observe_child_credential_capability_state(
+    const struct v4_hb_builder *builder,
+    uint64_t *payload_bytes,
+    uint32_t *credential_row_count,
+    uint32_t *capability_row_count,
+    struct v4_hb_status_credential_ids *observer_ids,
+    struct v4_hb_status_credential_ids *inner_ids,
+    struct v4_hb_status_capability_masks *capability_masks,
+    struct v4_hb_error *error
+);
+
+static bool v4_hb_same_status_credential_ids(
+    const struct v4_hb_status_credential_ids *first,
+    const struct v4_hb_status_credential_ids *second
+);
+
+static bool v4_hb_same_status_capability_masks(
+    const struct v4_hb_status_capability_masks *first,
+    const struct v4_hb_status_capability_masks *second
 );
 
 _Static_assert(sizeof(struct v4_hb_ptrace_syscall_base) == 24U,
@@ -2447,6 +2475,10 @@ v4_hb_child_gate_loop(_Atomic unsigned int *gate, int input_root_fd)
         V4_HB_KERNEL_SIGSET_BYTES, 0U, 0U
     );
     (void)v4_hb_child_raw_syscall6(
+        SYS_prctl, PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL,
+        0U, 0U, 0U, 0U
+    );
+    (void)v4_hb_child_raw_syscall6(
         SYS_exit, 0U, 0U, 0U, 0U, 0U, 0U
     );
     __builtin_unreachable();
@@ -3094,6 +3126,12 @@ v4_hb_verify_held_internal(
     }
     if (setup_stop) {
         struct v4_hb_ptrace_syscall_information setup_information;
+        struct v4_hb_status_credential_ids observer_ids;
+        struct v4_hb_status_credential_ids inner_ids;
+        struct v4_hb_status_capability_masks capability_masks;
+        uint64_t status_byte_count = 0U;
+        uint32_t credential_row_count = 0U;
+        uint32_t capability_row_count = 0U;
         uint8_t live_signal_mask_bytes[V4_HB_KERNEL_SIGSET_BYTES];
         uint32_t live_signal_mask_observed = 0U;
         uint32_t live_signal_mask_byte_count = 0U;
@@ -3107,6 +3145,31 @@ v4_hb_verify_held_internal(
         );
         if (code != V4_HB_OK) {
             return code;
+        }
+        code = v4_hb_observe_child_credential_capability_state(
+            builder, &status_byte_count, &credential_row_count,
+            &capability_row_count, &observer_ids, &inner_ids,
+            &capability_masks, error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        if (status_byte_count == 0U ||
+            status_byte_count > V4_HB_PROC_STATUS_MAX_BYTES ||
+            credential_row_count !=
+                builder->setup_prefix.credential_status_row_count ||
+            capability_row_count !=
+                builder->setup_prefix.capability_status_row_count ||
+            !v4_hb_same_status_credential_ids(
+                &observer_ids,
+                &builder->setup_prefix.observer_credential_ids
+            ) || !v4_hb_same_status_credential_ids(
+                &inner_ids, &builder->setup_prefix.inner_credential_ids
+            ) || !v4_hb_same_status_capability_masks(
+                &capability_masks, &builder->setup_prefix.capability_masks
+            ) || capability_masks.ambient != 0U) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "live child capability state changed");
         }
         code = v4_hb_observe_child_signal_mask(
             builder, &live_signal_mask_observed,
@@ -3153,7 +3216,7 @@ v4_hb_verify_held_internal(
             setup_information.detail.exit.return_value != 0 ||
             setup_information.detail.exit.is_error != 0U) {
             return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
-                              "final rt_sigprocmask exit stop projection changed");
+                              "final setup syscall exit stop projection changed");
         }
         do {
             waited = waitpid(builder->pid, &unexpected_status,
@@ -3747,7 +3810,7 @@ v4_hb_validate_setup_entry(
         V4_HB_SETUP_PREFIX_OPERATION_COUNT
     ] = {
         SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
-        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask
+        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask, SYS_prctl
     };
     uint64_t expected_number;
     uint32_t argument_index;
@@ -3866,6 +3929,18 @@ v4_hb_validate_setup_entry(
             return code;
         }
         break;
+    case V4_HB_SETUP_CLEAR_AMBIENT_CAPABILITIES:
+        if (information->detail.entry.arguments[0] != PR_CAP_AMBIENT ||
+            information->detail.entry.arguments[1] !=
+                PR_CAP_AMBIENT_CLEAR_ALL ||
+            information->detail.entry.arguments[2] != 0U ||
+            information->detail.entry.arguments[3] != 0U ||
+            information->detail.entry.arguments[4] != 0U ||
+            information->detail.entry.arguments[5] != 0U) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "clear ambient capability arguments mismatch");
+        }
+        break;
     default:
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "unknown setup operation");
@@ -3956,13 +4031,40 @@ v4_hb_same_status_credential_ids(
         first->filesystem_gid == second->filesystem_gid;
 }
 
+static bool
+v4_hb_same_status_capability_masks(
+    const struct v4_hb_status_capability_masks *first,
+    const struct v4_hb_status_capability_masks *second
+)
+{
+    return first->inheritable == second->inheritable &&
+        first->permitted == second->permitted &&
+        first->effective == second->effective &&
+        first->bounding == second->bounding &&
+        first->ambient == second->ambient;
+}
+
+static bool
+v4_hb_valid_ambient_clear_transition(
+    const struct v4_hb_status_capability_masks *before,
+    const struct v4_hb_status_capability_masks *after
+)
+{
+    return before->inheritable == after->inheritable &&
+        before->permitted == after->permitted &&
+        before->effective == after->effective &&
+        before->bounding == after->bounding && after->ambient == 0U;
+}
+
 static int
-v4_hb_observe_child_credentials(
+v4_hb_observe_child_credential_capability_state(
     const struct v4_hb_builder *builder,
     uint64_t *payload_bytes,
-    uint32_t *row_count,
+    uint32_t *credential_row_count,
+    uint32_t *capability_row_count,
     struct v4_hb_status_credential_ids *observer_ids,
     struct v4_hb_status_credential_ids *inner_ids,
+    struct v4_hb_status_capability_masks *capability_masks,
     struct v4_hb_error *error
 )
 {
@@ -3991,6 +4093,12 @@ v4_hb_observe_child_credentials(
     if (code != V4_HB_OK) {
         return code;
     }
+    code = v4_hb_parse_status_capability_rows(
+        payload, used, capability_masks, error
+    );
+    if (code != V4_HB_OK) {
+        return code;
+    }
     if (builder->uid_map.inside_id != 0U ||
         builder->uid_map.length != 1U ||
         builder->gid_map.inside_id != 0U ||
@@ -4015,7 +4123,8 @@ v4_hb_observe_child_credentials(
     }
     memset(inner_ids, 0, sizeof(*inner_ids));
     *payload_bytes = (uint64_t)used;
-    *row_count = 2U;
+    *credential_row_count = 2U;
+    *capability_row_count = 5U;
     return V4_HB_OK;
 }
 
@@ -4266,7 +4375,29 @@ v4_hb_same_setup_prefix(
         ) && v4_hb_same_status_credential_ids(
             &first->inner_credential_ids,
             &second->inner_credential_ids
-        ) &&
+        ) && first->ambient_before_status_byte_count ==
+            second->ambient_before_status_byte_count &&
+        first->ambient_before_credential_row_count ==
+            second->ambient_before_credential_row_count &&
+        first->ambient_before_capability_row_count ==
+            second->ambient_before_capability_row_count &&
+        v4_hb_same_status_credential_ids(
+            &first->ambient_before_observer_credential_ids,
+            &second->ambient_before_observer_credential_ids
+        ) && v4_hb_same_status_credential_ids(
+            &first->ambient_before_inner_credential_ids,
+            &second->ambient_before_inner_credential_ids
+        ) && v4_hb_same_status_capability_masks(
+            &first->ambient_before_capability_masks,
+            &second->ambient_before_capability_masks
+        ) && first->capability_status_row_count ==
+            second->capability_status_row_count &&
+        v4_hb_same_status_capability_masks(
+            &first->capability_masks, &second->capability_masks
+        ) && first->ambient_clear_syscall_observed ==
+            second->ambient_clear_syscall_observed &&
+        first->ambient_clear_idempotent ==
+            second->ambient_clear_idempotent &&
         first->live_signal_mask_observed ==
             second->live_signal_mask_observed &&
         first->live_signal_mask_byte_count ==
@@ -4300,13 +4431,17 @@ v4_hb_validate_setup_prefix_observation(
         &builder->root_config.input_root.initial_projection;
     static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
         SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
-        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask
+        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask, SYS_prctl
     };
     static const uint8_t empty_signal_mask[V4_HB_KERNEL_SIGSET_BYTES] = {0};
     const struct v4_hb_status_credential_ids *observer_ids =
         &setup->observer_credential_ids;
     const struct v4_hb_status_credential_ids *inner_ids =
         &setup->inner_credential_ids;
+    const struct v4_hb_status_credential_ids *before_observer_ids =
+        &setup->ambient_before_observer_credential_ids;
+    const struct v4_hb_status_credential_ids *before_inner_ids =
+        &setup->ambient_before_inner_credential_ids;
     uint32_t outside_uid = builder->uid_map.outside_id;
     uint32_t outside_gid = builder->gid_map.outside_id;
     uint32_t index;
@@ -4334,6 +4469,12 @@ v4_hb_validate_setup_prefix_observation(
         setup->credential_status_byte_count >
             V4_HB_PROC_STATUS_MAX_BYTES ||
         setup->credential_status_row_count != 2U ||
+        setup->capability_status_row_count != 5U ||
+        setup->ambient_before_status_byte_count == 0U ||
+        setup->ambient_before_status_byte_count >
+            V4_HB_PROC_STATUS_MAX_BYTES ||
+        setup->ambient_before_credential_row_count != 2U ||
+        setup->ambient_before_capability_row_count != 5U ||
         observer_ids->real_uid != outside_uid ||
         observer_ids->effective_uid != outside_uid ||
         observer_ids->saved_uid != outside_uid ||
@@ -4346,6 +4487,16 @@ v4_hb_validate_setup_prefix_observation(
         inner_ids->saved_uid != 0U || inner_ids->filesystem_uid != 0U ||
         inner_ids->real_gid != 0U || inner_ids->effective_gid != 0U ||
         inner_ids->saved_gid != 0U || inner_ids->filesystem_gid != 0U ||
+        !v4_hb_same_status_credential_ids(
+            before_observer_ids, observer_ids
+        ) || !v4_hb_same_status_credential_ids(before_inner_ids, inner_ids) ||
+        !v4_hb_valid_ambient_clear_transition(
+            &setup->ambient_before_capability_masks,
+            &setup->capability_masks
+        ) || setup->ambient_clear_syscall_observed != 1U ||
+        setup->ambient_clear_idempotent > 1U ||
+        setup->ambient_clear_idempotent !=
+            (setup->ambient_before_capability_masks.ambient == 0U ? 1U : 0U) ||
         setup->live_signal_mask_observed != 1U ||
         setup->live_signal_mask_byte_count != V4_HB_KERNEL_SIGSET_BYTES ||
         memcmp(setup->live_signal_mask_bytes, empty_signal_mask,
@@ -4397,11 +4548,18 @@ v4_hb_validate_setup_prefix_observation(
                  argument_index < 6U; ++argument_index) {
                 arguments_exact = operation->arguments[argument_index] == 0U;
             }
-        } else {
+        } else if (index == 6U) {
             arguments_exact = operation->arguments[0] == SIG_SETMASK &&
                 operation->arguments[1] != 0U &&
                 operation->arguments[2] == 0U &&
                 operation->arguments[3] == V4_HB_KERNEL_SIGSET_BYTES &&
+                operation->arguments[4] == 0U &&
+                operation->arguments[5] == 0U;
+        } else {
+            arguments_exact = operation->arguments[0] == PR_CAP_AMBIENT &&
+                operation->arguments[1] == PR_CAP_AMBIENT_CLEAR_ALL &&
+                operation->arguments[2] == 0U &&
+                operation->arguments[3] == 0U &&
                 operation->arguments[4] == 0U &&
                 operation->arguments[5] == 0U;
         }
@@ -4514,6 +4672,20 @@ v4_hb_builder_run_setup_prefix(
         struct v4_hb_setup_syscall_observation *operation =
             &setup.operations[index];
 
+        if (index == 7U) {
+            code = v4_hb_observe_child_credential_capability_state(
+                builder, &setup.ambient_before_status_byte_count,
+                &setup.ambient_before_credential_row_count,
+                &setup.ambient_before_capability_row_count,
+                &setup.ambient_before_observer_credential_ids,
+                &setup.ambient_before_inner_credential_ids,
+                &setup.ambient_before_capability_masks, error
+            );
+            if (code != V4_HB_OK) {
+                builder->state = V4_HB_POISONED;
+                return code;
+            }
+        }
         code = v4_hb_resume_to_syscall_stop(
             builder, &operation->raw_entry_wait_status, error
         );
@@ -4578,12 +4750,32 @@ v4_hb_builder_run_setup_prefix(
         }
     }
     setup.ptrace_syscall_resume_count = builder->resume_count;
-    code = v4_hb_observe_child_credentials(
+    code = v4_hb_observe_child_credential_capability_state(
         builder, &setup.credential_status_byte_count,
         &setup.credential_status_row_count,
+        &setup.capability_status_row_count,
         &setup.observer_credential_ids,
-        &setup.inner_credential_ids, error
+        &setup.inner_credential_ids, &setup.capability_masks, error
     );
+    if (code == V4_HB_OK &&
+        (!v4_hb_same_status_credential_ids(
+            &setup.ambient_before_observer_credential_ids,
+            &setup.observer_credential_ids
+         ) || !v4_hb_same_status_credential_ids(
+            &setup.ambient_before_inner_credential_ids,
+            &setup.inner_credential_ids
+         ) || !v4_hb_valid_ambient_clear_transition(
+            &setup.ambient_before_capability_masks,
+            &setup.capability_masks
+         ))) {
+        code = v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "ambient capability state transition is malformed");
+    }
+    if (code == V4_HB_OK) {
+        setup.ambient_clear_syscall_observed = 1U;
+        setup.ambient_clear_idempotent =
+            setup.ambient_before_capability_masks.ambient == 0U ? 1U : 0U;
+    }
     if (code == V4_HB_OK) {
         code = v4_hb_observe_child_signal_mask(
             builder, &setup.live_signal_mask_observed,
