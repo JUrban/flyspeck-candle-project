@@ -848,3 +848,14 @@ conditional on a clean completion of warm reverse-dependency attempt 003.
 The trusted launcher must retain the original PID, process group, start ticks
 and emitted terminal-manifest digest outside the writable replay root for the
 final gate.
+
+## Cold-launch unit correction
+
+A read-only launch rehearsal rejected the first readiness description because
+one controller comment called the unchanged `117964800` KiB limit 115.2 GiB.
+The exact conversion is `120795955200` bytes, or 112.5 GiB.  This remains
+below the user-authorized exceptional 120 GiB ceiling and does not change the
+enforced limit or any controller behavior.  The executable-source comment is
+corrected rather than changing the accepted numeric contract.  A cold launch
+must repin the resulting project head and recheck exact source identity before
+use; warm attempt 003 and its live `Holmake` continue to hold the launch gate.

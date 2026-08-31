@@ -149,7 +149,7 @@ fi
   --cakeml-root "$cakeml_root" --cakeml-head "$cakeml_head" \
   --hol4-root "$hol4_root" --hol4-head "$hol4_head" >/dev/null
 
-# 115.2 GiB in KiB. The user-authorized exceptional ceiling is 120 GiB.
+# 117964800 KiB is exactly 112.5 GiB, below the authorized 120 GiB ceiling.
 ulimit -v 117964800
 
 run_stage() {
