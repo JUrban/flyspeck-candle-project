@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -90,8 +91,13 @@ REPLAY_GATE_RELATIVE = "scripts/check-canonical-bootstrap-gate.py"
 PRISTINE_PREFLIGHT_RELATIVE = "pristine-preflight.json"
 TERMINAL_MANIFEST_RELATIVE = "terminal-manifest.json"
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
-PREFLIGHT_KIND = "canonical-cakeml-cold-pristine-preflight-v1"
-MANIFEST_KIND = "canonical-cakeml-cold-terminal-manifest-v1"
+PREFLIGHT_KIND = "canonical-cakeml-cold-pristine-preflight-v2"
+MANIFEST_KIND = "canonical-cakeml-cold-terminal-manifest-v2"
+SMALL_FILE_MAX_BYTES = 1024 * 1024
+PROC_STAT_MAX_BYTES = 4096
+PROC_CMDLINE_MAX_BYTES = 64 * 1024
+CONTROLLER_SOURCE_FD = 9
+UINT64_MAX = (1 << 64) - 1
 
 
 class GateError(RuntimeError):
@@ -112,29 +118,48 @@ def ordinary_exact_directory(path: Path, label: str) -> Path:
     return path
 
 
-def stable_file_bytes(path: Path, label: str, *, nonempty: bool = True) -> bytes:
+def stable_file_bytes(
+    path: Path,
+    label: str,
+    *,
+    nonempty: bool = True,
+    max_bytes: int = SMALL_FILE_MAX_BYTES,
+) -> bytes:
+    require(type(max_bytes) is int and max_bytes > 0,
+            f"invalid {label} byte cap")
     try:
         descriptor = os.open(
-            path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW |
+            getattr(os, "O_CLOEXEC", 0),
         )
     except OSError as error:
         raise GateError(f"could not open ordinary {label}: {path}") from error
     try:
         before = os.fstat(descriptor)
+        require(stat.S_ISREG(before.st_mode), f"{label} is not an ordinary file")
+        require(before.st_size <= max_bytes,
+                f"{label} exceeds size cap: {path}")
         chunks = []
-        while block := os.read(descriptor, 1024 * 1024):
+        total = 0
+        while block := os.read(
+            descriptor, min(1024 * 1024, max_bytes + 1 - total),
+        ):
             chunks.append(block)
+            total += len(block)
+            require(total <= max_bytes, f"{label} exceeds size cap: {path}")
         after = os.fstat(descriptor)
         named = path.stat(follow_symlinks=False)
     finally:
         os.close(descriptor)
     value = b"".join(chunks)
-    require(stat.S_ISREG(before.st_mode) and
-            (before.st_dev, before.st_ino, before.st_size,
+    require((before.st_dev, before.st_ino, before.st_mode, before.st_nlink,
+             before.st_size,
              before.st_mtime_ns, before.st_ctime_ns) ==
-            (after.st_dev, after.st_ino, after.st_size,
+            (after.st_dev, after.st_ino, after.st_mode, after.st_nlink,
+             after.st_size,
              after.st_mtime_ns, after.st_ctime_ns) and
-            (named.st_dev, named.st_ino) == (after.st_dev, after.st_ino) and
+            (named.st_dev, named.st_ino, named.st_mode, named.st_nlink) ==
+            (after.st_dev, after.st_ino, after.st_mode, after.st_nlink) and
             len(value) == before.st_size,
             f"{label} changed while reading: {path}")
     require(not nonempty or value, f"empty {label}: {path}")
@@ -150,7 +175,8 @@ def stable_file_record(
 ) -> dict[str, object]:
     try:
         descriptor = os.open(
-            path, os.O_RDONLY | os.O_NOFOLLOW | getattr(os, "O_CLOEXEC", 0),
+            path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW |
+            getattr(os, "O_CLOEXEC", 0),
         )
     except OSError as error:
         raise GateError(f"could not open ordinary {label}: {path}") from error
@@ -213,8 +239,7 @@ def no_duplicate_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
 
 
 def load_canonical_json(path: Path, label: str) -> tuple[dict[str, object], bytes]:
-    value = stable_file_bytes(path, label)
-    require(len(value) <= 1024 * 1024, f"{label} exceeds size cap")
+    value = stable_file_bytes(path, label, max_bytes=SMALL_FILE_MAX_BYTES)
     try:
         parsed = json.loads(value.decode("utf-8"), object_pairs_hook=no_duplicate_object)
     except (UnicodeError, json.JSONDecodeError) as error:
@@ -488,15 +513,182 @@ def source_authority_record(
     }
 
 
-def read_positive_pid(path: Path) -> int:
+def read_positive_decimal(path: Path, label: str, maximum: int) -> int:
     try:
-        value = int(stable_file_bytes(
-            path, "replay controller PID",
-        ).decode("ascii").strip())
+        raw = stable_file_bytes(path, label, max_bytes=32)
+        require(re.fullmatch(rb"[1-9][0-9]*\n", raw) is not None,
+                f"malformed {label}: {path}")
+        value = int(raw[:-1])
     except (OSError, UnicodeError, ValueError) as error:
-        raise GateError(f"malformed replay controller PID: {path}") from error
-    require(value > 1, f"malformed replay controller PID: {value}")
+        raise GateError(f"malformed {label}: {path}") from error
+    require(1 < value <= maximum, f"malformed {label}: {value}")
     return value
+
+
+def read_positive_pid(path: Path) -> int:
+    return read_positive_decimal(path, "replay controller PID", (1 << 31) - 1)
+
+
+def bounded_proc_file_bytes(path: Path, label: str, max_bytes: int) -> bytes:
+    require(type(max_bytes) is int and max_bytes > 0,
+            f"invalid {label} byte cap")
+    try:
+        descriptor = os.open(
+            path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW |
+            getattr(os, "O_CLOEXEC", 0),
+        )
+    except OSError as error:
+        raise GateError(f"could not open {label}: {path}") from error
+    try:
+        before = os.fstat(descriptor)
+        require(stat.S_ISREG(before.st_mode), f"{label} is not a regular proc file")
+        chunks = []
+        total = 0
+        while block := os.read(
+            descriptor, min(4096, max_bytes + 1 - total),
+        ):
+            chunks.append(block)
+            total += len(block)
+            require(total <= max_bytes, f"{label} exceeds size cap: {path}")
+        after = os.fstat(descriptor)
+    finally:
+        os.close(descriptor)
+    require((before.st_dev, before.st_ino, before.st_mode) ==
+            (after.st_dev, after.st_ino, after.st_mode),
+            f"{label} changed while reading: {path}")
+    value = b"".join(chunks)
+    require(value, f"empty {label}: {path}")
+    return value
+
+
+def parse_proc_stat_identity(value: bytes) -> dict[str, int]:
+    require(len(value) <= PROC_STAT_MAX_BYTES,
+            "controller proc stat exceeds size cap")
+    try:
+        text = value.decode("ascii")
+        require(text.endswith("\n") and text.count("\n") == 1,
+                "controller proc stat is not one complete line")
+        opening = text.index(" (")
+        closing = text.rindex(") ")
+        require(opening > 0 and closing > opening + 2,
+                "controller proc stat command field is malformed")
+        pid_text = text[:opening]
+        fields = text[closing + 2:-1].split()
+        require(len(fields) >= 20,
+                "controller proc stat has too few fields")
+        require(re.fullmatch(r"[1-9][0-9]*", pid_text) is not None and
+                re.fullmatch(r"[1-9][0-9]*", fields[2]) is not None and
+                re.fullmatch(r"[1-9][0-9]*", fields[19]) is not None,
+                "controller proc stat identity fields are malformed")
+        pid = int(pid_text)
+        process_group = int(fields[2])
+        start_ticks = int(fields[19])
+    except (UnicodeError, ValueError) as error:
+        raise GateError("malformed controller proc stat") from error
+    require(1 < pid <= (1 << 31) - 1 and
+            1 < process_group <= (1 << 31) - 1 and
+            0 < start_ticks <= UINT64_MAX,
+            "controller proc stat identity is outside its domain")
+    return {"pid": pid, "pgid": process_group, "start_ticks": start_ticks}
+
+
+def read_live_process_identity(proc_root: Path, pid: int) -> dict[str, int]:
+    require(type(pid) is int and 1 < pid <= (1 << 31) - 1,
+            "controller PID is outside its domain")
+    value = bounded_proc_file_bytes(
+        proc_root / str(pid) / "stat", "controller proc stat", PROC_STAT_MAX_BYTES,
+    )
+    identity = parse_proc_stat_identity(value)
+    require(identity["pid"] == pid, "controller proc stat PID mismatch")
+    return identity
+
+
+def validate_controller_identity_record(value: object) -> dict[str, int]:
+    require(type(value) is dict and set(value) == {"pid", "pgid", "start_ticks"},
+            "controller identity has unexpected fields")
+    assert isinstance(value, dict)
+    require(type(value["pid"]) is int and 1 < value["pid"] <= (1 << 31) - 1,
+            "controller identity PID is outside its domain")
+    require(type(value["pgid"]) is int and 1 < value["pgid"] <= (1 << 31) - 1,
+            "controller identity process group is outside its domain")
+    require(type(value["start_ticks"]) is int and
+            0 < value["start_ticks"] <= UINT64_MAX,
+            "controller identity start ticks are outside their domain")
+    return {
+        "pid": value["pid"],
+        "pgid": value["pgid"],
+        "start_ticks": value["start_ticks"],
+    }
+
+
+def authenticate_controller_parent(
+    proc_root: Path,
+    controller_pid: int,
+    controller_pgid: int,
+    controller_script: Path,
+    expected_arguments: tuple[str, ...],
+) -> dict[str, int]:
+    # This is a same-host process-origin check, not a cryptographic defense
+    # against same-UID ptrace/process-memory tampering.  The post-exit gate
+    # separately requires the terminal digest retained by its trusted caller.
+    require(os.getppid() == controller_pid,
+            "internal publication caller is not the recorded controller")
+    before = read_live_process_identity(proc_root, controller_pid)
+    require(before["pgid"] == controller_pgid,
+            "live controller process group mismatch")
+    expected_command = (
+        "/bin/bash", "-p", str(controller_script), *expected_arguments,
+    )
+    observed_command = bounded_proc_file_bytes(
+        proc_root / str(controller_pid) / "cmdline",
+        "controller proc cmdline", PROC_CMDLINE_MAX_BYTES,
+    )
+    expected_command_bytes = b"\0".join(
+        os.fsencode(argument) for argument in expected_command
+    ) + b"\0"
+    require(observed_command == expected_command_bytes,
+            "live controller command line differs from canonical invocation")
+
+    expected_executable = Path("/bin/bash").resolve(strict=True).stat()
+    observed_executable = (proc_root / str(controller_pid) / "exe").stat()
+    require(stat.S_ISREG(expected_executable.st_mode) and
+            (observed_executable.st_dev, observed_executable.st_ino) ==
+            (expected_executable.st_dev, expected_executable.st_ino),
+            "live controller executable differs from /bin/bash")
+
+    expected_source = controller_script.stat(follow_symlinks=False)
+    inherited_source = os.fstat(CONTROLLER_SOURCE_FD)
+    parent_source = (
+        proc_root / str(controller_pid) / "fd" / str(CONTROLLER_SOURCE_FD)
+    ).stat()
+    source_projection = lambda value: (
+        value.st_dev, value.st_ino, value.st_mode, value.st_nlink,
+    )
+    require(stat.S_ISREG(expected_source.st_mode) and
+            source_projection(expected_source) ==
+            source_projection(inherited_source) ==
+            source_projection(parent_source),
+            "controller source descriptor differs from committed script")
+    require((fcntl.fcntl(CONTROLLER_SOURCE_FD, fcntl.F_GETFL) & os.O_ACCMODE) ==
+            os.O_RDONLY,
+            "controller source descriptor is not read-only")
+    after = read_live_process_identity(proc_root, controller_pid)
+    require(after == before, "controller identity changed during authentication")
+    return before
+
+
+def read_replay_controller_identity(replay: Path) -> dict[str, int]:
+    return validate_controller_identity_record({
+        "pid": read_positive_pid(replay / "controller_pid"),
+        "pgid": read_positive_decimal(
+            replay / "controller_pgid", "replay controller process group",
+            (1 << 31) - 1,
+        ),
+        "start_ticks": read_positive_decimal(
+            replay / "controller_start_ticks", "replay controller start ticks",
+            UINT64_MAX,
+        ),
+    })
 
 
 def live_holmake_pids(proc_root: Path) -> list[int]:
@@ -602,6 +794,7 @@ def validate_replay_controller_authority(
     hol4_root: Path,
     hol4_head: str,
 ) -> dict[str, object]:
+    controller_identity = read_replay_controller_identity(replay)
     sidecars = {
         "controller_project_root": f"{project_root}\n".encode(),
         "controller_project_head": f"{project_head}\n".encode(),
@@ -638,7 +831,11 @@ def validate_replay_controller_authority(
                 "cold replay gate source digest",
             ) == f"{gate['sha256']}\n".encode(),
             "cold replay gate source digest mismatch")
-    return {"controller": controller, "gate": gate}
+    return {
+        "controller": controller,
+        "gate": gate,
+        "controller_identity": controller_identity,
+    }
 
 
 def tracked_summary_only(value: dict[str, object]) -> dict[str, object]:
@@ -655,9 +852,11 @@ def build_pristine_preflight(
     cakeml_head: str,
     hol4_root: Path,
     hol4_head: str,
+    controller_identity: object,
     *,
     require_pristine: bool,
 ) -> dict[str, object]:
+    identity = validate_controller_identity_record(controller_identity)
     project = validate_exact_git_tree(
         project_root, project_head, "replay controller project",
     )
@@ -681,7 +880,7 @@ def build_pristine_preflight(
     require(ignored_count == 0 and ignored_digest == EMPTY_SHA256,
             "historical CakeML ignored-product preflight is not empty")
     return {
-        "schema": 1,
+        "schema": 2,
         "kind": PREFLIGHT_KIND,
         "project_root": str(project_root),
         "project_head": project_head,
@@ -695,6 +894,7 @@ def build_pristine_preflight(
         "hol4_head": hol4_head,
         "hol4_tracked_tree": tracked_summary_only(hol4),
         "sources": authority,
+        "controller_identity": identity,
         "complete": True,
     }
 
@@ -708,12 +908,13 @@ def build_terminal_manifest(
     hol4_root: Path,
     hol4_head: str,
 ) -> dict[str, object]:
+    controller_identity = read_replay_controller_identity(replay)
     preflight, _preflight_bytes = load_canonical_json(
         replay / PRISTINE_PREFLIGHT_RELATIVE, "cold replay pristine preflight",
     )
     expected_preflight = build_pristine_preflight(
         project_root, project_head, cakeml_root, cakeml_head, hol4_root, hol4_head,
-        require_pristine=False,
+        controller_identity, require_pristine=False,
     )
     require(preflight == expected_preflight,
             "cold replay pristine preflight authority mismatch")
@@ -761,10 +962,8 @@ def build_terminal_manifest(
     finished = stable_file_bytes(
         replay / "finished_utc", "cold replay completion timestamp",
     ).decode("ascii").strip()
-    controller_pid = read_positive_pid(replay / "controller_pid")
-    controller_pgid = read_positive_pid(replay / "controller_pgid")
     return {
-        "schema": 1,
+        "schema": 2,
         "kind": MANIFEST_KIND,
         "replay_root": str(replay),
         "project_root": str(project_root),
@@ -773,8 +972,7 @@ def build_terminal_manifest(
         "cakeml_head": cakeml_head,
         "hol4_root": str(hol4_root),
         "hol4_head": hol4_head,
-        "controller_pid": controller_pid,
-        "controller_pgid": controller_pgid,
+        "controller_identity": controller_identity,
         "started_utc": started,
         "finished_utc": finished,
         "build_parallelism": "-j1 --mt=1",
@@ -837,6 +1035,13 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
         replay, project_root, arguments.project_head,
         cakeml, arguments.cakeml_head, hol4, arguments.hol4_head,
     )
+    controller_identity = replay_authority["controller_identity"]
+    require(controller_identity == {
+                "pid": arguments.replay_controller_pid,
+                "pgid": arguments.replay_process_group,
+                "start_ticks": arguments.replay_controller_start_ticks,
+            },
+            "cold replay controller identity differs from pinned launch identity")
 
     require(stable_file_bytes(
                 replay / "stage", "cold replay stage",
@@ -852,12 +1057,8 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
     )
     require(started <= finished <= datetime.now(timezone.utc),
             "cold replay timestamp ordering is invalid")
-    controller_pid = read_positive_pid(replay / "controller_pid")
-    require(controller_pid == arguments.replay_controller_pid,
-            "cold replay controller PID differs from pinned launch identity")
-    controller_pgid = read_positive_pid(replay / "controller_pgid")
-    require(controller_pgid == arguments.replay_process_group,
-            "cold replay controller process group differs from pinned launch identity")
+    controller_pid = controller_identity["pid"]
+    controller_pgid = controller_identity["pgid"]
     require(not (proc_root / str(controller_pid)).exists(),
             f"cold replay controller is still live: {controller_pid}")
     group_members = process_group_members(proc_root, arguments.replay_process_group)
@@ -867,11 +1068,13 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
         path = replay / relative
         validate_time_receipt(path, hol4, target)
     for relative in CAKEML_POSTCONDITIONS:
-        path = cakeml / relative
-        stable_file_bytes(path, "cold replay postcondition")
+        exact_relative_file_record(cakeml, relative, "cold replay postcondition")
     manifest, manifest_bytes = load_canonical_json(
         replay / TERMINAL_MANIFEST_RELATIVE, "cold replay terminal manifest",
     )
+    manifest_digest = hashlib.sha256(manifest_bytes).hexdigest()
+    require(manifest_digest == arguments.terminal_manifest_sha256,
+            "cold replay terminal manifest differs from pinned publication digest")
     expected_manifest = build_terminal_manifest(
         replay, project_root, arguments.project_head,
         cakeml, arguments.cakeml_head, hol4, arguments.hol4_head,
@@ -897,6 +1100,7 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
         "hol4_head": arguments.hol4_head,
         "replay_controller_pid": controller_pid,
         "replay_process_group": arguments.replay_process_group,
+        "replay_controller_start_ticks": controller_identity["start_ticks"],
         "mem_available_kib": available_kib,
         "minimum_mem_available_kib": required_kib,
         "attempt_root": str(arguments.attempt_root),
@@ -905,7 +1109,7 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
         "inherited_soft_limits": inherited_limits,
         "replay_controller_sha256": replay_authority["controller"]["sha256"],
         "replay_gate_sha256": replay_authority["gate"]["sha256"],
-        "terminal_manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+        "terminal_manifest_sha256": manifest_digest,
     }
 
 
@@ -916,6 +1120,8 @@ def main() -> None:
     parser.add_argument("--replay-root", type=Path, required=True)
     parser.add_argument("--replay-controller-pid", type=int, required=True)
     parser.add_argument("--replay-process-group", type=int, required=True)
+    parser.add_argument("--replay-controller-start-ticks", type=int, required=True)
+    parser.add_argument("--terminal-manifest-sha256", required=True)
     parser.add_argument("--candle-root", type=Path, required=True)
     parser.add_argument("--candle-head", required=True)
     parser.add_argument("--cakeml-root", type=Path, required=True)
@@ -930,8 +1136,12 @@ def main() -> None:
     require(arguments.minimum_mem_available_gib > 0,
             "minimum memory threshold must be positive")
     require(arguments.replay_controller_pid > 1 and
-            arguments.replay_process_group > 1,
+            arguments.replay_process_group > 1 and
+            0 < arguments.replay_controller_start_ticks <= UINT64_MAX,
             "replay launch identity must use positive non-system IDs")
+    require(re.fullmatch(r"[0-9a-f]{64}", arguments.terminal_manifest_sha256)
+            is not None,
+            "terminal manifest digest must be canonical SHA-256")
     project_head = validate_self_authority(
         arguments.project_root, arguments.project_head,
     )
@@ -964,14 +1174,37 @@ def internal_preflight_main(arguments: list[str]) -> None:
     parser.add_argument("--cakeml-head", required=True)
     parser.add_argument("--hol4-root", type=Path, required=True)
     parser.add_argument("--hol4-head", required=True)
+    parser.add_argument("--controller-pid", type=int, required=True)
+    parser.add_argument("--controller-pgid", type=int, required=True)
+    parser.add_argument("--proc-root", type=Path, default=Path("/proc"),
+                        help=argparse.SUPPRESS)
     parsed = parser.parse_args(arguments)
     replay = ordinary_exact_directory(parsed.replay_root, "replay root")
     project = ordinary_exact_directory(parsed.project_root, "controller project root")
     cakeml = ordinary_exact_directory(parsed.cakeml_root, "CakeML root")
     hol4 = ordinary_exact_directory(parsed.hol4_root, "HOL4 root")
+    proc_root = ordinary_exact_directory(parsed.proc_root, "proc root")
+    identity = authenticate_controller_parent(
+        proc_root, parsed.controller_pid, parsed.controller_pgid,
+        project / REPLAY_CONTROLLER_RELATIVE,
+        (
+            str(replay), str(cakeml), parsed.cakeml_head,
+            str(hol4), parsed.hol4_head,
+        ),
+    )
+    require(read_positive_pid(replay / "controller_pid") == identity["pid"] and
+            read_positive_decimal(
+                replay / "controller_pgid", "replay controller process group",
+                (1 << 31) - 1,
+            ) == identity["pgid"],
+            "live controller identity differs from replay sidecars")
+    write_exclusive(
+        replay / "controller_start_ticks",
+        f"{identity['start_ticks']}\n".encode("ascii"),
+    )
     preflight = build_pristine_preflight(
         project, parsed.project_head, cakeml, parsed.cakeml_head,
-        hol4, parsed.hol4_head, require_pristine=True,
+        hol4, parsed.hol4_head, identity, require_pristine=True,
     )
     value = canonical_json_bytes(preflight)
     write_exclusive(replay / PRISTINE_PREFLIGHT_RELATIVE, value)
@@ -987,11 +1220,26 @@ def internal_manifest_main(arguments: list[str]) -> None:
     parser.add_argument("--cakeml-head", required=True)
     parser.add_argument("--hol4-root", type=Path, required=True)
     parser.add_argument("--hol4-head", required=True)
+    parser.add_argument("--controller-pid", type=int, required=True)
+    parser.add_argument("--controller-pgid", type=int, required=True)
+    parser.add_argument("--proc-root", type=Path, default=Path("/proc"),
+                        help=argparse.SUPPRESS)
     parsed = parser.parse_args(arguments)
     replay = ordinary_exact_directory(parsed.replay_root, "replay root")
     project = ordinary_exact_directory(parsed.project_root, "controller project root")
     cakeml = ordinary_exact_directory(parsed.cakeml_root, "CakeML root")
     hol4 = ordinary_exact_directory(parsed.hol4_root, "HOL4 root")
+    proc_root = ordinary_exact_directory(parsed.proc_root, "proc root")
+    live_identity = authenticate_controller_parent(
+        proc_root, parsed.controller_pid, parsed.controller_pgid,
+        project / REPLAY_CONTROLLER_RELATIVE,
+        (
+            str(replay), str(cakeml), parsed.cakeml_head,
+            str(hol4), parsed.hol4_head,
+        ),
+    )
+    require(live_identity == read_replay_controller_identity(replay),
+            "terminal publisher differs from authenticated controller identity")
     manifest = build_terminal_manifest(
         replay, project, parsed.project_head, cakeml, parsed.cakeml_head,
         hol4, parsed.hol4_head,

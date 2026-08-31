@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -93,12 +94,24 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
         replay = parent / "replay"
         replay.mkdir()
 
+        identity_process = subprocess.Popen(
+            ["/bin/sleep", "60"], start_new_session=True,
+        )
+        try:
+            controller_identity = subject.read_live_process_identity(
+                Path("/proc"), identity_process.pid,
+            )
+        finally:
+            identity_process.terminate()
+            identity_process.wait(timeout=5)
+
         sidecars = {
             "stage": "complete\n",
             "started_utc": "2026-08-28T23:59:59Z\n",
             "finished_utc": "2026-08-29T00:00:00Z\n",
-            "controller_pid": "999999\n",
-            "controller_pgid": "999999\n",
+            "controller_pid": f"{controller_identity['pid']}\n",
+            "controller_pgid": f"{controller_identity['pgid']}\n",
+            "controller_start_ticks": f"{controller_identity['start_ticks']}\n",
             "controller_project_root": f"{project}\n",
             "controller_project_head": f"{project_head}\n",
             "controller_script_relative": f"{subject.REPLAY_CONTROLLER_RELATIVE}\n",
@@ -124,7 +137,7 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
 
         preflight = subject.build_pristine_preflight(
             project, project_head, cakeml, cakeml_head, hol4, hol4_head,
-            require_pristine=True,
+            controller_identity, require_pristine=True,
         )
         (replay / subject.PRISTINE_PREFLIGHT_RELATIVE).write_bytes(
             subject.canonical_json_bytes(preflight),
@@ -133,9 +146,9 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
         manifest = subject.build_terminal_manifest(
             replay, project, project_head, cakeml, cakeml_head, hol4, hol4_head,
         )
-        (replay / subject.TERMINAL_MANIFEST_RELATIVE).write_bytes(
-            subject.canonical_json_bytes(manifest),
-        )
+        manifest_bytes = subject.canonical_json_bytes(manifest)
+        (replay / subject.TERMINAL_MANIFEST_RELATIVE).write_bytes(manifest_bytes)
+        manifest_digest = hashlib.sha256(manifest_bytes).hexdigest()
 
         proc = parent / "proc"
         proc.mkdir()
@@ -144,8 +157,10 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
         )
         return type("Arguments", (), {
             "replay_root": replay,
-            "replay_controller_pid": 999999,
-            "replay_process_group": 999999,
+            "replay_controller_pid": controller_identity["pid"],
+            "replay_process_group": controller_identity["pgid"],
+            "replay_controller_start_ticks": controller_identity["start_ticks"],
+            "terminal_manifest_sha256": manifest_digest,
             "candle_root": candle,
             "candle_head": candle_head,
             "cakeml_root": cakeml,
@@ -178,6 +193,20 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
                 "compiler64ProgTheory.uo\n", encoding="ascii",
             )
             self.assert_gate_rejects(arguments, "not completed")
+
+    def test_v1_publication_schema_fails_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = self.fixture(Path(temporary))
+            preflight_path = (
+                arguments.replay_root / subject.PRISTINE_PREFLIGHT_RELATIVE
+            )
+            preflight, _ = subject.load_canonical_json(
+                preflight_path, "test pristine preflight",
+            )
+            preflight["schema"] = 1
+            preflight["kind"] = "canonical-cakeml-cold-pristine-preflight-v1"
+            preflight_path.write_bytes(subject.canonical_json_bytes(preflight))
+            self.assert_gate_rejects(arguments, "preflight authority mismatch")
 
     def test_live_holmake_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -309,7 +338,8 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
             process = arguments.proc_root / "123"
             process.mkdir()
             (process / "stat").write_text(
-                "123 (child with spaces) S 1 999999 999999 0 0 0 0 0 0 0 0 "
+                f"123 (child with spaces) S 1 {arguments.replay_process_group} "
+                f"{arguments.replay_process_group} 0 0 0 0 0 0 0 0 "
                 "0 0 0 0 0 0 0 100\n",
                 encoding="ascii",
             )
@@ -368,6 +398,82 @@ class CanonicalBootstrapGateTests(unittest.TestCase):
             arguments.replay_controller_pid = 888888
             self.assert_gate_rejects(arguments, "pinned launch")
 
+    def test_pinned_replay_start_ticks_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = self.fixture(Path(temporary))
+            arguments.replay_controller_start_ticks += 1
+            self.assert_gate_rejects(arguments, "pinned launch")
+
+    def test_pinned_manifest_digest_mismatch_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = self.fixture(Path(temporary))
+            arguments.terminal_manifest_sha256 = "0" * 64
+            self.assert_gate_rejects(arguments, "pinned publication digest")
+
+    def test_coordinated_direct_rebuild_fails_pinned_manifest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = self.fixture(Path(temporary))
+            receipt = arguments.replay_root / subject.TIME_RECEIPTS[1]
+            receipt_lines = receipt.read_text(encoding="utf-8").splitlines()
+            receipt_lines[1] = "\tUser time (seconds): 999.00"
+            receipt.write_text("\n".join(receipt_lines) + "\n", encoding="utf-8")
+            product = arguments.cakeml_root / subject.CAKEML_POSTCONDITIONS[4]
+            product.write_text("coordinated replacement\n", encoding="ascii")
+            manifest = subject.build_terminal_manifest(
+                arguments.replay_root, arguments.project_root,
+                arguments.project_head, arguments.cakeml_root,
+                arguments.cakeml_head, arguments.hol4_root,
+                arguments.hol4_head,
+            )
+            (arguments.replay_root / subject.TERMINAL_MANIFEST_RELATIVE).write_bytes(
+                subject.canonical_json_bytes(manifest),
+            )
+            self.assert_gate_rejects(arguments, "pinned publication digest")
+
+    def test_fifo_small_file_fails_without_reading(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "fifo"
+            os.mkfifo(path)
+            with self.assertRaisesRegex(subject.GateError, "ordinary file"):
+                subject.stable_file_bytes(path, "hostile FIFO")
+
+    def test_oversize_json_fails_at_stat_cap(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "huge.json"
+            with path.open("wb") as output:
+                output.truncate(subject.SMALL_FILE_MAX_BYTES + 1)
+            with self.assertRaisesRegex(subject.GateError, "exceeds size cap"):
+                subject.load_canonical_json(path, "hostile JSON")
+
+    def test_never_live_terminal_publisher_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            arguments = self.fixture(Path(temporary))
+            (arguments.replay_root / subject.TERMINAL_MANIFEST_RELATIVE).unlink()
+            completed = subprocess.run(
+                [
+                    "/usr/bin/python3", "-I", "-S",
+                    str(arguments.project_root / subject.REPLAY_GATE_RELATIVE),
+                    "--internal-publish-manifest",
+                    "--replay-root", str(arguments.replay_root),
+                    "--controller-pid", str(arguments.replay_controller_pid),
+                    "--controller-pgid", str(arguments.replay_process_group),
+                    "--project-root", str(arguments.project_root),
+                    "--project-head", arguments.project_head,
+                    "--cakeml-root", str(arguments.cakeml_root),
+                    "--cakeml-head", arguments.cakeml_head,
+                    "--hol4-root", str(arguments.hol4_root),
+                    "--hol4-head", arguments.hol4_head,
+                ],
+                check=False, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn("caller is not the recorded controller", completed.stderr)
+            self.assertFalse(
+                (arguments.replay_root / subject.TERMINAL_MANIFEST_RELATIVE).exists(),
+            )
+
 
 class CanonicalBootstrapControllerTests(unittest.TestCase):
     git = CanonicalBootstrapGateTests.git
@@ -384,6 +490,7 @@ class CanonicalBootstrapControllerTests(unittest.TestCase):
         holmake.parent.mkdir()
         holmake.write_text("""#!/usr/bin/env bash
 set -euo pipefail
+[[ ! -e /proc/self/fd/9 ]]
 target=${3:?missing-target}
 root=$PWD
 while [[ $root != / && ! -f $root/FAKE_CAKEML_ROOT ]]; do
@@ -462,6 +569,7 @@ esac
                 project, run_root, cakeml, cakeml_head, hol4, hol4_head,
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertRegex(completed.stdout, r"\A[0-9a-f]{64}\n\Z")
             manifest, _value = subject.load_canonical_json(
                 run_root / subject.TERMINAL_MANIFEST_RELATIVE,
                 "test terminal manifest",
@@ -475,6 +583,19 @@ esac
                 [stage["index"] for stage in manifest["stages"]],
                 list(range(5)),
             )
+            self.assertEqual(
+                manifest["controller_identity"],
+                {
+                    "pid": int((run_root / "controller_pid").read_text()),
+                    "pgid": int((run_root / "controller_pgid").read_text()),
+                    "start_ticks": int(
+                        (run_root / "controller_start_ticks").read_text()
+                    ),
+                },
+            )
+            self.assertEqual(manifest["schema"], 2)
+            self.assertEqual(manifest["kind"], subject.MANIFEST_KIND)
+            self.assertGreater(manifest["controller_identity"]["start_ticks"], 0)
 
     def test_stale_ignored_cache_rejected_before_run_root_creation(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -491,6 +612,153 @@ esac
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("ignored build products", completed.stderr)
             self.assertFalse(run_root.exists())
+
+    def test_live_start_ticks_splice_prevents_terminal_publication(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            (project, _project_head, cakeml, cakeml_head,
+             hol4, _hol4_head) = self.controller_fixture(parent)
+            holmake = hol4 / "bin" / "Holmake"
+            source = holmake.read_text(encoding="ascii")
+            holmake.write_text(
+                source.replace(
+                    "  x64BootstrapProofTheory.uo)\n",
+                    "  x64BootstrapProofTheory.uo)\n"
+                    "    /usr/bin/printf '999999999999\\n' >"
+                    "\"$root/../cold-replay/controller_start_ticks\"\n",
+                ),
+                encoding="ascii",
+            )
+            hol4_head = self.commit(hol4, "splice controller start ticks")
+            run_root = parent / "cold-replay"
+            completed = self.run_controller(
+                project, run_root, cakeml, cakeml_head, hol4, hol4_head,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            self.assertIn(
+                "terminal publisher differs from authenticated controller identity",
+                completed.stderr,
+            )
+            self.assertFalse(
+                (run_root / subject.TERMINAL_MANIFEST_RELATIVE).exists(),
+            )
+            self.assertNotEqual(
+                (run_root / "stage").read_text(encoding="ascii"), "complete\n",
+            )
+
+    def test_dead_controller_cannot_republish_coordinated_splice(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            (project, project_head, cakeml, cakeml_head,
+             hol4, hol4_head) = self.controller_fixture(parent)
+            run_root = parent / "cold-replay"
+            completed = self.run_controller(
+                project, run_root, cakeml, cakeml_head, hol4, hol4_head,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+            receipt = run_root / subject.TIME_RECEIPTS[1]
+            receipt_lines = receipt.read_text(encoding="utf-8").splitlines()
+            receipt_lines[1] = "\tUser time (seconds): 999.00"
+            receipt.write_text("\n".join(receipt_lines) + "\n", encoding="utf-8")
+            product = cakeml / subject.CAKEML_POSTCONDITIONS[4]
+            product.write_text("coordinated replacement\n", encoding="ascii")
+            (run_root / subject.TERMINAL_MANIFEST_RELATIVE).unlink()
+
+            replacement = subprocess.run(
+                [
+                    "/usr/bin/python3", "-I", "-S",
+                    str(project / subject.REPLAY_GATE_RELATIVE),
+                    "--internal-publish-manifest",
+                    "--replay-root", str(run_root),
+                    "--controller-pid",
+                    (run_root / "controller_pid").read_text().strip(),
+                    "--controller-pgid",
+                    (run_root / "controller_pgid").read_text().strip(),
+                    "--project-root", str(project),
+                    "--project-head", project_head,
+                    "--cakeml-root", str(cakeml),
+                    "--cakeml-head", cakeml_head,
+                    "--hol4-root", str(hol4),
+                    "--hol4-head", hol4_head,
+                ],
+                check=False, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+            )
+            self.assertNotEqual(replacement.returncode, 0)
+            self.assertIn(
+                "caller is not the recorded controller", replacement.stderr,
+            )
+            self.assertFalse(
+                (run_root / subject.TERMINAL_MANIFEST_RELATIVE).exists(),
+            )
+
+    def test_arbitrary_shell_cannot_recreate_publications(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary)
+            (project, project_head, cakeml, cakeml_head,
+             hol4, hol4_head) = self.controller_fixture(parent)
+            run_root = parent / "cold-replay"
+            completed = self.run_controller(
+                project, run_root, cakeml, cakeml_head, hol4, hol4_head,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+
+            (cakeml / subject.CAKEML_POSTCONDITIONS[4]).write_text(
+                "attacker replacement\n", encoding="ascii",
+            )
+            for relative in (
+                "controller_start_ticks", subject.PRISTINE_PREFLIGHT_RELATIVE,
+                subject.TERMINAL_MANIFEST_RELATIVE,
+            ):
+                (run_root / relative).unlink()
+
+            attacker = parent / "attacker-shell.sh"
+            attacker.write_text(
+                "#!/bin/bash\n"
+                "set -euo pipefail\n"
+                "controller=$1\n"
+                "shift\n"
+                "exec 9<\"$controller\"\n"
+                "pgid=$(/usr/bin/ps -o pgid= -p \"$$\")\n"
+                "pgid=${pgid//[[:space:]]/}\n"
+                "/usr/bin/printf '%s\\n' \"$$\" >\"$1/controller_pid\"\n"
+                "/usr/bin/printf '%s\\n' \"$pgid\" >\"$1/controller_pgid\"\n"
+                "/usr/bin/python3 -I -S \"$2\" "
+                "--internal-write-preflight "
+                "--replay-root \"$1\" --controller-pid \"$$\" "
+                "--controller-pgid \"$pgid\" "
+                "--project-root \"$3\" --project-head \"$4\" "
+                "--cakeml-root \"$5\" --cakeml-head \"$6\" "
+                "--hol4-root \"$7\" --hol4-head \"$8\"\n",
+                encoding="ascii",
+            )
+            attacker.chmod(0o755)
+            replacement = subprocess.run(
+                [
+                    str(attacker),
+                    str(project / subject.REPLAY_CONTROLLER_RELATIVE),
+                    str(run_root), str(project / subject.REPLAY_GATE_RELATIVE),
+                    str(project), project_head, str(cakeml), cakeml_head,
+                    str(hol4), hol4_head,
+                ],
+                check=False, text=True, stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, start_new_session=True,
+                env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+            )
+            self.assertNotEqual(replacement.returncode, 0)
+            self.assertIn(
+                "command line differs from canonical invocation",
+                replacement.stderr,
+            )
+            self.assertFalse((run_root / "controller_start_ticks").exists())
+            self.assertFalse(
+                (run_root / subject.PRISTINE_PREFLIGHT_RELATIVE).exists(),
+            )
+            self.assertFalse(
+                (run_root / subject.TERMINAL_MANIFEST_RELATIVE).exists(),
+            )
 
 
 if __name__ == "__main__":

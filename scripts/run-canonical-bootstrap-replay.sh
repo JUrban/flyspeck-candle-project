@@ -64,6 +64,11 @@ if [[ $controller_root != /* ]] ||
   exit 65
 fi
 
+# Keep the exact committed controller source open read-only across both
+# publisher execs.  The gate authenticates this descriptor together with the
+# parent's exact /proc command line and executable identity.
+exec 9<"$controller_script"
+
 if [[ $cakeml_root != "$(/usr/bin/realpath -e "$cakeml_root")" ]] ||
    [[ $hol4_root != "$(/usr/bin/realpath -e "$hol4_root")" ]]; then
   echo "CakeML and HOL4 roots must be exact canonical directories" >&2
@@ -139,6 +144,7 @@ fi
 # empty-product observation immediately before any build command.
 "${gate_command[@]}" --internal-write-preflight \
   --replay-root "$run_root" \
+  --controller-pid "$$" --controller-pgid "$controller_pgid" \
   --project-root "$controller_root" --project-head "$controller_head" \
   --cakeml-root "$cakeml_root" --cakeml-head "$cakeml_head" \
   --hol4-root "$hol4_root" --hol4-head "$hol4_head" >/dev/null
@@ -154,6 +160,7 @@ run_stage() {
   local log=$5
   /usr/bin/printf '%s\n' "$stage" >"$run_root/stage"
   (
+    exec 9<&-
     cd "$directory"
     /usr/bin/time -v -o "$run_root/$receipt" \
       "$hol4_root/bin/Holmake" -j1 --mt=1 "$target" \
@@ -181,7 +188,8 @@ run_stage x64BootstrapProofTheory.uo \
 /usr/bin/date -u +%FT%TZ >"$run_root/finished_utc"
 "${gate_command[@]}" --internal-publish-manifest \
   --replay-root "$run_root" \
+  --controller-pid "$$" --controller-pgid "$controller_pgid" \
   --project-root "$controller_root" --project-head "$controller_head" \
   --cakeml-root "$cakeml_root" --cakeml-head "$cakeml_head" \
-  --hol4-root "$hol4_root" --hol4-head "$hol4_head" >/dev/null
+  --hol4-root "$hol4_root" --hol4-head "$hol4_head"
 /usr/bin/printf '%s\n' complete >"$run_root/stage"
