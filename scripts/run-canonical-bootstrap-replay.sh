@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run the exact four-stage CakeML x64 bootstrap proof replay serially.
+# From a pristine CakeML worktree, build the base heap and run the exact
+# four-stage CakeML x64 bootstrap proof replay serially.
 
 set -euo pipefail
 
@@ -46,6 +47,15 @@ git_clean_at_head() {
 git_clean_at_head "$cakeml_root" "$cakeml_head" CakeML
 git_clean_at_head "$hol4_root" "$hol4_head" HOL4
 
+# Ordinary Git cleanliness deliberately excludes ignored products.  A cold
+# replay must not inherit a base heap or .hol object cache from a recycled
+# CakeML worktree.
+if [[ -n $(/usr/bin/git -C "$cakeml_root" \
+    ls-files --others --ignored --exclude-standard) ]]; then
+  echo "CakeML worktree contains ignored build products" >&2
+  exit 65
+fi
+
 if /usr/bin/pgrep -x Holmake >/dev/null; then
   echo "another Holmake process is live" >&2
   exit 65
@@ -78,6 +88,9 @@ run_stage() {
   )
 }
 
+run_stage cakeml-heap \
+  "$cakeml_root/misc" cakeml-heap \
+  00-cakeml-heap.time 00-cakeml-heap.log
 run_stage cake_compile_heap \
   "$cakeml_root/cv_translator" cake_compile_heap \
   01-cake-compile-heap.time 01-cake-compile-heap.log

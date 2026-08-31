@@ -29,12 +29,14 @@ GIT_OPTIONS = (
     "-c", "core.preloadIndex=false",
 )
 TIME_RECEIPTS = (
+    "00-cakeml-heap.time",
     "01-cake-compile-heap.time",
     "02-compiler64Prog.time",
     "03-x64Bootstrap.time",
     "04-x64BootstrapProof.time",
 )
 TIME_TARGETS = (
+    "cakeml-heap",
     "cake_compile_heap",
     "compiler64ProgTheory.uo",
     "x64BootstrapTheory.uo",
@@ -66,6 +68,7 @@ TIME_FIELDS = (
     "Exit status",
 )
 CAKEML_POSTCONDITIONS = (
+    "misc/cakeml-heap",
     "cv_translator/cake_compile_heap",
     "compiler/bootstrap/translation/.hol/objs/compiler64ProgTheory.uo",
     "compiler/bootstrap/compilation/x64/64/.hol/objs/x64BootstrapTheory.uo",
@@ -315,7 +318,7 @@ def validate_gate(arguments: argparse.Namespace) -> dict[str, object]:
     require(stable_file_bytes(
                 replay / "stage", "cold replay stage",
             ) == b"complete\n",
-            "cold replay has not completed all four stages")
+            "cold replay has not completed its base heap and four stages")
     started = utc_timestamp(
         stable_file_bytes(replay / "started_utc", "cold replay start timestamp"),
         "cold replay start timestamp",

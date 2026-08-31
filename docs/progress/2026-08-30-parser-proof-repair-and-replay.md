@@ -739,6 +739,14 @@ after.  This remains a developer warm regression only.  No Candle repin or
 20/400 gate is authorized until it passes, followed by the fresh clean
 four-stage replay and all postconditions.
 
+The cold controller is hardened for that genuinely fresh replay.  It rejects
+any ignored CakeML build product before launch, freshly builds
+`misc/cakeml-heap` with receipt `00-cakeml-heap.time`, and only then performs
+the four release-gating targets.  The read-only canonical gate correspondingly
+requires all five zero-exit receipts and seven concrete output postconditions.
+This keeps the four proof/bootstrap gates unchanged while preventing an old
+base heap or `.hol` object cache from making a nominally new worktree warm.
+
 For the failed/diagnostic progression, immutable log/timing SHA-256 pairs are:
 
 ```text
