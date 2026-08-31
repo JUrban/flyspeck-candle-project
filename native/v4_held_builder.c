@@ -107,6 +107,16 @@ _Static_assert(SYS_setresgid == 119,
                "unexpected Linux x86-64 setresgid syscall");
 _Static_assert(SYS_setresuid == 117,
                "unexpected Linux x86-64 setresuid syscall");
+_Static_assert(SYS_rt_sigprocmask == 14,
+               "unexpected Linux x86-64 rt_sigprocmask syscall");
+_Static_assert(SIG_SETMASK == 2,
+               "unexpected Linux x86-64 SIG_SETMASK value");
+_Static_assert(PTRACE_GETSIGMASK == 0x420a,
+               "unexpected Linux PTRACE_GETSIGMASK value");
+_Static_assert(V4_HB_KERNEL_SIGSET_BYTES == sizeof(uint64_t),
+               "unexpected V4 kernel signal-set width");
+_Static_assert(V4_HB_SETUP_PAYLOAD_CAP == V4_HB_KERNEL_SIGSET_BYTES,
+               "setup payload cap must equal the kernel signal-set width");
 _Static_assert(
     (CLONE_NEWNS | CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNET |
      CLONE_NEWIPC | SIGCHLD) == V4_HB_FIXED_CLONE_FLAGS,
@@ -215,6 +225,14 @@ static int v4_hb_get_syscall_information(
 static int v4_hb_validate_setup_prefix_observation(
     const struct v4_hb_builder *builder,
     const struct v4_hb_setup_prefix_observation *setup,
+    struct v4_hb_error *error
+);
+
+static int v4_hb_observe_child_signal_mask(
+    const struct v4_hb_builder *builder,
+    uint32_t *observed,
+    uint32_t *payload_bytes,
+    uint8_t bytes[V4_HB_KERNEL_SIGSET_BYTES],
     struct v4_hb_error *error
 );
 
@@ -2268,6 +2286,7 @@ v4_hb_child_gate_loop(_Atomic unsigned int *gate, int input_root_fd)
 {
     static const char root_path[V4_HB_SETUP_PATH_CAP] = {'/', '\0'};
     static const char current_path[V4_HB_SETUP_PATH_CAP] = {'.', '\0'};
+    static const uint64_t empty_kernel_sigset = 0U;
     unsigned int value;
 
     do {
@@ -2302,6 +2321,11 @@ v4_hb_child_gate_loop(_Atomic unsigned int *gate, int input_root_fd)
     );
     (void)v4_hb_child_raw_syscall6(
         SYS_setresuid, 0U, 0U, 0U, 0U, 0U, 0U
+    );
+    (void)v4_hb_child_raw_syscall6(
+        SYS_rt_sigprocmask, SIG_SETMASK,
+        (unsigned long)(uintptr_t)&empty_kernel_sigset, 0U,
+        V4_HB_KERNEL_SIGSET_BYTES, 0U, 0U
     );
     (void)v4_hb_child_raw_syscall6(
         SYS_exit, 0U, 0U, 0U, 0U, 0U, 0U
@@ -2951,6 +2975,9 @@ v4_hb_verify_held_internal(
     }
     if (setup_stop) {
         struct v4_hb_ptrace_syscall_information setup_information;
+        uint8_t live_signal_mask_bytes[V4_HB_KERNEL_SIGSET_BYTES];
+        uint32_t live_signal_mask_observed = 0U;
+        uint32_t live_signal_mask_byte_count = 0U;
         const struct v4_hb_setup_syscall_observation *final_operation =
             &builder->setup_prefix.operations[
                 V4_HB_SETUP_PREFIX_OPERATION_COUNT - 1U
@@ -2961,6 +2988,23 @@ v4_hb_verify_held_internal(
         );
         if (code != V4_HB_OK) {
             return code;
+        }
+        code = v4_hb_observe_child_signal_mask(
+            builder, &live_signal_mask_observed,
+            &live_signal_mask_byte_count, live_signal_mask_bytes, error
+        );
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        if (live_signal_mask_observed !=
+                builder->setup_prefix.live_signal_mask_observed ||
+            live_signal_mask_byte_count !=
+                builder->setup_prefix.live_signal_mask_byte_count ||
+            memcmp(live_signal_mask_bytes,
+                   builder->setup_prefix.live_signal_mask_bytes,
+                   sizeof(live_signal_mask_bytes)) != 0) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "live child signal mask changed");
         }
         memset(&registers, 0, sizeof(registers));
         vector.iov_base = &registers;
@@ -2990,7 +3034,7 @@ v4_hb_verify_held_internal(
             setup_information.detail.exit.return_value != 0 ||
             setup_information.detail.exit.is_error != 0U) {
             return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
-                              "final setresuid exit stop projection changed");
+                              "final rt_sigprocmask exit stop projection changed");
         }
         do {
             waited = waitpid(builder->pid, &unexpected_status,
@@ -3486,6 +3530,46 @@ v4_hb_read_remote_setup_path(
 }
 
 static int
+v4_hb_read_remote_empty_signal_mask(
+    const struct v4_hb_builder *builder,
+    uint64_t address,
+    uint8_t bytes[V4_HB_SETUP_PAYLOAD_CAP],
+    struct v4_hb_error *error
+)
+{
+    struct iovec local;
+    struct iovec remote;
+    uint32_t index;
+    ssize_t count;
+
+    if (address == 0U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EFAULT,
+                          "signal-mask payload pointer is null");
+    }
+    memset(bytes, 0xff, V4_HB_SETUP_PAYLOAD_CAP);
+    local.iov_base = bytes;
+    local.iov_len = V4_HB_KERNEL_SIGSET_BYTES;
+    remote.iov_base = (void *)(uintptr_t)address;
+    remote.iov_len = V4_HB_KERNEL_SIGSET_BYTES;
+    do {
+        count = process_vm_readv(builder->pid, &local, 1U, &remote, 1U, 0U);
+    } while (count < 0 && errno == EINTR);
+    if (count != (ssize_t)V4_HB_KERNEL_SIGSET_BYTES) {
+        return v4_hb_fail(
+            error, V4_HB_ERROR, count < 0 ? errno : EFAULT,
+            "bounded signal-mask payload observation failed"
+        );
+    }
+    for (index = 0U; index < V4_HB_KERNEL_SIGSET_BYTES; ++index) {
+        if (bytes[index] != 0U) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "signal-mask payload is not exact zero");
+        }
+    }
+    return V4_HB_OK;
+}
+
+static int
 v4_hb_get_syscall_information(
     const struct v4_hb_builder *builder,
     uint8_t expected_operation,
@@ -3544,7 +3628,7 @@ v4_hb_validate_setup_entry(
         V4_HB_SETUP_PREFIX_OPERATION_COUNT
     ] = {
         SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
-        SYS_setresgid, SYS_setresuid
+        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask
     };
     uint64_t expected_number;
     uint32_t argument_index;
@@ -3641,6 +3725,26 @@ v4_hb_validate_setup_entry(
                         "setresuid argument is not exact zero"
                 );
             }
+        }
+        break;
+    case V4_HB_SETUP_EMPTY_SIGNAL_MASK:
+        if (information->detail.entry.arguments[0] != SIG_SETMASK ||
+            information->detail.entry.arguments[1] == 0U ||
+            information->detail.entry.arguments[2] != 0U ||
+            information->detail.entry.arguments[3] !=
+                V4_HB_KERNEL_SIGSET_BYTES ||
+            information->detail.entry.arguments[4] != 0U ||
+            information->detail.entry.arguments[5] != 0U) {
+            return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                              "rt_sigprocmask arguments mismatch");
+        }
+        observation->payload_byte_count = V4_HB_KERNEL_SIGSET_BYTES;
+        code = v4_hb_read_remote_empty_signal_mask(
+            builder, information->detail.entry.arguments[1],
+            observation->payload_bytes, error
+        );
+        if (code != V4_HB_OK) {
+            return code;
         }
         break;
     default:
@@ -3793,6 +3897,40 @@ v4_hb_observe_child_credentials(
     memset(inner_ids, 0, sizeof(*inner_ids));
     *payload_bytes = (uint64_t)used;
     *row_count = 2U;
+    return V4_HB_OK;
+}
+
+static int
+v4_hb_observe_child_signal_mask(
+    const struct v4_hb_builder *builder,
+    uint32_t *observed,
+    uint32_t *payload_bytes,
+    uint8_t bytes[V4_HB_KERNEL_SIGSET_BYTES],
+    struct v4_hb_error *error
+)
+{
+    uint64_t kernel_mask = UINT64_MAX;
+
+    if (ptrace(
+            PTRACE_GETSIGMASK, builder->pid,
+            (void *)(uintptr_t)V4_HB_KERNEL_SIGSET_BYTES,
+            &kernel_mask
+        ) != 0) {
+        int saved_errno = errno;
+        return v4_hb_fail(
+            error,
+            (saved_errno == EIO || saved_errno == EINVAL ||
+             saved_errno == ENOSYS) ? V4_HB_UNSUPPORTED : V4_HB_ERROR,
+            saved_errno, "PTRACE_GETSIGMASK observation failed"
+        );
+    }
+    if (kernel_mask != 0U) {
+        return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
+                          "live child signal mask is not exact empty");
+    }
+    *observed = 1U;
+    *payload_bytes = V4_HB_KERNEL_SIGSET_BYTES;
+    memcpy(bytes, &kernel_mask, V4_HB_KERNEL_SIGSET_BYTES);
     return V4_HB_OK;
 }
 
@@ -3958,6 +4096,9 @@ v4_hb_same_setup_syscall(
         first->path_byte_count == second->path_byte_count &&
         memcmp(first->path_bytes, second->path_bytes,
                sizeof(first->path_bytes)) == 0 &&
+        first->payload_byte_count == second->payload_byte_count &&
+        memcmp(first->payload_bytes, second->payload_bytes,
+               sizeof(first->payload_bytes)) == 0 &&
         first->entry_stop_index == second->entry_stop_index &&
         first->exit_stop_index == second->exit_stop_index &&
         first->raw_entry_wait_status == second->raw_entry_wait_status &&
@@ -4007,6 +4148,13 @@ v4_hb_same_setup_prefix(
             &first->inner_credential_ids,
             &second->inner_credential_ids
         ) &&
+        first->live_signal_mask_observed ==
+            second->live_signal_mask_observed &&
+        first->live_signal_mask_byte_count ==
+            second->live_signal_mask_byte_count &&
+        memcmp(first->live_signal_mask_bytes,
+               second->live_signal_mask_bytes,
+               sizeof(first->live_signal_mask_bytes)) == 0 &&
         v4_hb_same_setup_fs_projection(
             &first->root_projection, &second->root_projection
         ) && v4_hb_same_setup_fs_projection(
@@ -4033,8 +4181,9 @@ v4_hb_validate_setup_prefix_observation(
         &builder->root_config.input_root.initial_projection;
     static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
         SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
-        SYS_setresgid, SYS_setresuid
+        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask
     };
+    static const uint8_t empty_signal_mask[V4_HB_KERNEL_SIGSET_BYTES] = {0};
     const struct v4_hb_status_credential_ids *observer_ids =
         &setup->observer_credential_ids;
     const struct v4_hb_status_credential_ids *inner_ids =
@@ -4078,6 +4227,10 @@ v4_hb_validate_setup_prefix_observation(
         inner_ids->saved_uid != 0U || inner_ids->filesystem_uid != 0U ||
         inner_ids->real_gid != 0U || inner_ids->effective_gid != 0U ||
         inner_ids->saved_gid != 0U || inner_ids->filesystem_gid != 0U ||
+        setup->live_signal_mask_observed != 1U ||
+        setup->live_signal_mask_byte_count != V4_HB_KERNEL_SIGSET_BYTES ||
+        memcmp(setup->live_signal_mask_bytes, empty_signal_mask,
+               sizeof(empty_signal_mask)) != 0 ||
         setup->root_projection.device != input->st_dev ||
         setup->root_projection.inode != input->st_ino ||
         setup->root_projection.mount_id != input->mount_id ||
@@ -4094,6 +4247,8 @@ v4_hb_validate_setup_prefix_observation(
         uint32_t expected_path_bytes =
             (index == 0U || index == 2U || index == 3U) ?
                 V4_HB_SETUP_PATH_CAP : 0U;
+        uint32_t expected_payload_bytes = index == 6U ?
+            V4_HB_KERNEL_SIGSET_BYTES : 0U;
         uint8_t expected_path = index == 2U ? '.' : '/';
         bool arguments_exact = true;
         uint32_t argument_index;
@@ -4118,11 +4273,18 @@ v4_hb_validate_setup_prefix_observation(
                  argument_index < 6U; ++argument_index) {
                 arguments_exact = operation->arguments[argument_index] == 0U;
             }
-        } else {
+        } else if (index == 4U || index == 5U) {
             for (argument_index = 0U; arguments_exact &&
                  argument_index < 6U; ++argument_index) {
                 arguments_exact = operation->arguments[argument_index] == 0U;
             }
+        } else {
+            arguments_exact = operation->arguments[0] == SIG_SETMASK &&
+                operation->arguments[1] != 0U &&
+                operation->arguments[2] == 0U &&
+                operation->arguments[3] == V4_HB_KERNEL_SIGSET_BYTES &&
+                operation->arguments[4] == 0U &&
+                operation->arguments[5] == 0U;
         }
 
         if (operation->operation_index != index ||
@@ -4137,6 +4299,9 @@ v4_hb_validate_setup_prefix_observation(
             (expected_path_bytes == 0U &&
              (operation->path_bytes[0] != 0U ||
               operation->path_bytes[1] != 0U)) ||
+            operation->payload_byte_count != expected_payload_bytes ||
+            memcmp(operation->payload_bytes, empty_signal_mask,
+                   sizeof(empty_signal_mask)) != 0 ||
             operation->entry_stop_index != index * 2U ||
             operation->exit_stop_index != index * 2U + 1U ||
             !WIFSTOPPED(operation->raw_entry_wait_status) ||
@@ -4300,6 +4465,13 @@ v4_hb_builder_run_setup_prefix(
         &setup.observer_credential_ids,
         &setup.inner_credential_ids, error
     );
+    if (code == V4_HB_OK) {
+        code = v4_hb_observe_child_signal_mask(
+            builder, &setup.live_signal_mask_observed,
+            &setup.live_signal_mask_byte_count,
+            setup.live_signal_mask_bytes, error
+        );
+    }
     if (code == V4_HB_OK) {
         code = v4_hb_observe_child_fs_link(
             builder, "root", &setup.root_projection, error

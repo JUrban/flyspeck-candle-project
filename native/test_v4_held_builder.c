@@ -594,8 +594,9 @@ setup_prefix_is_exact(
 {
     static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
         SYS_mount, SYS_fchdir, SYS_chroot, SYS_chdir,
-        SYS_setresgid, SYS_setresuid
+        SYS_setresgid, SYS_setresuid, SYS_rt_sigprocmask
     };
+    static const uint8_t empty_signal_mask[V4_HB_KERNEL_SIGSET_BYTES] = {0};
     uint32_t index;
 
     if (setup->operation_count != V4_HB_SETUP_PREFIX_OPERATION_COUNT ||
@@ -631,6 +632,10 @@ setup_prefix_is_exact(
         setup->inner_credential_ids.effective_gid != 0U ||
         setup->inner_credential_ids.saved_gid != 0U ||
         setup->inner_credential_ids.filesystem_gid != 0U ||
+        setup->live_signal_mask_observed != 1U ||
+        setup->live_signal_mask_byte_count != V4_HB_KERNEL_SIGSET_BYTES ||
+        memcmp(setup->live_signal_mask_bytes, empty_signal_mask,
+               sizeof(empty_signal_mask)) != 0 ||
         setup->root_projection.device !=
             config->input_root.initial_projection.st_dev ||
         setup->root_projection.inode !=
@@ -652,6 +657,8 @@ setup_prefix_is_exact(
         uint32_t path_count =
             (index == 0U || index == 2U || index == 3U) ?
                 V4_HB_SETUP_PATH_CAP : 0U;
+        uint32_t payload_count = index == 6U ?
+            V4_HB_KERNEL_SIGSET_BYTES : 0U;
         uint8_t path = index == 2U ? '.' : '/';
 
         if (operation->operation_index != index ||
@@ -665,6 +672,9 @@ setup_prefix_is_exact(
             (path_count == 0U &&
              (operation->path_bytes[0] != 0U ||
               operation->path_bytes[1] != 0U)) ||
+            operation->payload_byte_count != payload_count ||
+            memcmp(operation->payload_bytes, empty_signal_mask,
+                   sizeof(empty_signal_mask)) != 0 ||
             operation->entry_stop_index != index * 2U ||
             operation->exit_stop_index != index * 2U + 1U ||
             !WIFSTOPPED(operation->raw_entry_wait_status) ||
@@ -711,13 +721,20 @@ setup_prefix_is_exact(
                     return false;
                 }
             }
-        } else {
+        } else if (index == 4U || index == 5U) {
             for (argument_index = 0U; argument_index < 6U;
                  ++argument_index) {
                 if (operation->arguments[argument_index] != 0U) {
                     return false;
                 }
             }
+        } else if (operation->arguments[0] != SIG_SETMASK ||
+                   operation->arguments[1] == 0U ||
+                   operation->arguments[2] != 0U ||
+                   operation->arguments[3] != V4_HB_KERNEL_SIGSET_BYTES ||
+                   operation->arguments[4] != 0U ||
+                   operation->arguments[5] != 0U) {
+            return false;
         }
     }
     return true;
@@ -765,6 +782,15 @@ expect_setup_prefix_splices_reject(
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(
         ++splice.inner_credential_ids.filesystem_gid
     );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.live_signal_mask_observed = 0U
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        --splice.live_signal_mask_byte_count
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.live_signal_mask_bytes[0] = 1U
+    );
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.root_projection.inode);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.cwd_projection.mount_id);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[0].operation_index);
@@ -774,6 +800,33 @@ expect_setup_prefix_splices_reject(
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[4].syscall_number);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[4].arguments[5]);
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[5].arguments[0]);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[6].operation);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(++splice.operations[6].syscall_number);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[6].arguments[0] = 0U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[6].arguments[1] = 0U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[6].arguments[2] = 1U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[6].arguments[3] = 7U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[6].arguments[4] = 1U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[6].arguments[5] = 1U);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        --splice.operations[6].payload_byte_count
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.operations[6].payload_bytes[0] = 1U
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        --splice.operations[6].entry_stop_index
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        --splice.operations[6].exit_stop_index
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.operations[6].raw_exit_wait_status ^= 1
+    );
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[6].return_value = -1);
+    V4_HB_EXPECT_SETUP_SPLICE_REJECT(
+        splice.operations[6].return_is_error = 1U
+    );
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[2].path_bytes[0] = '/');
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(
         splice.operations[3].raw_entry_wait_status ^= 1
@@ -1156,8 +1209,8 @@ main(void)
         V4_HB_PTRACE_OPTION_COUNT != 8U ||
         V4_HB_FIXED_CLONE_FLAGS != 0x78020011UL ||
         V4_HB_NAMESPACE_COUNT != 5U ||
-        V4_HB_SETUP_PREFIX_OPERATION_COUNT != 6U ||
-        V4_HB_SETUP_PREFIX_STOP_COUNT != 12U) {
+        V4_HB_SETUP_PREFIX_OPERATION_COUNT != 7U ||
+        V4_HB_SETUP_PREFIX_STOP_COUNT != 14U) {
         return test_fail("fixed V4 ptrace/namespace identity drifted");
     }
     if (test_status_credential_parser() != 0) {
@@ -1758,6 +1811,76 @@ main(void)
     }
     v4_hb_builder_destroy(builder);
     builder = NULL;
+
+    code = v4_hb_builder_start(&config, &attack_builder, &error);
+    if (code != V4_HB_OK ||
+        hold_and_prewalk(
+            attack_builder, &config, &held, &error
+        ) != V4_HB_OK ||
+        run_setup_prefix(
+            attack_builder, &config, &setup, &setup_snapshot, &error
+        ) != V4_HB_OK) {
+        (void)test_fail("cannot establish live signal-mask attack boundary");
+        goto cleanup_anchor;
+    }
+    {
+        uint64_t hostile_signal_mask =
+            UINT64_C(1) << ((unsigned int)SIGUSR2 - 1U);
+        char verify_message[sizeof(error.message)];
+        char release_message[sizeof(error.message)];
+        struct v4_hb_snapshot poisoned;
+        int verify_code;
+        int release_code;
+        int snapshot_code;
+        int abort_code;
+
+        if (ptrace(
+                PTRACE_SETSIGMASK, held.pid,
+                (void *)(uintptr_t)V4_HB_KERNEL_SIGSET_BYTES,
+                &hostile_signal_mask
+            ) != 0) {
+            (void)test_fail("cannot mutate held child signal mask");
+            goto cleanup_anchor;
+        }
+        verify_code = v4_hb_builder_verify_setup_prefix(
+            attack_builder, &setup, &error
+        );
+        (void)snprintf(
+            verify_message, sizeof(verify_message), "%s", error.message
+        );
+        release_code = v4_hb_builder_release_and_reap(
+            attack_builder, &completion, &error
+        );
+        (void)snprintf(
+            release_message, sizeof(release_message), "%s", error.message
+        );
+        snapshot_code = v4_hb_builder_snapshot(
+            attack_builder, &poisoned, &error
+        );
+        abort_code = v4_hb_builder_abort(attack_builder, &error);
+        if (verify_code != V4_HB_ERROR ||
+            strcmp(verify_message,
+                   "live child signal mask is not exact empty") != 0 ||
+            release_code != V4_HB_ERROR ||
+            strcmp(release_message,
+                   "live child signal mask is not exact empty") != 0 ||
+            snapshot_code != V4_HB_OK ||
+            poisoned.state != V4_HB_POISONED ||
+            poisoned.gate_value != 1U ||
+            poisoned.resume_count != V4_HB_SETUP_PREFIX_STOP_COUNT ||
+            poisoned.held_stop_consumed != 1U || abort_code != V4_HB_OK) {
+            (void)fprintf(
+                stderr,
+                "FAIL: live signal-mask mismatch verify=%d release=%d "
+                "snapshot=%d abort=%d messages=%s/%s/%s\n",
+                verify_code, release_code, snapshot_code, abort_code,
+                verify_message, release_message, error.message
+            );
+            goto cleanup_anchor;
+        }
+    }
+    v4_hb_builder_destroy(attack_builder);
+    attack_builder = NULL;
 
     code = v4_hb_builder_start(&config, &attack_builder, &error);
     if (code != V4_HB_OK ||

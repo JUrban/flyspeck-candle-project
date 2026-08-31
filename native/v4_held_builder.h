@@ -19,9 +19,11 @@
 #define V4_HB_FIXED_PTRACE_OPTIONS_MASK 0x0010007fUL
 #define V4_HB_NAMESPACE_COUNT 5U
 #define V4_HB_FIXED_CLONE_FLAGS 0x78020011UL
-#define V4_HB_SETUP_PREFIX_OPERATION_COUNT 6U
-#define V4_HB_SETUP_PREFIX_STOP_COUNT 12U
+#define V4_HB_SETUP_PREFIX_OPERATION_COUNT 7U
+#define V4_HB_SETUP_PREFIX_STOP_COUNT 14U
 #define V4_HB_SETUP_PATH_CAP 2U
+#define V4_HB_SETUP_PAYLOAD_CAP 8U
+#define V4_HB_KERNEL_SIGSET_BYTES 8U
 #define V4_HB_SETUP_MOUNT_FLAGS 0x00044000UL
 
 enum v4_hb_result {
@@ -47,6 +49,7 @@ enum v4_hb_setup_operation {
     V4_HB_SETUP_CHDIR_ROOT = 4,
     V4_HB_SETUP_SETRESGID_ZERO = 5,
     V4_HB_SETUP_SETRESUID_ZERO = 6,
+    V4_HB_SETUP_EMPTY_SIGNAL_MASK = 7,
 };
 
 struct v4_hb_error {
@@ -91,7 +94,7 @@ struct v4_hb_bound_root_walks {
 };
 
 /*
- * These are detached, process-local observations of six successful traced
+ * These are detached, process-local observations of seven successful traced
  * syscalls.  They are neither a serialized receipt nor complete mount-graph
  * authority.  The logical generation is the pre-clone userspace ledger value
  * bound to the inherited input descriptor, not a kernel generation ID.
@@ -103,6 +106,8 @@ struct v4_hb_setup_syscall_observation {
     uint64_t arguments[6];
     uint32_t path_byte_count;
     uint8_t path_bytes[V4_HB_SETUP_PATH_CAP];
+    uint32_t payload_byte_count;
+    uint8_t payload_bytes[V4_HB_SETUP_PAYLOAD_CAP];
     uint32_t entry_stop_index;
     uint32_t exit_stop_index;
     int raw_entry_wait_status;
@@ -150,6 +155,9 @@ struct v4_hb_setup_prefix_observation {
     uint32_t credential_status_row_count;
     struct v4_hb_status_credential_ids observer_credential_ids;
     struct v4_hb_status_credential_ids inner_credential_ids;
+    uint32_t live_signal_mask_observed;
+    uint32_t live_signal_mask_byte_count;
+    uint8_t live_signal_mask_bytes[V4_HB_KERNEL_SIGSET_BYTES];
     struct v4_hb_setup_fs_projection root_projection;
     struct v4_hb_setup_fs_projection cwd_projection;
     struct v4_hb_setup_syscall_observation operations[

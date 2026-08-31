@@ -104,6 +104,10 @@ class V4HeldBuilderTests(unittest.TestCase):
         self.assertIn("SYS_chdir", source)
         self.assertIn("SYS_setresgid", source)
         self.assertIn("SYS_setresuid", source)
+        self.assertIn("SYS_rt_sigprocmask", source)
+        self.assertIn("PTRACE_GETSIGMASK", source)
+        self.assertNotIn("PTRACE_SETSIGMASK", source)
+        self.assertIn("V4_HB_KERNEL_SIGSET_BYTES", header)
         self.assertIn("process_vm_readv", source)
         self.assertIn("V4_HB_SETUP_PREFIX_STOP_COUNT", header)
         self.assertIn("v4_hb_builder_run_setup_prefix", header)
@@ -142,13 +146,15 @@ class V4HeldBuilderTests(unittest.TestCase):
         chdir_setup = child.index("SYS_chdir")
         setresgid_setup = child.index("SYS_setresgid")
         setresuid_setup = child.index("SYS_setresuid")
-        exit_setup = child.index("SYS_exit", setresuid_setup)
+        sigprocmask_setup = child.index("SYS_rt_sigprocmask")
+        exit_setup = child.index("SYS_exit", sigprocmask_setup)
         self.assertLess(mount_setup, fchdir_setup)
         self.assertLess(fchdir_setup, chroot_setup)
         self.assertLess(chroot_setup, chdir_setup)
         self.assertLess(chdir_setup, setresgid_setup)
         self.assertLess(setresgid_setup, setresuid_setup)
-        self.assertLess(setresuid_setup, exit_setup)
+        self.assertLess(setresuid_setup, sigprocmask_setup)
+        self.assertLess(sigprocmask_setup, exit_setup)
 
 
 if __name__ == "__main__":
