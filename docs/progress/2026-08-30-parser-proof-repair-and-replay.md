@@ -602,3 +602,52 @@ The immutable log/timing SHA-256 pairs are:
 
 No proof admission, theorem weakening, compiler qualification, Candle repin or
 20/400 corpus result is claimed by these failed development replays.
+
+## Dopen proof closure and declaration-sequence frontier
+
+Focused attempts 028 through 038 continued from the same isolated worktree and
+base `77b769a99`.  All executable replays used one HOL worker, recorded zero
+swaps, and failed normally.  Wall times were `2:19.27`--`2:28.99`; maximum RSS
+was `1039960`--`2092564` KiB.
+
+Attempt 028 proved the exact conditional Log induction-hypothesis selection
+and installed matching explicit selectors in If, Mat and Let, then stopped at
+a later implicit search.  Attempt 029 conclusively replayed complete Log, If,
+Mat (including its pattern IH), Let, Letrec, pattern and empty-declaration
+branches and reached the new Dopen branch.  Attempts 030--034 successively
+proved the open-environment invariant application, normalized the successful
+source-open case, supplied the exact compiled state and global-environment
+witnesses, and reduced Dopen's only residual to the flat-semantics identity
+`evaluate_decs s_i1 [] = (s_i1,NONE)`.
+
+Attempts 035--037 were definition-qualification refinements at that final
+identity.  The unqualified name was unavailable; `evaluateTheory` selected
+the wrong evaluator and left the equation; and flat semantics exposes the
+mutual `evaluate`, `evaluate_dec` and `evaluate_decs` clauses through
+`flatSemTheory.evaluate_def`, not a separate `evaluate_decs_def` theorem.
+Attempt 038 used that exact definition, completed Dopen, and entered
+`compile_correct[cons_decs]`.  This is the first replay evidence beyond Dopen:
+the source-to-flat Dopen proof obligation is now closed without changing the
+theorem statement, semantics, abort exclusions or axiom set.  The remaining
+focused frontier is the declaration-sequence induction proof and its newly
+explicit exact-domain result child.
+
+The immutable log/timing SHA-256 pairs are:
+
+```text
+028 232abb446b093c032cf21e999dcb64ff98d943f7175dd9f5a1d5e0d4719685ed / 326cdf77d34d486e56a0b7a32a41273e0a3dc235cddeae7e9bd77498e6f0bc8a
+029 119a07da2843753506f19bbd49e308fdb8c05888c0f5ba36bda0badef1b9ec3e / cc5e93f6c11d83d54cc2635def080bff9fc6ef34abb09fbcf1bbbfb321db5a3e
+030 daf89e291c2ae9ec9c7623e68dcc42c3a1b556e4f4d91d0fac7aec9e4e59b581 / 48f46127cb4c59c29edda5872940a990bf23bd948b0b4f22da2f00e0813596c9
+031 c99c945c1d01ed8dfd492647a70a10fd7c22ce32694140ada42c4beb4d75a5e2 / 2b8cd7d15e17eef811345e65476867d3536fea54576906a6a696c96390275a9d
+032 7d475f26a9d64bc4bef49115f5037590ba62502b96432cc5e93df6aa68a1c651 / 95d1cd497bc4229e04e0a05195a6b7e96161a5e4e6575683bb4882b247633b98
+033 92605f97dfd29ce968ba7a808cb638cd9016a5d65cae010d1e89e1f49a761772 / eecf0d88414203a927bdc5c3128f6974ec0f5ddd9ad6d7fb84c5c6e5640641bd
+034 64479c603d0df5395bbe9a74030763c6d825c36d54c46dbffbd07200a2999253 / 8d41b1954ac1c056d424a604550edd8a99e475916e28fcf656d24d8bcdb37734
+035 977e027c11490fc743b5d23e2496a71bb6db2cbf476b89b35f68e56b5d55889d / 7094b97f2c50660e59e62325d8b1cd0c50f2ef245cfcea9bb44c2b90093f649a
+036 64479c603d0df5395bbe9a74030763c6d825c36d54c46dbffbd07200a2999253 / 1afbbd6c1bcc6c70ca9ab381128e161a4664df1fca21710dfe0cbfcab406779a
+037 63a713601c5722b4d1929b7f5ea67cfd136ce7a7046d019d4aedaa93f0741afb / 331410d24dda1122c9e920a42583f1fd27be26a0bb8647b98e7d0ae761f5a6ae
+038 d626be295510a14a3da1d9bda1830b3b9fa99f8cee53d687cf27248bf6d04593 / f9335f878711a05b81c6c790f5a9e4f57eec48413e46d6f447e866edc10316cb
+```
+
+Attempt 038 remains focused failed development evidence because the complete
+target has not yet replayed.  It does not qualify a compiler or authorize a
+Candle repin or corpus gate.
