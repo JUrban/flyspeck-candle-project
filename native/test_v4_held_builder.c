@@ -586,6 +586,133 @@ hold_and_prewalk(
     return V4_HB_OK;
 }
 
+static int
+expect_start_rejection(
+    const struct v4_hb_root_anchor_config *config,
+    int expected_errno,
+    const char *expected_message,
+    struct v4_hb_error *error
+)
+{
+    struct v4_hb_builder *builder = NULL;
+    int code = v4_hb_builder_start(config, &builder, error);
+    int saved_errno = error->saved_errno;
+    char message[sizeof(error->message)];
+
+    (void)snprintf(message, sizeof(message), "%s", error->message);
+    if (builder != NULL) {
+        (void)v4_hb_builder_abort(builder, error);
+        v4_hb_builder_destroy(builder);
+    }
+    if (code != V4_HB_ERROR || builder != NULL ||
+        saved_errno != expected_errno ||
+        strcmp(message, expected_message) != 0) {
+        (void)fprintf(
+            stderr,
+            "FAIL: start rejection code=%d errno=%d/%d message=%s/%s\n",
+            code, saved_errno, expected_errno, message, expected_message
+        );
+        return -1;
+    }
+    return 0;
+}
+
+static int
+expect_bound_walk_rejection(
+    const struct v4_hb_root_anchor_config *config,
+    int expected_errno,
+    const char *expected_message,
+    struct v4_hb_error *error
+)
+{
+    struct v4_hb_builder *builder = NULL;
+    struct v4_hb_bound_root_walks walks;
+    struct v4_hb_snapshot held;
+    int code = v4_hb_builder_start(config, &builder, error);
+    int walk_code;
+    int walk_errno;
+    int abort_code;
+    char message[sizeof(error->message)];
+
+    if (code != V4_HB_OK || builder == NULL) {
+        if (builder != NULL) {
+            (void)v4_hb_builder_abort(builder, error);
+            v4_hb_builder_destroy(builder);
+        }
+        return -1;
+    }
+    if (v4_hb_builder_seize_interrupt(builder, &held, error) != V4_HB_OK) {
+        (void)v4_hb_builder_abort(builder, error);
+        v4_hb_builder_destroy(builder);
+        return -1;
+    }
+    walk_code = v4_hb_builder_run_bound_root_walks(
+        builder, &walks, error
+    );
+    walk_errno = error->saved_errno;
+    (void)snprintf(message, sizeof(message), "%s", error->message);
+    v4_hb_bound_root_walks_destroy(&walks);
+    abort_code = v4_hb_builder_abort(builder, error);
+    v4_hb_builder_destroy(builder);
+    if (walk_code != V4_HB_ERROR || walk_errno != expected_errno ||
+        strcmp(message, expected_message) != 0 || abort_code != V4_HB_OK) {
+        (void)fprintf(
+            stderr,
+            "FAIL: walk rejection code=%d errno=%d/%d abort=%d "
+            "message=%s/%s\n",
+            walk_code, walk_errno, expected_errno, abort_code,
+            message, expected_message
+        );
+        return -1;
+    }
+    return 0;
+}
+
+enum hostile_literal_kind {
+    HOSTILE_LITERAL_MISSING = 0,
+    HOSTILE_LITERAL_SYMLINK = 1,
+    HOSTILE_LITERAL_REGULAR = 2,
+};
+
+static int
+populate_hostile_literal_fixture(
+    int parent_fd,
+    const char *relative,
+    enum hostile_literal_kind kind
+)
+{
+    int root_fd = openat(
+        parent_fd, relative,
+        O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
+    );
+    int result = 0;
+
+    if (root_fd < 0) {
+        return -1;
+    }
+    if (kind == HOSTILE_LITERAL_SYMLINK) {
+        result = symlinkat(
+            ".", root_fd, V4_ORW_DECLARED_OUTPUT_EDGE
+        );
+    } else if (kind == HOSTILE_LITERAL_REGULAR) {
+        result = write_file_at(
+            root_fd, V4_ORW_DECLARED_OUTPUT_EDGE, "not a directory\n"
+        );
+        if (result == 0) {
+            result = fchmodat(
+                root_fd, V4_ORW_DECLARED_OUTPUT_EDGE, 0444, 0
+            );
+        }
+    }
+    if (result == 0) {
+        result = fchmodat(parent_fd, relative, 0555, 0);
+    }
+    if (close(root_fd) != 0 && result == 0) {
+        result = -1;
+    }
+    return result;
+}
+
 int
 main(void)
 {
@@ -594,16 +721,28 @@ main(void)
     char output_path[512] = {0};
     char wrong_output_path[512] = {0};
     char nested_attack_path[512] = {0};
+    char missing_input_path[512] = {0};
+    char symlink_input_path[512] = {0};
+    char regular_input_path[512] = {0};
+    char output_alias_path[512] = {0};
     struct v4_orw_logical_ledger ledger;
     struct v4_orw_output_anchor input_anchor;
     struct v4_orw_output_anchor output_anchor;
     struct v4_orw_output_anchor wrong_output_anchor;
     struct v4_orw_output_anchor same_mount_anchor;
+    struct v4_orw_output_anchor missing_input_anchor;
+    struct v4_orw_output_anchor symlink_input_anchor;
+    struct v4_orw_output_anchor regular_input_anchor;
+    struct v4_orw_output_anchor output_alias_anchor;
     struct v4_hb_root_anchor_config config;
     struct v4_hb_root_anchor_config expected_config;
     struct v4_hb_root_anchor_config nonempty_config;
     struct v4_hb_root_anchor_config wrong_output_config;
     struct v4_hb_root_anchor_config same_mount_config;
+    struct v4_hb_root_anchor_config missing_literal_config;
+    struct v4_hb_root_anchor_config symlink_literal_config;
+    struct v4_hb_root_anchor_config regular_literal_config;
+    struct v4_hb_root_anchor_config output_alias_config;
     struct v4_orw_error walk_error;
     struct v4_hb_builder *builder = NULL;
     struct v4_hb_builder *attack_builder = NULL;
@@ -627,6 +766,10 @@ main(void)
     bool output_mounted = false;
     bool wrong_output_mounted = false;
     bool nested_attack_mounted = false;
+    bool missing_input_mounted = false;
+    bool symlink_input_mounted = false;
+    bool regular_input_mounted = false;
+    bool output_alias_mounted = false;
     int code;
 
     if (V4_HB_FIXED_PTRACE_OPTIONS_MASK != 0x0010007fUL ||
@@ -646,6 +789,10 @@ main(void)
     memset(&output_anchor, 0, sizeof(output_anchor));
     memset(&wrong_output_anchor, 0, sizeof(wrong_output_anchor));
     memset(&same_mount_anchor, 0, sizeof(same_mount_anchor));
+    memset(&missing_input_anchor, 0, sizeof(missing_input_anchor));
+    memset(&symlink_input_anchor, 0, sizeof(symlink_input_anchor));
+    memset(&regular_input_anchor, 0, sizeof(regular_input_anchor));
+    memset(&output_alias_anchor, 0, sizeof(output_alias_anchor));
     input_anchor.primary.fd = -1;
     input_anchor.guard.fd = -1;
     output_anchor.primary.fd = -1;
@@ -654,10 +801,22 @@ main(void)
     wrong_output_anchor.guard.fd = -1;
     same_mount_anchor.primary.fd = -1;
     same_mount_anchor.guard.fd = -1;
+    missing_input_anchor.primary.fd = -1;
+    missing_input_anchor.guard.fd = -1;
+    symlink_input_anchor.primary.fd = -1;
+    symlink_input_anchor.guard.fd = -1;
+    regular_input_anchor.primary.fd = -1;
+    regular_input_anchor.guard.fd = -1;
+    output_alias_anchor.primary.fd = -1;
+    output_alias_anchor.guard.fd = -1;
     root_fd = open(temporary,
                    O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
     if (root_fd < 0 || mkdirat(root_fd, "candle-input", 0700) != 0 ||
         mkdirat(root_fd, "wrong-output", 0700) != 0 ||
+        mkdirat(root_fd, "missing-input", 0700) != 0 ||
+        mkdirat(root_fd, "symlink-input", 0700) != 0 ||
+        mkdirat(root_fd, "regular-input", 0700) != 0 ||
+        mkdirat(root_fd, "output-alias", 0700) != 0 ||
         snprintf(input_path, sizeof(input_path), "%s/candle-input",
                  temporary) < 0 ||
         snprintf(output_path, sizeof(output_path),
@@ -666,7 +825,15 @@ main(void)
         snprintf(wrong_output_path, sizeof(wrong_output_path),
                  "%s/wrong-output", temporary) < 0 ||
         snprintf(nested_attack_path, sizeof(nested_attack_path),
-                 "%s/candle-input/sub", temporary) < 0) {
+                 "%s/candle-input/sub", temporary) < 0 ||
+        snprintf(missing_input_path, sizeof(missing_input_path),
+                 "%s/missing-input", temporary) < 0 ||
+        snprintf(symlink_input_path, sizeof(symlink_input_path),
+                 "%s/symlink-input", temporary) < 0 ||
+        snprintf(regular_input_path, sizeof(regular_input_path),
+                 "%s/regular-input", temporary) < 0 ||
+        snprintf(output_alias_path, sizeof(output_alias_path),
+                 "%s/output-alias", temporary) < 0) {
         (void)test_fail("cannot construct held-builder roots");
         goto cleanup;
     }
@@ -684,6 +851,48 @@ main(void)
         goto cleanup;
     }
     wrong_output_mounted = true;
+    if (mount("tmpfs", missing_input_path, "tmpfs",
+              MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              "size=1048576,mode=0700") != 0) {
+        status = test_skip("private missing-literal input mount unavailable");
+        goto cleanup;
+    }
+    missing_input_mounted = true;
+    if (mount("tmpfs", symlink_input_path, "tmpfs",
+              MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              "size=1048576,mode=0700") != 0) {
+        status = test_skip("private symlink-literal input mount unavailable");
+        goto cleanup;
+    }
+    symlink_input_mounted = true;
+    if (mount("tmpfs", regular_input_path, "tmpfs",
+              MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              "size=1048576,mode=0700") != 0) {
+        status = test_skip("private regular-literal input mount unavailable");
+        goto cleanup;
+    }
+    regular_input_mounted = true;
+    if (populate_hostile_literal_fixture(
+            root_fd, "missing-input", HOSTILE_LITERAL_MISSING
+        ) != 0 ||
+        populate_hostile_literal_fixture(
+            root_fd, "symlink-input", HOSTILE_LITERAL_SYMLINK
+        ) != 0 ||
+        populate_hostile_literal_fixture(
+            root_fd, "regular-input", HOSTILE_LITERAL_REGULAR
+        ) != 0 ||
+        mount(NULL, missing_input_path, NULL,
+              MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              NULL) != 0 ||
+        mount(NULL, symlink_input_path, NULL,
+              MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              NULL) != 0 ||
+        mount(NULL, regular_input_path, NULL,
+              MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              NULL) != 0) {
+        (void)test_fail("cannot seal hostile literal input fixtures");
+        goto cleanup;
+    }
     input_fd = openat(
         root_fd, "candle-input",
         O_PATH | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC
@@ -706,6 +915,11 @@ main(void)
         goto cleanup;
     }
     output_mounted = true;
+    if (mount(output_path, output_alias_path, NULL, MS_BIND, NULL) != 0) {
+        status = test_skip("private output bind-mount alias unavailable");
+        goto cleanup;
+    }
+    output_alias_mounted = true;
     if (write_file_at(
             input_fd, V4_ORW_DECLARED_OUTPUT_EDGE "/unexpected",
             "unexpected\n"
@@ -826,6 +1040,22 @@ main(void)
         v4_orw_output_anchor_open(
             input_fd, "sub", &ledger,
             &same_mount_anchor, &walk_error
+        ) != V4_ORW_OK ||
+        v4_orw_output_anchor_open(
+            root_fd, "missing-input", &ledger,
+            &missing_input_anchor, &walk_error
+        ) != V4_ORW_OK ||
+        v4_orw_output_anchor_open(
+            root_fd, "symlink-input", &ledger,
+            &symlink_input_anchor, &walk_error
+        ) != V4_ORW_OK ||
+        v4_orw_output_anchor_open(
+            root_fd, "regular-input", &ledger,
+            &regular_input_anchor, &walk_error
+        ) != V4_ORW_OK ||
+        v4_orw_output_anchor_open(
+            root_fd, "output-alias", &ledger,
+            &output_alias_anchor, &walk_error
         ) != V4_ORW_OK) {
         (void)test_fail("cannot retain production/hostile root anchors");
         goto cleanup_anchor;
@@ -838,8 +1068,51 @@ main(void)
     wrong_output_config.output_root = wrong_output_anchor;
     same_mount_config = config;
     same_mount_config.output_root = same_mount_anchor;
+    missing_literal_config = config;
+    missing_literal_config.input_root = missing_input_anchor;
+    missing_literal_config.output_root = wrong_output_anchor;
+    symlink_literal_config = config;
+    symlink_literal_config.input_root = symlink_input_anchor;
+    symlink_literal_config.output_root = wrong_output_anchor;
+    regular_literal_config = config;
+    regular_literal_config.input_root = regular_input_anchor;
+    regular_literal_config.output_root = wrong_output_anchor;
+    output_alias_config = config;
+    output_alias_config.output_root = output_alias_anchor;
     if (expect_root_config_splices_reject(&config, &error) != 0) {
         (void)test_fail("malformed root-anchor config was accepted");
+        goto cleanup_anchor;
+    }
+    if (mount(NULL, input_path, NULL,
+              MS_REMOUNT | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              NULL) != 0) {
+        (void)test_fail("cannot make input mount writable for attack");
+        goto cleanup_anchor;
+    }
+    code = expect_start_rejection(
+        &config, EROFS, "input/output root mount access is not closed",
+        &error
+    );
+    if (mount(NULL, input_path, NULL,
+              MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              NULL) != 0 || code != 0) {
+        (void)test_fail("writable input mount did not fail closed");
+        goto cleanup_anchor;
+    }
+    if (mount(NULL, output_path, NULL,
+              MS_REMOUNT | MS_RDONLY | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              NULL) != 0) {
+        (void)test_fail("cannot make output mount read-only for attack");
+        goto cleanup_anchor;
+    }
+    code = expect_start_rejection(
+        &config, EROFS, "input/output root mount access is not closed",
+        &error
+    );
+    if (mount(NULL, output_path, NULL,
+              MS_REMOUNT | MS_NOSUID | MS_NODEV | MS_NOEXEC,
+              NULL) != 0 || code != 0) {
+        (void)test_fail("read-only output mount did not fail closed");
         goto cleanup_anchor;
     }
     {
@@ -868,6 +1141,43 @@ main(void)
     input_fd = -1;
     root_fd = -1;
     v4_orw_output_anchor_close(&same_mount_anchor);
+
+    if (output_alias_anchor.initial_projection.st_dev !=
+            output_anchor.initial_projection.st_dev ||
+        output_alias_anchor.initial_projection.st_ino !=
+            output_anchor.initial_projection.st_ino ||
+        output_alias_anchor.initial_projection.mount_id ==
+            output_anchor.initial_projection.mount_id) {
+        (void)test_fail("bind-mount alias lacks same-object/new-mount shape");
+        goto cleanup_anchor;
+    }
+    if (expect_bound_walk_rejection(
+            &missing_literal_config, ENOENT,
+            "held input-root walk failed: declared output mount edge is "
+            "missing", &error
+        ) != 0 ||
+        expect_bound_walk_rejection(
+            &symlink_literal_config, ELOOP,
+            "held input-root walk failed: literal output edge is symbolic",
+            &error
+        ) != 0 ||
+        expect_bound_walk_rejection(
+            &regular_literal_config, ENOTDIR,
+            "held input-root walk failed: literal output edge is not a "
+            "directory", &error
+        ) != 0 ||
+        expect_bound_walk_rejection(
+            &output_alias_config, EINVAL,
+            "held input-root walk failed: literal output edge does not "
+            "match its declared mount", &error
+        ) != 0) {
+        (void)test_fail("literal or bind-mount edge attack was accepted");
+        goto cleanup_anchor;
+    }
+    v4_orw_output_anchor_close(&output_alias_anchor);
+    v4_orw_output_anchor_close(&regular_input_anchor);
+    v4_orw_output_anchor_close(&symlink_input_anchor);
+    v4_orw_output_anchor_close(&missing_input_anchor);
 
     code = v4_hb_builder_start(
         &wrong_output_config, &wrong_output_builder, &error
@@ -924,6 +1234,7 @@ main(void)
         struct v4_hb_bound_root_walks rejected_walks;
         char rejection[sizeof(error.message)];
         int walk_code;
+        int rejection_errno;
         int abort_code;
 
         if (v4_hb_builder_seize_interrupt(
@@ -935,13 +1246,14 @@ main(void)
         walk_code = v4_hb_builder_run_bound_root_walks(
             attack_builder, &rejected_walks, &error
         );
+        rejection_errno = error.saved_errno;
         (void)snprintf(rejection, sizeof(rejection), "%s", error.message);
         abort_code = v4_hb_builder_abort(attack_builder, &error);
-        if (walk_code != V4_HB_ERROR ||
+        if (walk_code != V4_HB_ERROR || rejection_errno != EXDEV ||
             strcmp(
                 rejection,
-                "held input-root walk failed: openat2 rejected "
-                "descriptor-rooted path"
+                "held input-root walk failed: undeclared nested mount is "
+                "forbidden"
             ) != 0 || abort_code != V4_HB_OK) {
             (void)test_fail("undeclared nested mount did not fail closed");
             goto cleanup_anchor;
@@ -1290,6 +1602,10 @@ cleanup_anchor:
     }
     v4_orw_output_anchor_close(&same_mount_anchor);
     v4_orw_output_anchor_close(&wrong_output_anchor);
+    v4_orw_output_anchor_close(&output_alias_anchor);
+    v4_orw_output_anchor_close(&regular_input_anchor);
+    v4_orw_output_anchor_close(&symlink_input_anchor);
+    v4_orw_output_anchor_close(&missing_input_anchor);
     v4_orw_output_anchor_close(&output_anchor);
     v4_orw_output_anchor_close(&input_anchor);
 cleanup:
@@ -1302,6 +1618,9 @@ cleanup:
     if (nested_attack_mounted) {
         (void)umount2(nested_attack_path, MNT_DETACH);
     }
+    if (output_alias_mounted) {
+        (void)umount2(output_alias_path, MNT_DETACH);
+    }
     if (output_mounted) {
         (void)umount2(output_path, MNT_DETACH);
     }
@@ -1311,11 +1630,32 @@ cleanup:
     if (wrong_output_mounted) {
         (void)umount2(wrong_output_path, MNT_DETACH);
     }
+    if (missing_input_mounted) {
+        (void)umount2(missing_input_path, MNT_DETACH);
+    }
+    if (symlink_input_mounted) {
+        (void)umount2(symlink_input_path, MNT_DETACH);
+    }
+    if (regular_input_mounted) {
+        (void)umount2(regular_input_path, MNT_DETACH);
+    }
     if (input_path[0] != '\0') {
         (void)rmdir(input_path);
     }
     if (wrong_output_path[0] != '\0') {
         (void)rmdir(wrong_output_path);
+    }
+    if (missing_input_path[0] != '\0') {
+        (void)rmdir(missing_input_path);
+    }
+    if (symlink_input_path[0] != '\0') {
+        (void)rmdir(symlink_input_path);
+    }
+    if (regular_input_path[0] != '\0') {
+        (void)rmdir(regular_input_path);
+    }
+    if (output_alias_path[0] != '\0') {
+        (void)rmdir(output_alias_path);
     }
     (void)rmdir(temporary);
     return status;

@@ -1213,9 +1213,39 @@ v4_orw_root_walk(
             error
         );
         if (object_fd < 0) {
-            free(relative);
-            code = object_fd == -V4_ORW_UNSUPPORTED ?
+            int open_result = object_fd == -V4_ORW_UNSUPPORTED ?
                 V4_ORW_UNSUPPORTED : V4_ORW_ERROR;
+            int open_errno = error != NULL ? error->saved_errno : 0;
+
+            free(relative);
+            if (!is_declared_edge && open_result == V4_ORW_ERROR &&
+                open_errno == EXDEV) {
+                code = v4_orw_fail(
+                    error, V4_ORW_ERROR, EXDEV,
+                    "undeclared nested mount is forbidden"
+                );
+            } else if (is_declared_edge &&
+                       open_result == V4_ORW_ERROR &&
+                       open_errno == ENOTDIR) {
+                struct stat literal_status;
+
+                if (fstatat(
+                        anchor->primary.fd, V4_ORW_DECLARED_OUTPUT_EDGE,
+                        &literal_status, AT_SYMLINK_NOFOLLOW
+                    ) == 0 && S_ISLNK(literal_status.st_mode)) {
+                    code = v4_orw_fail(
+                        error, V4_ORW_ERROR, ELOOP,
+                        "literal output edge is symbolic"
+                    );
+                } else {
+                    code = v4_orw_fail(
+                        error, V4_ORW_ERROR, ENOTDIR,
+                        "literal output edge is not a directory"
+                    );
+                }
+            } else {
+                code = open_result;
+            }
             break;
         }
         code = v4_orw_allocate_new_ofd(
