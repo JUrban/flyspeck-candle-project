@@ -208,8 +208,9 @@ static int v4_hb_get_syscall_information(
     struct v4_hb_error *error
 );
 
-static int v4_hb_validate_stored_setup_prefix(
+static int v4_hb_validate_setup_prefix_observation(
     const struct v4_hb_builder *builder,
+    const struct v4_hb_setup_prefix_observation *setup,
     struct v4_hb_error *error
 );
 
@@ -228,6 +229,21 @@ _Static_assert(
         sizeof(int64_t) + sizeof(uint8_t) == 33U,
     "ptrace exit syscall-info ABI drifted"
 );
+
+#if defined(__GNUC__) || defined(__clang__)
+#define V4_HB_PRINTF_FORMAT(format_index, first_argument) \
+    __attribute__((format(printf, format_index, first_argument)))
+#else
+#define V4_HB_PRINTF_FORMAT(format_index, first_argument)
+#endif
+
+static int v4_hb_fail(
+    struct v4_hb_error *error,
+    int result,
+    int saved_errno,
+    const char *format,
+    ...
+) V4_HB_PRINTF_FORMAT(4, 5);
 
 static int
 v4_hb_fail(
@@ -249,6 +265,8 @@ v4_hb_fail(
     }
     return result;
 }
+
+#undef V4_HB_PRINTF_FORMAT
 
 void
 v4_hb_error_clear(struct v4_hb_error *error)
@@ -2815,7 +2833,9 @@ v4_hb_verify_held_internal(
                 V4_HB_SETUP_PREFIX_OPERATION_COUNT - 1U
             ];
 
-        code = v4_hb_validate_stored_setup_prefix(builder, error);
+        code = v4_hb_validate_setup_prefix_observation(
+            builder, &builder->setup_prefix, error
+        );
         if (code != V4_HB_OK) {
             return code;
         }
@@ -3774,13 +3794,12 @@ v4_hb_same_setup_prefix(
 }
 
 static int
-v4_hb_validate_stored_setup_prefix(
+v4_hb_validate_setup_prefix_observation(
     const struct v4_hb_builder *builder,
+    const struct v4_hb_setup_prefix_observation *setup,
     struct v4_hb_error *error
 )
 {
-    const struct v4_hb_setup_prefix_observation *setup =
-        &builder->setup_prefix;
     const struct v4_orw_kernel_projection *input =
         &builder->root_config.input_root.initial_projection;
     static const int64_t numbers[V4_HB_SETUP_PREFIX_OPERATION_COUNT] = {
@@ -3892,8 +3911,8 @@ v4_hb_validate_stored_setup_prefix(
                 operation->path_byte_count,
                 (unsigned int)operation->path_bytes[0],
                 (unsigned int)operation->path_bytes[1],
-                operation->raw_entry_wait_status,
-                operation->raw_exit_wait_status,
+                (unsigned int)operation->raw_entry_wait_status,
+                (unsigned int)operation->raw_exit_wait_status,
                 (unsigned long long)operation->entry_instruction_pointer,
                 (unsigned long long)operation->exit_instruction_pointer,
                 (unsigned long long)operation->entry_stack_pointer,
@@ -4032,7 +4051,9 @@ v4_hb_builder_run_setup_prefix(
     builder->setup_prefix = setup;
     builder->setup_prefix_complete = true;
     builder->state = V4_HB_SETUP_PREFIX_COMPLETE;
-    code = v4_hb_validate_stored_setup_prefix(builder, error);
+    code = v4_hb_validate_setup_prefix_observation(
+        builder, &builder->setup_prefix, error
+    );
     if (code == V4_HB_OK) {
         code = v4_hb_verify_held_internal(builder, error);
     }
@@ -4061,7 +4082,14 @@ v4_hb_builder_verify_setup_prefix(
     }
     code = v4_hb_verify_held_internal(builder, error);
     if (code == V4_HB_OK) {
-        code = v4_hb_validate_stored_setup_prefix(builder, error);
+        code = v4_hb_validate_setup_prefix_observation(
+            builder, &builder->setup_prefix, error
+        );
+    }
+    if (code == V4_HB_OK) {
+        code = v4_hb_validate_setup_prefix_observation(
+            builder, expected, error
+        );
     }
     if (code != V4_HB_OK) {
         return code;

@@ -22,11 +22,15 @@ class V4HeldBuilderTests(unittest.TestCase):
             prefix="candle-v4-held-builder-test-"
         ) as temporary:
             executable = pathlib.Path(temporary) / "test-v4-held-builder"
-            flags = ["-std=c11", "-O2", "-Wall", "-Wextra", "-Werror"]
+            flags = [
+                "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
+                "-Wformat=2",
+            ]
             environment = None
             if sanitizers:
                 flags = [
                     "-std=c11", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
+                    "-Wformat=2",
                     "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
                 ]
                 environment = os.environ.copy()
@@ -101,6 +105,7 @@ class V4HeldBuilderTests(unittest.TestCase):
         self.assertIn("process_vm_readv", source)
         self.assertIn("V4_HB_SETUP_PREFIX_STOP_COUNT", header)
         self.assertIn("v4_hb_builder_run_setup_prefix", header)
+        self.assertIn("V4_HB_PRINTF_FORMAT(4, 5)", source)
         self.assertNotIn("PTRACE_SETREG", source)
         self.assertNotIn("seccomp", source.lower())
         self.assertIn("getpid(), builder->pid, KCMP_FILE", source)

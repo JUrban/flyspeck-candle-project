@@ -745,6 +745,40 @@ expect_setup_prefix_splices_reject(
     V4_HB_EXPECT_SETUP_SPLICE_REJECT(splice.operations[0].return_value = -1);
 #undef V4_HB_EXPECT_SETUP_SPLICE_REJECT
 
+    {
+        const struct v4_hb_setup_syscall_observation *operation;
+        char expected_message[sizeof(error->message)];
+
+        splice = *setup;
+        splice.operations[0].raw_exit_wait_status ^= 1;
+        operation = &splice.operations[0];
+        (void)snprintf(
+            expected_message, sizeof(expected_message),
+            "stored setup syscall observation is malformed: index=%u "
+            "operation=%u nr=%lld path=%u/%u,%u waits=%x,%x "
+            "ip=%llu,%llu sp=%llu,%llu return=%lld/%u",
+            0U, (unsigned int)operation->operation,
+            (long long)operation->syscall_number,
+            operation->path_byte_count,
+            (unsigned int)operation->path_bytes[0],
+            (unsigned int)operation->path_bytes[1],
+            (unsigned int)operation->raw_entry_wait_status,
+            (unsigned int)operation->raw_exit_wait_status,
+            (unsigned long long)operation->entry_instruction_pointer,
+            (unsigned long long)operation->exit_instruction_pointer,
+            (unsigned long long)operation->entry_stack_pointer,
+            (unsigned long long)operation->exit_stack_pointer,
+            (long long)operation->return_value,
+            operation->return_is_error
+        );
+        if (v4_hb_builder_verify_setup_prefix(
+                builder, &splice, error
+            ) != V4_HB_ERROR || error->saved_errno != EINVAL ||
+            strcmp(error->message, expected_message) != 0) {
+            return -1;
+        }
+    }
+
     return v4_hb_builder_verify_setup_prefix(builder, setup, error) ==
         V4_HB_OK ? 0 : -1;
 }
@@ -1501,8 +1535,8 @@ main(void)
             (long)completed.pid, (long)held.pid,
             (unsigned long long)completed.start_ticks,
             (unsigned long long)held.start_ticks,
-            completed.raw_interrupt_wait_status,
-            held.raw_interrupt_wait_status, error.message
+            (unsigned int)completed.raw_interrupt_wait_status,
+            (unsigned int)held.raw_interrupt_wait_status, error.message
         );
         goto cleanup_anchor;
     }
