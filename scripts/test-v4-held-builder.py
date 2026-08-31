@@ -16,28 +16,33 @@ NATIVE = ROOT / "native"
 
 class V4HeldBuilderTests(unittest.TestCase):
     def _compile_and_run(
-        self, *, sanitizers: bool
+        self, *, sanitizers: bool, proc_nlink_churn: bool = False
     ) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory(
             prefix="candle-v4-held-builder-test-"
         ) as temporary:
             executable = pathlib.Path(temporary) / "test-v4-held-builder"
+            environment = os.environ.copy()
+            environment["TMPDIR"] = temporary
             flags = [
                 "-std=c11", "-O2", "-Wall", "-Wextra", "-Werror",
                 "-Wformat=2",
             ]
-            environment = None
             if sanitizers:
                 flags = [
                     "-std=c11", "-O1", "-g", "-Wall", "-Wextra", "-Werror",
                     "-Wformat=2",
                     "-fsanitize=address,undefined", "-fno-omit-frame-pointer",
                 ]
-                environment = os.environ.copy()
                 environment["ASAN_OPTIONS"] = "detect_leaks=1:halt_on_error=1"
                 environment["UBSAN_OPTIONS"] = (
                     "halt_on_error=1:print_stacktrace=1"
                 )
+            if proc_nlink_churn:
+                flags.extend([
+                    "-DV4_HB_TEST_PROC_NLINK_CHURN",
+                    "-Wl,--wrap=fstat",
+                ])
             subprocess.run(
                 [
                     "cc", *flags, "-I", str(NATIVE),
@@ -69,6 +74,11 @@ class V4HeldBuilderTests(unittest.TestCase):
 
     def test_real_boundary_under_asan_ubsan(self) -> None:
         self._check(self._compile_and_run(sanitizers=True))
+
+    def test_proc_root_guard_tolerates_dynamic_link_count(self) -> None:
+        self._check(self._compile_and_run(
+            sanitizers=False, proc_nlink_churn=True
+        ))
 
     def test_slice_remains_below_protocol_and_exec(self) -> None:
         source = (NATIVE / "v4_held_builder.c").read_text(encoding="utf-8")

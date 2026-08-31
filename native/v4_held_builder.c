@@ -312,6 +312,7 @@ v4_hb_verify_same_ofd(
     int primary,
     int guard,
     const char *label,
+    bool require_stable_link_count,
     struct v4_hb_error *error
 )
 {
@@ -361,7 +362,8 @@ v4_hb_verify_same_ofd(
         primary_status.st_dev != guard_status.st_dev ||
         primary_status.st_ino != guard_status.st_ino ||
         primary_status.st_mode != guard_status.st_mode ||
-        primary_status.st_nlink != guard_status.st_nlink) {
+        (require_stable_link_count &&
+         primary_status.st_nlink != guard_status.st_nlink)) {
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "%s guarded projection changed", label);
     }
@@ -509,8 +511,10 @@ v4_hb_capture_proc_root(
         return v4_hb_fail(error, V4_HB_ERROR, errno,
                           "cannot retain proc root guard alias");
     }
+    /* procfs root link count tracks visible tasks and is not an OFD identity. */
     return v4_hb_verify_same_ofd(
-        builder->proc_root_fd, builder->proc_root_guard, "proc root", error
+        builder->proc_root_fd, builder->proc_root_guard, "proc root", false,
+        error
     );
 }
 
@@ -1376,7 +1380,7 @@ v4_hb_capture_namespace_set(
                               "cannot retain namespace guard alias");
         }
         code = v4_hb_verify_same_ofd(
-            descriptor, guards[index], "namespace", error
+            descriptor, guards[index], "namespace", true, error
         );
         if (code != V4_HB_OK) {
             return code;
@@ -1425,8 +1429,10 @@ v4_hb_verify_proc_root(
         return v4_hb_fail(error, V4_HB_ERROR, EINVAL,
                           "retained proc root is no longer procfs");
     }
+    /* KCMP_FILE plus the stable projection authenticate this mutable procfs. */
     code = v4_hb_verify_same_ofd(
-        builder->proc_root_fd, builder->proc_root_guard, "proc root", error
+        builder->proc_root_fd, builder->proc_root_guard, "proc root", false,
+        error
     );
     return code;
 }
@@ -1468,7 +1474,7 @@ v4_hb_verify_namespace_set(
         }
         code = v4_hb_verify_same_ofd(
             projections[index].descriptor, guards[index],
-            "namespace", error
+            "namespace", true, error
         );
         if (code != V4_HB_OK) {
             return code;

@@ -4,6 +4,9 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#ifdef V4_HB_TEST_PROC_NLINK_CHURN
+#include <linux/magic.h>
+#endif
 #include <sched.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -13,9 +16,33 @@
 #include <sys/mount.h>
 #include <sys/ptrace.h>
 #include <sys/stat.h>
+#ifdef V4_HB_TEST_PROC_NLINK_CHURN
+#include <sys/statfs.h>
+#endif
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#ifdef V4_HB_TEST_PROC_NLINK_CHURN
+static unsigned int test_proc_root_observation_count;
+
+int __real_fstat(int descriptor, struct stat *status);
+
+int
+__wrap_fstat(int descriptor, struct stat *status)
+{
+    struct statfs filesystem;
+    int result = __real_fstat(descriptor, status);
+
+    if (result == 0 && S_ISDIR(status->st_mode) && status->st_ino == 1 &&
+        fstatfs(descriptor, &filesystem) == 0 &&
+        (unsigned long)filesystem.f_type == (unsigned long)PROC_SUPER_MAGIC) {
+        status->st_nlink +=
+            (nlink_t)(++test_proc_root_observation_count & 1U);
+    }
+    return result;
+}
+#endif
 
 static const unsigned long expected_namespace_flags[V4_HB_NAMESPACE_COUNT] = {
     CLONE_NEWUSER,
@@ -129,6 +156,47 @@ static int
 test_fail(const char *message)
 {
     (void)fprintf(stderr, "FAIL: %s\n", message);
+    return 1;
+}
+
+static int
+test_v4_oracle_error(struct v4_hb_error *error, const char *message)
+{
+    error->saved_errno = EINVAL;
+    (void)snprintf(error->message, sizeof(error->message), "%s", message);
+    return V4_HB_ERROR;
+}
+
+static int
+test_v4_diagnostic_failure(
+    const char *context,
+    const char *phase,
+    int code,
+    struct v4_hb_builder *builder,
+    const struct v4_hb_error *error
+)
+{
+    struct v4_hb_snapshot snapshot;
+    struct v4_hb_error snapshot_error;
+    int snapshot_code = V4_HB_ERROR;
+
+    memset(&snapshot, 0, sizeof(snapshot));
+    memset(&snapshot_error, 0, sizeof(snapshot_error));
+    if (builder != NULL) {
+        snapshot_code = v4_hb_builder_snapshot(
+            builder, &snapshot, &snapshot_error
+        );
+    }
+    (void)fprintf(
+        stderr, "FAIL: %s: phase=%s code=%d errno=%d message=%s "
+        "snapshot_code=%d state=%d poisoned=%u snapshot_errno=%d "
+        "snapshot_message=%s\n",
+        context, phase != NULL ? phase : "unspecified",
+        code, error->saved_errno, error->message,
+        snapshot_code, snapshot_code == V4_HB_OK ? (int)snapshot.state : -1,
+        snapshot_code == V4_HB_OK && snapshot.state == V4_HB_POISONED ? 1U : 0U,
+        snapshot_error.saved_errno, snapshot_error.message
+    );
     return 1;
 }
 
@@ -376,93 +444,57 @@ expect_snapshot_splices_reject(
 )
 {
     struct v4_hb_snapshot splice;
+    int verify_code;
 
-    splice = *held;
-    ++splice.pid;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.start_ticks;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    splice.raw_interrupt_wait_status ^= 1 << 16;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.pidfd;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    splice.clone_flags ^= CLONE_NEWUTS;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    --splice.namespace_count;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.observer_effective_uid;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    splice.observer_setgroups_denied ^= 1U;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.child_nspid;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.uid_map.outside_id;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.setgroups_deny_write_order;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.child_namespaces[0].inode;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.parent_namespaces[1].descriptor;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.input_root.primary.fd_generation;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    ++splice.output_root.initial_projection.st_ino;
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    splice = *held;
-    {
-        struct v4_orw_output_anchor swapped = splice.input_root;
-        splice.input_root = splice.output_root;
-        splice.output_root = swapped;
-    }
-    if (v4_hb_builder_verify_held(builder, &splice, error) != V4_HB_ERROR) {
-        return -1;
-    }
-    return v4_hb_builder_verify_held(builder, held, error) == V4_HB_OK ?
-        0 : -1;
+#define V4_HB_EXPECT_HELD_SPLICE_REJECT(statement) \
+    do { \
+        splice = *held; \
+        statement; \
+        verify_code = v4_hb_builder_verify_held(builder, &splice, error); \
+        if (verify_code != V4_HB_ERROR) { \
+            if (verify_code != V4_HB_OK) { \
+                return verify_code; \
+            } \
+            return test_v4_oracle_error( \
+                error, "held snapshot hostile splice was accepted" \
+            ); \
+        } \
+    } while (0)
+
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(++splice.pid);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(++splice.start_ticks);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(
+        splice.raw_interrupt_wait_status ^= 1 << 16
+    );
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(++splice.pidfd);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(splice.clone_flags ^= CLONE_NEWUTS);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(--splice.namespace_count);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(++splice.observer_effective_uid);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(
+        splice.observer_setgroups_denied ^= 1U
+    );
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(++splice.child_nspid);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(++splice.uid_map.outside_id);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(++splice.setgroups_deny_write_order);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(++splice.child_namespaces[0].inode);
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(
+        ++splice.parent_namespaces[1].descriptor
+    );
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(
+        ++splice.input_root.primary.fd_generation
+    );
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(
+        ++splice.output_root.initial_projection.st_ino
+    );
+    V4_HB_EXPECT_HELD_SPLICE_REJECT(
+        do { \
+            struct v4_orw_output_anchor swapped = splice.input_root; \
+            splice.input_root = splice.output_root; \
+            splice.output_root = swapped; \
+        } while (0)
+    );
+#undef V4_HB_EXPECT_HELD_SPLICE_REJECT
+    return v4_hb_builder_verify_held(builder, held, error);
 }
 
 static int
@@ -509,28 +541,56 @@ hold_and_prewalk(
     struct v4_hb_builder *builder,
     const struct v4_hb_root_anchor_config *config,
     struct v4_hb_snapshot *held,
+    const char **failure_phase,
     struct v4_hb_error *error
 )
 {
     struct v4_hb_bound_root_walks walks;
     struct v4_hb_completion forbidden_completion;
-    int code = v4_hb_builder_seize_interrupt(builder, held, error);
+    int code;
 
+    *failure_phase = "held seize/interrupt";
+    code = v4_hb_builder_seize_interrupt(builder, held, error);
     if (code != V4_HB_OK) {
         return code;
     }
-    if (!held_snapshot_is_exact(held, config) ||
-        v4_hb_builder_seize_interrupt(builder, held, error) != V4_HB_ERROR ||
-        expect_snapshot_splices_reject(builder, held, error) != 0 ||
-        v4_hb_builder_release_and_reap(
-            builder, &forbidden_completion, error
-        ) != V4_HB_ERROR) {
-        return V4_HB_ERROR;
+    *failure_phase = "held snapshot oracle";
+    if (!held_snapshot_is_exact(held, config)) {
+        return test_v4_oracle_error(error, "held snapshot oracle mismatch");
     }
+    *failure_phase = "forbidden second seize/interrupt";
+    code = v4_hb_builder_seize_interrupt(builder, held, error);
+    if (code != V4_HB_ERROR) {
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        return test_v4_oracle_error(
+            error, "second held seize/interrupt was accepted"
+        );
+    }
+    *failure_phase = "held snapshot splice hostility";
+    code = expect_snapshot_splices_reject(builder, held, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    *failure_phase = "forbidden early release/reap";
+    code = v4_hb_builder_release_and_reap(
+        builder, &forbidden_completion, error
+    );
+    if (code != V4_HB_ERROR) {
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        return test_v4_oracle_error(
+            error, "early held release/reap was accepted"
+        );
+    }
+    *failure_phase = "held bound-root walks";
     code = v4_hb_builder_run_bound_root_walks(builder, &walks, error);
     if (code != V4_HB_OK) {
         return code;
     }
+    *failure_phase = "bound-root walk oracle";
     if (walks.input_root.entry_count != 4U ||
         walks.input_root.opened_descriptor_count != 7U ||
         walks.input_root.directory_eof_count != 2U ||
@@ -580,9 +640,10 @@ hold_and_prewalk(
             walks.input_root.entries[3].descriptor.fd_generation ||
         walks.output_root.root_walk_descriptor.logical_ofd_id == 0U) {
         v4_hb_bound_root_walks_destroy(&walks);
-        return V4_HB_ERROR;
+        return test_v4_oracle_error(error, "bound-root walk oracle mismatch");
     }
     v4_hb_bound_root_walks_destroy(&walks);
+    *failure_phase = NULL;
     return V4_HB_OK;
 }
 
@@ -748,15 +809,22 @@ expect_setup_prefix_splices_reject(
 )
 {
     struct v4_hb_setup_prefix_observation splice;
+    int verify_code;
 
 #define V4_HB_EXPECT_SETUP_SPLICE_REJECT(statement) \
     do { \
         splice = *setup; \
         statement; \
-        if (v4_hb_builder_verify_setup_prefix( \
-                builder, &splice, error \
-            ) != V4_HB_ERROR) { \
-            return -1; \
+        verify_code = v4_hb_builder_verify_setup_prefix( \
+            builder, &splice, error \
+        ); \
+        if (verify_code != V4_HB_ERROR) { \
+            if (verify_code != V4_HB_OK) { \
+                return verify_code; \
+            } \
+            return test_v4_oracle_error( \
+                error, "setup-prefix hostile splice was accepted" \
+            ); \
         } \
     } while (0)
 
@@ -863,16 +931,26 @@ expect_setup_prefix_splices_reject(
             (long long)operation->return_value,
             operation->return_is_error
         );
-        if (v4_hb_builder_verify_setup_prefix(
-                builder, &splice, error
-            ) != V4_HB_ERROR || error->saved_errno != EINVAL ||
+        verify_code = v4_hb_builder_verify_setup_prefix(
+            builder, &splice, error
+        );
+        if (verify_code != V4_HB_ERROR) {
+            if (verify_code != V4_HB_OK) {
+                return verify_code;
+            }
+            return test_v4_oracle_error(
+                error, "malformed setup-prefix observation was accepted"
+            );
+        }
+        if (error->saved_errno != EINVAL ||
             strcmp(error->message, expected_message) != 0) {
-            return -1;
+            return test_v4_oracle_error(
+                error, "malformed setup-prefix diagnostic oracle mismatch"
+            );
         }
     }
 
-    return v4_hb_builder_verify_setup_prefix(builder, setup, error) ==
-        V4_HB_OK ? 0 : -1;
+    return v4_hb_builder_verify_setup_prefix(builder, setup, error);
 }
 
 static int
@@ -881,28 +959,76 @@ run_setup_prefix(
     const struct v4_hb_root_anchor_config *config,
     struct v4_hb_setup_prefix_observation *setup,
     struct v4_hb_snapshot *snapshot,
+    const char **failure_phase,
     struct v4_hb_error *error
 )
 {
     struct v4_hb_setup_prefix_observation forbidden_second;
-    int code = v4_hb_builder_run_setup_prefix(builder, setup, error);
+    int code;
 
+    *failure_phase = "setup-prefix traced execution";
+    code = v4_hb_builder_run_setup_prefix(builder, setup, error);
     if (code != V4_HB_OK) {
         return code;
     }
-    if (!setup_prefix_is_exact(setup, config) ||
-        v4_hb_builder_run_setup_prefix(
-            builder, &forbidden_second, error
-        ) != V4_HB_ERROR ||
-        expect_setup_prefix_splices_reject(builder, setup, error) != 0 ||
-        v4_hb_builder_snapshot(builder, snapshot, error) != V4_HB_OK ||
-        snapshot->state != V4_HB_SETUP_PREFIX_COMPLETE ||
-        snapshot->gate_value != 1U ||
-        snapshot->resume_count != V4_HB_SETUP_PREFIX_STOP_COUNT ||
-        snapshot->held_stop_consumed != 1U ||
-        v4_hb_builder_verify_held(builder, snapshot, error) != V4_HB_OK) {
-        return V4_HB_ERROR;
+    *failure_phase = "positive setup-prefix observation oracle";
+    if (!setup_prefix_is_exact(setup, config)) {
+        return test_v4_oracle_error(
+            error, "positive setup-prefix observation oracle mismatch"
+        );
     }
+    *failure_phase = "forbidden second setup-prefix run";
+    code = v4_hb_builder_run_setup_prefix(
+        builder, &forbidden_second, error
+    );
+    if (code != V4_HB_ERROR) {
+        if (code != V4_HB_OK) {
+            return code;
+        }
+        return test_v4_oracle_error(
+            error, "second setup-prefix run was accepted"
+        );
+    }
+    *failure_phase = "setup-prefix splice hostility";
+    code = expect_setup_prefix_splices_reject(builder, setup, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    *failure_phase = "setup-prefix snapshot call";
+    code = v4_hb_builder_snapshot(builder, snapshot, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    *failure_phase = "setup-prefix snapshot state";
+    if (snapshot->state != V4_HB_SETUP_PREFIX_COMPLETE) {
+        return test_v4_oracle_error(
+            error, "setup-prefix snapshot state mismatch"
+        );
+    }
+    *failure_phase = "setup-prefix snapshot gate";
+    if (snapshot->gate_value != 1U) {
+        return test_v4_oracle_error(
+            error, "setup-prefix snapshot gate mismatch"
+        );
+    }
+    *failure_phase = "setup-prefix snapshot resume count";
+    if (snapshot->resume_count != V4_HB_SETUP_PREFIX_STOP_COUNT) {
+        return test_v4_oracle_error(
+            error, "setup-prefix snapshot resume count mismatch"
+        );
+    }
+    *failure_phase = "setup-prefix snapshot held-stop ownership";
+    if (snapshot->held_stop_consumed != 1U) {
+        return test_v4_oracle_error(
+            error, "setup-prefix snapshot held-stop ownership mismatch"
+        );
+    }
+    *failure_phase = "setup-prefix held verification";
+    code = v4_hb_builder_verify_held(builder, snapshot, error);
+    if (code != V4_HB_OK) {
+        return code;
+    }
+    *failure_phase = NULL;
     return V4_HB_OK;
 }
 
@@ -1147,7 +1273,7 @@ populate_hostile_literal_fixture(
 int
 main(void)
 {
-    char temporary[] = "/tmp/candle-v4-held-builder.XXXXXX";
+    char temporary[512] = {0};
     char input_path[512] = {0};
     char output_path[512] = {0};
     char wrong_output_path[512] = {0};
@@ -1188,6 +1314,9 @@ main(void)
     struct v4_hb_setup_prefix_observation setup;
     struct v4_hb_completion completion;
     struct v4_hb_error error;
+    const char *held_failure_phase = NULL;
+    const char *setup_failure_phase = NULL;
+    const char *temporary_parent = getenv("TMPDIR");
     int root_fd = -1;
     int input_fd = -1;
     int saved_pidfd = -1;
@@ -1204,6 +1333,24 @@ main(void)
     bool regular_input_mounted = false;
     bool output_alias_mounted = false;
     int code;
+    int temporary_path_length;
+
+    if (temporary_parent == NULL || temporary_parent[0] == '\0') {
+        temporary_parent = "/tmp";
+    }
+    temporary_path_length = snprintf(
+        temporary, sizeof(temporary), "%s%s%s",
+        temporary_parent,
+        temporary_parent[strlen(temporary_parent) - 1U] == '/' ? "" : "/",
+        "candle-v4-held-builder.XXXXXX"
+    );
+    if (temporary_parent[0] != '/' || temporary_path_length < 0 ||
+        (size_t)temporary_path_length >= sizeof(temporary) ||
+        (size_t)temporary_path_length >
+            sizeof(temporary) -
+                sizeof("/candle-input/" V4_ORW_DECLARED_OUTPUT_EDGE)) {
+        return test_fail("TMPDIR does not admit a bounded native fixture path");
+    }
 
     if (V4_HB_FIXED_PTRACE_OPTIONS_MASK != 0x0010007fUL ||
         V4_HB_PTRACE_OPTION_COUNT != 8U ||
@@ -1722,7 +1869,9 @@ main(void)
         goto cleanup_anchor;
     }
     config = expected_config;
-    code = hold_and_prewalk(builder, &config, &held, &error);
+    code = hold_and_prewalk(
+        builder, &config, &held, &held_failure_phase, &error
+    );
     if (code == V4_HB_UNSUPPORTED) {
         status = test_skip(error.message);
         goto cleanup_anchor;
@@ -1749,7 +1898,8 @@ main(void)
         goto cleanup_anchor;
     }
     code = run_setup_prefix(
-        builder, &config, &setup, &setup_snapshot, &error
+        builder, &config, &setup, &setup_snapshot,
+        &setup_failure_phase, &error
     );
     if (code == V4_HB_UNSUPPORTED) {
         status = test_skip(error.message);
@@ -1760,9 +1910,11 @@ main(void)
         setup_snapshot.start_ticks != completed.start_ticks ||
         setup_snapshot.raw_interrupt_wait_status !=
             completed.raw_interrupt_wait_status) {
-        (void)fprintf(
-            stderr, "FAIL: traced setup prefix is malformed: code=%d %s\n",
-            code, error.message
+        (void)test_v4_diagnostic_failure(
+            "traced setup prefix is malformed",
+            setup_failure_phase != NULL ? setup_failure_phase :
+                "post-helper identity join",
+            code, builder, &error
         );
         goto cleanup_anchor;
     }
@@ -1812,15 +1964,75 @@ main(void)
     v4_hb_builder_destroy(builder);
     builder = NULL;
 
+    held_failure_phase = "setup-oracle builder start";
     code = v4_hb_builder_start(&config, &attack_builder, &error);
-    if (code != V4_HB_OK ||
-        hold_and_prewalk(
-            attack_builder, &config, &held, &error
-        ) != V4_HB_OK ||
-        run_setup_prefix(
-            attack_builder, &config, &setup, &setup_snapshot, &error
-        ) != V4_HB_OK) {
-        (void)test_fail("cannot establish live signal-mask attack boundary");
+    if (code == V4_HB_OK) {
+        code = hold_and_prewalk(
+            attack_builder, &config, &held, &held_failure_phase, &error
+        );
+    }
+    if (code != V4_HB_OK) {
+        (void)test_v4_diagnostic_failure(
+            "cannot establish setup-oracle attack boundary",
+            held_failure_phase, code, attack_builder, &error
+        );
+        goto cleanup_anchor;
+    }
+    {
+        struct v4_hb_root_anchor_config hostile_config = config;
+        struct v4_hb_error rejection;
+        int setup_code;
+        int abort_code;
+
+        ++hostile_config.input_root.primary.fd_generation;
+        setup_code = run_setup_prefix(
+            attack_builder, &hostile_config, &setup, &setup_snapshot,
+            &setup_failure_phase, &error
+        );
+        rejection = error;
+        abort_code = v4_hb_builder_abort(attack_builder, &error);
+        if (setup_code != V4_HB_ERROR ||
+            strcmp(setup_failure_phase,
+                   "positive setup-prefix observation oracle") != 0 ||
+            rejection.saved_errno != EINVAL ||
+            strcmp(
+                rejection.message,
+                "positive setup-prefix observation oracle mismatch"
+            ) != 0 || abort_code != V4_HB_OK) {
+            (void)fprintf(
+                stderr,
+                "FAIL: setup oracle phase=%s code=%d errno=%d abort=%d "
+                "message=%s/%s\n",
+                setup_failure_phase, setup_code, rejection.saved_errno,
+                abort_code, rejection.message, error.message
+            );
+            goto cleanup_anchor;
+        }
+    }
+    v4_hb_builder_destroy(attack_builder);
+    attack_builder = NULL;
+
+    held_failure_phase = "live signal-mask builder start";
+    setup_failure_phase = NULL;
+    code = v4_hb_builder_start(&config, &attack_builder, &error);
+    if (code == V4_HB_OK) {
+        code = hold_and_prewalk(
+            attack_builder, &config, &held, &held_failure_phase, &error
+        );
+    }
+    if (code == V4_HB_OK) {
+        code = run_setup_prefix(
+            attack_builder, &config, &setup, &setup_snapshot,
+            &setup_failure_phase, &error
+        );
+    }
+    if (code != V4_HB_OK) {
+        (void)test_v4_diagnostic_failure(
+            "cannot establish live signal-mask attack boundary",
+            setup_failure_phase != NULL ? setup_failure_phase :
+                held_failure_phase,
+            code, attack_builder, &error
+        );
         goto cleanup_anchor;
     }
     {
@@ -1882,12 +2094,18 @@ main(void)
     v4_hb_builder_destroy(attack_builder);
     attack_builder = NULL;
 
+    held_failure_phase = "setup-stop builder start";
     code = v4_hb_builder_start(&config, &attack_builder, &error);
-    if (code != V4_HB_OK ||
-        hold_and_prewalk(
-            attack_builder, &config, &held, &error
-        ) != V4_HB_OK) {
-        (void)test_fail("cannot establish setup-stop attack boundary");
+    if (code == V4_HB_OK) {
+        code = hold_and_prewalk(
+            attack_builder, &config, &held, &held_failure_phase, &error
+        );
+    }
+    if (code != V4_HB_OK) {
+        (void)test_v4_diagnostic_failure(
+            "cannot establish setup-stop attack boundary",
+            held_failure_phase, code, attack_builder, &error
+        );
         goto cleanup_anchor;
     }
     {
@@ -1903,8 +2121,9 @@ main(void)
             (void)test_fail("cannot queue intermediate setup signal");
             goto cleanup_anchor;
         }
-        setup_code = v4_hb_builder_run_setup_prefix(
-            attack_builder, &setup, &error
+        setup_code = run_setup_prefix(
+            attack_builder, &config, &setup, &setup_snapshot,
+            &setup_failure_phase, &error
         );
         rejection_errno = error.saved_errno;
         (void)snprintf(rejection, sizeof(rejection), "%s", error.message);
@@ -1912,7 +2131,10 @@ main(void)
             attack_builder, &poisoned, &error
         );
         abort_code = v4_hb_builder_abort(attack_builder, &error);
-        if (setup_code != V4_HB_ERROR || rejection_errno != EINVAL ||
+        if (setup_code != V4_HB_ERROR ||
+            strcmp(setup_failure_phase,
+                   "setup-prefix traced execution") != 0 ||
+            rejection_errno != EINVAL ||
             strcmp(rejection,
                    "non-TRACESYSGOOD syscall stop observed") != 0 ||
             snapshot_code != V4_HB_OK ||
@@ -1922,10 +2144,10 @@ main(void)
             abort_code != V4_HB_OK) {
             (void)fprintf(
                 stderr,
-                "FAIL: intermediate setup stop code=%d errno=%d abort=%d "
-                "message=%s/%s\n",
-                setup_code, rejection_errno, abort_code, rejection,
-                error.message
+                "FAIL: intermediate setup stop phase=%s code=%d errno=%d "
+                "abort=%d message=%s/%s\n",
+                setup_failure_phase, setup_code, rejection_errno,
+                abort_code, rejection, error.message
             );
             goto cleanup_anchor;
         }
@@ -1943,17 +2165,24 @@ main(void)
         goto cleanup_anchor;
     }
     code = hold_and_prewalk(
-        attack_builder, &config, &held, &error
+        attack_builder, &config, &held, &held_failure_phase, &error
     );
     if (code != V4_HB_OK) {
-        (void)test_fail("cannot establish unexpected-stop boundary");
+        (void)test_v4_diagnostic_failure(
+            "cannot establish unexpected-stop boundary",
+            held_failure_phase, code, attack_builder, &error
+        );
         goto cleanup_anchor;
     }
     code = run_setup_prefix(
-        attack_builder, &config, &setup, &setup_snapshot, &error
+        attack_builder, &config, &setup, &setup_snapshot,
+        &setup_failure_phase, &error
     );
     if (code != V4_HB_OK) {
-        (void)test_fail("cannot establish unexpected-stop setup boundary");
+        (void)test_v4_diagnostic_failure(
+            "cannot establish unexpected-stop setup boundary",
+            setup_failure_phase, code, attack_builder, &error
+        );
         goto cleanup_anchor;
     }
     if (syscall(SYS_pidfd_send_signal, held.pidfd, SIGUSR1, NULL, 0) != 0 ||
@@ -1977,17 +2206,24 @@ main(void)
         goto cleanup_anchor;
     }
     code = hold_and_prewalk(
-        exit_builder, &config, &held, &error
+        exit_builder, &config, &held, &held_failure_phase, &error
     );
     if (code != V4_HB_OK) {
-        (void)test_fail("cannot establish unexpected-exit boundary");
+        (void)test_v4_diagnostic_failure(
+            "cannot establish unexpected-exit boundary",
+            held_failure_phase, code, exit_builder, &error
+        );
         goto cleanup_anchor;
     }
     code = run_setup_prefix(
-        exit_builder, &config, &setup, &setup_snapshot, &error
+        exit_builder, &config, &setup, &setup_snapshot,
+        &setup_failure_phase, &error
     );
     if (code != V4_HB_OK) {
-        (void)test_fail("cannot establish unexpected-exit setup boundary");
+        (void)test_v4_diagnostic_failure(
+            "cannot establish unexpected-exit setup boundary",
+            setup_failure_phase, code, exit_builder, &error
+        );
         goto cleanup_anchor;
     }
     if (syscall(SYS_pidfd_send_signal, held.pidfd, SIGKILL, NULL, 0) != 0 ||
@@ -2001,12 +2237,18 @@ main(void)
     v4_hb_builder_destroy(exit_builder);
     exit_builder = NULL;
 
+    held_failure_phase = "pidfd-substitution builder start";
     code = v4_hb_builder_start(&config, &alias_builder, &error);
-    if (code != V4_HB_OK ||
-        hold_and_prewalk(
-            alias_builder, &config, &held, &error
-        ) != V4_HB_OK) {
-        (void)test_fail("cannot establish pidfd-substitution boundary");
+    if (code == V4_HB_OK) {
+        code = hold_and_prewalk(
+            alias_builder, &config, &held, &held_failure_phase, &error
+        );
+    }
+    if (code != V4_HB_OK) {
+        (void)test_v4_diagnostic_failure(
+            "cannot establish pidfd-substitution boundary",
+            held_failure_phase, code, alias_builder, &error
+        );
         goto cleanup_anchor;
     }
     {
@@ -2048,12 +2290,18 @@ main(void)
     v4_hb_builder_destroy(alias_builder);
     alias_builder = NULL;
 
+    held_failure_phase = "namespace-OFD builder start";
     code = v4_hb_builder_start(&config, &alias_builder, &error);
-    if (code != V4_HB_OK ||
-        hold_and_prewalk(
-            alias_builder, &config, &held, &error
-        ) != V4_HB_OK) {
-        (void)test_fail("cannot establish namespace-OFD boundary");
+    if (code == V4_HB_OK) {
+        code = hold_and_prewalk(
+            alias_builder, &config, &held, &held_failure_phase, &error
+        );
+    }
+    if (code != V4_HB_OK) {
+        (void)test_v4_diagnostic_failure(
+            "cannot establish namespace-OFD boundary",
+            held_failure_phase, code, alias_builder, &error
+        );
         goto cleanup_anchor;
     }
     {
@@ -2061,35 +2309,87 @@ main(void)
         int replacement;
         int primary = held.child_namespaces[0].descriptor;
 
-        if (snprintf(path, sizeof(path), "/proc/%ld/ns/user",
-                     (long)held.pid) < 0 || close(primary) != 0) {
-            (void)test_fail("cannot begin namespace-OFD substitution");
+        int count = snprintf(
+            path, sizeof(path), "/proc/%ld/ns/user", (long)held.pid
+        );
+
+        if (count < 0 || (size_t)count >= sizeof(path)) {
+            (void)test_fail("namespace-OFD substitution path exceeds cap");
+            goto cleanup_anchor;
+        }
+        if (close(primary) != 0) {
+            (void)fprintf(
+                stderr, "FAIL: cannot close namespace primary: errno=%d\n",
+                errno
+            );
             goto cleanup_anchor;
         }
         replacement = open(path, O_RDONLY | O_CLOEXEC);
-        if (replacement < 0 ||
-            (replacement != primary &&
-             (dup3(replacement, primary, O_CLOEXEC) < 0 ||
-              close(replacement) != 0))) {
-            (void)test_fail("cannot force namespace-OFD number reuse");
+        if (replacement < 0) {
+            (void)fprintf(
+                stderr, "FAIL: cannot reopen child user namespace: errno=%d\n",
+                errno
+            );
             goto cleanup_anchor;
         }
-        code = v4_hb_builder_verify_held(alias_builder, &held, &error);
-        if (code != V4_HB_ERROR ||
-            v4_hb_builder_abort(alias_builder, &error) != V4_HB_OK) {
-            (void)test_fail("namespace-OFD substitution did not fail closed");
+        if (replacement != primary &&
+            dup3(replacement, primary, O_CLOEXEC) < 0) {
+            (void)fprintf(
+                stderr, "FAIL: cannot reuse namespace descriptor: errno=%d\n",
+                errno
+            );
             goto cleanup_anchor;
+        }
+        if (replacement != primary && close(replacement) != 0) {
+            (void)fprintf(
+                stderr, "FAIL: cannot close replacement namespace: errno=%d\n",
+                errno
+            );
+            goto cleanup_anchor;
+        }
+        {
+            struct v4_hb_error rejection;
+            struct v4_hb_snapshot rejected_snapshot;
+            int snapshot_code;
+            int abort_code;
+
+            code = v4_hb_builder_verify_held(alias_builder, &held, &error);
+            rejection = error;
+            snapshot_code = v4_hb_builder_snapshot(
+                alias_builder, &rejected_snapshot, &error
+            );
+            abort_code = v4_hb_builder_abort(alias_builder, &error);
+            if (code != V4_HB_ERROR || snapshot_code != V4_HB_OK ||
+                rejected_snapshot.state != V4_HB_BOUND_ROOT_WALKS_COMPLETE ||
+                abort_code != V4_HB_OK) {
+                (void)fprintf(
+                    stderr,
+                    "FAIL: namespace-OFD substitution verify=%d errno=%d "
+                    "snapshot=%d state=%d abort=%d message=%s/%s\n",
+                    code, rejection.saved_errno, snapshot_code,
+                    snapshot_code == V4_HB_OK ?
+                        (int)rejected_snapshot.state : -1,
+                    abort_code, rejection.message, error.message
+                );
+                goto cleanup_anchor;
+            }
         }
     }
     v4_hb_builder_destroy(alias_builder);
     alias_builder = NULL;
 
+    held_failure_phase = "namespace-splice builder start";
     code = v4_hb_builder_start(&config, &alias_builder, &error);
-    if (code != V4_HB_OK ||
-        hold_and_prewalk(
-            alias_builder, &config, &held, &error
-        ) != V4_HB_OK) {
-        (void)test_fail("cannot establish namespace-splice boundary");
+    if (code == V4_HB_OK) {
+        code = hold_and_prewalk(
+            alias_builder, &config, &held, &held_failure_phase, &error
+        );
+    }
+    if (code != V4_HB_OK) {
+        (void)test_v4_diagnostic_failure(
+            "cannot establish namespace-splice boundary",
+            held_failure_phase, code, alias_builder, &error
+        );
         goto cleanup_anchor;
     }
     {
@@ -2108,12 +2408,18 @@ main(void)
     v4_hb_builder_destroy(alias_builder);
     alias_builder = NULL;
 
+    held_failure_phase = "root-anchor reuse builder start";
     code = v4_hb_builder_start(&config, &alias_builder, &error);
-    if (code != V4_HB_OK ||
-        hold_and_prewalk(
-            alias_builder, &config, &held, &error
-        ) != V4_HB_OK) {
-        (void)test_fail("cannot establish root-anchor reuse boundary");
+    if (code == V4_HB_OK) {
+        code = hold_and_prewalk(
+            alias_builder, &config, &held, &held_failure_phase, &error
+        );
+    }
+    if (code != V4_HB_OK) {
+        (void)test_v4_diagnostic_failure(
+            "cannot establish root-anchor reuse boundary",
+            held_failure_phase, code, alias_builder, &error
+        );
         goto cleanup_anchor;
     }
     {
@@ -2163,6 +2469,12 @@ main(void)
     v4_hb_builder_destroy(alias_builder);
     alias_builder = NULL;
 
+#ifdef V4_HB_TEST_PROC_NLINK_CHURN
+    if (test_proc_root_observation_count < 2U) {
+        (void)test_fail("proc-root link-count hostility was not exercised");
+        goto cleanup_anchor;
+    }
+#endif
     status = 0;
     (void)fprintf(stdout, "PASS: native V4 held-builder boundary\n");
 
