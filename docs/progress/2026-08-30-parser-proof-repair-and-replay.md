@@ -747,6 +747,14 @@ requires all five zero-exit receipts and seven concrete output postconditions.
 This keeps the four proof/bootstrap gates unchanged while preventing an old
 base heap or `.hol` object cache from making a nominally new worktree warm.
 
+The detached qualification worktree is prepared but deliberately unbuilt at
+`/project/worktrees/cakeml-flyspeck-runtime-stack-cold-480a9f4-v13`.  It is
+exact CakeML head `480a9f4fcdeaea0d50ed2b6e1fc7998371610ded`, tree
+`c81371cd44e1a09bcadd14866bdefc3e4bb56c06`, with empty ordinary status, zero
+ignored products and all seven cold postconditions absent.  It remains idle
+until warm attempt 003 succeeds; a warm failure supersedes this prepared root
+instead of permitting a replay from the wrong source head.
+
 For the failed/diagnostic progression, immutable log/timing SHA-256 pairs are:
 
 ```text
