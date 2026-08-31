@@ -552,3 +552,53 @@ and attempt 018
 `232abb446b093c032cf21e999dcb64ff98d943f7175dd9f5a1d5e0d4719685ed` /
 `7e677ff3c6cb52dac84a7e694a1cff262d004773fe219122a61fa6855286c353`.
 None is qualification or authorizes a compiler/Candle repin.
+
+## App closure and normalized Log frontier
+
+Focused attempts 019 through 027 continued in the restored isolated proof
+worktree at exact base `77b769a99`.  Each run used one HOL worker, recorded
+zero swaps, failed normally without changing repository metadata, and is
+retained below the corresponding
+`cakeml-source-to-flat-dopen-focused-77b769a99-attempt-NNN` artifact root.
+Wall times ranged from `2:16.70` to `2:30.06`; maximum RSS ranged from
+`1112700` to `2109672` KiB.
+
+Attempts 019--021 proved the remaining Force error witness, recursive
+expression IH, result-relation split, entire Force branch and generic App
+application/state facts.  They then progressed through the generic App
+existential witness and its immediate result children.  Attempts 022--023
+isolated the remaining invariant projection and replaced its ambiguous
+assumption search with the exact `invariant interp g gen genv2 ...` premise.
+The targeted simplification closed App's sole remaining goal: attempt 024
+entered `Resume compile_correct[Log]`, conclusively establishing complete App
+replay under the strengthened theorem.
+
+The first Log failure was again an old order-dependent `first_x_assum`: its
+state contained both the conditional second-expression IH and the ordinary
+first-expression IH.  Attempt 024 printed both; attempt 025 selected the
+ordinary five-antecedent source-state shape and passed it.  The later
+conditional-expression selector then failed.  Attempt 026 deliberately tested
+and rejected an over-specific guessed shape.  Attempt 027 printed the exact
+normalized theorem: after the abort premise has already been discharged, the
+conditional IH has four antecedents--the invariant at `st'`, environment
+relation, length equality and eval-state generation relation.  The next
+replay uses that exact shape and also batch-hardens the corresponding
+evidence-matched If and Let selectors.  Mat's pattern IH and Letrec remain
+unchanged because their theorem shapes differ.
+
+The immutable log/timing SHA-256 pairs are:
+
+```text
+019 02e8ae1796a6df91eeaedd6db404ebbbc9d195c6bc032a8134150a2d86f2dc87 / ed5900c03ba8b3c2a0ad56dfefc8eab148c1d92b8c17bf5adb9c8e6f5d4eb69a
+020 5dc7480847f87aa3b157794aee1d096534e430ccac0b39b9f1f7e417941ebbd0 / e35196584b7dc93f6e4362fb4f1d225711e385dd0cbac1fe83bb9b373425c9e7
+021 22f4e1d8803d3ee28004011797f6a1a6ee3034dbb222fbe65ca64dbcc967c504 / 1b832d4fc393f6abf312687afad5b6825a3f998632509cd55946b2b1e85e7b93
+022 b0ed36a937d18f70ded507fb14e1c8bee627affc8cfe342f5f635cb2e5546937 / 2d5f51b0e29e9767a5703afd7089c0fe7f5d98c84c798e2b4883e67b0c81f2ea
+023 22f4e1d8803d3ee28004011797f6a1a6ee3034dbb222fbe65ca64dbcc967c504 / d8bd2f1a461dc5b1b4bdbf5bc231d87b080a8578aef409409e209cb41523c8e6
+024 07456b5c912e4d48afecb51a750fb2710c1b942c9a48d2acb277c9fc255a86b4 / dc9f503f2337bbfcfb00ad4b4c83d335dd3cc86fb05988723472424e5e71bcf9
+025 ee9d308e740f48d9b64e483da21e5788b12c31c3fe27d69415e50462738481e9 / 0806724ad3cc0a9fb37d18518b1577d0e3165d0979b9adf2f06aadf88b257def
+026 4619e34299a223cc9dbd3447a80011105023d9c764c31fa0be4817af9c453a6d / 7a22ffe49ef0bfab070118a8905d4f8dc13512e555399f267d1f784afd8f235f
+027 f1c49df38e59712ce8181471b03888d2624caa98df12d3a689b81ec8cce034bc / af6a3e6af2863284cb9afe5890a235ac22ecd12b02185c077a42811d8216458d
+```
+
+No proof admission, theorem weakening, compiler qualification, Candle repin or
+20/400 corpus result is claimed by these failed development replays.
