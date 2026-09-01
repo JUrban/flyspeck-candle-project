@@ -503,8 +503,11 @@ declaration-inference translation and theory export.  `explorerProg`,
 exported in 8m49s, 8m43s, 7m07s, 15m14s, and 3m54s.  `to_word64Prog` then
 exported successfully in 48m15s, reducing the dependency count from nine to
 eight.  `to_target64Prog` and `from_pancake64Prog` subsequently exported in
-22m48s and 27m32s, reducing the count to six, and `x64Prog` started cleanly.
-The large parser peaked near 31 GiB RSS;
+22m48s and 27m32s.  The serial architecture chain then exported `x64Prog`,
+`arm8Prog`, `riscvProg`, and `mipsProg` in 10m50s, 11m38s, 11m48s, and
+13m44s.  The previously overlooked `repl_init_types` dependency exported in
+50.6s; the dependency count is now one and the final `compiler64Prog`
+translation is active.  The large parser peaked near 31 GiB RSS;
 combined cold replay plus the separate PFT oracle remained near or below
 70 GiB, so the exceptional 120-GiB allowance was not needed.  This is a live
 interim milestone only: stage 2, the x64 bootstrap, the x64 proof, the terminal
