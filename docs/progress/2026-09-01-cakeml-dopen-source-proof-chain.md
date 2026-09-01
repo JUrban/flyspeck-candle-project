@@ -5,18 +5,20 @@ Date: 2026-09-01 UTC
 ## Outcome
 
 The CakeML Dopen source proof chain now reaches and passes the top-level
-compiler correctness theory on branch `codex/flyspeck-v13-runtime-stack` at:
+compiler correctness theory, its repaired REPL proof consumer, and the exact
+head warm x64 bootstrap-proof regression on branch
+`codex/flyspeck-v13-runtime-stack` at:
 
-- commit `715553067b9152debd9e3067a56d9f916809b82e`;
+- commit `c2e26f43c35080d57fc18aba42d4023590b6daba`;
 - HOL4 commit `a390cbabd3a4521bab4ee20281e3e42933a8a3ae`;
 - clean tracked CakeML and HOL4 worktrees; and
 - no admissions, omitted proofs, or new axioms.
 
 This closes the focused parser/inference/evaluator/backend/compiler source
-proof repair.  It does **not** qualify a new compiler binary.  The exact-head
-warm x64 bootstrap-proof regression is now active, the pristine-cold
-four-stage replay remains mandatory afterward, and the Candle repin remains
-on HOLD.
+proof repair and its first downstream bootstrap-proof consumer.  It does
+**not** qualify a new compiler binary.  The pristine-cold four-stage replay
+remains mandatory, and the Candle repin remains on HOLD until its authenticated
+terminal manifest passes.
 
 ## Final proof commits
 
@@ -34,7 +36,8 @@ The commits after the previously prepared CakeML parent `480a9f4fc...` are:
 10. `2ca34642f` -- restore inference completeness for open declarations;
 11. `3fce40602` -- prove parser soundness for open declarations;
 12. `d93c024fa` -- complete open token-parser first-set exclusions; and
-13. `715553067` -- prove parser completeness for open declarations.
+13. `715553067` -- prove parser completeness for open declarations; and
+14. `c2e26f43c` -- repair the REPL proof after parser diagnostics.
 
 The final parser work covers both accepted `open` forms: the recursive
 `nStructName` production and the direct long-identifier constructor.  It also
@@ -62,6 +65,14 @@ exited zero in 2m21.75s with 3,509,148 KiB maximum RSS.  This is an
 exact-head developer proof regression over the current worktree cache; the
 cold bootstrap replay below remains the release qualification.
 
+The repaired downstream consumer was then checked with
+`Holmake -j1 --mt=1 replProofTheory.uo` under a 40-GiB address-space ceiling.
+It saved `evaluate_decs_compiler64_prog` and
+`semantics_prog_compiler64_prog`, exported the theory, and exited zero in
+18m53.76s with 17,882,648 KiB maximum RSS and no swaps.  An immediate second
+request was a clean no-op.  The source diff scan found no added admissions,
+cheats, omitted proofs, or axioms.
+
 ## Diagnostic lessons
 
 Two failures were evidence-quality issues rather than deep theorem failures.
@@ -77,9 +88,13 @@ for more than an hour because the restored proof referred to the stale binder
 name `path`, while the generated induction case binds the path as `l0`.
 Explicit theorem applications and witnesses both fixed the name error and
 reduced the clean target to 45.56 seconds.  This validates the external speed
-advice to instrument the actual frontier and batch small frontend repairs,
-but it also shows why proof-critical replay remains serial: parallel retries
-would only have multiplied a malformed search.
+advice to instrument the actual frontier, use cheap 20/400-file gates, batch
+small frontend repairs, and reuse exact-head worktree products during
+development.  It also shows the limit of broad build parallelism here: the
+roughly 4,000-constant bootstrap proof phase is internally serial, and
+parallel retries would only have multiplied a malformed search.  The release
+gate therefore remains a pristine cold replay even though warm products are
+useful for diagnosis.
 
 ## Warm attempt 004 and consumer-proof repair
 
@@ -108,16 +123,44 @@ A replay from the emitted 8.70-GB theorem heap proved that, under the existing
 `has_repl_flag (TL cl)` hypothesis, those two new calls return false and
 `NONE`; carrying their evaluator clock/reference effects through the old proof
 then closes the entire theorem, including its unchanged backend-config and
-REPL tail.  A source patch implementing that proof-only synchronization is
-under a focused serial `replProofTheory.uo` rebuild with a 40-GiB address-space
-ceiling.  No runtime or compiler-semantics source is changed.  The repaired
-CakeML commit, focused result, and replacement warm receipt will be recorded
-here after they exist; no bootstrap success is claimed yet.
+REPL tail.  The first patch used generated result names and accidentally split
+an unrelated `res'`; the final proof instead anchors the two dispatches through
+their exact `do_opapp` and `evaluate` facts before case-splitting their result
+variables.  This removes fresh-name brittleness.  No runtime or
+compiler-semantics source changed.  The focused result is recorded above and
+the proof-only synchronization is commit `c2e26f43c`.
+
+## Warm attempt 005
+
+The replacement exact-head warm regression passed at:
+
+`/project/flyspeck-candle-runs/cakeml-parser-dopen-warm-proof-c2e26f43c-attempt-005`
+
+It bound CakeML `c2e26f43c35080d57fc18aba42d4023590b6daba` and HOL4
+`a390cbabd3a4521bab4ee20281e3e42933a8a3ae`, then ran
+`x64BootstrapProofTheory.uo` with `-j1 --mt=1` under the same 117,964,800-KiB
+(112.5-GiB) virtual-address-space ceiling.  It exited zero after 30m10.49s,
+with 46,161,420 KiB maximum RSS and no swaps.  The log records the compiled
+parser-diagnostic results, Candle soundness, axiom-free consistency, the
+explicit no-cheats check, and successful theory export.  Pre/post hashes of
+the repaired `replProof` products and all reused stage-3 products are equal.
+
+The sealed evidence hashes are:
+
+- receipt: `b1af333466df6c17b11273d10fa64b8559124f8f45838a46296ce9c4a6cfb160`;
+- runner: `03b249804094592ab153e57a4b0d63f1e0ae0d31a63859878ff831b53366b9d0`;
+- log: `d91e79cf6808c2685222530926a47a1f3cc75eb9bcd378e47144a94611631a2e`;
+  and
+- time: `d1fe61a337d75c5e4dbc10407d412a1343583067b52894e91a6e7f59d82ad0d7`.
+
+The runner, log, time record, and receipt are read-only.  This is deliberately
+classified as a warm developer regression, not as the cold release proof.
 
 ## Remaining cold qualification
 
-If the warm gate passes, the next release gate is the frozen pristine-cold
-controller's base-heap plus four-stage replay in a new product-empty worktree:
+The next release gate is the frozen pristine-cold controller's base-heap plus
+four-stage replay in a new product-empty worktree at exact commit
+`c2e26f43c35080d57fc18aba42d4023590b6daba`:
 
 1. `misc/cakeml-heap`;
 2. `cv_translator/cake_compile_heap`;
