@@ -160,17 +160,27 @@ same evidence or fit the current qualification boundary:
   batch frontend failures before another release build, and reuse exact-head
   products in the same development worktree.  These measures avoid expensive
   iterations without weakening the final clean replay.
-- **Benchmark only in development:** `Holmake -j2` or `-j4` may shorten the
-  independent portions of a future traversal.  It cannot accelerate a single
-  large HOL process, and the accepted cold controller is deliberately frozen
-  at `-j1 --mt=1`; changing it during this replay would destroy the authority
-  of the run.  Any parallel release controller needs its own measured memory
-  envelope and independent review.
-- **Defer cross-worktree caching:** a content-addressed cache is attractive,
-  but a trustworthy key must close over theory sources, generated products,
-  the complete dependency graph, HOL4, Poly/ML, host tools, and build flags.
-  Same-worktree incremental products already provide the safe near-term gain;
-  an unauthenticated shared cache is not release evidence.
+- **Benchmark parallelism only in development:** `Holmake -j2` may shorten
+  independent portions of a future traversal, but it cannot provide the
+  headline speed-up on the dominant translation chain.  The exact sources
+  make `arm8Prog` extend `x64Prog`, `riscvProg` extend `arm8Prog`, `mipsProg`
+  extend `riscvProg`, and `compiler64Prog` extend `mipsProg`; those large
+  targets are deliberately serial dependencies, not schedulable siblings.
+  A single large HOL process is serial as well.  The accepted cold controller
+  is frozen at `-j1 --mt=1`; changing it during this replay would destroy the
+  authority of the run.  Any parallel release controller needs its own
+  measured memory envelope and independent review.
+- **Use the existing cache mechanism only in a bounded development pilot:**
+  pinned HOL4 already provides opt-in `Holmake --use-cache`/`--cache-dir`
+  theory-product caching, recursive content keys, staged fetches, and
+  fail-safe parent-hash validation.  There is no reason to invent another
+  cache.  Its internal key is centered on theory inputs and `.dat` parent
+  hashes, however, and does not visibly bind every HOL4/Poly/ML/host-tool/build
+  flag identity required by this project.  A pilot must therefore put each
+  exact toolchain and command envelope in a separate externally named cache
+  root, exercise clean misses and cross-worktree hits, and remain diagnostic.
+  Same-worktree incremental products remain the lowest-risk near-term gain;
+  no shared-cache hit is release evidence.
 - **Use frontend gates at the earliest honest point:** source-plan and static
   checks can run before the bootstrap, but the new compiled CakeML
   parser/inferencer does not exist until the first parser-capable runtime is
@@ -445,9 +455,11 @@ At this report revision, the cold `compiler64Prog` stage has rebuilt and
 exported `to_closProg` (11m23s), `to_bvlProg` (8m37s), `to_dataProg`
 (4m21s), `lexerProg` (4m28s), generic `parserProg` (14m01s), `caml_lexProg`
 (11m02s), the large `caml_parserProg` (36m45s), `pancake_lexProg` (3m53s),
-and `pancake_parseProg` (4m47s).  The remaining dependency count has fallen
-from 25 to 16 and `reg_allocProg` is active.  The large parser peaked near
-31 GiB RSS; combined cold replay plus the separate PFT oracle remained near
-70 GiB, so the exceptional 120-GiB allowance was not needed.  This is a live
-interim milestone only: stage 2, the x64 bootstrap, the x64 proof, the terminal
-manifest, and the public gate all remain pending.
+`pancake_parseProg` (4m47s), and `reg_allocProg` (26m42s).  The remaining
+dependency count has fallen from 25 to 15 and `inferProg` is active in its
+known long, mostly silent constraint preprocessing at one full core and about
+13.1 GiB RSS.  The large parser peaked near 31 GiB RSS; combined cold replay
+plus the separate PFT oracle remained near 70 GiB, so the exceptional 120-GiB
+allowance was not needed.  This is a live interim milestone only: stage 2, the
+x64 bootstrap, the x64 proof, the terminal manifest, and the public gate all
+remain pending.
