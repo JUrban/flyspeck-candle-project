@@ -549,6 +549,17 @@ the completed Candle evaluator and semantics chain.  `source_letProof` and
 `source_to_sourceProof` then exported, leaving 91 theories with
 `linear_scanProof` active at this report revision.
 
+The cold proof closure has since crossed its halfway point: the first 60 of
+119 theories have exported.  The serial replay passed the BVL/BVI proof chain,
+including `bvi_tailrecProof` (3m48s), `bvi_tmcProof` (3m15s), and
+`bvl_to_bviProof` (4m20s), followed by the complete closure-conversion chain
+through `clos_to_bvlProof` (3m47s).  It then exported `dataSem` in 1m59s and
+the historically long `dataProps` in 13m08s, closely matching its prior
+13m13s measurement.  There are 59 theories left with `data_liveProof` active
+at this report revision.  The final-stage receipt remains empty, as required
+until the enclosing `time -v` command exits; this is still an interim
+milestone and does not authorize the Candle repin.
+
 ### Post-terminal repin handoff audit
 
 An independent read-only adversarial audit conditionally accepts the planned
