@@ -560,6 +560,12 @@ at this report revision.  The final-stage receipt remains empty, as required
 until the enclosing `time -v` command exits; this is still an interim
 milestone and does not authorize the Candle repin.
 
+The next repaired warm-failure site also passed cold.  After the data and flat
+language chains exported, `source_to_flatProof` saved its suspended
+`compile_correct` theorem, including the formerly failing `Dopen` case, and
+exported in 2m31s.  The replay thereby completed the first 70 theories; 49
+remain with `wordSem` active at this report revision.
+
 ### Post-terminal repin handoff audit
 
 An independent read-only adversarial audit conditionally accepts the planned
