@@ -753,6 +753,8 @@ FLYSPECK_ROOT="$workspace_dir/worktrees/flyspeck-v13-source" \
   "$direct_clean_candle" >/dev/null
 "$project_dir/scripts/test-module-compatibility.sh" \
   "$direct_clean_candle" >/dev/null
+"$project_dir/scripts/test-pointer-shadowing-compatibility.sh" \
+  "$direct_clean_candle" >/dev/null
 # The older seven-overlay frontier log remains immutable historical evidence.
 direct_frontier_log="$workspace_dir/flyspeck-candle-runs/v13-direct-overlay-frontier-dopen-2.log"
 [[ $(sha256sum "$direct_frontier_log" | cut -d' ' -f1) == \
