@@ -3222,9 +3222,12 @@ def _validate_restart_context(
     )
     publication = checkpoint["atomic_publication"]
     expected_argv = [
-        restart_path, "--coord-port",
+        restart_path, "--join-coordinator", "--coord-port",
         checkpoint_plan["checkpoint_environment"]["DMTCP_COORD_PORT"],
-        "--ckptdir", publication["published_path"],
+        *[
+            f"{publication['published_path']}/{item['path']}"
+            for item in image_manifest["files"]
+        ],
     ]
     expected_environment = {
         **checkpoint_plan["runtime_environment"],

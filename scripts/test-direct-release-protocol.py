@@ -971,9 +971,12 @@ def checkpoint_protocol_fixture() -> dict:
         "resume_nonce": challenges["resume_nonce"],
         "resume_token": challenges["resume_token"],
         "argv": [
-            "/usr/local/bin/dmtcp_restart", "--coord-port",
-            checkpoint_environment["DMTCP_COORD_PORT"], "--ckptdir",
-            atomic_publication["published_path"],
+            "/usr/local/bin/dmtcp_restart", "--join-coordinator",
+            "--coord-port", checkpoint_environment["DMTCP_COORD_PORT"],
+            *[
+                f"{atomic_publication['published_path']}/{item['path']}"
+                for item in images["files"]
+            ],
         ],
         "environment": {**runtime_environment, **checkpoint_environment},
         "restarted_process": {
@@ -2385,6 +2388,19 @@ class DirectReleaseProtocolTests(unittest.TestCase):
 
         restart = copy.deepcopy(values["restart_context"])
         restart["argv"][0] = "/project/bin/dmtcp_command"
+        with self.assertRaisesRegex(subject.ProtocolError, "restart context"):
+            rebuild_resume(values, restart_context=restart)
+
+        restart = copy.deepcopy(values["restart_context"])
+        restart["argv"][-2:] = reversed(restart["argv"][-2:])
+        with self.assertRaisesRegex(subject.ProtocolError, "restart context"):
+            rebuild_resume(values, restart_context=restart)
+        restart = copy.deepcopy(values["restart_context"])
+        restart["argv"].pop()
+        with self.assertRaisesRegex(subject.ProtocolError, "restart context"):
+            rebuild_resume(values, restart_context=restart)
+        restart = copy.deepcopy(values["restart_context"])
+        restart["argv"].append("checkpoints/extra/ckpt.dmtcp")
         with self.assertRaisesRegex(subject.ProtocolError, "restart context"):
             rebuild_resume(values, restart_context=restart)
 
