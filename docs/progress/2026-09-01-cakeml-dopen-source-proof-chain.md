@@ -57,6 +57,22 @@ explicit direct-manifest override.  Default and override modes now both close
 the 6,074-entry ledger and the 3,689-finding/329-file direct projection; the
 inventory, ledger and triage suites pass 8/8, 6/6 and 4/4 respectively.
 
+The remaining P0 pointer-shadowing review is also closed at commit `1c76332`.
+The selected Flyspeck source defines `add_eq`, `mul_eq`, and `eq_eq`, then
+simultaneously binds `(+)`, `(*)`, `(!)`, and `(==)` to those functions and
+`REFL` before using `(==)` to construct a theorem.  The strengthened typed
+oracle mirrors that simultaneous binding and requires its local `(==)` to
+return a theorem-like pair `(3,12)`.  This cannot be supplied by either host
+OCaml's boolean physical equality or Candle's reference-only primitive.  The
+oracle passes under pinned OCaml 4.14.1 and under the clean compiled Candle at
+commit `87f1fd965313c090fd4d87bcfcc493a3ad7bc79f` (executable SHA-256
+`c20b3ec65fc01b6f50a0101c706e18271920530030aa3c381a36ff0fdbd3b23f`), in
+both its default and explicit-executable modes.  `verify-lock.sh` now invokes
+the same regression against its selected clean Candle executable.  The ledger
+therefore records five resolved entries, seven regression-pending entries,
+two deferred entries, and only one proof-pending entry: the Dopen qualification
+that remains subject to the pristine-cold replay and final linked runtime.
+
 ## Final proof commits
 
 The commits after the previously prepared CakeML parent `480a9f4fc...` are:
