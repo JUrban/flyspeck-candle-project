@@ -498,10 +498,49 @@ exported `to_closProg` (11m23s), `to_bvlProg` (8m37s), `to_dataProg`
 `pancake_parseProg` (4m47s), and `reg_allocProg` (26m42s).  The remaining
 dependency count has since fallen from 25 to 12.  `inferProg` passed in
 41m29s, saving the cold `open_ienv_v_thm` and `infer_open_v_thm` before the
-declaration-inference translation and theory export.  `explorerProg` and
-`decodeProg` then exported in 8m49s and 8m43s; `sexp_parserProg` is active.
-The large parser peaked near 31 GiB RSS, while these later stages have remained
-below about 18 GiB; combined cold replay plus the separate PFT oracle remained
-near or below 70 GiB, so the exceptional 120-GiB allowance was not needed.
-This is a live interim milestone only: stage 2, the x64 bootstrap, the x64
-proof, the terminal manifest, and the public gate all remain pending.
+declaration-inference translation and theory export.  `explorerProg`,
+`decodeProg`, `sexp_parserProg`, `basis_defProg`, and `printingProg` then
+exported in 8m49s, 8m43s, 7m07s, 15m14s, and 3m54s.  `to_word64Prog` is active
+with nine dependencies remaining.  The large parser peaked near 31 GiB RSS;
+combined cold replay plus the separate PFT oracle remained near or below
+70 GiB, so the exceptional 120-GiB allowance was not needed.  This is a live
+interim milestone only: stage 2, the x64 bootstrap, the x64 proof, the terminal
+manifest, and the public gate all remain pending.
+
+### Post-terminal repin handoff audit
+
+An independent read-only adversarial audit conditionally accepts the planned
+repin **only after** the controller-printed terminal-manifest digest and empty
+replay process group exist.  It confirms that a fresh branch directly from
+`c2f7888d1cc25a3a6de4c159d36f111d6a613790` closes over exactly eight tracked
+paths and no hidden ninth artifact.  Five primary pin sites occur in the
+manifest generator, generated manifest, two tests, and diagnostic document;
+regeneration then changes the pilot descriptor, all-inventory descriptor, and
+the two corresponding hashes in `flyspeck_all_inventory_sources.py`.
+
+The equal-length `964406...` to `c2e26f43...` substitution predicts these
+fixed-point identities.  They are stop-on-mismatch expectations, not a
+substitute for actual regeneration:
+
+| Artifact | Bytes | SHA-256 |
+| --- | ---: | --- |
+| manifest | 821,669 | `ea6d061cdb23327e41e85387eec82ca5a88d51647c985f67f80eabf80fc65740` |
+| pilot | 14,715 | `1ed2cf50bafc057d16eb8358fd6396103004c0f12f36783a4f3b279437720e3e` |
+| all inventory | 206,558 | `e368343e85a844219e73403b21e1683554766ff87d3a9f8a797d6186d720a705` |
+
+The manifest writer also rewrites two generated ML files even though the pin
+does not affect their source graph.  They must remain byte-identical to the
+current `c2f7888` baselines:
+
+- `flyspeck_source_digests.ml`:
+  `ccd3784a1d6a9c8ca29aac1e881fca6d97ac68d593a34a64901da74ad776ae02`;
+- `flyspeck_full_build.ml`:
+  `62f3400d87d28f1e0cdd7f02dd6b0b7adedb7cfede7a0bac6f511298e5b1dacf`.
+
+The final procedure must generate both descriptors to fresh temporary files,
+verify their exact identities, replace them atomically, and then require the
+exact eight-file diff before committing.  Runtime parser plans are materialized
+only after that commit and the public gate.  Prepared commit `103691ef` is
+categorically not reusable: it has the wrong parent and old pin, and differs
+from `c2f7888` in twenty paths.  The final fresh worktree and reserved branch
+remain absent during the active cold replay.
