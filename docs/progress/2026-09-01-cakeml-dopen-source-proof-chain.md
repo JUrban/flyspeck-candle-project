@@ -188,6 +188,36 @@ later controlled benchmark, not a planning assumption.  Current measurements
 show a 4h51m warm translation traversal and a prior cold traversal that reached
 a final source error after 11h10m; the serial critical path dominates both.
 
+## Checkpoint/resume protocol critical review
+
+Commit `dd067a2` introduced pure record constructors and validators for a
+checkpoint-attempt plan, a process checkpoint, and a resume attempt.  Its
+45/45 focused tests, the unchanged 18/18 published-result tests, bytecode
+compilation, and diff checks pass.  All new schemas keep promotion, S2, S3,
+release, and PFT-evidence flags false.  This is useful design work, but it is
+**not accepted checkpoint qualification**.
+
+An independent hostile review found no direct promotion bypass, but did find
+P1 acceptance gaps.  Process and resume validation trusted shallow envelopes,
+so coherently rehashed mutations could bypass full plan and checkpoint
+semantics.  The two clean baselines were not fully authenticated as distinct
+schema-6 executions.  Expected authorities and controller challenges were
+mutually self-consistent rather than externally supplied.  Restart records did
+not yet reauthenticate images or bind complete restart/process-tree and raw
+suffix-event evidence.  Address-space and sampling-cadence claims were also
+declared rather than measured.  Concrete counterexamples included a changed
+boundary-action hash, `origin_process.reaped=false`, and a second "clean"
+capture distinguished only by a fabricated receipt hash.
+
+The checkpoint path therefore remains blocked pending full-validator calls,
+externally bound authorities/challenges, actually distinct authenticated clean
+captures, restart/image/process evidence, measured resource evidence, and
+coherent-splice regressions.  Real DMTCP installation and trust closure, an OS
+authenticator using anchored no-follow file access and restart-time rehashing,
+and a linked-runtime controller/finalizer remain subsequent execution work.
+The user-authorized 120-GiB exceptional memory allowance does not relax any of
+these evidence requirements or the parser consumers' exact 16-GiB limit.
+
 ## Candle host-runtime identity refresh
 
 A sanitized baseline test of the prepared Candle pin exposed two independent
@@ -222,16 +252,37 @@ The exact test passes from both ordinary and already-sanitized parents, and a
 fresh ordinary full discovery passes 330/330 in 161.277 seconds, maximum RSS
 328,200 KiB, zero swaps.
 
-The unchanged generated corpus authorities also pass their cheap pre-repin
-fixed-point gates on this branch: the manifest closes 297 roots, 400 source
-nodes and 43 generated inputs; the isolated parser controller validates the
-exact 20-input pilot and 400-input all-inventory descriptors.  These checks
-establish source-plan consistency only, not a compiled parser result.
+An integration audit then found that the host-refresh branch and the direct
+schema-6 consumption branch were siblings, not ancestor and descendant.  The
+host-only `6fad64c` therefore was not a valid final repin base: it lacked the
+LP-certificate consumption closure implemented through direct-consumption
+commit `5e75cb9047136ffcb3a3a659ba546c93965bfeda`.  The reviewed integration
+branch `codex/flyspeck-v13-schema6-host-runtime-base` starts at that schema-6
+head and replays the two exact host-refresh patches.  Their patch IDs are
+unchanged at integration commits `bd0b5ac` and `4ab444a`.
 
-This is a host-tool authority repair, not compiler qualification and not a
-CakeML pin.  The final Candle repin must be based on `6fad64c` (or an exact
-reviewed descendant), rather than promoting either the old `688d9d1` authority
-unchanged or stale prepared commit `103691ef`.
+That integration correctly invalidated the previously generated 20-input
+pilot descriptor.  Its fail-closed check identified four stale authority
+fields: the full-build source hash, loader source hash, manifest byte count,
+and manifest hash.  Regeneration changed only those four fields.  Commit
+`c2f7888d1cc25a3a6de4c159d36f111d6a613790` records the repaired fixed point
+and is now the exact pre-repin Candle base.  At that clean commit:
+
+- the manifest closes 297 roots, 400 source nodes, and 43 generated inputs;
+- the exact 20-input pilot and 400-input all-inventory checks pass;
+- the focused and broad suites pass 96/96 and 227/227 respectively;
+- sanitized and ordinary complete discoveries both pass 339/339, in 160.499
+  and 160.720 seconds, with about 326 MiB maximum RSS and no swap; and
+- the generated manifest, pilot, and all-inventory SHA-256 values are
+  `e928b7aa8fc6712822e29987cc2f68e39fac1e77a6d0b62d0d4b7c35ccf84fe7`,
+  `60485ad5e32dbc80f6bbca183f0b603ff6fe2e2798bbc3e15f0dd059fc95b761`,
+  and `d5b282bac746bca86d9a6d139c3964c8f1ced0a514df3d167eb1cb2c55e2f84b`.
+
+These checks establish source-plan and host-tool consistency, not compiler
+qualification or a compiled parser result.  The final Candle repin must use a
+fresh branch from `c2f7888`, after the cold replay publishes its authenticated
+terminal authority.  Neither host-only `6fad64c`, old `688d9d1`, nor stale
+prepared commit `103691ef` may be promoted.
 
 ## Warm attempt 004 and consumer-proof repair
 
