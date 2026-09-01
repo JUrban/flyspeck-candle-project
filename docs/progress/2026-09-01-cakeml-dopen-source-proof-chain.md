@@ -566,6 +566,16 @@ language chains exported, `source_to_flatProof` saved its suspended
 exported in 2m31s.  The replay thereby completed the first 70 theories; 49
 remain with `wordSem` active at this report revision.
 
+The target-language chain has now passed cold through `lab_to_targetProof`,
+which saved its final `compile_correct` theorem and exported in 17m34s, closely
+matching the prior 17m24s measurement.  `wordConvs`, `wordConvsProof`,
+`wordProps`, `word_simpProof`, and `word_gcFunctions` then exported in 43.4s,
+2m52s, 5m56s, 1m25s, and 24.5s respectively.  The replay has therefore
+completed 87 of 119 theories, with the historically heavy
+`data_to_word_memoryProof` active.  There is still no authority to repin:
+32 theories, final-stage closure, the controller-printed terminal manifest,
+and the public gate all remain pending.
+
 ### Post-terminal repin handoff audit
 
 An independent read-only adversarial audit conditionally accepts the planned
