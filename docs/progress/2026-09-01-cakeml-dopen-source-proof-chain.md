@@ -523,6 +523,18 @@ the final cold `x64BootstrapProofTheory.uo` stage with about 183 GiB host
 memory available at the transition.  This is a live interim milestone only:
 the x64 proof, terminal manifest, and public gate remain pending.
 
+The final cold proof stage starts with 119 theory files.  An independent
+read-only traversal of the current dependency closure found successful
+historical per-theory timings for 110 of them; those known theory times sum to
+about 4h43m.  Nine repaired or otherwise untimed theories dominate the
+uncertainty, so the conservative no-failure estimate made at 20:28 UTC is
+8--14 more hours, rather than the 30-minute warm one-target lower bound.  The
+first seven cold theories have now exported.  Crucially,
+`candle_prover_evaluate` passed in 1m09s after saving
+`env_ok_open_dec_env` and the final `evaluate_v_ok` theorem with its `Dopen`
+case.  This closes the exact point where the older `0e75b7e42...` cold attempt
+failed; 112 theories remain at this report revision.
+
 ### Post-terminal repin handoff audit
 
 An independent read-only adversarial audit conditionally accepts the planned
