@@ -529,11 +529,16 @@ historical per-theory timings for 110 of them; those known theory times sum to
 about 4h43m.  Nine repaired or otherwise untimed theories dominate the
 uncertainty, so the conservative no-failure estimate made at 20:28 UTC is
 8--14 more hours, rather than the 30-minute warm one-target lower bound.  The
-first seven cold theories have now exported.  Crucially,
+first fourteen cold theories have now exported.  Crucially,
 `candle_prover_evaluate` passed in 1m09s after saving
 `env_ok_open_dec_env` and the final `evaluate_v_ok` theorem with its `Dopen`
 case.  This closes the exact point where the older `0e75b7e42...` cold attempt
-failed; 112 theories remain at this report revision.
+failed.  `candle_basis_evaluate` then passed in 25.2s with its `Dopen` branch,
+and the previously untimed repaired `candle_prover_semantics` passed in 2m01s
+after saving `semantics_thm`, `events_of_semantics`, and
+`events_of_semantics_with_eval_state`.  The set model and the first two HOL
+semantics layers subsequently exported; 105 theories remain at this report
+revision, with `holBool` active.
 
 ### Post-terminal repin handoff audit
 
