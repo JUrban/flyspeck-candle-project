@@ -540,6 +540,15 @@ after saving `semantics_thm`, `events_of_semantics`, and
 semantics layers subsequently exported; 105 theories remain at this report
 revision, with `holBool` active.
 
+The cold replay subsequently passed the repaired `source_evalProof` in 1m44s.
+That theory proved `env_rel_open_dec_env` and discharged the `Dopen` branch of
+the suspended `eval_simulation` theorem before exporting.  This was the first
+later proof node that had failed during warm integration, so its pristine
+success is independent evidence that the source-evaluator repair coexists with
+the completed Candle evaluator and semantics chain.  `source_letProof` and
+`source_to_sourceProof` then exported, leaving 91 theories with
+`linear_scanProof` active at this report revision.
+
 ### Post-terminal repin handoff audit
 
 An independent read-only adversarial audit conditionally accepts the planned
