@@ -239,6 +239,57 @@ qualify the result.  The user-authorized 120-GiB exceptional memory allowance
 does not relax any evidence requirement or the parser consumers' exact
 16-GiB limit.
 
+### OS-observation scaffold and hostile review
+
+Commits `b6b40c3`, `f8ed7c2`, `859e065`, and `a9ed233` develop the next
+checkpoint layer, but the resulting module is deliberately an **unapproved
+observation candidate**, not the separate trusted OS authenticator requested
+above.  The first live companion was rejected after independent review found
+that its in-process token seal was forgeable; tracing stopped after the first
+exec; READY and action receipts were cooperative; process-tree membership was
+caller-selected; restart paths were subject to pathname replacement; and
+mount/proc namespace, coordinator-port, loaded-ELF, resource, and resumed-exec
+continuity were not independently closed.  No release used that result.
+
+The accepted scaffold now reports those limits rather than hiding them.  Its
+wire decoder is explicitly named a schema/layout checker; its checksum is
+self-reported and detects accidental corruption only.  Coherent edits to
+ordinary observation values are intentionally not called integrity failures,
+because an unkeyed self-contained record cannot authenticate its author.  The
+candidate enumerates the missing external precommit/signing or trusted-source
+validator, the forgeable in-process seal and mutable dictionaries, and the
+remaining kernel/runtime boundaries.  Exactly eight release-sensitive keys
+(`lifecycle_complete`, OS authentication, runtime/checkpoint qualification,
+S2/S3 approval, release promotion, and PFT use) may occur only once at the
+top level and must be the literal value `false`; recursive validation rejects
+the same keys at every nested location.
+
+The publisher now consumes the direct protocol's exact, strictly path-sorted
+seven-field DMTCP image records, including ordinary-file type, mode `0444`,
+and link count one.  It hashes the same record list as the direct protocol,
+publishes by no-replace rename to
+`checkpoints/<ordered-file-sha256>`, retains and rehashes the selected file
+descriptors, and supplies restart argv in the local DMTCP 4.1.0 form:
+
+`dmtcp_restart --join-coordinator --coord-port PORT IMAGE...`
+
+The integration test passes that publication through the public
+`build_process_checkpoint` entrypoint rather than a self-agreeing low-level
+helper.  Candidate paths, argv, environments, nested keys, and values reject
+any case-insensitive `pft` substring and every Unicode `Cc` control character,
+including the C1 range.  Controller-local receipt, reap, cadence, and restart
+labels no longer claim independent parent authentication.
+
+At final scaffold head `a9ed233886026d76fabc83ba989dfcac27a3d453`, the
+companion suite passes 23/23 under exact `LC_ALL=C`; an independent run took
+4.22 seconds and 33,264 KiB maximum RSS.  The unchanged direct protocol suite
+passes 49/49, and the published-result, compatibility, and pristine-reference
+suites pass 18/18, 3/3, and 10/10.  A final independent read-only review found
+no P0/P1 in this narrowed contract.  Nevertheless all authentication,
+qualification, approval, promotion, and PFT-use flags remain categorically
+false.  Building the external trusted controller and continuously binding the
+enumerated OS lifecycle remains mandatory before checkpoint qualification.
+
 ## Candle host-runtime identity refresh
 
 A sanitized baseline test of the prepared Candle pin exposed two independent
@@ -381,3 +432,22 @@ Only the authenticated terminal manifest from that replay can authorize a
 Candle pin refresh.  Prepared Candle commit `103691ef...` still names the old
 CakeML head and must not be promoted.  The PFT process continues separately as
 an oracle only and contributes no S2/S3 proof evidence.
+
+The frozen replay is now active at
+`/project/flyspeck-candle-runs/cakeml-dopen-cold-c2e26f43c-attempt-001` in a
+product-empty detached CakeML worktree.  It binds CakeML `c2e26f43c...`, HOL4
+`a390cbabd...`, frozen controller project `5ef9419cc...`, one Holmake job and
+one HOL worker thread under the recorded 112.5-GiB virtual-address-space
+ceiling.  The base CakeML heap passed in 2m16.27s at 978,608 KiB maximum RSS;
+`cake_compile_heap` passed in 1h43m04s at 5,520,316 KiB maximum RSS.
+
+At this report revision, the cold `compiler64Prog` stage has rebuilt and
+exported `to_closProg` (11m23s), `to_bvlProg` (8m37s), `to_dataProg`
+(4m21s), `lexerProg` (4m28s), generic `parserProg` (14m01s), `caml_lexProg`
+(11m02s), the large `caml_parserProg` (36m45s), `pancake_lexProg` (3m53s),
+and `pancake_parseProg` (4m47s).  The remaining dependency count has fallen
+from 25 to 16 and `reg_allocProg` is active.  The large parser peaked near
+31 GiB RSS; combined cold replay plus the separate PFT oracle remained near
+70 GiB, so the exceptional 120-GiB allowance was not needed.  This is a live
+interim milestone only: stage 2, the x64 bootstrap, the x64 proof, the terminal
+manifest, and the public gate all remain pending.
