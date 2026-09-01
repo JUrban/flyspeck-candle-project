@@ -300,6 +300,46 @@ qualification, approval, promotion, and PFT-use flags remain categorically
 false.  Building the external trusted controller and continuously binding the
 enumerated OS lifecycle remains mandatory before checkpoint qualification.
 
+### Trusted-controller host feasibility decision
+
+An independent read-only feasibility audit confirms that another same-process
+candidate record would not advance authentication.  The host does provide a
+useful unprivileged kernel subset: nested user/mount/PID/network namespaces,
+private procfs and tmpfs, held-FD read-only bind mounts, parent ptrace, pidfds
+including `pidfd_getfd`, subreaping, and Btrfs fs-verity support.  Focused live
+pidfd parent/reap and ptrace exec-gate tests passed.  These facilities are
+enough for an isolated prototype, but not for the accepted release threat
+model in which arbitrary same-UID ancestors and peers are untrusted.
+
+The decisive host gaps are concrete.  The session is UID 1001 with no
+capabilities, `NoNewPrivs=1`, no passwordless sudo, no visible/delegated cgroup
+v2 controller, and no protected service identity, signing key, or evidence
+spool.  The current ptrace gate detaches immediately after its first exec;
+resource evidence periodically scans one process group; READY/action records
+are cooperative JSON; and the process-tree list is caller-predeclared.  None
+of those mechanisms continuously binds fork/clone/setsid activity, the DMTCP
+restore boundary, short resource peaks, or resumed execution before user code.
+
+DMTCP 4.1.0 also accepts checkpoint images by `.dmtcp` pathname rather than by
+already authenticated file descriptor: it checks the pathname and later
+opens it.  Holding and rehashing an FD is therefore insufficient.  A viable
+design must fs-verity-seal each closed image, bind-mount every held image FD
+over its exact relative pathname in a private read-only mirror, protect
+`mtcp_restart` and optional decompression helpers, and continuously trace the
+restart/plugin gate.  A read-only directory alone does not protect the
+owner-controlled backing in another namespace.
+
+Checkpoint qualification is consequently **not deployable in this session as
+currently provisioned**.  It requires a protected external launcher/finalizer
+with a one-use signed challenge, a delegated cgroup (plus quota-backed disk
+enforcement), continuous ptrace/pidfd lifecycle collection, a credentialed
+kernel action channel, and a new signed attestation overlay over the existing
+hard-false records.  The smallest meaningful implementation slice begins by
+establishing that external trust root; adding more untrusted observations
+first would only enlarge the scaffold.  This blocks checkpoint-based release
+acceleration, not the active pristine replay or ordinary two-clean-run S3
+path, so no current process was interrupted and no qualification flag changed.
+
 ## Candle host-runtime identity refresh
 
 A sanitized baseline test of the prepared Candle pin exposed two independent
