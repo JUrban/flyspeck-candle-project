@@ -81,19 +81,40 @@ advice to instrument the actual frontier and batch small frontend repairs,
 but it also shows why proof-critical replay remains serial: parallel retries
 would only have multiplied a malformed search.
 
-## Warm and cold qualification status
+## Warm attempt 004 and consumer-proof repair
 
-Warm regression attempt 004 is active at:
+Warm regression attempt 004 ran at:
 
 `/project/flyspeck-candle-runs/cakeml-parser-dopen-warm-proof-715553067-attempt-004`
 
-It binds the exact CakeML/HOL4 heads above, runs
-`x64BootstrapProofTheory.uo` with `-j1 --mt=1`, and uses a 117,964,800-KiB
-(112.5-GiB) virtual-address-space ceiling.  It hashes the four reused stage-3
-products before and after the run.  Those inputs matched the prior attempt at
-launch.  The target reported three invalidated theory files and began with
-`repl_init`; no success is claimed until its sealed receipt records exit zero
-and unchanged stage-3 hashes.
+It bound the exact CakeML/HOL4 heads above, ran
+`x64BootstrapProofTheory.uo` with `-j1 --mt=1`, and used a 117,964,800-KiB
+(112.5-GiB) virtual-address-space ceiling.  The sealed receipt records failure
+after 28m22.34s with 25,582,872 KiB maximum RSS and no swaps.  All four reused
+stage-3 product hashes were unchanged.  Receipt and log hashes are:
+
+- receipt: `b0072965a6ce8817eeafe6879f3c1430afe4650f3cfe251eb84f6b3684745f96`;
+- log: `44a34cfe005ebca1125b274df40ecbc3c5a2e21320f4c58cb1b0dfd1d102163e`; and
+- time: `cbb16de50cde53ca90d534fc6f50a80b22f1852af51073ecdfc88b67d3b346a2`.
+
+`repl_init` passed.  `replProof` then reached its final theorem,
+`evaluate_decs_compiler64_prog`, before failing; the x64 proof target was not
+reached.  The failure exposed a stale proof consumer: `main` now evaluates the
+parser-diagnostic capability and run-argument dispatches before
+`compiler_has_repl_flag`, but this REPL evaluator proof still modeled the old
+control-flow prefix.
+
+A replay from the emitted 8.70-GB theorem heap proved that, under the existing
+`has_repl_flag (TL cl)` hypothesis, those two new calls return false and
+`NONE`; carrying their evaluator clock/reference effects through the old proof
+then closes the entire theorem, including its unchanged backend-config and
+REPL tail.  A source patch implementing that proof-only synchronization is
+under a focused serial `replProofTheory.uo` rebuild with a 40-GiB address-space
+ceiling.  No runtime or compiler-semantics source is changed.  The repaired
+CakeML commit, focused result, and replacement warm receipt will be recorded
+here after they exist; no bootstrap success is claimed yet.
+
+## Remaining cold qualification
 
 If the warm gate passes, the next release gate is the frozen pristine-cold
 controller's base-heap plus four-stage replay in a new product-empty worktree:
