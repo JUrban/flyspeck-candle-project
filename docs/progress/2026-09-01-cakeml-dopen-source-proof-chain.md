@@ -48,6 +48,15 @@ requirements are not yet complete.  The current critical path is the cold
 qualification, deliberate Candle repin/link, consumed 20/400 gates, current
 binary Great-100 comparison, and then direct nonlinear/LP cumulative S2/S3.
 
+The roadmap-level relocation rereview also found and repaired a project
+wrapper defect.  `check-compatibility-ledger.sh` previously located the direct
+manifest relative to the project checkout, producing a doubled
+`worktrees/worktrees` path from a normal Git worktree.  Commit `c18755b`
+derives the workspace from the explicit repository root and permits an
+explicit direct-manifest override.  Default and override modes now both close
+the 6,074-entry ledger and the 3,689-finding/329-file direct projection; the
+inventory, ledger and triage suites pass 8/8, 6/6 and 4/4 respectively.
+
 ## Final proof commits
 
 The commits after the previously prepared CakeML parent `480a9f4fc...` are:
