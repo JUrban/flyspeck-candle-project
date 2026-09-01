@@ -1,10 +1,11 @@
 #!/usr/bin/python3
-"""Live, fail-closed OS evidence companion for direct checkpoint attempts.
+"""Live, fail-closed OS-observation companion for direct checkpoint attempts.
 
 This module is intentionally not a release finalizer.  It observes files and
-processes through kernel interfaces while they are live, and can emit one
-bounded OS-evidence value only after the entire lifecycle has been observed.
-It never sets runtime qualification, S2/S3 approval, or release promotion.
+processes through kernel interfaces while they are live, and emits only an
+unapproved controller-asserted candidate.  The available observations do not
+close the kernel/runtime trust boundary.  This module never authenticates the
+candidate and never sets runtime qualification, S2/S3 approval, or promotion.
 
 Stable file identity/content remains revalidatable after process exit.
 Process liveness, parent-owned exit/reap, READY ordering, no-replace rename,
@@ -51,6 +52,14 @@ def canonical_sha256(value: object) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
 
+def direct_ordered_manifest_sha256(value: object) -> str:
+    data = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(data).hexdigest()
+
+
 def protocol_content_record(value: object) -> dict[str, Any]:
     """Match the direct protocol's indented canonical content records."""
     data = (json.dumps(
@@ -68,6 +77,7 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 UUID = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 )
+PFT_NAMESPACE = re.compile(r"(?:^|[/:._-])pft(?:$|[/:._-])", re.IGNORECASE)
 
 DMTCP_VERSION = "4.1.0"
 DMTCP_AUTHORITY_KIND = "candle-flyspeck-dmtcp-authority-v1"
@@ -92,13 +102,27 @@ DMTCP_ROLE_PATHS = {
 }
 PHASES = ("pilot", "origin", "checkpoint", "clean-1", "clean-2", "resume")
 CONTROLLER_ASSERTION_SCOPE = (
-    "live-os-authenticator-parent-and-fd-observed-v1"
+    "controller-asserted-unapproved-without-anchored-os-revalidation-v1"
 )
-EVIDENCE_KIND = "candle-flyspeck-checkpoint-os-authentication-evidence-v1"
+EVIDENCE_KIND = "candle-flyspeck-checkpoint-os-observation-candidate-v1"
 CHALLENGE_KIND = "candle-flyspeck-checkpoint-controller-challenges-v1"
 CHALLENGE_POLICY = "externally-predeclared-distinct-nonces-and-tokens-v1"
+UNCLOSED_TRUST_BOUNDARIES = (
+    "continuous-tracefork-vfork-clone-exec-exit-or-cgroup-subreaper-membership",
+    "kernel-bound-ack-channel",
+    "complete-process-tree-and-time-ordering",
+    "mount-and-proc-namespace-plus-fstatfs-anchor",
+    "coordinator-port-time-ownership-and-reuseport-exclusion",
+    "elf-pt-interp-rpath-runpath-ld-cache-and-mapped-plugin-inode-closure",
+    "writable-files-and-inherited-or-open-fd-races",
+    "pgid-sampling-of-exited-setsid-and-transient-work-plus-complete-retained-files",
+    "resumed-controller-exec-gate-continuity",
+    "independently-predeclared-coordinator-and-restart-argv",
+    "immutable-held-fd-or-bind-mount-restart-without-pathname-toctou",
+    "restart-working-directory-binding-for-relative-direct-protocol-paths",
+)
 
-_TOKEN_SEAL = object()
+_OBSERVATION_SEAL = object()
 
 
 def _hex(value: object, pattern: re.Pattern[str], label: str) -> str:
@@ -109,21 +133,31 @@ def _hex(value: object, pattern: re.Pattern[str], label: str) -> str:
 
 def _safe_relative(value: object, label: str) -> str:
     require(isinstance(value, str) and value and "\\" not in value and
-            not value.startswith("/"), f"malformed {label}")
+            not value.startswith("/") and all(
+                ord(character) >= 32 and character != "\x7f"
+                for character in value
+            ), f"malformed {label}")
     path = PurePosixPath(value)
     require(path.as_posix() == value and all(
         part not in {"", ".", ".."} for part in path.parts
     ), f"unsafe {label}")
+    require(PFT_NAMESPACE.search(value) is None,
+            f"PFT namespace is forbidden in {label}")
     return value
 
 
 def _absolute_to_relative(value: object, label: str) -> str:
     require(isinstance(value, str) and value.startswith("/") and
-            "\\" not in value, f"malformed {label}")
+            "\\" not in value and all(
+                ord(character) >= 32 and character != "\x7f"
+                for character in value
+            ), f"malformed {label}")
     path = PurePosixPath(value)
     require(path.as_posix() == value and all(
         part not in {"", ".", ".."} for part in path.parts[1:]
     ), f"unsafe {label}")
+    require(PFT_NAMESPACE.search(value) is None,
+            f"PFT namespace is forbidden in {label}")
     return "/".join(path.parts[1:])
 
 
@@ -137,7 +171,8 @@ def validate_controller_challenges(value: object) -> dict[str, Any]:
         "pft_used",
     }
     require(isinstance(value, dict) and set(value) == fields and
-            value.get("schema") == 1 and value.get("kind") == CHALLENGE_KIND and
+            type(value.get("schema")) is int and value["schema"] == 1 and
+            value.get("kind") == CHALLENGE_KIND and
             value.get("policy") == CHALLENGE_POLICY and
             value.get("pft_used") is False,
             "malformed external checkpoint challenges")
@@ -392,21 +427,21 @@ def file_expectation(path: str | os.PathLike[str]) -> dict[str, Any]:
 
 
 @dataclass(frozen=True)
-class _Token:
+class _Observation:
     kind: str
     evidence: dict[str, Any]
-    production: bool
+    nonfixture: bool
     _seal: object
 
 
-def _token(kind: str, evidence: dict[str, Any], production: bool) -> _Token:
-    return _Token(kind, copy.deepcopy(evidence), production, _TOKEN_SEAL)
+def _make_observation(kind: str, evidence: dict[str, Any], nonfixture: bool) -> _Observation:
+    return _Observation(kind, copy.deepcopy(evidence), nonfixture, _OBSERVATION_SEAL)
 
 
-def _require_token(value: object, kind: str, *, production: bool = True) -> _Token:
-    require(isinstance(value, _Token) and value._seal is _TOKEN_SEAL and
-            value.kind == kind and (not production or value.production),
-            f"missing sealed production {kind} observation")
+def _require_observation(value: object, kind: str, *, nonfixture: bool = True) -> _Observation:
+    require(isinstance(value, _Observation) and value._seal is _OBSERVATION_SEAL and
+            value.kind == kind and (not nonfixture or value.nonfixture),
+            f"missing sealed nonfixture {kind} observation")
     return value
 
 
@@ -464,7 +499,7 @@ def authenticate_dmtcp_authority(
     expected: object, *, filesystem_root: str = "/",
     version_runner: Callable[[str], str] | None = None,
     readelf_runner: Callable[[int], str] | None = None,
-) -> _Token:
+) -> _Observation:
     """Authenticate exact DMTCP binaries, plugins, and their ELF closure."""
     fields = {"version", "executables", "injected_libraries", "elf_closure"}
     require(isinstance(expected, dict) and set(expected) == fields and
@@ -534,6 +569,7 @@ def authenticate_dmtcp_authority(
         for soname, item in closure_by_soname.items():
             require(set(item) == {"soname", "path", "authority"} and
                     isinstance(soname, str) and soname and "/" not in soname and
+                    PFT_NAMESPACE.search(soname) is None and
                     isinstance(item["path"], str) and item["path"].startswith("/"),
                     "malformed DMTCP ELF-closure entry")
             observed, needed = _authenticate_elf_file(
@@ -568,7 +604,7 @@ def authenticate_dmtcp_authority(
     require(all(_parse_dmtcp_version(output) == DMTCP_VERSION
                 for output in versions.values()),
             "DMTCP executable version differs from 4.1.0")
-    return _token("dmtcp-authority", {
+    return _make_observation("dmtcp-authority", {
         "version": DMTCP_VERSION,
         "executables": observations[:len(DMTCP_ROLES)],
         "injected_libraries": observations[
@@ -644,13 +680,13 @@ def _parse_dmtcp_version(output: str) -> str:
 
 
 def bind_dmtcp_controller_authority(
-    *, os_authority: _Token, kernel: _Token,
+    *, os_authority: _Observation, kernel: _Observation,
     direct_authority: dict[str, Any], elf_closure_document: dict[str, Any],
     challenges: dict[str, Any],
-) -> _Token:
+) -> _Observation:
     """Bind live OS observations to the externally challenged direct authority."""
-    observed = _require_token(os_authority, "dmtcp-authority", production=False)
-    kernel_token = _require_token(kernel, "kernel", production=False)
+    observed = _require_observation(os_authority, "dmtcp-authority", nonfixture=False)
+    kernel_observation = _require_observation(kernel, "kernel", nonfixture=False)
     challenges = validate_controller_challenges(copy.deepcopy(challenges))
     fields = {
         "schema", "kind", "version", "executables", "injected_libraries",
@@ -730,11 +766,11 @@ def bind_dmtcp_controller_authority(
                 "policy", "release", "machine", "vdso_sha256",
             } and kernel_trust.get("policy") ==
             "same-boot-pinned-kernel-vdso-v1" and
-            kernel_trust.get("release") == kernel_token.evidence["release"] and
-            kernel_trust.get("machine") == kernel_token.evidence["machine"],
+            kernel_trust.get("release") == kernel_observation.evidence["release"] and
+            kernel_trust.get("machine") == kernel_observation.evidence["machine"],
             "challenged kernel authority differs from live kernel")
     _hex(kernel_trust.get("vdso_sha256"), HEX64, "challenged vDSO SHA-256")
-    return _token("bound-dmtcp-authority", {
+    return _make_observation("bound-dmtcp-authority", {
         "direct_authority_sha256": challenges["dmtcp_authority"]["sha256"],
         "version": DMTCP_VERSION,
         "executables": copy.deepcopy(observed_executables),
@@ -742,19 +778,19 @@ def bind_dmtcp_controller_authority(
         "elf_closure": copy.deepcopy(observed.evidence["elf_closure"]),
         "elf_closure_document_sha256":
             direct_authority["elf_closure"]["sha256"],
-        "kernel": copy.deepcopy(kernel_token.evidence),
+        "kernel": copy.deepcopy(kernel_observation.evidence),
         "vdso_sha256": kernel_trust["vdso_sha256"],
-    }, observed.production and kernel_token.production)
+    }, observed.nonfixture and kernel_observation.nonfixture)
 
 
 def authenticate_challenged_environments(
     *, challenges: dict[str, Any], runtime_environment: dict[str, str],
-    checkpoint_environment: dict[str, str], dmtcp_authority: _Token,
-) -> _Token:
+    checkpoint_environment: dict[str, str], dmtcp_authority: _Observation,
+) -> _Observation:
     """Authenticate exact clean/checkpoint env maps against external records."""
     challenges = validate_controller_challenges(copy.deepcopy(challenges))
-    dmtcp = _require_token(
-        dmtcp_authority, "bound-dmtcp-authority", production=False,
+    dmtcp = _require_observation(
+        dmtcp_authority, "bound-dmtcp-authority", nonfixture=False,
     )
     require(isinstance(runtime_environment, dict) and runtime_environment and
             isinstance(checkpoint_environment, dict) and
@@ -795,16 +831,16 @@ def authenticate_challenged_environments(
     require(checkpoint_environment.get("LD_PRELOAD") == injected,
             "checkpoint LD_PRELOAD differs from live injected libraries")
     combined = {**runtime_environment, **checkpoint_environment}
-    return _token("challenged-environments", {
+    return _make_observation("challenged-environments", {
         "runtime": copy.deepcopy(runtime_environment),
         "checkpoint": copy.deepcopy(checkpoint_environment),
         "combined": combined,
-    }, dmtcp.production)
+    }, dmtcp.nonfixture)
 
 
 def authenticate_resource_limits(
     *, challenges: dict[str, Any], limits: dict[str, int],
-) -> _Token:
+) -> _Observation:
     """Bind sampling and storage ceilings to the external challenge."""
     challenges = validate_controller_challenges(copy.deepcopy(challenges))
     fields = {
@@ -828,13 +864,13 @@ def authenticate_resource_limits(
             limits["max_retained_disk_bytes"] and
             10 <= limits["sampling_interval_milliseconds"] <= 60_000,
             "resource limits are not the externally challenged fixed envelope")
-    return _token("resource-limits", copy.deepcopy(limits), True)
+    return _make_observation("resource-limits", copy.deepcopy(limits), True)
 
 
 def authenticate_kernel(
     expected: object, *, proc_root: str = "/proc",
     uname: os.uname_result | None = None,
-) -> _Token:
+) -> _Observation:
     fields = {"release", "machine", "boot_id"}
     require(isinstance(expected, dict) and set(expected) == fields,
             "malformed expected kernel authority")
@@ -851,7 +887,7 @@ def authenticate_kernel(
         "boot_id": boot_id,
     }
     require(observed == expected, "kernel release, machine, or boot ID drifted")
-    return _token("kernel", observed, proc_root == "/proc" and uname is None)
+    return _make_observation("kernel", observed, proc_root == "/proc" and uname is None)
 
 
 def _read_all_fd(fd: int, limit: int = 64 * 1024 * 1024) -> bytes:
@@ -959,8 +995,8 @@ class LiveProcessPin:
     evidence: dict[str, Any]
     pidfd: int | None
     proc_root: str
-    production: bool
-    _seal: object = _TOKEN_SEAL
+    nonfixture: bool
+    _seal: object = _OBSERVATION_SEAL
     completed: bool = False
     gated_by_authenticator: bool = False
     trace_attached: bool = False
@@ -992,11 +1028,16 @@ def pin_live_process(
             isinstance(expected.get("executable"), str) and
             expected["executable"].startswith("/") and
             isinstance(expected.get("argv"), list) and expected["argv"] and
-            all(isinstance(item, str) for item in expected["argv"]) and
+            all(isinstance(item, str) and item and
+                all(ord(character) >= 32 and character != "\x7f"
+                    for character in item) and
+                PFT_NAMESPACE.search(item) is None
+                for item in expected["argv"]) and
             isinstance(expected.get("environment"), dict) and
             all(isinstance(name, str) and isinstance(value, str)
                 for name, value in expected["environment"].items()),
             "malformed expected live process")
+    _absolute_to_relative(expected["executable"], "live process executable")
     _hex(expected.get("vdso_sha256"), HEX64, "expected process vDSO SHA-256")
     kernel = expected.get("kernel")
     require(isinstance(kernel, dict) and set(kernel) == {
@@ -1048,7 +1089,7 @@ def pin_live_process(
                 argv == expected["argv"] and environment == expected["environment"] and
                 hashlib.sha256(vdso).hexdigest() == expected["vdso_sha256"],
                 "live process identity, executable, argv, env, or vDSO drifted")
-        kernel_token = authenticate_kernel(
+        kernel_observation = authenticate_kernel(
             kernel, proc_root=proc_root,
             uname=None if not fixture else os.uname(),
         )
@@ -1068,7 +1109,7 @@ def pin_live_process(
         "vdso_start": start,
         "vdso_end": end,
         "vdso_sha256": hashlib.sha256(vdso).hexdigest(),
-        "kernel": kernel_token.evidence,
+        "kernel": kernel_observation.evidence,
     }
     return LiveProcessPin(evidence, real_pidfd, proc_root, not fixture)
 
@@ -1088,9 +1129,9 @@ def _ptrace(request: int, pid: int, data: int) -> None:
 
 
 def _live_expected_from_proc(
-    pid: int, kernel: _Token,
+    pid: int, kernel: _Observation,
 ) -> dict[str, Any]:
-    kernel_token = _require_token(kernel, "kernel", production=False)
+    kernel_observation = _require_observation(kernel, "kernel", nonfixture=False)
     process = Path("/proc") / str(pid)
     stat_value = _parse_proc_stat(process.joinpath("stat").read_bytes())
     pid_directory_fd = os.open(
@@ -1112,24 +1153,28 @@ def _live_expected_from_proc(
             process.joinpath("environ").read_bytes(),
         ),
         "vdso_sha256": hashlib.sha256(vdso).hexdigest(),
-        "kernel": copy.deepcopy(kernel_token.evidence),
+        "kernel": copy.deepcopy(kernel_observation.evidence),
     }
 
 
 def spawn_exec_gated_process(
     *, executable: str, argv: list[str], environment: dict[str, str],
-    kernel: _Token, new_process_group: bool,
+    kernel: _Observation, new_process_group: bool,
 ) -> LiveProcessPin:
     """Fork and stop at PTRACE_EVENT_EXEC before any target instruction runs."""
-    kernel_token = _require_token(kernel, "kernel")
+    kernel_observation = _require_observation(kernel, "kernel")
     require(isinstance(executable, str) and executable.startswith("/") and
             isinstance(argv, list) and argv and argv[0] == executable and
-            all(isinstance(item, str) for item in argv) and
+            all(isinstance(item, str) and item and
+                all(ord(character) >= 32 and character != "\x7f"
+                    for character in item) and
+                PFT_NAMESPACE.search(item) is None for item in argv) and
             isinstance(environment, dict) and all(
                 isinstance(name, str) and name and isinstance(value, str)
                 for name, value in environment.items()
             ) and type(new_process_group) is bool,
             "malformed gated process launch")
+    _absolute_to_relative(executable, "gated process executable")
     pid = os.fork()
     if pid == 0:
         try:
@@ -1154,7 +1199,7 @@ def spawn_exec_gated_process(
         require(stopped_pid == pid and os.WIFSTOPPED(status) and
                 os.WSTOPSIG(status) == signal.SIGTRAP and status >> 16 == 4,
                 "gated child did not stop at the exec boundary")
-        expected = _live_expected_from_proc(pid, kernel_token)
+        expected = _live_expected_from_proc(pid, kernel_observation)
         require(expected["executable"] == executable and
                 expected["argv"] == argv and
                 expected["environment"] == environment and
@@ -1187,8 +1232,8 @@ def spawn_exec_gated_process(
 
 
 def release_exec_gated_process(pin: LiveProcessPin) -> None:
-    require(isinstance(pin, LiveProcessPin) and pin._seal is _TOKEN_SEAL and
-            pin.production and pin.gated_by_authenticator and pin.trace_attached and
+    require(isinstance(pin, LiveProcessPin) and pin._seal is _OBSERVATION_SEAL and
+            pin.nonfixture and pin.gated_by_authenticator and pin.trace_attached and
             pin.gate_evidence is not None and
             pin.gate_evidence.get("released") is False,
             "process does not have an unreleased authenticator exec gate")
@@ -1202,9 +1247,9 @@ def complete_parent_owned_process(
     pin: LiveProcessPin, *, allowed_exit_codes: Iterable[int] = (),
     allowed_signals: Iterable[int] = (),
     fixture_completion: object | None = None,
-) -> _Token:
+) -> _Observation:
     """Observe exit through pidfd, reap as parent, and prove /proc removal."""
-    require(isinstance(pin, LiveProcessPin) and pin._seal is _TOKEN_SEAL and
+    require(isinstance(pin, LiveProcessPin) and pin._seal is _OBSERVATION_SEAL and
             not pin.completed, "invalid or reused live process pin")
     exit_codes = set(allowed_exit_codes)
     signals = set(allowed_signals)
@@ -1214,7 +1259,7 @@ def complete_parent_owned_process(
                 for item in signals),
             "malformed allowed process termination")
     pid = pin.evidence["pid"]
-    if pin.production:
+    if pin.nonfixture:
         require(pin.pidfd is not None and hasattr(os, "P_PIDFD"),
                 "parent-owned lifecycle requires pidfd wait support")
         try:
@@ -1255,12 +1300,12 @@ def complete_parent_owned_process(
                 "fixture termination was not predeclared")
     pin.completed = True
     pin.close()
-    return _token("completed-process", {
+    return _make_observation("completed-process", {
         "process": copy.deepcopy(pin.evidence),
         "termination": termination,
         "reaped": True,
         "proc_absent_after_reap": True,
-    }, pin.production)
+    }, pin.nonfixture)
 
 
 def _listening_socket_inodes(proc_root: str, port: int) -> set[str]:
@@ -1289,8 +1334,8 @@ def _listening_socket_inodes(proc_root: str, port: int) -> set[str]:
     return result
 
 
-def authenticate_coordinator_port(pin: LiveProcessPin, port: int) -> _Token:
-    require(isinstance(pin, LiveProcessPin) and pin._seal is _TOKEN_SEAL and
+def authenticate_coordinator_port(pin: LiveProcessPin, port: int) -> _Observation:
+    require(isinstance(pin, LiveProcessPin) and pin._seal is _OBSERVATION_SEAL and
             not pin.completed, "coordinator process is not live")
     inodes = _listening_socket_inodes(pin.proc_root, port)
     fd_path = Path(pin.proc_root) / str(pin.evidence["pid"]) / "fd"
@@ -1305,14 +1350,14 @@ def authenticate_coordinator_port(pin: LiveProcessPin, port: int) -> _Token:
     selected = sorted(inodes & owned)
     require(len(selected) == 1,
             "coordinator does not own exactly one selected listening socket")
-    return _token("coordinator-port", {
+    return _make_observation("coordinator-port", {
         "process_identity": {
             field: pin.evidence[field]
             for field in ("pid", "process_group_id", "start_ticks")
         },
         "port": port,
         "socket_inode": selected[0],
-    }, pin.production)
+    }, pin.nonfixture)
 
 
 def _decode_exact_json(data: bytes, label: str) -> dict[str, Any]:
@@ -1328,20 +1373,20 @@ def _decode_exact_json(data: bytes, label: str) -> dict[str, Any]:
 
 def authenticate_phase_files(
     *, filesystem: AnchoredFilesystem, phase: str,
-    challenges: dict[str, Any], completed_controller: _Token,
+    challenges: dict[str, Any], completed_controller: _Observation,
     event_path: str, event_authority: dict[str, Any],
     log_path: str, log_authority: dict[str, Any],
     sampling_interval_milliseconds: int,
-) -> _Token:
+) -> _Observation:
     """Inspect retrospective phase files without qualifying them as live evidence.
 
     This helper is useful for diagnostics only.  Only ``LivePhaseObserver`` can
-    produce a production phase token, because it timestamps receipts and reads
+    produce a nonfixture phase token, because it timestamps receipts and reads
     resource counters while the controller is alive.
     """
     challenges = validate_controller_challenges(copy.deepcopy(challenges))
-    completed = _require_token(
-        completed_controller, "completed-process", production=False,
+    completed = _require_observation(
+        completed_controller, "completed-process", nonfixture=False,
     )
     require(phase in PHASES and type(sampling_interval_milliseconds) is int and
             sampling_interval_milliseconds > 0,
@@ -1442,7 +1487,7 @@ def authenticate_phase_files(
     ):
         require(binding.encode() in log_bytes,
                 "phase log omits a challenge or controller identity binding")
-    return _token("phase", {
+    return _make_observation("phase", {
         "phase": phase,
         "challenge_name": challenge_name,
         "challenge_value": challenge_value,
@@ -1458,7 +1503,7 @@ def authenticate_phase_files(
         ),
         "ordered_sample_sha256": canonical_sha256(samples),
         "ordered_event_sha256": canonical_sha256(events),
-        "zero_actions_after_ready": True,
+        "post_ready_action_receipt_count": 0,
         "retrospective_only": True,
     }, False)
 
@@ -1585,18 +1630,18 @@ class LivePhaseObserver:
 
     def __init__(
         self, *, pin: LiveProcessPin, phase: str,
-        challenges: dict[str, Any], resource_limits: _Token,
+        challenges: dict[str, Any], resource_limits: _Observation,
         retained_fds: Iterable[int] = (), fixture_monotonic_ns: int | None = None,
     ) -> None:
-        require(isinstance(pin, LiveProcessPin) and pin._seal is _TOKEN_SEAL and
+        require(isinstance(pin, LiveProcessPin) and pin._seal is _OBSERVATION_SEAL and
                 not pin.completed, "phase controller is not pinned live")
         self.challenges = validate_controller_challenges(copy.deepcopy(challenges))
-        self.resource_limits = _require_token(
-            resource_limits, "resource-limits", production=False,
+        self.resource_limits = _require_observation(
+            resource_limits, "resource-limits", nonfixture=False,
         )
         require(phase in PHASES, "malformed live phase policy")
-        require(fixture_monotonic_ns is None or not pin.production,
-                "production timestamps must come from CLOCK_MONOTONIC")
+        require(fixture_monotonic_ns is None or not pin.nonfixture,
+                "nonfixture timestamps must come from CLOCK_MONOTONIC")
         self.pin = pin
         self.phase = phase
         self.interval_ms = self.resource_limits.evidence[
@@ -1613,6 +1658,7 @@ class LivePhaseObserver:
         self.samples: list[dict[str, int]] = []
         self.receipts: list[dict[str, Any]] = []
         self.raw_receipt_hashes: set[str] = set()
+        self.event_nonces: set[str] = set()
         self.ended = False
         self.gate_was_held_at_begin = (
             pin.gated_by_authenticator and pin.trace_attached and
@@ -1628,8 +1674,8 @@ class LivePhaseObserver:
         release_exec_gated_process(self.pin)
 
     def _now(self, supplied: int | None) -> int:
-        require(supplied is None or not self.pin.production,
-                "production timestamps cannot be caller supplied")
+        require(supplied is None or not self.pin.nonfixture,
+                "nonfixture timestamps cannot be caller supplied")
         value = time.monotonic_ns() if supplied is None else supplied
         require(type(value) is int and value > 0, "invalid monotonic timestamp")
         return value
@@ -1682,6 +1728,8 @@ class LivePhaseObserver:
                 receipt.get("pft_used") is False,
                 "live receipt is challenge- or process-spliced")
         _hex(receipt.get("event_nonce"), HEX32, "live event nonce")
+        require(receipt["event_nonce"] not in self.event_nonces,
+                "live event nonce was reused")
         if receipt["event"] == "action":
             require(type(receipt.get("action_index")) is int and
                     receipt["action_index"] >= 0,
@@ -1698,6 +1746,7 @@ class LivePhaseObserver:
                  self.receipts[-1]["received_monotonic_ns"] < now),
                 "live event receipt order is not monotonic")
         self.raw_receipt_hashes.add(digest)
+        self.event_nonces.add(receipt["event_nonce"])
         self.receipts.append({
             "sequence": len(self.receipts),
             "received_monotonic_ns": now,
@@ -1732,13 +1781,13 @@ class LivePhaseObserver:
         self.ended = True
 
     def finish(
-        self, completed_controller: _Token, *,
+        self, completed_controller: _Observation, *,
         filesystem: AnchoredFilesystem, output_directory: str,
-    ) -> _Token:
+    ) -> _Observation:
         """Seal parent-observed raw data after the exact controller is reaped."""
         require(self.ended, "phase lifecycle has not reached its end boundary")
-        completed = _require_token(
-            completed_controller, "completed-process", production=False,
+        completed = _require_observation(
+            completed_controller, "completed-process", nonfixture=False,
         )
         process = completed.evidence["process"]
         require({field: process[field] for field in self.identity} == self.identity,
@@ -1776,7 +1825,7 @@ class LivePhaseObserver:
             right["monotonic_ns"] - left["monotonic_ns"]
             for left, right in zip(self.samples, self.samples[1:])
         )
-        return _token("phase", {
+        return _make_observation("phase", {
             "phase": self.phase,
             "challenge_id": self.challenges["challenge_id"],
             "challenge_name": self.challenge_name,
@@ -1789,14 +1838,16 @@ class LivePhaseObserver:
             "maximum_sampling_gap_ns": maximum_gap,
             "ordered_sample_sha256": canonical_sha256(self.samples),
             "ordered_event_sha256": canonical_sha256(self.receipts),
+            "event_nonces": sorted(self.event_nonces),
             "cadence_file": cadence_file,
             "event_file": events_file,
             "filesystem_root": filesystem.root_path,
-            "zero_actions_after_ready": True,
-            "parent_observed_live": True,
+            "post_ready_action_receipt_count": 0,
+            "receipt_observation_scope":
+                "controller-supplied-bytes-received-and-timestamped-by-parent",
             "exec_gate": copy.deepcopy(self.pin.gate_evidence),
-        }, self.pin.production and completed.production and
-           filesystem.root_path == "/" and self.resource_limits.production and
+        }, self.pin.nonfixture and completed.nonfixture and
+           filesystem.root_path == "/" and self.resource_limits.nonfixture and
            self.gate_was_held_at_begin and self.pin.gate_evidence is not None and
            self.pin.gate_evidence.get("released") is True)
 
@@ -1839,8 +1890,8 @@ class PublicationPin:
     directory_fd: int
     image_fds: tuple[int, ...]
     filesystem_root: str
-    production: bool
-    _seal: object = _TOKEN_SEAL
+    nonfixture: bool
+    _seal: object = _OBSERVATION_SEAL
 
     def close(self) -> None:
         for fd in self.image_fds:
@@ -1857,18 +1908,18 @@ class PublicationPin:
 def publish_checkpoint_no_replace(
     *, filesystem: AnchoredFilesystem, staging_directory: str,
     publication_parent: str, images: list[dict[str, Any]],
-    challenges: dict[str, Any], resource_limits: _Token,
+    challenges: dict[str, Any], resource_limits: _Observation,
 ) -> PublicationPin:
     """Atomically publish the exact ordered image set and retain all fds."""
     challenges = validate_controller_challenges(copy.deepcopy(challenges))
-    limits = _require_token(resource_limits, "resource-limits", production=False)
+    limits = _require_observation(resource_limits, "resource-limits", nonfixture=False)
     staging_directory = _safe_relative(staging_directory, "staging directory")
     publication_parent = _safe_relative(
         publication_parent, "checkpoint publication parent",
     )
-    require(PurePosixPath(staging_directory).parent.as_posix() ==
-            publication_parent,
-            "sealed staging directory must share the publication parent")
+    require(PurePosixPath(staging_directory).parts[0] == "staging" and
+            publication_parent == "checkpoints",
+            "checkpoint paths differ from the direct protocol layout")
     require(isinstance(images, list) and images,
             "checkpoint publication has no selected images")
     ordered_paths: list[str] = []
@@ -1892,9 +1943,9 @@ def publish_checkpoint_no_replace(
             "staging tree differs from exact selected checkpoint images")
     stage_fd = filesystem.open_directory(staging_directory)
     stage_stat = os.fstat(stage_fd)
-    require(stat.S_IMODE(stage_stat.st_mode) == 0o555 and
-            stage_stat.st_uid == os.getuid() and stage_stat.st_gid == os.getgid(),
-            "staging image directory is not sealed and owned")
+    require(stage_stat.st_uid == os.getuid() and stage_stat.st_gid == os.getgid() and
+            stat.S_IMODE(stage_stat.st_mode) & 0o022 == 0,
+            "staging image directory is not privately owned")
     held: list[int] = []
     observations: list[dict[str, Any]] = []
     try:
@@ -1918,19 +1969,18 @@ def publish_checkpoint_no_replace(
                     "checkpoint image changed before fd retention")
             held.append(image_fd)
             observations.append(observed)
-        publication_digest = canonical_sha256({
-            "schema": 1,
-            "challenge_id": challenges["challenge_id"],
-            "checkpoint_token": challenges["checkpoint_token"],
-            "ordered_images": [{
+        direct_files = [{
                 "path": item["path"],
                 "bytes": item["authority"]["bytes"],
                 "sha256": item["authority"]["sha256"],
                 "md5": item["authority"]["md5"],
-            } for item in images],
-        })
+            } for item in images]
+        ordered_manifest_sha256 = direct_ordered_manifest_sha256(direct_files)
         source_parent, source_name = filesystem._open_parent(staging_directory)
         destination_parent_fd = filesystem.open_directory(publication_parent)
+        publication_parent_stat = os.fstat(destination_parent_fd)
+        require(publication_parent_stat.st_dev == stage_stat.st_dev,
+                "staging and checkpoints directories are on different devices")
         libc = ctypes.CDLL(None, use_errno=True)
         syscall_numbers = {"x86_64": 316, "aarch64": 276, "i686": 353}
         syscall_number = syscall_numbers.get(platform.machine())
@@ -1944,7 +1994,7 @@ def publish_checkpoint_no_replace(
         try:
             result = libc.syscall(
                 syscall_number, source_parent, os.fsencode(source_name),
-                destination_parent_fd, os.fsencode(publication_digest), 1,
+                destination_parent_fd, os.fsencode(ordered_manifest_sha256), 1,
             )
             if result != 0:
                 error_number = ctypes.get_errno()
@@ -1955,11 +2005,13 @@ def publish_checkpoint_no_replace(
                 raise AuthenticationError(
                     f"checkpoint no-replace rename failed: errno {error_number}"
                 )
+            os.fchmod(stage_fd, 0o555)
+            os.fsync(stage_fd)
             os.fsync(destination_parent_fd)
         finally:
             os.close(source_parent)
             os.close(destination_parent_fd)
-        published_directory = f"{publication_parent}/{publication_digest}"
+        published_directory = f"{publication_parent}/{ordered_manifest_sha256}"
         require(filesystem.exact_tree(published_directory) ==
                 sorted(ordered_paths),
                 "published checkpoint tree changed during rename")
@@ -1992,7 +2044,7 @@ def publish_checkpoint_no_replace(
         "challenge_id": challenges["challenge_id"],
         "checkpoint_token": challenges["checkpoint_token"],
         "resource_limits": copy.deepcopy(limits.evidence),
-        "publication_digest": publication_digest,
+        "ordered_manifest_sha256": ordered_manifest_sha256,
         "published_directory": absolute_prefix,
         "published_relative_directory": published_directory,
         "ordered_images": [{
@@ -2002,21 +2054,35 @@ def publish_checkpoint_no_replace(
                 "device": observed["device"], "inode": observed["inode"],
             },
         } for item, observed in zip(images, observations, strict=True)],
+        "direct_protocol_image_files": copy.deepcopy(direct_files),
         "ordered_restart_image_argv": [
-            f"{absolute_prefix}/{path}" for path in ordered_paths
+            f"{published_directory}/{path}" for path in ordered_paths
         ],
+        "direct_protocol_atomic_publication": {
+            "staging_path": staging_directory,
+            "published_path": published_directory,
+            "staging_device": stage_stat.st_dev,
+            "published_parent_device": publication_parent_stat.st_dev,
+            "rename_noreplace": True,
+            "parent_fsync": True,
+            "image_files_read_only": True,
+            "image_directory_read_only": True,
+            "authentication_scope": CONTROLLER_ASSERTION_SCOPE,
+            "anchored_nofollow_rehash": False,
+        },
+        "anchored_nofollow_observed": True,
         "rename_noreplace_observed": True,
         "held_directory_and_image_fds": True,
     }, published_fd, tuple(held), filesystem.root_path,
-       filesystem.root_path == "/" and limits.production)
+       filesystem.root_path == "/" and limits.nonfixture)
 
 
 def rehash_checkpoint_for_restart(
     publication: PublicationPin, *, filesystem: AnchoredFilesystem,
-) -> _Token:
+) -> _Observation:
     """Revalidate held and named image identities immediately around restart."""
     require(isinstance(publication, PublicationPin) and
-            publication._seal is _TOKEN_SEAL and publication.directory_fd >= 0 and
+            publication._seal is _OBSERVATION_SEAL and publication.directory_fd >= 0 and
             len(publication.image_fds) ==
             len(publication.evidence["ordered_images"]),
             "missing live checkpoint publication pin")
@@ -2055,20 +2121,20 @@ def rehash_checkpoint_for_restart(
                 named["inode"] == held["inode"],
                 "restart image name does not select the held publication inode")
         observations.append(named)
-    return _token("restart-images", {
-        "publication_digest": publication.evidence["publication_digest"],
+    return _make_observation("restart-images", {
+        "ordered_manifest_sha256": publication.evidence["ordered_manifest_sha256"],
         "ordered_restart_image_argv": copy.deepcopy(
             publication.evidence["ordered_restart_image_argv"],
         ),
         "restart_rehash_monotonic_ns": time.monotonic_ns(),
         "images": observations,
-    }, publication.production and filesystem.root_path == "/")
+    }, publication.nonfixture and filesystem.root_path == "/")
 
 
 def authenticate_killed_process_tree(
     *, expected_identities: list[dict[str, int]],
-    completed_processes: list[_Token],
-) -> _Token:
+    completed_processes: list[_Observation],
+) -> _Observation:
     """Prove a predeclared, single-PGID process tree was killed and reaped."""
     identity_fields = {"pid", "process_group_id", "start_ticks"}
     require(isinstance(expected_identities, list) and expected_identities and
@@ -2087,9 +2153,9 @@ def authenticate_killed_process_tree(
             "process tree identities alias or span process groups")
     require(len(completed_processes) == len(expected_identities),
             "completed process tree has omitted or extra members")
-    by_identity: dict[tuple[int, int, int], _Token] = {}
+    by_identity: dict[tuple[int, int, int], _Observation] = {}
     for candidate in completed_processes:
-        completed = _require_token(candidate, "completed-process", production=False)
+        completed = _require_observation(candidate, "completed-process", nonfixture=False)
         process = completed.evidence["process"]
         identity = tuple(process[field] for field in (
             "pid", "process_group_id", "start_ticks",
@@ -2118,25 +2184,25 @@ def authenticate_killed_process_tree(
                 item for item in identities if item[0] == parent
             )
             parent = by_identity[parent_identity].evidence["process"]["parent_pid"]
-    return _token("killed-process-tree", {
+    return _make_observation("killed-process-tree", {
         "root_identity": copy.deepcopy(expected_identities[0]),
         "ordered_identities": copy.deepcopy(expected_identities),
         "members": [copy.deepcopy(by_identity[item].evidence) for item in identities],
         "single_owned_process_group": True,
         "all_members_killed_reaped_and_proc_absent": True,
-    }, all(by_identity[item].production for item in identities))
+    }, all(by_identity[item].nonfixture for item in identities))
 
 
 def authenticate_coordinator_lifecycle(
-    *, pin: LiveProcessPin, port_observation: _Token,
-    completed_process: _Token, environments: _Token,
+    *, pin: LiveProcessPin, port_observation: _Observation,
+    completed_process: _Observation, environments: _Observation,
     expected_argv: list[str],
-) -> _Token:
+) -> _Observation:
     """Bind the exact DMTCP coordinator process, socket, and termination."""
-    port = _require_token(port_observation, "coordinator-port", production=False)
-    completed = _require_token(completed_process, "completed-process", production=False)
-    environment_token = _require_token(
-        environments, "challenged-environments", production=False,
+    port = _require_observation(port_observation, "coordinator-port", nonfixture=False)
+    completed = _require_observation(completed_process, "completed-process", nonfixture=False)
+    environment_observation = _require_observation(
+        environments, "challenged-environments", nonfixture=False,
     )
     process = completed.evidence["process"]
     identity = {field: process[field] for field in (
@@ -2146,22 +2212,22 @@ def authenticate_coordinator_lifecycle(
             port.evidence["process_identity"] == identity and
             process["executable"] == DMTCP_ROLE_PATHS["coordinator"] and
             isinstance(expected_argv, list) and process["argv"] == expected_argv and
-            process["environment"] == environment_token.evidence["combined"] and
+            process["environment"] == environment_observation.evidence["combined"] and
             completed.evidence["termination"] in (
                 {"kind": "exit", "value": 0},
                 {"kind": "signal", "value": int(signal.SIGTERM)},
             ), "coordinator executable/argv/env/port/termination is not exact")
-    return _token("coordinator-lifecycle", {
+    return _make_observation("coordinator-lifecycle", {
         "process": copy.deepcopy(process),
         "exec_gate": copy.deepcopy(pin.gate_evidence),
         "port": port.evidence["port"],
         "socket_inode": port.evidence["socket_inode"],
         "termination": copy.deepcopy(completed.evidence["termination"]),
         "reaped": True,
-    }, pin.production and pin.gated_by_authenticator and
+    }, pin.nonfixture and pin.gated_by_authenticator and
        pin.gate_evidence is not None and pin.gate_evidence.get("released") is True and
-       port.production and completed.production and
-       environment_token.production)
+       port.nonfixture and completed.nonfixture and
+       environment_observation.nonfixture)
 
 
 class RestartObserver:
@@ -2169,18 +2235,18 @@ class RestartObserver:
 
     def __init__(
         self, *, launcher_pin: LiveProcessPin, publication: PublicationPin,
-        filesystem: AnchoredFilesystem, coordinator_port: _Token,
-        challenges: dict[str, Any], environments: _Token,
+        filesystem: AnchoredFilesystem, coordinator_port: _Observation,
+        challenges: dict[str, Any], environments: _Observation,
     ) -> None:
         require(isinstance(launcher_pin, LiveProcessPin) and
-                launcher_pin._seal is _TOKEN_SEAL and not launcher_pin.completed,
+                launcher_pin._seal is _OBSERVATION_SEAL and not launcher_pin.completed,
                 "restart launcher is not live")
         self.challenges = validate_controller_challenges(copy.deepcopy(challenges))
-        self.port = _require_token(
-            coordinator_port, "coordinator-port", production=False,
+        self.port = _require_observation(
+            coordinator_port, "coordinator-port", nonfixture=False,
         )
-        self.environments = _require_token(
-            environments, "challenged-environments", production=False,
+        self.environments = _require_observation(
+            environments, "challenged-environments", nonfixture=False,
         )
         self.publication = publication
         self.filesystem = filesystem
@@ -2215,16 +2281,17 @@ class RestartObserver:
         release_exec_gated_process(self.launcher_pin)
 
     def finish(
-        self, *, completed_launcher: _Token, resumed_phase: _Token,
-    ) -> _Token:
-        launcher = _require_token(
-            completed_launcher, "completed-process", production=False,
+        self, *, completed_launcher: _Observation, resumed_phase: _Observation,
+    ) -> _Observation:
+        launcher = _require_observation(
+            completed_launcher, "completed-process", nonfixture=False,
         )
-        resume = _require_token(resumed_phase, "phase", production=False)
+        resume = _require_observation(resumed_phase, "phase", nonfixture=False)
         require(self.launcher_pin.completed and
                 launcher.evidence["process"] == self.launcher_pin.evidence and
                 resume.evidence["phase"] == "resume" and
-                resume.evidence.get("parent_observed_live") is True and
+                resume.evidence.get("receipt_observation_scope") ==
+                "controller-supplied-bytes-received-and-timestamped-by-parent" and
                 resume.evidence["challenge_name"] == "resume_nonce" and
                 resume.evidence["challenge_value"] ==
                 self.challenges["resume_nonce"],
@@ -2236,58 +2303,58 @@ class RestartObserver:
                 self.before.evidence["ordered_restart_image_argv"] ==
                 after.evidence["ordered_restart_image_argv"],
                 "checkpoint images changed across restart lifecycle")
-        return _token("restart-lifecycle", {
+        return _make_observation("restart-lifecycle", {
             "launcher": copy.deepcopy(launcher.evidence),
             "exec_gate": copy.deepcopy(self.launcher_pin.gate_evidence),
             "restarted_controller": copy.deepcopy(
                 resume.evidence["controller"]["process"],
             ),
-            "resumed_handshake": True,
-            "publication_digest": self.publication.evidence["publication_digest"],
+            "resumed_receipt_count": 1,
+            "ordered_manifest_sha256": self.publication.evidence["ordered_manifest_sha256"],
             "coordinator_port": self.port.evidence["port"],
             "ordered_restart_image_argv": copy.deepcopy(
                 self.before.evidence["ordered_restart_image_argv"],
             ),
             "pre_restart_images": copy.deepcopy(self.before.evidence["images"]),
             "post_restart_images": copy.deepcopy(after.evidence["images"]),
-        }, self.launcher_pin.production and launcher.production and
-           resume.production and self.before.production and after.production and
-           self.environments.production and self.gate_was_held_at_begin and
+        }, self.launcher_pin.nonfixture and launcher.nonfixture and
+           resume.nonfixture and self.before.nonfixture and after.nonfixture and
+           self.environments.nonfixture and self.gate_was_held_at_begin and
            self.launcher_pin.gate_evidence is not None and
            self.launcher_pin.gate_evidence.get("released") is True)
 
 
-def assemble_lifecycle_complete_evidence(
-    *, challenges: dict[str, Any], dmtcp_authority: _Token,
-    environments: _Token, resource_limits: _Token, kernel: _Token,
-    phases: list[_Token], coordinator: _Token,
-    origin_process_tree: _Token, publication: PublicationPin,
-    restart: _Token,
+def assemble_unapproved_candidate(
+    *, challenges: dict[str, Any], dmtcp_authority: _Observation,
+    environments: _Observation, resource_limits: _Observation, kernel: _Observation,
+    phases: list[_Observation], coordinator: _Observation,
+    origin_process_tree: _Observation, publication: PublicationPin,
+    restart: _Observation,
 ) -> dict[str, Any]:
-    """Emit bounded OS evidence only after every live observation is complete."""
+    """Emit only an unapproved candidate after bounded local observations."""
     challenges = validate_controller_challenges(copy.deepcopy(challenges))
-    dmtcp = _require_token(dmtcp_authority, "bound-dmtcp-authority")
-    environment_token = _require_token(environments, "challenged-environments")
-    limits = _require_token(resource_limits, "resource-limits")
-    kernel_token = _require_token(kernel, "kernel")
-    coordinator_token = _require_token(coordinator, "coordinator-lifecycle")
-    tree = _require_token(origin_process_tree, "killed-process-tree")
-    restart_token = _require_token(restart, "restart-lifecycle")
+    dmtcp = _require_observation(dmtcp_authority, "bound-dmtcp-authority")
+    environment_observation = _require_observation(environments, "challenged-environments")
+    limits = _require_observation(resource_limits, "resource-limits")
+    kernel_observation = _require_observation(kernel, "kernel")
+    coordinator_observation = _require_observation(coordinator, "coordinator-lifecycle")
+    tree = _require_observation(origin_process_tree, "killed-process-tree")
+    restart_observation = _require_observation(restart, "restart-lifecycle")
     require(isinstance(publication, PublicationPin) and
-            publication._seal is _TOKEN_SEAL and publication.production and
+            publication._seal is _OBSERVATION_SEAL and publication.nonfixture and
             publication.directory_fd >= 0,
-            "missing live production publication pin")
+            "missing live nonfixture publication pin")
     require(isinstance(phases, list) and len(phases) == len(PHASES),
             "lifecycle evidence omits a required phase")
     phase_tokens = [
-        _require_token(item, "phase") for item in phases
+        _require_observation(item, "phase") for item in phases
     ]
     require([item.evidence["phase"] for item in phase_tokens] == list(PHASES),
             "lifecycle phases are absent, duplicated, or reordered")
     with AnchoredFilesystem("/") as final_filesystem:
         for item in phase_tokens:
             require(item.evidence.get("filesystem_root") == "/",
-                    "phase raw files do not use the production root anchor")
+                    "phase raw files do not use the nonfixture root anchor")
             for name in ("cadence_file", "event_file"):
                 prior = item.evidence.get(name)
                 require(isinstance(prior, dict),
@@ -2302,33 +2369,47 @@ def assemble_lifecycle_complete_evidence(
                 )
                 require(current == prior,
                         "phase raw evidence changed before final assembly")
+    with AnchoredFilesystem(publication.filesystem_root) as final_filesystem:
         final_images = rehash_checkpoint_for_restart(
             publication, filesystem=final_filesystem,
         )
-    require(final_images.production and
-            final_images.evidence["images"] ==
-            restart_token.evidence["post_restart_images"],
+    require(final_images.evidence["images"] ==
+            restart_observation.evidence["post_restart_images"],
             "published images changed after restart completion")
+    prior_end = 0
+    all_event_nonces: set[str] = set()
     for item in phase_tokens:
         phase = item.evidence["phase"]
         challenge_name, challenge_value = phase_challenge(challenges, phase)
-        expected_environment = environment_token.evidence[
+        expected_environment = environment_observation.evidence[
             "runtime" if phase in {"pilot", "clean-1", "clean-2"}
             else "combined"
         ]
         process = item.evidence["controller"]["process"]
+        begin = item.evidence.get("begin_monotonic_ns")
+        end = item.evidence.get("end_monotonic_ns")
+        event_nonces = item.evidence.get("event_nonces")
         require(item.evidence.get("challenge_id") == challenges["challenge_id"] and
                 item.evidence.get("challenge_name") == challenge_name and
                 item.evidence.get("challenge_value") == challenge_value and
                 process.get("environment") == expected_environment and
                 item.evidence.get("resource_limits") == limits.evidence and
-                item.evidence.get("parent_observed_live") is True and
-                item.evidence.get("zero_actions_after_ready") is True and
+                item.evidence.get("receipt_observation_scope") ==
+                "controller-supplied-bytes-received-and-timestamped-by-parent" and
+                item.evidence.get("post_ready_action_receipt_count") == 0 and
                 isinstance(item.evidence.get("exec_gate"), dict) and
                 item.evidence["exec_gate"].get("released") is True and
                 process.get("vdso_sha256") == dmtcp.evidence["vdso_sha256"] and
-                process.get("kernel") == kernel_token.evidence,
+                process.get("kernel") == kernel_observation.evidence and
+                type(begin) is int and type(end) is int and
+                prior_end < begin < end and isinstance(event_nonces, list) and
+                event_nonces and len(event_nonces) == len(set(event_nonces)) and
+                all(isinstance(nonce, str) and HEX32.fullmatch(nonce)
+                    for nonce in event_nonces) and
+                all_event_nonces.isdisjoint(event_nonces),
                 "phase challenge, environment, kernel, or vDSO is spliced")
+        prior_end = end
+        all_event_nonces.update(event_nonces)
     identities = {
         item.evidence["phase"]: tuple(
             item.evidence["controller"]["process"][field]
@@ -2339,17 +2420,17 @@ def assemble_lifecycle_complete_evidence(
         "origin", "clean-1", "clean-2", "resume",
     )]
     coordinator_identity = tuple(
-        coordinator_token.evidence["process"][field]
+        coordinator_observation.evidence["process"][field]
         for field in ("pid", "process_group_id", "start_ticks")
     )
     require(len(set(critical)) == 4 and coordinator_identity not in set(critical),
             "origin, clean attempts, resume, or coordinator reuse an identity")
-    resume_process = restart_token.evidence["restarted_controller"]
+    resume_process = restart_observation.evidence["restarted_controller"]
     dmtcp_roles = {
         item["role"]: item for item in dmtcp.evidence["executables"]
     }
-    coordinator_process = coordinator_token.evidence["process"]
-    restart_launcher = restart_token.evidence["launcher"]["process"]
+    coordinator_process = coordinator_observation.evidence["process"]
+    restart_launcher = restart_observation.evidence["launcher"]["process"]
     require(tuple(resume_process[field] for field in (
                 "pid", "process_group_id", "start_ticks",
             )) == identities["resume"] and
@@ -2357,55 +2438,57 @@ def assemble_lifecycle_complete_evidence(
                 field: phase_tokens[1].evidence["controller"]["process"][field]
                 for field in ("pid", "process_group_id", "start_ticks")
             } and
-            restart_token.evidence["publication_digest"] ==
-            publication.evidence["publication_digest"] and
+            restart_observation.evidence["ordered_manifest_sha256"] ==
+            publication.evidence["ordered_manifest_sha256"] and
             publication.evidence.get("resource_limits") == limits.evidence and
-            restart_token.evidence.get("coordinator_port") ==
-            coordinator_token.evidence.get("port") and
-            dmtcp.evidence.get("kernel") == kernel_token.evidence and
-            coordinator_token.evidence["process"].get("environment") ==
-            environment_token.evidence["combined"] and
-            coordinator_token.evidence["process"].get("vdso_sha256") ==
+            restart_observation.evidence.get("coordinator_port") ==
+            coordinator_observation.evidence.get("port") and
+            dmtcp.evidence.get("kernel") == kernel_observation.evidence and
+            coordinator_observation.evidence["process"].get("environment") ==
+            environment_observation.evidence["combined"] and
+            coordinator_observation.evidence["process"].get("vdso_sha256") ==
             dmtcp.evidence["vdso_sha256"] and
-            coordinator_token.evidence["process"].get("kernel") ==
-            kernel_token.evidence and
+            coordinator_observation.evidence["process"].get("kernel") ==
+            kernel_observation.evidence and
             coordinator_process.get("executable") ==
             DMTCP_ROLE_PATHS["coordinator"] and
             coordinator_process.get("executable_device") ==
             dmtcp_roles["coordinator"]["device"] and
             coordinator_process.get("executable_inode") ==
             dmtcp_roles["coordinator"]["inode"] and
-            coordinator_token.evidence.get("exec_gate", {}).get("released") is True and
-            restart_token.evidence.get("exec_gate", {}).get("released") is True and
+            coordinator_observation.evidence.get("exec_gate", {}).get("released") is True and
+            restart_observation.evidence.get("exec_gate", {}).get("released") is True and
             restart_launcher.get("executable") == DMTCP_ROLE_PATHS["restart"] and
             restart_launcher.get("executable_device") ==
             dmtcp_roles["restart"]["device"] and
             restart_launcher.get("executable_inode") ==
             dmtcp_roles["restart"]["inode"] and
             restart_launcher.get("environment") ==
-            environment_token.evidence["combined"] and
+            environment_observation.evidence["combined"] and
             restart_launcher.get("vdso_sha256") ==
             dmtcp.evidence["vdso_sha256"] and
             restart_launcher.get("kernel") ==
-            kernel_token.evidence,
+            kernel_observation.evidence,
             "restart, origin tree, phase, or publication evidence is spliced")
     evidence = {
         "schema": 1,
         "kind": EVIDENCE_KIND,
+        "status": "controller-asserted-unapproved",
         "authentication_scope": CONTROLLER_ASSERTION_SCOPE,
         "challenge_id": challenges["challenge_id"],
         "controller_challenges_sha256": canonical_sha256(challenges),
         "dmtcp_authority": copy.deepcopy(dmtcp.evidence),
-        "environments": copy.deepcopy(environment_token.evidence),
+        "environments": copy.deepcopy(environment_observation.evidence),
         "resource_limits": copy.deepcopy(limits.evidence),
-        "kernel": copy.deepcopy(kernel_token.evidence),
+        "kernel": copy.deepcopy(kernel_observation.evidence),
         "phases": [copy.deepcopy(item.evidence) for item in phase_tokens],
-        "coordinator": copy.deepcopy(coordinator_token.evidence),
+        "coordinator": copy.deepcopy(coordinator_observation.evidence),
         "origin_process_tree": copy.deepcopy(tree.evidence),
         "checkpoint_publication": copy.deepcopy(publication.evidence),
-        "restart": copy.deepcopy(restart_token.evidence),
-        "lifecycle_complete": True,
-        "os_evidence_authenticated": True,
+        "restart": copy.deepcopy(restart_observation.evidence),
+        "unclosed_trust_boundaries": list(UNCLOSED_TRUST_BOUNDARIES),
+        "lifecycle_complete": False,
+        "os_evidence_authenticated": False,
         "runtime_qualified": False,
         "checkpoint_protocol_qualified": False,
         "s2_approved": False,
@@ -2413,4 +2496,131 @@ def assemble_lifecycle_complete_evidence(
         "release_promoted": False,
         "pft_used": False,
     }
-    return evidence
+    evidence["candidate_payload_sha256"] = canonical_sha256(evidence)
+    return validate_unapproved_candidate(evidence)
+
+
+def validate_unapproved_candidate(value: object) -> dict[str, Any]:
+    """Validate the exact canonical fail-closed candidate contract."""
+    fields = {
+        "schema", "kind", "status", "authentication_scope", "challenge_id",
+        "controller_challenges_sha256", "dmtcp_authority", "environments",
+        "resource_limits", "kernel", "phases", "coordinator",
+        "origin_process_tree", "checkpoint_publication", "restart",
+        "unclosed_trust_boundaries", "lifecycle_complete",
+        "os_evidence_authenticated", "runtime_qualified",
+        "checkpoint_protocol_qualified", "s2_approved", "s3_approved",
+        "release_promoted", "pft_used", "candidate_payload_sha256",
+    }
+    require(isinstance(value, dict) and set(value) == fields and
+            type(value.get("schema")) is int and value["schema"] == 1 and
+            value.get("kind") == EVIDENCE_KIND and
+            value.get("status") == "controller-asserted-unapproved" and
+            value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE and
+            value.get("unclosed_trust_boundaries") ==
+            list(UNCLOSED_TRUST_BOUNDARIES) and
+            all(value.get(field) is False for field in (
+                "lifecycle_complete", "os_evidence_authenticated",
+                "runtime_qualified", "checkpoint_protocol_qualified",
+                "s2_approved", "s3_approved", "release_promoted", "pft_used",
+            )), "checkpoint OS candidate overclaims trust or approval")
+    _hex(value.get("challenge_id"), HEX64, "candidate challenge ID")
+    _hex(value.get("controller_challenges_sha256"), HEX64,
+         "candidate challenges SHA-256")
+    dmtcp = value.get("dmtcp_authority")
+    require(isinstance(dmtcp, dict), "candidate DMTCP observation is malformed")
+    for group in ("executables", "injected_libraries", "elf_closure"):
+        items = dmtcp.get(group)
+        require(isinstance(items, list), f"candidate {group} is malformed")
+        for item in items:
+            require(isinstance(item, dict), f"candidate {group} item is malformed")
+            _absolute_to_relative(item.get("path"), f"candidate {group} path")
+    publication = value.get("checkpoint_publication")
+    require(isinstance(publication, dict), "candidate publication is malformed")
+    published_absolute = _absolute_to_relative(
+        publication.get("published_directory"),
+        "candidate held publication path",
+    )
+    published_relative = _safe_relative(
+        publication.get("published_relative_directory"),
+        "candidate relative publication path",
+    )
+    absolute_parts = PurePosixPath(published_absolute).parts
+    relative_parts = PurePosixPath(published_relative).parts
+    require(absolute_parts[-len(relative_parts):] == relative_parts,
+            "candidate absolute publication path omits the direct layout")
+    atomic = publication.get("direct_protocol_atomic_publication")
+    require(isinstance(atomic, dict), "candidate direct publication is malformed")
+    for name in ("staging_path", "published_path"):
+        _safe_relative(atomic.get(name), f"candidate direct {name}")
+    direct_files = publication.get("direct_protocol_image_files")
+    require(isinstance(direct_files, list), "candidate direct image files malformed")
+    for item in direct_files:
+        require(isinstance(item, dict) and set(item) == {
+                    "path", "bytes", "sha256", "md5",
+                } and type(item.get("bytes")) is int and item["bytes"] >= 0,
+                "candidate direct image item malformed")
+        _safe_relative(item.get("path"), "candidate direct image path")
+        _hex(item.get("sha256"), HEX64, "candidate direct image SHA-256")
+        _hex(item.get("md5"), HEX32, "candidate direct image MD5")
+    ordered_images = publication.get("ordered_images")
+    require(isinstance(ordered_images, list) and
+            len(ordered_images) == len(direct_files),
+            "candidate ordered checkpoint images are malformed")
+    for direct, held in zip(direct_files, ordered_images, strict=True):
+        require(isinstance(held, dict) and set(held) == {
+                    "path", "authority", "identity",
+                } and held.get("path") == direct["path"] and
+                isinstance(held.get("authority"), dict) and all(
+                    held["authority"].get(field) == direct[field]
+                    for field in ("bytes", "sha256", "md5")
+                ), "candidate held and direct checkpoint images differ")
+        _safe_relative(held["path"], "candidate held image path")
+    manifest_sha256 = direct_ordered_manifest_sha256(direct_files)
+    require(publication.get("ordered_manifest_sha256") == manifest_sha256 and
+            published_relative == f"checkpoints/{manifest_sha256}" and
+            atomic.get("published_path") == published_relative and
+            PurePosixPath(atomic.get("staging_path", "")).parts[:1] ==
+            ("staging",),
+            "candidate checkpoint manifest or direct layout differs")
+    for phase in value.get("phases", []):
+        require(isinstance(phase, dict), "candidate phase is malformed")
+        for name in ("cadence_file", "event_file"):
+            item = phase.get(name)
+            require(isinstance(item, dict), "candidate phase file is malformed")
+            _safe_relative(item.get("path"), "candidate phase file path")
+        process = phase.get("controller", {}).get("process", {})
+        _absolute_to_relative(
+            process.get("executable"), "candidate phase executable",
+        )
+    restart = value.get("restart")
+    require(isinstance(restart, dict), "candidate restart is malformed")
+    argv = restart.get("ordered_restart_image_argv")
+    require(isinstance(argv, list) and argv,
+            "candidate restart image argv is malformed")
+    for item in argv:
+        _safe_relative(item, "candidate restart image argv")
+    require(argv == [
+                f"{published_relative}/{item['path']}" for item in direct_files
+            ], "candidate restart image argv differs from direct image order")
+    launcher = restart.get("launcher", {}).get("process", {})
+    _absolute_to_relative(
+        launcher.get("executable"), "candidate restart executable",
+    )
+    coordinator = value.get("coordinator", {}).get("process", {})
+    _absolute_to_relative(
+        coordinator.get("executable"), "candidate coordinator executable",
+    )
+    digest = _hex(value.get("candidate_payload_sha256"), HEX64,
+                  "candidate payload SHA-256")
+    payload = copy.deepcopy(value)
+    del payload["candidate_payload_sha256"]
+    require(digest == canonical_sha256(payload),
+            "checkpoint OS candidate payload digest differs")
+    return value
+
+
+def decode_unapproved_candidate(data: bytes) -> dict[str, Any]:
+    return validate_unapproved_candidate(
+        _decode_exact_json(data, "checkpoint OS observation candidate")
+    )
