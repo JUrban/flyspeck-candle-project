@@ -161,6 +161,14 @@ three Python ELF closures and the OCaml lexer toolchain passes.  Under
 - the compatibility discovery passes 63/63 in 6.043 seconds, maximum RSS
   46,076 KiB, zero swaps.
 
+A follow-up critical check found that the direct-runner unit test inherited
+the developer shell's locale even though production requires exact
+`LC_ALL=C`.  It now supplies the production environment to every child
+interpreter at commit `6fad64c` (`Test stratum CLI under its exact locale`).
+The exact test passes from both ordinary and already-sanitized parents, and a
+fresh ordinary full discovery passes 330/330 in 161.277 seconds, maximum RSS
+328,200 KiB, zero swaps.
+
 The unchanged generated corpus authorities also pass their cheap pre-repin
 fixed-point gates on this branch: the manifest closes 297 roots, 400 source
 nodes and 43 generated inputs; the isolated parser controller validates the
@@ -168,7 +176,7 @@ exact 20-input pilot and 400-input all-inventory descriptors.  These checks
 establish source-plan consistency only, not a compiled parser result.
 
 This is a host-tool authority repair, not compiler qualification and not a
-CakeML pin.  The final Candle repin must be based on `b5aa0eb` (or an exact
+CakeML pin.  The final Candle repin must be based on `6fad64c` (or an exact
 reviewed descendant), rather than promoting either the old `688d9d1` authority
 unchanged or stale prepared commit `103691ef`.
 
