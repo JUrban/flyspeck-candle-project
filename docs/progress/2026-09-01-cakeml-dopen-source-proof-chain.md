@@ -506,12 +506,17 @@ eight.  `to_target64Prog` and `from_pancake64Prog` subsequently exported in
 22m48s and 27m32s.  The serial architecture chain then exported `x64Prog`,
 `arm8Prog`, `riscvProg`, and `mipsProg` in 10m50s, 11m38s, 11m48s, and
 13m44s.  The previously overlooked `repl_init_types` dependency exported in
-50.6s; the dependency count is now one and the final `compiler64Prog`
-translation is active.  The large parser peaked near 31 GiB RSS;
-combined cold replay plus the separate PFT oracle remained near or below
-70 GiB, so the exceptional 120-GiB allowance was not needed.  This is a live
-interim milestone only: stage 2, the x64 bootstrap, the x64 proof, the terminal
-manifest, and the public gate all remain pending.
+50.6s.  The final `compiler64Prog` theory then exported in 51m55s after saving
+the direct-parser translation theorem, the diagnostic success/error and
+capability whole-program specifications, their exact semantic theorems, and
+the ordinary compiler semantics theorem.  Stage 2 therefore passed after
+11h32m20s total wall time with exit status zero, 45,163,852 KiB maximum RSS,
+and no swaps.  The large parser peaked near 31 GiB RSS; the measured stage-2
+maximum plus the separate PFT oracle was about 81.9 GiB RSS, within the
+exceptional 120-GiB allowance.  The controller has advanced to the cold
+`x64BootstrapTheory.uo` stage with about 186 GiB host memory available at the
+transition.  This is a live interim milestone only: the x64 bootstrap, the
+x64 proof, the terminal manifest, and the public gate all remain pending.
 
 ### Post-terminal repin handoff audit
 
