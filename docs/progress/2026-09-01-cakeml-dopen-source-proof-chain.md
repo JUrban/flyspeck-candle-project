@@ -209,14 +209,35 @@ declared rather than measured.  Concrete counterexamples included a changed
 boundary-action hash, `origin_process.reaped=false`, and a second "clean"
 capture distinguished only by a fabricated receipt hash.
 
-The checkpoint path therefore remains blocked pending full-validator calls,
-externally bound authorities/challenges, actually distinct authenticated clean
-captures, restart/image/process evidence, measured resource evidence, and
-coherent-splice regressions.  Real DMTCP installation and trust closure, an OS
-authenticator using anchored no-follow file access and restart-time rehashing,
-and a linked-runtime controller/finalizer remain subsequent execution work.
-The user-authorized 120-GiB exceptional memory allowance does not relax any of
-these evidence requirements or the parser consumers' exact 16-GiB limit.
+Follow-up commit `0aa0dd9` closes those P1 paths in the fail-closed value
+protocol.  Process and resume records now invoke the full plan/checkpoint
+source-chain validators.  Each clean candidate carries a raw schema-6 receipt,
+authenticated plan, expected external authority, predeclared attempt nonce,
+and challenge-bound controller measurement; the two receipt, capture, and
+attempt identities must all differ.  The externally supplied challenge also
+precommits the plan, diagnostic pilot, DMTCP authority, resource limits,
+environments, nonces, and tokens.  Restart, image, coordinator/process,
+zero-prefix-replay, raw suffix-event, READY/RESUMED, address-space, RSS, disk,
+and sampling-cadence records are now bound through the comparison.
+
+The expanded protocol suite passes 49/49 in both `C.UTF-8` and exact
+production `C` locales (73.101 and 72.081 seconds); the unchanged published
+result suite passes 18/18.  Bytecode and diff checks pass.  A second hostile
+review reran five focused coherent-splice/escalation tests and found no
+remaining P0/P1 in this deliberately unapproved protocol.
+
+This still does **not** qualify checkpoint/resume.  A pure record can clone one
+physical run into two nonce-distinct assertions, and the current DMTCP,
+filesystem, process, measurement, and suffix facts are controller assertions.
+The schemas therefore require `runtime_qualified=false`,
+`os_evidence_authenticated=false`, and anchored no-follow claims false, as
+well as all promotion and PFT flags false.  A separate OS authenticator must
+bind challenges to distinct live process identities and immutable raw logs,
+authenticate DMTCP/ELF/kernel/image inputs through anchored file descriptors,
+and supply raw cadence/restart/process-tree evidence before a finalizer may
+qualify the result.  The user-authorized 120-GiB exceptional memory allowance
+does not relax any evidence requirement or the parser consumers' exact
+16-GiB limit.
 
 ## Candle host-runtime identity refresh
 
