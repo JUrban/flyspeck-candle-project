@@ -96,6 +96,45 @@ parallel retries would only have multiplied a malformed search.  The release
 gate therefore remains a pristine cold replay even though warm products are
 useful for diagnosis.
 
+## External speed-advice assessment
+
+The supplied `docs/advice/external-advice-speed.md` (SHA-256
+`01b0a59abe465d10113e5370926784ef1526eff609304a42e2b687830fc48288`)
+contains useful engineering advice, but its proposals do not all have the
+same evidence or fit the current qualification boundary:
+
+- **Adopt now:** keep the 20-input pilot ahead of the 400-input inventory,
+  batch frontend failures before another release build, and reuse exact-head
+  products in the same development worktree.  These measures avoid expensive
+  iterations without weakening the final clean replay.
+- **Benchmark only in development:** `Holmake -j2` or `-j4` may shorten the
+  independent portions of a future traversal.  It cannot accelerate a single
+  large HOL process, and the accepted cold controller is deliberately frozen
+  at `-j1 --mt=1`; changing it during this replay would destroy the authority
+  of the run.  Any parallel release controller needs its own measured memory
+  envelope and independent review.
+- **Defer cross-worktree caching:** a content-addressed cache is attractive,
+  but a trustworthy key must close over theory sources, generated products,
+  the complete dependency graph, HOL4, Poly/ML, host tools, and build flags.
+  Same-worktree incremental products already provide the safe near-term gain;
+  an unauthenticated shared cache is not release evidence.
+- **Use frontend gates at the earliest honest point:** source-plan and static
+  checks can run before the bootstrap, but the new compiled CakeML
+  parser/inferencer does not exist until the first parser-capable runtime is
+  bootstrapped and linked.  Thereafter the 20/400 gates should protect every
+  later expensive whole-corpus iteration.
+- **Defer x64-only specialization and theory splitting:** the present
+  `compiler64Prog` closure deliberately includes shared multi-target compiler
+  definitions, while the x64 bootstrap/proof targets are already
+  architecture-specific.  Proving a smaller verified compiler or refactoring
+  giant theories may pay off over months, but each is a separate proof project
+  and is not on the shortest path to the first usable Flyspeck runtime.
+
+The suggested two-to-three-hour clean build is therefore a hypothesis worth a
+later controlled benchmark, not a planning assumption.  Current measurements
+show a 4h51m warm translation traversal and a prior cold traversal that reached
+a final source error after 11h10m; the serial critical path dominates both.
+
 ## Warm attempt 004 and consumer-proof repair
 
 Warm regression attempt 004 ran at:
