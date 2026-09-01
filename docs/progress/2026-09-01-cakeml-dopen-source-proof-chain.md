@@ -135,6 +135,37 @@ later controlled benchmark, not a planning assumption.  Current measurements
 show a 4h51m warm translation traversal and a prior cold traversal that reached
 a final source error after 11h10m; the serial critical path dominates both.
 
+## Candle host-runtime identity refresh
+
+A sanitized baseline test of the prepared Candle pin exposed two independent
+host-contract failures before the CakeML repin.  The fail-closed checks were
+working as designed: `/lib/x86_64-linux-gnu/libz.so.1.3` retained its path and
+113,000-byte size but changed SHA-256 from `9b64150b...` to `86200da3...`, and
+the regenerated `/etc/ld.so.cache` changed SHA-256 from `0971c6df...` to
+`98c3f425...`.  In addition, the exact documented `env -i ... LC_ALL=C`
+Python launch observes `utf8_mode=1`; the direct-stratum and float-performance
+controllers incorrectly pinned `0`.  The parser-diagnostic controller already
+pinned the observed value correctly.
+
+The independent Candle branch `codex/flyspeck-v13-host-runtime-refresh`, based
+on clean authority `688d9d1738a7021501f95b6f0ed788e014fa726f`, deliberately
+refreshes those four bounded host records at commit
+`b5aa0eb` (`Refresh pinned host runtime identities`).  Exact validation of all
+three Python ELF closures and the OCaml lexer toolchain passes.  Under
+`PATH=/usr/bin:/bin`, `LC_ALL=C`, and an otherwise empty environment:
+
+- the two originally failing direct-stratum regressions pass 2/2;
+- focused Python/float compatibility tests pass 41/41;
+- the main lightweight Candle discovery passes 330/330 in 160.393 seconds,
+  maximum RSS 324,224 KiB, zero swaps; and
+- the compatibility discovery passes 63/63 in 6.043 seconds, maximum RSS
+  46,076 KiB, zero swaps.
+
+This is a host-tool authority repair, not compiler qualification and not a
+CakeML pin.  The final Candle repin must be based on `b5aa0eb` (or an exact
+reviewed descendant), rather than promoting either the old `688d9d1` authority
+unchanged or stale prepared commit `103691ef`.
+
 ## Warm attempt 004 and consumer-proof repair
 
 Warm regression attempt 004 ran at:
