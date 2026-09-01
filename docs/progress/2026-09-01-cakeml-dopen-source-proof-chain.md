@@ -500,8 +500,10 @@ dependency count has since fallen from 25 to 12.  `inferProg` passed in
 41m29s, saving the cold `open_ienv_v_thm` and `infer_open_v_thm` before the
 declaration-inference translation and theory export.  `explorerProg`,
 `decodeProg`, `sexp_parserProg`, `basis_defProg`, and `printingProg` then
-exported in 8m49s, 8m43s, 7m07s, 15m14s, and 3m54s.  `to_word64Prog` is active
-with nine dependencies remaining.  The large parser peaked near 31 GiB RSS;
+exported in 8m49s, 8m43s, 7m07s, 15m14s, and 3m54s.  `to_word64Prog` then
+exported successfully in 48m15s, reducing the dependency count from nine to
+eight, and `to_target64Prog` started cleanly.  The large parser peaked near 31
+GiB RSS;
 combined cold replay plus the separate PFT oracle remained near or below
 70 GiB, so the exceptional 120-GiB allowance was not needed.  This is a live
 interim milestone only: stage 2, the x64 bootstrap, the x64 proof, the terminal
