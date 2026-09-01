@@ -1,10 +1,11 @@
 #!/usr/bin/python3
-"""Strict pure projections for the direct Flyspeck release protocol.
+"""Strict pure values for the direct Flyspeck release protocol.
 
 This module does not authenticate a runtime result and never approves S2, S3,
-or a release.  It defines strict nonce-free semantic and coverage values for a
-later independent approval validator to compare after it has authenticated the
-captured final-boundary observations from which they were projected.
+or a release.  It defines nonce-free semantic/coverage projections and strict
+checkpoint/resume values for later independent authenticators.  Every builder
+binds caller-supplied source values by content; none treats an embedded digest
+or a self-consistent JSON object as authentication of those source values.
 """
 
 from __future__ import annotations
@@ -69,6 +70,59 @@ AUTHENTICATED_CAPTURE_KIND = (
 AUTHENTICATED_CAPTURE_POLICY = (
     "descriptor-held-schema6-revalidation-and-content-bound-projections-v2"
 )
+CHECKPOINT_ATTEMPT_PLAN_KIND = (
+    "candle-flyspeck-checkpoint-attempt-plan-v1"
+)
+CHECKPOINT_ATTEMPT_PLAN_POLICY = (
+    "predeclared-half-action-time-cooperative-dmtcp-boundary-v1"
+)
+CHECKPOINT_DIAGNOSTIC_PILOT_KIND = (
+    "candle-flyspeck-checkpoint-diagnostic-pilot-v1"
+)
+PROCESS_CHECKPOINT_KIND = "candle-flyspeck-process-checkpoint-v1"
+PROCESS_CHECKPOINT_POLICY = (
+    "live-ready-observation-atomic-content-addressed-dmtcp-images-v1"
+)
+RESUME_ATTEMPT_KIND = "candle-flyspeck-resume-attempt-v1"
+RESUME_ATTEMPT_POLICY = (
+    "two-clean-one-resumed-exact-projection-and-resource-comparison-v1"
+)
+AUTHENTICATED_RESUMED_RESULT_KIND = (
+    "candle-flyspeck-authenticated-resumed-result-v1"
+)
+DMTCP_AUTHORITY_KIND = "candle-flyspeck-dmtcp-authority-v1"
+DMTCP_VERSION = "4.1.0"
+DMTCP_EXECUTABLE_ROLES = (
+    "command", "coordinator", "launch", "restart",
+)
+CHECKPOINT_ENVIRONMENT_POLICY = (
+    "clean-runtime-plus-exact-dmtcp-and-injected-library-environment-v1"
+)
+CHECKPOINT_ALLOWED_ENVIRONMENT_NAMES = (
+    "CML_HEAP_SIZE", "CML_STACK_SIZE", "DMTCP_CHECKPOINT_DIR",
+    "DMTCP_COORD_PORT", "DMTCP_GZIP", "DMTCP_QUIET", "LC_ALL",
+    "LD_PRELOAD", "PATH",
+)
+CHECKPOINT_FORBIDDEN_ENVIRONMENT_NAMES = (
+    "BASH_ENV", "ENV", "GLIBC_TUNABLES", "LD_AUDIT", "LD_LIBRARY_PATH",
+)
+CHECKPOINT_READY_PREFIX = "CANDLE_FLYSPECK_CHECKPOINT_READY_V1"
+CHECKPOINT_RESUMED_PREFIX = "CANDLE_FLYSPECK_CHECKPOINT_RESUMED_V1"
+CHECKPOINT_HANDSHAKE_POLICY = (
+    "flushed-live-ready-block-checkpoint-kill-fresh-token-resumed-v1"
+)
+CHECKPOINT_TIMING_POLICY = (
+    "monotonic-controller-through-final-validation-process-tree-v1"
+)
+CHECKPOINT_SELECTION_POLICY = (
+    "first-nonfinal-action-at-or-after-half-diagnostic-action-time-v1"
+)
+RESUME_SAVINGS_NUMERATOR = 3
+RESUME_SAVINGS_DENOMINATOR = 4
+EXCEPTIONAL_MEMORY_CEILING_BYTES = 120 * 1024 * 1024 * 1024
+EXCEPTIONAL_MEMORY_CEILING_KIB = 120 * 1024 * 1024
+CHECKPOINT_IMAGE_CEILING_BYTES = 120 * 1024 * 1024 * 1024
+CHECKPOINT_DISK_CEILING_BYTES = 240 * 1024 * 1024 * 1024
 COMPILED_DIRECT_CANDIDATE_KIND = AUTHENTICATED_CAPTURE_KIND
 INDEPENDENT_COMPARISON_KIND = (
     "candle-flyspeck-independent-direct-comparison-v2"
@@ -2072,6 +2126,1352 @@ def _validate_content_record(value: object, label: str) -> dict[str, Any]:
 def _same_canonical_value(left: object, right: object) -> bool:
     """Compare already validated JSON values without Python bool/int aliasing."""
     return canonical_value_bytes(left) == canonical_value_bytes(right)
+
+
+def _validate_unapproved_flags(value: dict[str, Any], label: str) -> None:
+    require(
+        value.get("promotion") is False and
+        value.get("approval_included") is False and
+        value.get("direct_s2_execution_approved") is False and
+        value.get("direct_s3_coverage_approved") is False and
+        value.get("v1_3_s3_release_approved") is False and
+        value.get("pft_used") is False and
+        value.get("s2_s3_evidence") is False,
+        f"{label} must remain categorically unapproved and PFT-free",
+    )
+
+
+def _validate_absolute_path(value: object, label: str) -> str:
+    require(
+        isinstance(value, str) and value.startswith("/") and
+        "\\" not in value and ":" not in value and
+        all(ord(character) >= 32 and character != "\x7f"
+            for character in value),
+        f"malformed {label}",
+    )
+    path = Path(value)
+    require(
+        path.is_absolute() and path.as_posix() == value and
+        all(part not in {"", ".", ".."} for part in path.parts[1:]),
+        f"unsafe {label}",
+    )
+    return _no_pft_namespace(value, label)
+
+
+def _validate_dmtcp_authority(value: object) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "version", "executables", "injected_libraries",
+        "elf_closure", "kernel_trust", "environment_policy",
+        "allowed_environment_names", "forbidden_environment_names",
+        "pft_used",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == DMTCP_AUTHORITY_KIND and
+        value.get("version") == DMTCP_VERSION and
+        value.get("environment_policy") == CHECKPOINT_ENVIRONMENT_POLICY and
+        value.get("allowed_environment_names") ==
+        list(CHECKPOINT_ALLOWED_ENVIRONMENT_NAMES) and
+        value.get("forbidden_environment_names") ==
+        list(CHECKPOINT_FORBIDDEN_ENVIRONMENT_NAMES) and
+        value.get("pft_used") is False,
+        "malformed direct DMTCP authority",
+    )
+    executables = value.get("executables")
+    require(
+        isinstance(executables, list) and
+        [item.get("role") if isinstance(item, dict) else None
+         for item in executables] == list(DMTCP_EXECUTABLE_ROLES),
+        "DMTCP executable authority is not the exact canonical role set",
+    )
+    for index, item in enumerate(executables):
+        require(
+            isinstance(item, dict) and set(item) == {
+                "role", "path", "bytes", "sha256", "md5",
+            },
+            f"malformed DMTCP executable record: {index}",
+        )
+        _validate_absolute_path(item.get("path"),
+                                f"DMTCP executable path: {index}")
+        _validate_content_record(
+            {field: item[field] for field in ("bytes", "sha256", "md5")},
+            f"DMTCP executable: {index}",
+        )
+    libraries = value.get("injected_libraries")
+    require(isinstance(libraries, list) and libraries,
+            "DMTCP injected-library authority is empty")
+    previous: str | None = None
+    for index, item in enumerate(libraries):
+        require(
+            isinstance(item, dict) and set(item) == {
+                "path", "bytes", "sha256", "md5",
+            },
+            f"malformed DMTCP injected-library record: {index}",
+        )
+        path = _validate_absolute_path(
+            item.get("path"), f"DMTCP injected-library path: {index}",
+        )
+        require(path.endswith(".so") and (previous is None or previous < path),
+                "DMTCP injected-library inventory is not canonical")
+        previous = path
+        _validate_content_record(
+            {field: item[field] for field in ("bytes", "sha256", "md5")},
+            f"DMTCP injected library: {index}",
+        )
+    _validate_content_record(value.get("elf_closure"), "DMTCP ELF closure")
+    kernel = value.get("kernel_trust")
+    require(
+        isinstance(kernel, dict) and set(kernel) == {
+            "policy", "release", "machine", "vdso_sha256",
+        } and kernel.get("policy") == "same-boot-pinned-kernel-vdso-v1" and
+        kernel.get("machine") == "x86_64",
+        "malformed DMTCP kernel trust declaration",
+    )
+    _validate_printable_label(kernel.get("release"), "DMTCP kernel release")
+    _hex(kernel.get("vdso_sha256"), HEX64, "DMTCP vDSO SHA-256")
+    return value
+
+
+def _validate_checkpoint_resource_limits(value: object) -> dict[str, Any]:
+    fields = {
+        "max_address_space_bytes", "max_aggregate_rss_kib",
+        "max_checkpoint_image_bytes", "max_retained_disk_bytes",
+        "sampling_interval_milliseconds",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        all(type(value.get(field)) is int and value[field] > 0
+            for field in fields),
+        "malformed checkpoint resource limits",
+    )
+    require(
+        value["max_address_space_bytes"] <= EXCEPTIONAL_MEMORY_CEILING_BYTES and
+        value["max_aggregate_rss_kib"] <= EXCEPTIONAL_MEMORY_CEILING_KIB and
+        value["max_checkpoint_image_bytes"] <=
+        CHECKPOINT_IMAGE_CEILING_BYTES and
+        value["max_retained_disk_bytes"] <= CHECKPOINT_DISK_CEILING_BYTES and
+        value["max_checkpoint_image_bytes"] <=
+        value["max_retained_disk_bytes"] and
+        10 <= value["sampling_interval_milliseconds"] <= 60_000,
+        "checkpoint resource limits exceed the fixed qualification envelope",
+    )
+    return value
+
+
+def _validate_clean_runtime_environment(value: object) -> dict[str, str]:
+    require(
+        isinstance(value, dict) and
+        set(value) >= {"LC_ALL", "PATH"} and
+        set(value) <= {"LC_ALL", "PATH", "CML_HEAP_SIZE", "CML_STACK_SIZE"} and
+        value.get("LC_ALL") == "C" and value.get("PATH") == "/usr/bin:/bin" and
+        all(isinstance(item, str) for item in value.values()) and
+        all(re.fullmatch(r"[1-9][0-9]*", value[name]) is not None
+            for name in ("CML_HEAP_SIZE", "CML_STACK_SIZE") if name in value),
+        "malformed clean checkpoint runtime environment",
+    )
+    return value
+
+
+def _validate_checkpoint_environment(
+    value: object, dmtcp_authority: dict[str, Any],
+) -> dict[str, str]:
+    fields = {
+        "DMTCP_CHECKPOINT_DIR", "DMTCP_COORD_PORT", "DMTCP_GZIP",
+        "DMTCP_QUIET", "LD_PRELOAD",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        all(isinstance(item, str) for item in value.values()),
+        "malformed exact checkpoint-mode environment",
+    )
+    _safe_relative(value["DMTCP_CHECKPOINT_DIR"],
+                   "DMTCP checkpoint directory")
+    port = value["DMTCP_COORD_PORT"]
+    require(
+        re.fullmatch(r"[1-9][0-9]*", port) is not None and
+        1 <= int(port) <= 65535 and value["DMTCP_GZIP"] in {"0", "1"} and
+        value["DMTCP_QUIET"] in {"0", "1", "2"},
+        "malformed exact DMTCP checkpoint settings",
+    )
+    expected_preload = ":".join(
+        item["path"] for item in dmtcp_authority["injected_libraries"]
+    )
+    require(value["LD_PRELOAD"] == expected_preload,
+            "checkpoint LD_PRELOAD differs from authenticated DMTCP libraries")
+    return value
+
+
+def _validate_checkpoint_plan_actions(
+    authenticated_plan: object,
+) -> list[dict[str, Any]]:
+    require(
+        isinstance(authenticated_plan, dict) and
+        type(authenticated_plan.get("action_count")) is int and
+        authenticated_plan["action_count"] == FINAL_ACTION_COUNT and
+        isinstance(authenticated_plan.get("actions"), list) and
+        len(authenticated_plan["actions"]) == FINAL_ACTION_COUNT and
+        authenticated_plan.get("ordered_action_sha256") ==
+        canonical_sha256(authenticated_plan["actions"]),
+        "checkpoint plan source is not the exact 297-action plan",
+    )
+    actions = authenticated_plan["actions"]
+    for index, action in enumerate(actions):
+        require(
+            isinstance(action, dict) and type(action.get("index")) is int and
+            action["index"] == index,
+            f"malformed checkpoint plan action: {index}",
+        )
+        _validate_logical_source_key(
+            action.get("selected_source"),
+            f"checkpoint plan selected source: {index}",
+        )
+        _hex(action.get("source_sha256"), HEX64,
+             f"checkpoint plan source SHA-256: {index}")
+        _hex(action.get("source_md5"), HEX32,
+             f"checkpoint plan source MD5: {index}")
+    return actions
+
+
+def _checkpoint_action_projection(action: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "index": action["index"],
+        "selected_source": action["selected_source"],
+        "source_sha256": action["source_sha256"],
+        "source_md5": action["source_md5"],
+    }
+
+
+def _validate_checkpoint_diagnostic_pilot(
+    value: object, authenticated_plan: object,
+) -> list[int]:
+    fields = {
+        "schema", "kind", "authenticated_plan", "attempt_nonce",
+        "diagnostic_only", "clock", "action_elapsed_ns",
+        "full_action_elapsed_ns", "resource_sampling_complete",
+        "promotion", "pft_used",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == CHECKPOINT_DIAGNOSTIC_PILOT_KIND and
+        value.get("authenticated_plan") == _content_record(authenticated_plan) and
+        value.get("diagnostic_only") is True and
+        value.get("clock") == "CLOCK_MONOTONIC" and
+        value.get("resource_sampling_complete") is True and
+        value.get("promotion") is False and value.get("pft_used") is False,
+        "malformed or plan-spliced checkpoint diagnostic pilot",
+    )
+    _hex(value.get("attempt_nonce"), HEX32,
+         "checkpoint diagnostic-pilot nonce")
+    elapsed = value.get("action_elapsed_ns")
+    require(
+        isinstance(elapsed, list) and len(elapsed) == FINAL_ACTION_COUNT and
+        all(type(item) is int and item > 0 for item in elapsed) and
+        all(left < right for left, right in zip(elapsed, elapsed[1:])) and
+        type(value.get("full_action_elapsed_ns")) is int and
+        value["full_action_elapsed_ns"] == elapsed[-1],
+        "checkpoint diagnostic-pilot timing is incomplete or nonmonotonic",
+    )
+    return elapsed
+
+
+def _derive_checkpoint_boundary(
+    actions: list[dict[str, Any]], elapsed: list[int],
+) -> dict[str, Any]:
+    total = elapsed[-1]
+    eligible = [
+        index for index, item in enumerate(elapsed[:-1])
+        if 2 * item >= total
+    ]
+    require(eligible,
+            "diagnostic pilot has no nonfinal half-time checkpoint boundary")
+    selected = eligible[0]
+    require(0 <= selected < FINAL_ACTION_COUNT - 1,
+            "checkpoint boundary is not nonfinal")
+    return {
+        "selection_policy": CHECKPOINT_SELECTION_POLICY,
+        "action_index": selected,
+        "completed_action_count": selected + 1,
+        "action": _checkpoint_action_projection(actions[selected]),
+        "next_action": _checkpoint_action_projection(actions[selected + 1]),
+    }
+
+
+def _checkpoint_handshake_contract() -> dict[str, Any]:
+    return {
+        "policy": CHECKPOINT_HANDSHAKE_POLICY,
+        "ready_marker_prefix": CHECKPOINT_READY_PREFIX,
+        "resumed_marker_prefix": CHECKPOINT_RESUMED_PREFIX,
+        "control_channel": "dedicated-inherited-line-channel-v1",
+        "ready_flush_required": True,
+        "live_controller_observation_required": True,
+        "block_before_next_action": True,
+        "fresh_resume_nonce_and_token_required": True,
+    }
+
+
+def _checkpoint_timing_contract() -> dict[str, Any]:
+    return {
+        "policy": CHECKPOINT_TIMING_POLICY,
+        "wall_clock": "CLOCK_MONOTONIC",
+        "cpu_scope": "owned-process-tree-user-plus-system-nanoseconds",
+        "wall_scope": "controller-launch-or-restart-through-final-validation",
+        "clean_attempt_count": 2,
+        "resume_attempt_count": 1,
+        "baseline": "minimum-of-two-distinct-clean-attempts",
+        "savings_numerator": RESUME_SAVINGS_NUMERATOR,
+        "savings_denominator": RESUME_SAVINGS_DENOMINATOR,
+        "integer_cross_multiplication": True,
+        "rss_and_disk_sampling_required": True,
+    }
+
+
+CHECKPOINT_UNAPPROVED_FIELDS = {
+    "promotion", "approval_included", "direct_s2_execution_approved",
+    "direct_s3_coverage_approved", "v1_3_s3_release_approved", "pft_used",
+    "s2_s3_evidence",
+}
+
+
+def validate_checkpoint_attempt_plan(
+    value: object, *, authenticated_plan: object,
+    diagnostic_pilot: object, dmtcp_authority: object,
+) -> dict[str, Any]:
+    """Validate a pre-attempt policy value against separately supplied inputs."""
+    fields = {
+        "schema", "kind", "policy", "state", "authenticated_plan",
+        "diagnostic_pilot", "dmtcp_authority", "final_boundary_id",
+        "final_action_count", "checkpoint_boundary", "handshake",
+        "timing_policy", "resource_limits", "runtime_environment",
+        "checkpoint_environment", *CHECKPOINT_UNAPPROVED_FIELDS,
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == CHECKPOINT_ATTEMPT_PLAN_KIND and
+        value.get("policy") == CHECKPOINT_ATTEMPT_PLAN_POLICY and
+        value.get("state") == "predeclared-before-release-attempt" and
+        value.get("final_boundary_id") == FINAL_BOUNDARY_ID and
+        type(value.get("final_action_count")) is int and
+        value["final_action_count"] == FINAL_ACTION_COUNT,
+        "malformed checkpoint attempt plan",
+    )
+    _validate_unapproved_flags(value, "checkpoint attempt plan")
+    authority = _validate_dmtcp_authority(dmtcp_authority)
+    actions = _validate_checkpoint_plan_actions(authenticated_plan)
+    elapsed = _validate_checkpoint_diagnostic_pilot(
+        diagnostic_pilot, authenticated_plan,
+    )
+    require(
+        value["authenticated_plan"] == _content_record(authenticated_plan) and
+        value["diagnostic_pilot"] == _content_record(diagnostic_pilot) and
+        value["dmtcp_authority"] == _content_record(authority),
+        "checkpoint attempt plan differs from authenticated source inputs",
+    )
+    require(
+        _same_canonical_value(
+            value.get("checkpoint_boundary"),
+            _derive_checkpoint_boundary(actions, elapsed),
+        ) and value.get("handshake") == _checkpoint_handshake_contract() and
+        value.get("timing_policy") == _checkpoint_timing_contract(),
+        "checkpoint boundary, handshake, or timing policy drift",
+    )
+    _validate_checkpoint_resource_limits(value.get("resource_limits"))
+    _validate_clean_runtime_environment(value.get("runtime_environment"))
+    _validate_checkpoint_environment(value.get("checkpoint_environment"),
+                                     authority)
+    return value
+
+
+def build_checkpoint_attempt_plan(
+    authenticated_plan: object, diagnostic_pilot: object,
+    dmtcp_authority: object, resource_limits: object,
+    runtime_environment: object, checkpoint_environment: object,
+) -> dict[str, Any]:
+    authority = copy.deepcopy(_validate_dmtcp_authority(dmtcp_authority))
+    actions = _validate_checkpoint_plan_actions(authenticated_plan)
+    elapsed = _validate_checkpoint_diagnostic_pilot(
+        diagnostic_pilot, authenticated_plan,
+    )
+    _validate_checkpoint_resource_limits(resource_limits)
+    _validate_clean_runtime_environment(runtime_environment)
+    _validate_checkpoint_environment(checkpoint_environment, authority)
+    value = {
+        "schema": 1,
+        "kind": CHECKPOINT_ATTEMPT_PLAN_KIND,
+        "policy": CHECKPOINT_ATTEMPT_PLAN_POLICY,
+        "state": "predeclared-before-release-attempt",
+        "authenticated_plan": _content_record(authenticated_plan),
+        "diagnostic_pilot": _content_record(diagnostic_pilot),
+        "dmtcp_authority": _content_record(authority),
+        "final_boundary_id": FINAL_BOUNDARY_ID,
+        "final_action_count": FINAL_ACTION_COUNT,
+        "checkpoint_boundary": _derive_checkpoint_boundary(actions, elapsed),
+        "handshake": _checkpoint_handshake_contract(),
+        "timing_policy": _checkpoint_timing_contract(),
+        "resource_limits": copy.deepcopy(resource_limits),
+        "runtime_environment": copy.deepcopy(runtime_environment),
+        "checkpoint_environment": copy.deepcopy(checkpoint_environment),
+        "promotion": False,
+        "approval_included": False,
+        "direct_s2_execution_approved": False,
+        "direct_s3_coverage_approved": False,
+        "v1_3_s3_release_approved": False,
+        "pft_used": False,
+        "s2_s3_evidence": False,
+    }
+    return validate_checkpoint_attempt_plan(
+        value, authenticated_plan=authenticated_plan,
+        diagnostic_pilot=diagnostic_pilot, dmtcp_authority=authority,
+    )
+
+
+def _validate_checkpoint_plan_envelope(value: object) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "policy", "state", "authenticated_plan",
+        "diagnostic_pilot", "dmtcp_authority", "final_boundary_id",
+        "final_action_count", "checkpoint_boundary", "handshake",
+        "timing_policy", "resource_limits", "runtime_environment",
+        "checkpoint_environment", *CHECKPOINT_UNAPPROVED_FIELDS,
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == CHECKPOINT_ATTEMPT_PLAN_KIND and
+        value.get("policy") == CHECKPOINT_ATTEMPT_PLAN_POLICY and
+        value.get("state") == "predeclared-before-release-attempt" and
+        value.get("final_boundary_id") == FINAL_BOUNDARY_ID and
+        type(value.get("final_action_count")) is int and
+        value["final_action_count"] == FINAL_ACTION_COUNT,
+        "malformed authenticated checkpoint plan envelope",
+    )
+    _validate_unapproved_flags(value, "authenticated checkpoint plan")
+    for field in ("authenticated_plan", "diagnostic_pilot", "dmtcp_authority"):
+        _validate_content_record(value.get(field),
+                                 f"checkpoint plan {field}")
+    boundary = value.get("checkpoint_boundary")
+    require(
+        isinstance(boundary, dict) and set(boundary) == {
+            "selection_policy", "action_index", "completed_action_count",
+            "action", "next_action",
+        } and boundary.get("selection_policy") ==
+        CHECKPOINT_SELECTION_POLICY and
+        type(boundary.get("action_index")) is int and
+        0 <= boundary["action_index"] < FINAL_ACTION_COUNT - 1 and
+        type(boundary.get("completed_action_count")) is int and
+        boundary["completed_action_count"] == boundary["action_index"] + 1,
+        "malformed authenticated checkpoint boundary",
+    )
+    for offset, field in enumerate(("action", "next_action")):
+        action = boundary.get(field)
+        expected_index = boundary["action_index"] + offset
+        require(
+            isinstance(action, dict) and set(action) == {
+                "index", "selected_source", "source_sha256", "source_md5",
+            } and type(action.get("index")) is int and
+            action["index"] == expected_index,
+            f"malformed checkpoint boundary {field}",
+        )
+        _validate_logical_source_key(
+            action.get("selected_source"), f"checkpoint boundary {field}",
+        )
+        _hex(action.get("source_sha256"), HEX64,
+             f"checkpoint boundary {field} SHA-256")
+        _hex(action.get("source_md5"), HEX32,
+             f"checkpoint boundary {field} MD5")
+    require(value.get("handshake") == _checkpoint_handshake_contract() and
+            value.get("timing_policy") == _checkpoint_timing_contract(),
+            "authenticated checkpoint policy contract drift")
+    _validate_checkpoint_resource_limits(value.get("resource_limits"))
+    _validate_clean_runtime_environment(value.get("runtime_environment"))
+    return value
+
+
+def _validate_checkpoint_origin_attempt(
+    value: object, checkpoint_plan: dict[str, Any],
+    dmtcp_authority: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "state", "attempt_nonce", "boundary_id",
+        "action_count", "checkpoint_attempt_plan", "dmtcp_authority",
+        "process_state_checkpoint", "promotion", "approval_included",
+        "pft_used", "s2_s3_evidence",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") ==
+        "candle-flyspeck-checkpointable-full-attempt-v1" and
+        value.get("state") == "running-at-predeclared-checkpoint" and
+        value.get("boundary_id") == FINAL_BOUNDARY_ID and
+        type(value.get("action_count")) is int and
+        value["action_count"] == FINAL_ACTION_COUNT and
+        value.get("checkpoint_attempt_plan") ==
+        _content_record(checkpoint_plan) and
+        value.get("dmtcp_authority") == _content_record(dmtcp_authority) and
+        value.get("process_state_checkpoint") == "capture-pending" and
+        value.get("promotion") is False and
+        value.get("approval_included") is False and
+        value.get("pft_used") is False and
+        value.get("s2_s3_evidence") is False,
+        "malformed or plan-spliced checkpoint origin attempt",
+    )
+    _hex(value.get("attempt_nonce"), HEX32,
+         "checkpoint origin-attempt nonce")
+    return value
+
+
+def _ready_marker(
+    origin_nonce: str, checkpoint_token: str, boundary: dict[str, Any],
+) -> str:
+    action = boundary["action"]
+    next_action = boundary["next_action"]
+    return (
+        f"{CHECKPOINT_READY_PREFIX} {origin_nonce} {checkpoint_token} "
+        f"{action['index']:03d} {action['source_sha256']} "
+        f"{next_action['index']:03d} {next_action['source_sha256']}"
+    )
+
+
+def _validate_ready_observation(
+    value: object, checkpoint_plan: dict[str, Any], origin_nonce: str,
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "origin_attempt_nonce", "checkpoint_token",
+        "action_index", "completed_action_count", "source_sha256",
+        "next_action_index", "next_source_sha256", "ready_marker",
+        "marker_count", "stream_byte_offset", "observed_monotonic_ns",
+        "live_controller_observation", "flushed_before_observation",
+        "blocked_before_next_action", "next_action_observed", "pft_used",
+    }
+    boundary = checkpoint_plan["checkpoint_boundary"]
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") ==
+        "candle-flyspeck-live-checkpoint-ready-observation-v1" and
+        value.get("origin_attempt_nonce") == origin_nonce and
+        type(value.get("action_index")) is int and
+        value["action_index"] == boundary["action_index"] and
+        type(value.get("completed_action_count")) is int and
+        value["completed_action_count"] == boundary["completed_action_count"] and
+        value.get("source_sha256") == boundary["action"]["source_sha256"] and
+        type(value.get("next_action_index")) is int and
+        value["next_action_index"] == boundary["next_action"]["index"] and
+        value.get("next_source_sha256") ==
+        boundary["next_action"]["source_sha256"] and
+        type(value.get("marker_count")) is int and
+        value["marker_count"] == 1 and
+        type(value.get("stream_byte_offset")) is int and
+        value["stream_byte_offset"] >= 0 and
+        type(value.get("observed_monotonic_ns")) is int and
+        value["observed_monotonic_ns"] > 0 and
+        value.get("live_controller_observation") is True and
+        value.get("flushed_before_observation") is True and
+        value.get("blocked_before_next_action") is True and
+        value.get("next_action_observed") is False and
+        value.get("pft_used") is False,
+        "malformed, late, or non-live checkpoint READY observation",
+    )
+    token = _hex(value.get("checkpoint_token"), HEX64,
+                 "checkpoint token")
+    require(value.get("ready_marker") ==
+            _ready_marker(origin_nonce, token, boundary),
+            "checkpoint READY marker differs from its authenticated boundary")
+    return value
+
+
+def _validate_checkpoint_image_manifest(
+    value: object, checkpoint_token: str,
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "checkpoint_token", "file_count", "total_bytes",
+        "ordered_file_sha256", "files", "pft_used",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == "candle-flyspeck-dmtcp-image-manifest-v1" and
+        value.get("checkpoint_token") == checkpoint_token and
+        value.get("pft_used") is False,
+        "malformed or token-spliced checkpoint image manifest",
+    )
+    files = value.get("files")
+    require(isinstance(files, list) and files,
+            "checkpoint image manifest is empty")
+    previous: str | None = None
+    total_bytes = 0
+    for index, record in enumerate(files):
+        require(
+            isinstance(record, dict) and set(record) == {
+                "path", "bytes", "sha256", "md5", "file_type", "mode",
+                "link_count",
+            } and record.get("file_type") == "ordinary" and
+            record.get("mode") == "0444" and
+            type(record.get("link_count")) is int and
+            record["link_count"] == 1,
+            f"checkpoint image is not an immutable ordinary file: {index}",
+        )
+        path = _safe_relative(record.get("path"),
+                              f"checkpoint image path: {index}")
+        require(previous is None or previous < path,
+                "checkpoint image manifest is not canonically ordered")
+        previous = path
+        _validate_content_record(
+            {field: record[field] for field in ("bytes", "sha256", "md5")},
+            f"checkpoint image: {index}",
+        )
+        total_bytes += record["bytes"]
+    require(
+        type(value.get("file_count")) is int and
+        value["file_count"] == len(files) and
+        type(value.get("total_bytes")) is int and
+        value["total_bytes"] == total_bytes and
+        value.get("ordered_file_sha256") == canonical_sha256(files),
+        "checkpoint image manifest count, size, or digest mismatch",
+    )
+    return value
+
+
+def _validate_capture_timeline(value: object, ready_ns: int) -> dict[str, Any]:
+    fields = {
+        "ready_observed_monotonic_ns", "checkpoint_requested_monotonic_ns",
+        "checkpoint_completed_monotonic_ns", "origin_terminated_monotonic_ns",
+        "images_published_monotonic_ns",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        all(type(value.get(field)) is int and value[field] > 0
+            for field in fields) and
+        value["ready_observed_monotonic_ns"] == ready_ns and
+        value["ready_observed_monotonic_ns"] <=
+        value["checkpoint_requested_monotonic_ns"] <
+        value["checkpoint_completed_monotonic_ns"] <=
+        value["origin_terminated_monotonic_ns"] <
+        value["images_published_monotonic_ns"],
+        "checkpoint capture timeline is incomplete or out of order",
+    )
+    return value
+
+
+def _validate_origin_process(value: object) -> dict[str, Any]:
+    require(
+        isinstance(value, dict) and set(value) == {
+            "pid", "process_group_id", "start_ticks", "terminated",
+            "termination_signal", "reaped",
+        } and all(type(value.get(field)) is int and value[field] > 0
+                  for field in ("pid", "process_group_id", "start_ticks")) and
+        value.get("terminated") is True and
+        type(value.get("termination_signal")) is int and
+        value["termination_signal"] in {9, 15} and
+        value.get("reaped") is True,
+        "checkpoint origin process was not uniquely identified, killed, and reaped",
+    )
+    return value
+
+
+def _validate_atomic_checkpoint_publication(
+    value: object, image_sha256: str,
+) -> dict[str, Any]:
+    require(
+        isinstance(value, dict) and set(value) == {
+            "staging_path", "published_path", "staging_device",
+            "published_parent_device", "rename_noreplace", "parent_fsync",
+            "image_files_read_only", "image_directory_read_only",
+        }, "malformed checkpoint atomic-publication record",
+    )
+    staging = _safe_relative(value.get("staging_path"),
+                             "checkpoint staging path")
+    published = _safe_relative(value.get("published_path"),
+                               "checkpoint published path")
+    require(
+        staging != published and
+        Path(staging).parts[0] == "staging" and
+        Path(published).parts[0] == "checkpoints" and
+        published == f"checkpoints/{image_sha256}" and
+        type(value.get("staging_device")) is int and
+        value["staging_device"] >= 0 and
+        type(value.get("published_parent_device")) is int and
+        value["published_parent_device"] == value["staging_device"] and
+        value.get("rename_noreplace") is True and
+        value.get("parent_fsync") is True and
+        value.get("image_files_read_only") is True and
+        value.get("image_directory_read_only") is True,
+        "checkpoint images were not atomically published read-only by content",
+    )
+    return value
+
+
+def _validate_process_checkpoint_envelope(value: object) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "policy", "status", "checkpoint_attempt_plan",
+        "origin_attempt", "ready_observation", "image_manifest",
+        "dmtcp_authority", "origin_attempt_nonce", "checkpoint_token",
+        "final_boundary_id", "final_action_count", "checkpoint_boundary",
+        "capture_timeline", "origin_process", "image_set",
+        "atomic_publication", *CHECKPOINT_UNAPPROVED_FIELDS,
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == PROCESS_CHECKPOINT_KIND and
+        value.get("policy") == PROCESS_CHECKPOINT_POLICY and
+        value.get("status") == "captured-unapproved" and
+        value.get("final_boundary_id") == FINAL_BOUNDARY_ID and
+        type(value.get("final_action_count")) is int and
+        value["final_action_count"] == FINAL_ACTION_COUNT,
+        "malformed authenticated process-checkpoint envelope",
+    )
+    _validate_unapproved_flags(value, "authenticated process checkpoint")
+    for field in (
+        "checkpoint_attempt_plan", "origin_attempt", "ready_observation",
+        "image_manifest", "dmtcp_authority",
+    ):
+        _validate_content_record(value.get(field),
+                                 f"process checkpoint {field}")
+    _hex(value.get("origin_attempt_nonce"), HEX32,
+         "process-checkpoint origin nonce")
+    _hex(value.get("checkpoint_token"), HEX64,
+         "process-checkpoint token")
+    return value
+
+
+def validate_process_checkpoint(
+    value: object, *, checkpoint_plan: object, origin_attempt: object,
+    ready_observation: object, image_manifest: object,
+    dmtcp_authority: object,
+) -> dict[str, Any]:
+    """Bind a checkpoint record to separately authenticated capture inputs."""
+    fields = {
+        "schema", "kind", "policy", "status", "checkpoint_attempt_plan",
+        "origin_attempt", "ready_observation", "image_manifest",
+        "dmtcp_authority", "origin_attempt_nonce", "checkpoint_token",
+        "final_boundary_id", "final_action_count", "checkpoint_boundary",
+        "capture_timeline", "origin_process", "image_set",
+        "atomic_publication", *CHECKPOINT_UNAPPROVED_FIELDS,
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1,
+        "malformed process-checkpoint record",
+    )
+    _validate_process_checkpoint_envelope(value)
+    plan = _validate_checkpoint_plan_envelope(checkpoint_plan)
+    authority = _validate_dmtcp_authority(dmtcp_authority)
+    require(plan["dmtcp_authority"] == _content_record(authority),
+            "checkpoint plan and DMTCP authority differ")
+    _validate_checkpoint_environment(plan.get("checkpoint_environment"),
+                                     authority)
+    origin = _validate_checkpoint_origin_attempt(
+        origin_attempt, plan, authority,
+    )
+    origin_nonce = origin["attempt_nonce"]
+    ready = _validate_ready_observation(
+        ready_observation, plan, origin_nonce,
+    )
+    token = ready["checkpoint_token"]
+    images = _validate_checkpoint_image_manifest(image_manifest, token)
+    require(
+        value["checkpoint_attempt_plan"] == _content_record(plan) and
+        value["origin_attempt"] == _content_record(origin) and
+        value["ready_observation"] == _content_record(ready) and
+        value["image_manifest"] == _content_record(images) and
+        value["dmtcp_authority"] == _content_record(authority),
+        "process checkpoint differs from authenticated source inputs",
+    )
+    require(
+        value.get("origin_attempt_nonce") == origin_nonce and
+        value.get("checkpoint_token") == token and
+        _same_canonical_value(
+            value.get("checkpoint_boundary"), plan["checkpoint_boundary"],
+        ), "process-checkpoint nonce, token, or boundary drift",
+    )
+    _validate_capture_timeline(
+        value.get("capture_timeline"), ready["observed_monotonic_ns"],
+    )
+    _validate_origin_process(value.get("origin_process"))
+    image_set = value.get("image_set")
+    require(
+        isinstance(image_set, dict) and set(image_set) == {
+            "file_count", "total_bytes", "ordered_file_sha256",
+        } and image_set == {
+            field: images[field] for field in (
+                "file_count", "total_bytes", "ordered_file_sha256",
+            )
+        }, "process checkpoint image-set summary drift",
+    )
+    limits = plan["resource_limits"]
+    require(images["total_bytes"] <= limits["max_checkpoint_image_bytes"],
+            "checkpoint images exceed the predeclared resource limit")
+    _validate_atomic_checkpoint_publication(
+        value.get("atomic_publication"), images["ordered_file_sha256"],
+    )
+    return value
+
+
+def build_process_checkpoint(
+    checkpoint_plan: object, origin_attempt: object,
+    ready_observation: object, image_manifest: object,
+    dmtcp_authority: object, capture_timeline: object,
+    origin_process: object, atomic_publication: object,
+) -> dict[str, Any]:
+    plan = _validate_checkpoint_plan_envelope(checkpoint_plan)
+    authority = _validate_dmtcp_authority(dmtcp_authority)
+    origin = _validate_checkpoint_origin_attempt(origin_attempt, plan, authority)
+    ready = _validate_ready_observation(
+        ready_observation, plan, origin["attempt_nonce"],
+    )
+    images = _validate_checkpoint_image_manifest(
+        image_manifest, ready["checkpoint_token"],
+    )
+    _validate_capture_timeline(
+        capture_timeline, ready["observed_monotonic_ns"],
+    )
+    _validate_origin_process(origin_process)
+    _validate_atomic_checkpoint_publication(
+        atomic_publication, images["ordered_file_sha256"],
+    )
+    value = {
+        "schema": 1,
+        "kind": PROCESS_CHECKPOINT_KIND,
+        "policy": PROCESS_CHECKPOINT_POLICY,
+        "status": "captured-unapproved",
+        "checkpoint_attempt_plan": _content_record(plan),
+        "origin_attempt": _content_record(origin),
+        "ready_observation": _content_record(ready),
+        "image_manifest": _content_record(images),
+        "dmtcp_authority": _content_record(authority),
+        "origin_attempt_nonce": origin["attempt_nonce"],
+        "checkpoint_token": ready["checkpoint_token"],
+        "final_boundary_id": FINAL_BOUNDARY_ID,
+        "final_action_count": FINAL_ACTION_COUNT,
+        "checkpoint_boundary": copy.deepcopy(plan["checkpoint_boundary"]),
+        "capture_timeline": copy.deepcopy(capture_timeline),
+        "origin_process": copy.deepcopy(origin_process),
+        "image_set": {
+            field: images[field] for field in (
+                "file_count", "total_bytes", "ordered_file_sha256",
+            )
+        },
+        "atomic_publication": copy.deepcopy(atomic_publication),
+        "promotion": False,
+        "approval_included": False,
+        "direct_s2_execution_approved": False,
+        "direct_s3_coverage_approved": False,
+        "v1_3_s3_release_approved": False,
+        "pft_used": False,
+        "s2_s3_evidence": False,
+    }
+    return validate_process_checkpoint(
+        value, checkpoint_plan=plan, origin_attempt=origin,
+        ready_observation=ready, image_manifest=images,
+        dmtcp_authority=authority,
+    )
+
+
+def _validate_clean_capture_envelope(value: object) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "boundary_id", "action_count", "receipt",
+        "authenticated_plan", "semantic_projection", "coverage_projection",
+        "cross_runtime_coverage_projection", "authority", "promotion",
+        "approval_included", "direct_s2_execution_approved",
+        "direct_s3_coverage_approved", "v1_3_s3_release_approved",
+        "pft_used", "s2_s3_evidence",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 2 and
+        value.get("kind") == AUTHENTICATED_CAPTURE_KIND and
+        value.get("boundary_id") == FINAL_BOUNDARY_ID and
+        type(value.get("action_count")) is int and
+        value["action_count"] == FINAL_ACTION_COUNT,
+        "malformed authenticated clean-capture envelope",
+    )
+    _validate_unapproved_flags(value, "authenticated clean capture")
+    _validate_content_record(value.get("receipt"), "clean-capture receipt")
+    _validate_content_record(value.get("authenticated_plan"),
+                             "clean-capture plan")
+    validate_semantic_projection(value.get("semantic_projection"))
+    validate_coverage_projection(value.get("coverage_projection"))
+    validate_cross_runtime_coverage_projection(
+        value.get("cross_runtime_coverage_projection")
+    )
+    _validate_capture_authority(value.get("authority"))
+    return value
+
+
+def _validate_clean_candidates(value: object) -> list[dict[str, Any]]:
+    require(isinstance(value, list) and len(value) == 2,
+            "resume qualification requires exactly two clean candidates")
+    nonces: list[str] = []
+    capture_sha256s: list[str] = []
+    for index, candidate in enumerate(value, start=1):
+        require(
+            isinstance(candidate, dict) and set(candidate) == {
+                "attempt_nonce", "capture",
+            }, f"malformed clean resume candidate: {index}",
+        )
+        nonces.append(_hex(
+            candidate.get("attempt_nonce"), HEX32,
+            f"clean resume candidate nonce: {index}",
+        ))
+        capture = _validate_clean_capture_envelope(candidate.get("capture"))
+        capture_sha256s.append(_content_record(capture)["sha256"])
+    require(len(set(nonces)) == 2 and len(set(capture_sha256s)) == 2,
+            "clean resume candidates or nonces are not distinct")
+    return value
+
+
+def _validate_attempt_measurement(
+    value: object, *, phase: str,
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "phase", "attempt_nonce", "wall_clock",
+        "wall_ns", "cpu_scope", "cpu_ns", "peak_aggregate_rss_kib",
+        "peak_retained_disk_bytes", "sample_count", "sampling_complete",
+        "pft_used",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") ==
+        "candle-flyspeck-direct-attempt-measurement-v1" and
+        value.get("phase") == phase and
+        value.get("wall_clock") == "CLOCK_MONOTONIC" and
+        value.get("cpu_scope") ==
+        "owned-process-tree-user-plus-system-nanoseconds" and
+        all(type(value.get(field)) is int and value[field] > 0
+            for field in (
+                "wall_ns", "cpu_ns", "peak_aggregate_rss_kib",
+                "peak_retained_disk_bytes", "sample_count",
+            )) and value["sample_count"] >= 2 and
+        value.get("sampling_complete") is True and
+        value.get("pft_used") is False,
+        f"malformed or incomplete {phase} measurement",
+    )
+    _hex(value.get("attempt_nonce"), HEX32, f"{phase} measurement nonce")
+    return value
+
+
+def _validate_resumed_result(
+    value: object, checkpoint: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "state", "origin_attempt_nonce", "resume_nonce",
+        "resume_token", "process_checkpoint", "authority", "boundary_id",
+        "action_count",
+        "suffix_start_action_index", "suffix_action_count",
+        "precheckpoint_action_replay_count", "semantic_projection",
+        "coverage_projection", "cross_runtime_coverage_projection",
+        *CHECKPOINT_UNAPPROVED_FIELDS,
+    }
+    boundary = checkpoint["checkpoint_boundary"]
+    suffix_start = boundary["next_action"]["index"]
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == AUTHENTICATED_RESUMED_RESULT_KIND and
+        value.get("state") == "completed-unapproved" and
+        value.get("origin_attempt_nonce") ==
+        checkpoint["origin_attempt_nonce"] and
+        value.get("process_checkpoint") == _content_record(checkpoint) and
+        value.get("boundary_id") == FINAL_BOUNDARY_ID and
+        type(value.get("action_count")) is int and
+        value["action_count"] == FINAL_ACTION_COUNT and
+        type(value.get("suffix_start_action_index")) is int and
+        value["suffix_start_action_index"] == suffix_start and
+        type(value.get("suffix_action_count")) is int and
+        value["suffix_action_count"] == FINAL_ACTION_COUNT - suffix_start and
+        type(value.get("precheckpoint_action_replay_count")) is int and
+        value["precheckpoint_action_replay_count"] == 0,
+        "malformed, checkpoint-spliced, or nonsuffix resumed result",
+    )
+    _validate_unapproved_flags(value, "authenticated resumed result")
+    resume_nonce = _hex(value.get("resume_nonce"), HEX32,
+                        "resumed-result nonce")
+    resume_token = _hex(value.get("resume_token"), HEX64,
+                        "resumed-result token")
+    require(
+        resume_nonce != checkpoint["origin_attempt_nonce"] and
+        resume_token != checkpoint["checkpoint_token"],
+        "resume nonce or token was reused from the checkpoint origin",
+    )
+    validate_semantic_projection(value.get("semantic_projection"))
+    validate_coverage_projection(value.get("coverage_projection"))
+    validate_cross_runtime_coverage_projection(
+        value.get("cross_runtime_coverage_projection")
+    )
+    _validate_capture_authority(value.get("authority"))
+    return value
+
+
+def _resumed_marker(
+    checkpoint: dict[str, Any], resume_nonce: str, resume_token: str,
+) -> str:
+    next_action = checkpoint["checkpoint_boundary"]["next_action"]
+    return (
+        f"{CHECKPOINT_RESUMED_PREFIX} {checkpoint['origin_attempt_nonce']} "
+        f"{checkpoint['checkpoint_token']} {resume_nonce} {resume_token} "
+        f"{next_action['index']:03d} {next_action['source_sha256']}"
+    )
+
+
+def _validate_resumed_observation(
+    value: object, checkpoint: dict[str, Any], resumed_result: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "origin_attempt_nonce", "checkpoint_token",
+        "resume_nonce", "resume_token", "next_action_index",
+        "next_source_sha256", "resumed_marker", "marker_count",
+        "stream_byte_offset", "resumed_observed_monotonic_ns",
+        "next_action_observed_monotonic_ns", "live_controller_observation",
+        "replayed_precheckpoint_action_count", "pft_used",
+    }
+    next_action = checkpoint["checkpoint_boundary"]["next_action"]
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") ==
+        "candle-flyspeck-live-resumed-observation-v1" and
+        value.get("origin_attempt_nonce") ==
+        checkpoint["origin_attempt_nonce"] and
+        value.get("checkpoint_token") == checkpoint["checkpoint_token"] and
+        value.get("resume_nonce") == resumed_result["resume_nonce"] and
+        value.get("resume_token") == resumed_result["resume_token"] and
+        type(value.get("next_action_index")) is int and
+        value["next_action_index"] == next_action["index"] and
+        value.get("next_source_sha256") == next_action["source_sha256"] and
+        type(value.get("marker_count")) is int and
+        value["marker_count"] == 1 and
+        type(value.get("stream_byte_offset")) is int and
+        value["stream_byte_offset"] >= 0 and
+        type(value.get("resumed_observed_monotonic_ns")) is int and
+        value["resumed_observed_monotonic_ns"] > 0 and
+        type(value.get("next_action_observed_monotonic_ns")) is int and
+        value["resumed_observed_monotonic_ns"] <
+        value["next_action_observed_monotonic_ns"] and
+        value.get("live_controller_observation") is True and
+        type(value.get("replayed_precheckpoint_action_count")) is int and
+        value["replayed_precheckpoint_action_count"] == 0 and
+        value.get("pft_used") is False,
+        "malformed, late, or replayed-prefix RESUMED observation",
+    )
+    require(
+        value.get("resumed_marker") == _resumed_marker(
+            checkpoint, resumed_result["resume_nonce"],
+            resumed_result["resume_token"],
+        ), "RESUMED marker differs from authenticated resume inputs",
+    )
+    return value
+
+
+def _timing_comparison(
+    clean_measurements: list[dict[str, Any]],
+    resume_measurement: dict[str, Any],
+) -> dict[str, Any]:
+    clean_wall = [item["wall_ns"] for item in clean_measurements]
+    clean_cpu = [item["cpu_ns"] for item in clean_measurements]
+    wall_passed = (
+        RESUME_SAVINGS_DENOMINATOR * resume_measurement["wall_ns"] <=
+        RESUME_SAVINGS_NUMERATOR * min(clean_wall)
+    )
+    cpu_passed = (
+        RESUME_SAVINGS_DENOMINATOR * resume_measurement["cpu_ns"] <=
+        RESUME_SAVINGS_NUMERATOR * min(clean_cpu)
+    )
+    return {
+        "policy": CHECKPOINT_TIMING_POLICY,
+        "baseline": "minimum-of-two-distinct-clean-attempts",
+        "savings_numerator": RESUME_SAVINGS_NUMERATOR,
+        "savings_denominator": RESUME_SAVINGS_DENOMINATOR,
+        "clean_wall_ns": clean_wall,
+        "clean_cpu_ns": clean_cpu,
+        "resume_wall_ns": resume_measurement["wall_ns"],
+        "resume_cpu_ns": resume_measurement["cpu_ns"],
+        "wall_threshold_passed": wall_passed,
+        "cpu_threshold_passed": cpu_passed,
+        "materially_cheaper": wall_passed and cpu_passed,
+    }
+
+
+def _resource_comparison(
+    checkpoint_plan: dict[str, Any], checkpoint: dict[str, Any],
+    clean_measurements: list[dict[str, Any]],
+    resume_measurement: dict[str, Any],
+) -> dict[str, Any]:
+    limits = checkpoint_plan["resource_limits"]
+    clean_rss = [item["peak_aggregate_rss_kib"]
+                 for item in clean_measurements]
+    clean_disk = [item["peak_retained_disk_bytes"]
+                  for item in clean_measurements]
+    image_bytes = checkpoint["image_set"]["total_bytes"]
+    within = (
+        all(item <= limits["max_aggregate_rss_kib"] for item in clean_rss) and
+        resume_measurement["peak_aggregate_rss_kib"] <=
+        limits["max_aggregate_rss_kib"] and
+        all(item <= limits["max_retained_disk_bytes"] for item in clean_disk) and
+        resume_measurement["peak_retained_disk_bytes"] <=
+        limits["max_retained_disk_bytes"] and
+        image_bytes <= limits["max_checkpoint_image_bytes"]
+    )
+    return {
+        "policy": "complete-sampling-within-predeclared-ceilings-v1",
+        "resource_limits": copy.deepcopy(limits),
+        "clean_peak_aggregate_rss_kib": clean_rss,
+        "clean_peak_retained_disk_bytes": clean_disk,
+        "resume_peak_aggregate_rss_kib":
+            resume_measurement["peak_aggregate_rss_kib"],
+        "resume_peak_retained_disk_bytes":
+            resume_measurement["peak_retained_disk_bytes"],
+        "checkpoint_image_bytes": image_bytes,
+        "within_predeclared_limits": within,
+    }
+
+
+def validate_resume_attempt(
+    value: object, *, checkpoint_plan: object, process_checkpoint: object,
+    clean_candidates: object, resumed_result: object,
+    resumed_observation: object, clean_measurements: object,
+    resume_measurement: object, dmtcp_authority: object,
+) -> dict[str, Any]:
+    """Bind an unapproved comparison to authenticated clean/resume inputs."""
+    fields = {
+        "schema", "kind", "policy", "status", "checkpoint_attempt_plan",
+        "process_checkpoint", "dmtcp_authority", "clean_attempts",
+        "resumed_result", "resumed_observation", "resume_measurement",
+        "origin_attempt_nonce", "resume_nonce", "resume_token",
+        "final_boundary_id", "final_action_count", "semantic_projection",
+        "coverage_projection", "cross_runtime_coverage_projection",
+        "timing_comparison", "resource_comparison",
+        *CHECKPOINT_UNAPPROVED_FIELDS,
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == RESUME_ATTEMPT_KIND and
+        value.get("policy") == RESUME_ATTEMPT_POLICY and
+        value.get("status") == "clean-resume-match-unapproved" and
+        value.get("final_boundary_id") == FINAL_BOUNDARY_ID and
+        type(value.get("final_action_count")) is int and
+        value["final_action_count"] == FINAL_ACTION_COUNT,
+        "malformed resume-attempt record",
+    )
+    _validate_unapproved_flags(value, "resume attempt")
+    plan = _validate_checkpoint_plan_envelope(checkpoint_plan)
+    checkpoint = _validate_process_checkpoint_envelope(process_checkpoint)
+    authority = _validate_dmtcp_authority(dmtcp_authority)
+    require(
+        checkpoint["checkpoint_attempt_plan"] == _content_record(plan) and
+        checkpoint["dmtcp_authority"] == _content_record(authority) and
+        plan["dmtcp_authority"] == _content_record(authority) and
+        _same_canonical_value(
+            checkpoint["checkpoint_boundary"], plan["checkpoint_boundary"],
+        ),
+        "resume inputs do not share one checkpoint plan and DMTCP authority",
+    )
+    _validate_checkpoint_environment(plan["checkpoint_environment"], authority)
+    candidates = _validate_clean_candidates(clean_candidates)
+    resumed = _validate_resumed_result(resumed_result, checkpoint)
+    observation = _validate_resumed_observation(
+        resumed_observation, checkpoint, resumed,
+    )
+    require(
+        isinstance(clean_measurements, list) and len(clean_measurements) == 2,
+        "resume qualification requires two clean measurements",
+    )
+    clean_metrics = [
+        _validate_attempt_measurement(item, phase="clean-full")
+        for item in clean_measurements
+    ]
+    for candidate, measurement in zip(candidates, clean_metrics, strict=True):
+        require(candidate["attempt_nonce"] == measurement["attempt_nonce"],
+                "clean candidate and measurement nonce differ")
+    resume_metric = _validate_attempt_measurement(
+        resume_measurement, phase="restart-through-final-validation",
+    )
+    require(resume_metric["attempt_nonce"] == resumed["resume_nonce"],
+            "resumed result and measurement nonce differ")
+    all_nonces = [
+        checkpoint["origin_attempt_nonce"], resumed["resume_nonce"],
+        *(item["attempt_nonce"] for item in candidates),
+    ]
+    require(len(set(all_nonces)) == 4,
+            "origin, resume, and clean attempt nonces are not distinct")
+    clean_captures = [item["capture"] for item in candidates]
+    require(
+        all(item["authenticated_plan"] == plan["authenticated_plan"]
+            for item in clean_captures) and
+        all(_same_canonical_value(
+                item["authority"], clean_captures[0]["authority"],
+            ) for item in clean_captures) and
+        _same_canonical_value(
+            resumed["authority"], clean_captures[0]["authority"],
+        ),
+        "clean and resumed inputs do not share one plan and runtime authority",
+    )
+    semantic = resumed["semantic_projection"]
+    coverage = resumed["coverage_projection"]
+    cross_coverage = resumed["cross_runtime_coverage_projection"]
+    require(
+        all(_same_canonical_value(item["semantic_projection"], semantic)
+            for item in clean_captures) and
+        all(_same_canonical_value(item["coverage_projection"], coverage)
+            for item in clean_captures) and
+        all(_same_canonical_value(
+                item["cross_runtime_coverage_projection"], cross_coverage,
+            ) for item in clean_captures),
+        "resumed semantic or coverage projection differs from a clean attempt",
+    )
+    timing = _timing_comparison(clean_metrics, resume_metric)
+    resources = _resource_comparison(
+        plan, checkpoint, clean_metrics, resume_metric,
+    )
+    require(timing["materially_cheaper"] is True,
+            "resume is not at least 25 percent cheaper in wall and CPU time")
+    require(resources["within_predeclared_limits"] is True,
+            "resume qualification exceeds predeclared resource limits")
+    expected_clean = [
+        {
+            "ordinal": index,
+            "attempt_nonce": candidate["attempt_nonce"],
+            "capture": _content_record(candidate["capture"]),
+            "measurement": _content_record(measurement),
+        }
+        for index, (candidate, measurement) in enumerate(
+            zip(candidates, clean_metrics, strict=True), start=1,
+        )
+    ]
+    require(
+        value["checkpoint_attempt_plan"] == _content_record(plan) and
+        value["process_checkpoint"] == _content_record(checkpoint) and
+        value["dmtcp_authority"] == _content_record(authority) and
+        value["clean_attempts"] == expected_clean and
+        value["resumed_result"] == _content_record(resumed) and
+        value["resumed_observation"] == _content_record(observation) and
+        value["resume_measurement"] == _content_record(resume_metric),
+        "resume attempt differs from authenticated source inputs",
+    )
+    require(
+        value.get("origin_attempt_nonce") == checkpoint["origin_attempt_nonce"] and
+        value.get("resume_nonce") == resumed["resume_nonce"] and
+        value.get("resume_token") == resumed["resume_token"] and
+        _same_canonical_value(value.get("semantic_projection"), semantic) and
+        _same_canonical_value(value.get("coverage_projection"), coverage) and
+        _same_canonical_value(
+            value.get("cross_runtime_coverage_projection"), cross_coverage,
+        ) and _same_canonical_value(value.get("timing_comparison"), timing) and
+        _same_canonical_value(value.get("resource_comparison"), resources),
+        "resume attempt projection, timing, or resource summary drift",
+    )
+    return value
+
+
+def build_resume_attempt(
+    checkpoint_plan: object, process_checkpoint: object,
+    clean_candidates: object, resumed_result: object,
+    resumed_observation: object, clean_measurements: object,
+    resume_measurement: object, dmtcp_authority: object,
+) -> dict[str, Any]:
+    plan = _validate_checkpoint_plan_envelope(checkpoint_plan)
+    checkpoint = _validate_process_checkpoint_envelope(process_checkpoint)
+    authority = _validate_dmtcp_authority(dmtcp_authority)
+    candidates = _validate_clean_candidates(clean_candidates)
+    resumed = _validate_resumed_result(resumed_result, checkpoint)
+    observation = _validate_resumed_observation(
+        resumed_observation, checkpoint, resumed,
+    )
+    require(isinstance(clean_measurements, list) and len(clean_measurements) == 2,
+            "resume qualification requires two clean measurements")
+    clean_metrics = [
+        _validate_attempt_measurement(item, phase="clean-full")
+        for item in clean_measurements
+    ]
+    resume_metric = _validate_attempt_measurement(
+        resume_measurement, phase="restart-through-final-validation",
+    )
+    timing = _timing_comparison(clean_metrics, resume_metric)
+    resources = _resource_comparison(
+        plan, checkpoint, clean_metrics, resume_metric,
+    )
+    value = {
+        "schema": 1,
+        "kind": RESUME_ATTEMPT_KIND,
+        "policy": RESUME_ATTEMPT_POLICY,
+        "status": "clean-resume-match-unapproved",
+        "checkpoint_attempt_plan": _content_record(plan),
+        "process_checkpoint": _content_record(checkpoint),
+        "dmtcp_authority": _content_record(authority),
+        "clean_attempts": [
+            {
+                "ordinal": index,
+                "attempt_nonce": candidate["attempt_nonce"],
+                "capture": _content_record(candidate["capture"]),
+                "measurement": _content_record(measurement),
+            }
+            for index, (candidate, measurement) in enumerate(
+                zip(candidates, clean_metrics, strict=True), start=1,
+            )
+        ],
+        "resumed_result": _content_record(resumed),
+        "resumed_observation": _content_record(observation),
+        "resume_measurement": _content_record(resume_metric),
+        "origin_attempt_nonce": checkpoint["origin_attempt_nonce"],
+        "resume_nonce": resumed["resume_nonce"],
+        "resume_token": resumed["resume_token"],
+        "final_boundary_id": FINAL_BOUNDARY_ID,
+        "final_action_count": FINAL_ACTION_COUNT,
+        "semantic_projection": copy.deepcopy(resumed["semantic_projection"]),
+        "coverage_projection": copy.deepcopy(resumed["coverage_projection"]),
+        "cross_runtime_coverage_projection": copy.deepcopy(
+            resumed["cross_runtime_coverage_projection"]
+        ),
+        "timing_comparison": timing,
+        "resource_comparison": resources,
+        "promotion": False,
+        "approval_included": False,
+        "direct_s2_execution_approved": False,
+        "direct_s3_coverage_approved": False,
+        "v1_3_s3_release_approved": False,
+        "pft_used": False,
+        "s2_s3_evidence": False,
+    }
+    return validate_resume_attempt(
+        value, checkpoint_plan=plan, process_checkpoint=checkpoint,
+        clean_candidates=candidates, resumed_result=resumed,
+        resumed_observation=observation, clean_measurements=clean_metrics,
+        resume_measurement=resume_metric, dmtcp_authority=authority,
+    )
+
+
+def validate_canonical_checkpoint_attempt_plan_bytes(
+    data: bytes, **authenticated_inputs: Any,
+) -> dict[str, Any]:
+    value = decode_object(data, "checkpoint attempt plan")
+    validate_checkpoint_attempt_plan(value, **authenticated_inputs)
+    require(data == canonical_json_bytes(value),
+            "checkpoint attempt plan is not canonical JSON")
+    return value
+
+
+def validate_canonical_process_checkpoint_bytes(
+    data: bytes, **authenticated_inputs: Any,
+) -> dict[str, Any]:
+    value = decode_object(data, "process checkpoint")
+    validate_process_checkpoint(value, **authenticated_inputs)
+    require(data == canonical_json_bytes(value),
+            "process checkpoint is not canonical JSON")
+    return value
+
+
+def validate_canonical_resume_attempt_bytes(
+    data: bytes, **authenticated_inputs: Any,
+) -> dict[str, Any]:
+    value = decode_object(data, "resume attempt")
+    validate_resume_attempt(value, **authenticated_inputs)
+    require(data == canonical_json_bytes(value),
+            "resume attempt is not canonical JSON")
+    return value
 
 
 def _validate_source_inventory(value: object, label: str) -> list[dict[str, Any]]:
