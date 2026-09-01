@@ -126,6 +126,11 @@ UNCLOSED_TRUST_BOUNDARIES = (
 )
 
 _OBSERVATION_SEAL = object()
+SENSITIVE_CANDIDATE_KEYS = frozenset({
+    "lifecycle_complete", "os_evidence_authenticated", "runtime_qualified",
+    "checkpoint_protocol_qualified", "s2_approved", "s3_approved",
+    "release_promoted", "pft_used",
+})
 
 
 def _hex(value: object, pattern: re.Pattern[str], label: str) -> str:
@@ -2534,8 +2539,10 @@ def assemble_unapproved_candidate(
     return check_unapproved_candidate_schema_layout(evidence)
 
 
-def _check_candidate_lexical_safety(value: object, label: str = "candidate") -> None:
-    """Reject Cc/PFT serialized text without claiming source authenticity."""
+def _check_candidate_lexical_safety(
+    value: object, label: str = "candidate", *, top_level: bool = True,
+) -> None:
+    """Reject unsafe text and nested release-sensitive keys."""
     if isinstance(value, str):
         require(all(unicodedata.category(character) != "Cc" for character in value),
                 f"Unicode control character in {label}")
@@ -2547,12 +2554,19 @@ def _check_candidate_lexical_safety(value: object, label: str = "candidate") -> 
                         unicodedata.category(character) != "Cc"
                         for character in key
                     ), f"Unicode control character in {label} field name")
-            require(key == "pft_used" or PFT_NAMESPACE.search(key) is None,
+            require(key not in SENSITIVE_CANDIDATE_KEYS or top_level,
+                    f"release-sensitive key is nested at {label}.{key}")
+            require((top_level and key == "pft_used") or
+                    PFT_NAMESPACE.search(key) is None,
                     f"PFT namespace is forbidden in {label} field name")
-            _check_candidate_lexical_safety(item, f"{label}.{key}")
+            _check_candidate_lexical_safety(
+                item, f"{label}.{key}", top_level=False,
+            )
     elif isinstance(value, list):
         for index, item in enumerate(value):
-            _check_candidate_lexical_safety(item, f"{label}[{index}]")
+            _check_candidate_lexical_safety(
+                item, f"{label}[{index}]", top_level=False,
+            )
 
 
 def check_unapproved_candidate_schema_layout(value: object) -> dict[str, Any]:

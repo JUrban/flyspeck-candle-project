@@ -1412,22 +1412,19 @@ class LifecycleTests(unittest.TestCase):
                     coordinator=coordinator, origin_process_tree=tree,
                     publication=publication, restart=restart,
                 )
-                for field in (
+                sensitive_fields = (
                     "lifecycle_complete", "os_evidence_authenticated",
                     "runtime_qualified", "checkpoint_protocol_qualified",
                     "s2_approved", "s3_approved", "release_promoted", "pft_used",
-                ):
+                )
+                for field in sensitive_fields:
                     self.assertFalse(evidence[field], field)
                 self.assertEqual(
                     AUTH.decode_unapproved_candidate_schema_layout(
                         AUTH.canonical_json_bytes(evidence)
                     ), evidence,
                 )
-                for field in (
-                    "lifecycle_complete", "os_evidence_authenticated",
-                    "runtime_qualified", "checkpoint_protocol_qualified",
-                    "s2_approved", "s3_approved", "release_promoted", "pft_used",
-                ):
+                for field in sensitive_fields:
                     forged = copy.deepcopy(evidence)
                     forged[field] = True
                     payload = copy.deepcopy(forged)
@@ -1439,6 +1436,43 @@ class LifecycleTests(unittest.TestCase):
                         AUTH.AuthenticationError, "overclaims",
                     ):
                         AUTH.check_unapproved_candidate_schema_layout(forged)
+                nested_targets = (
+                    lambda item: item["kernel"],
+                    lambda item: item["phases"][0],
+                    lambda item: item["resource_limits"],
+                    lambda item: item["origin_process_tree"],
+                    lambda item: item["restart"],
+                    lambda item: item["coordinator"],
+                    lambda item: item["environments"]["checkpoint"],
+                    lambda item: item["checkpoint_publication"],
+                )
+                for field, target in zip(
+                    sensitive_fields, nested_targets, strict=True,
+                ):
+                    forged = copy.deepcopy(evidence)
+                    target(forged)[field] = True
+                    payload = copy.deepcopy(forged)
+                    del payload["self_reported_schema_layout_sha256"]
+                    forged["self_reported_schema_layout_sha256"] = (
+                        AUTH.canonical_sha256(payload)
+                    )
+                    with self.assertRaisesRegex(
+                        AUTH.AuthenticationError, "release-sensitive key is nested",
+                    ):
+                        AUTH.check_unapproved_candidate_schema_layout(forged)
+                nested_pft_false = copy.deepcopy(evidence)
+                nested_pft_false["kernel"]["pft_used"] = False
+                payload = copy.deepcopy(nested_pft_false)
+                del payload["self_reported_schema_layout_sha256"]
+                nested_pft_false["self_reported_schema_layout_sha256"] = (
+                    AUTH.canonical_sha256(payload)
+                )
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, "release-sensitive key is nested",
+                ):
+                    AUTH.check_unapproved_candidate_schema_layout(
+                        nested_pft_false
+                    )
                 coherently_mutated = copy.deepcopy(evidence)
                 coherently_mutated["kernel"]["release"] = "other-kernel"
                 coherently_mutated["resource_limits"][
