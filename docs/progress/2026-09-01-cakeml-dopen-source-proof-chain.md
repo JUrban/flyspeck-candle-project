@@ -161,6 +161,12 @@ three Python ELF closures and the OCaml lexer toolchain passes.  Under
 - the compatibility discovery passes 63/63 in 6.043 seconds, maximum RSS
   46,076 KiB, zero swaps.
 
+The unchanged generated corpus authorities also pass their cheap pre-repin
+fixed-point gates on this branch: the manifest closes 297 roots, 400 source
+nodes and 43 generated inputs; the isolated parser controller validates the
+exact 20-input pilot and 400-input all-inventory descriptors.  These checks
+establish source-plan consistency only, not a compiled parser result.
+
 This is a host-tool authority repair, not compiler qualification and not a
 CakeML pin.  The final Candle repin must be based on `b5aa0eb` (or an exact
 reviewed descendant), rather than promoting either the old `688d9d1` authority
