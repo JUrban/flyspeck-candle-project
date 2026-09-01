@@ -20,6 +20,34 @@ proof repair and its first downstream bootstrap-proof consumer.  It does
 remains mandatory, and the Candle repin remains on HOLD until its authenticated
 terminal manifest passes.
 
+## `audit1.md` current-state reassessment
+
+The audit's strategic criticism remains correct: a full
+HOL-Light-to-PFT-to-Candle replay is P1 validation and cannot establish direct
+S2 or S3.  Its more detailed corrective checklist now maps to current evidence
+as follows:
+
+1. The CakeML `Dopen` parser, inference, semantics, evaluator, backend,
+   compiler and downstream REPL proof chain is complete at the source level,
+   with the cold compiler qualification in progress below.
+2. The conservative OCaml compatibility inventory and generated 400-source
+   projection exist, while compiled compatibility remains gated on the new
+   linked runtime.
+3. The independently audited Great-100 reference artifact closes 130/130
+   runs (two sweeps of 65 targets) with identical cross-sweep fingerprints,
+   but remains deliberately `candidates_unapproved`; it can be approved only
+   by comparison with the qualified current direct Candle binary.
+4. Direct 20/400 parser execution, linked compatibility, d0/d1 and cumulative
+   Flyspeck strata are still pending and are not replaced by source-plan,
+   reference-HOL, or PFT evidence.
+5. The active full PFT run remains untouched as an oracle only.  Project
+   README status labels explicitly state that it cannot advance S2 or S3.
+
+Thus the audit's direction has been corrected, but its final direct-source
+requirements are not yet complete.  The current critical path is the cold
+qualification, deliberate Candle repin/link, consumed 20/400 gates, current
+binary Great-100 comparison, and then direct nonlinear/LP cumulative S2/S3.
+
 ## Final proof commits
 
 The commits after the previously prepared CakeML parent `480a9f4fc...` are:
