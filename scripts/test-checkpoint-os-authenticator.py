@@ -34,6 +34,14 @@ assert DIRECT_SPEC is not None and DIRECT_SPEC.loader is not None
 DIRECT = importlib.util.module_from_spec(DIRECT_SPEC)
 sys.modules[DIRECT_SPEC.name] = DIRECT
 DIRECT_SPEC.loader.exec_module(DIRECT)
+DIRECT_TEST_SPEC = importlib.util.spec_from_file_location(
+    "direct_release_protocol_fixture_for_os_test",
+    HERE / "test-direct-release-protocol.py",
+)
+assert DIRECT_TEST_SPEC is not None and DIRECT_TEST_SPEC.loader is not None
+DIRECT_TEST = importlib.util.module_from_spec(DIRECT_TEST_SPEC)
+sys.modules[DIRECT_TEST_SPEC.name] = DIRECT_TEST
+DIRECT_TEST_SPEC.loader.exec_module(DIRECT_TEST)
 
 
 def content_record(seed: bytes) -> dict[str, object]:
@@ -210,7 +218,8 @@ class AnchoredFilesystemTests(unittest.TestCase):
     def test_pft_and_control_namespaces_are_rejected_lexically(self) -> None:
         for path in (
             "checkpoint/PFT/image.dmtcp", "checkpoint/pFt-image.dmtcp",
-            "checkpoint/pft.image.dmtcp",
+            "checkpoint/pft.image.dmtcp", "checkpoint/pftkernel.dmtcp",
+            "checkpoint/myPFTbuild.dmtcp",
         ):
             with self.assertRaisesRegex(AUTH.AuthenticationError, "PFT namespace"):
                 AUTH._safe_relative(path, "hostile checkpoint path")
@@ -218,7 +227,11 @@ class AnchoredFilesystemTests(unittest.TestCase):
             AUTH._absolute_to_relative(
                 "/usr/local/lib/dmtcp/PfT.so", "hostile DMTCP library",
             )
-        for path in ("checkpoint/evil\nname", "/usr/local/bin/evil\x7fname"):
+        for path in (
+            "checkpoint/evil\nname", "/usr/local/bin/evil\x7fname",
+            "checkpoint/evil\u0080name", "/usr/local/bin/evil\u0085name",
+            "checkpoint/evil\u009fname",
+        ):
             validator = (AUTH._safe_relative if not path.startswith("/")
                          else AUTH._absolute_to_relative)
             with self.assertRaisesRegex(AUTH.AuthenticationError, "malformed"):
@@ -547,6 +560,17 @@ class ProcessAndPhaseTests(unittest.TestCase):
             changed["environment"]["MODE"] = "coherently-rehashed"
             with self.assertRaisesRegex(AUTH.AuthenticationError, "drifted"):
                 AUTH.pin_live_process(changed, proc_root=str(root))
+            for field, hostile in (
+                ("argv", "/tmp/myPFTbuild"),
+                ("environment", "bad\u0085value"),
+            ):
+                changed = copy.deepcopy(expected)
+                if field == "argv":
+                    changed["argv"].append(hostile)
+                else:
+                    changed["environment"]["MODE"] = hostile
+                with self.assertRaisesRegex(AUTH.AuthenticationError, "malformed"):
+                    AUTH.pin_live_process(changed, proc_root=str(root))
             pin.close()
 
     def test_live_self_pin_is_nonfixture_observation(self) -> None:
@@ -621,7 +645,7 @@ class ProcessAndPhaseTests(unittest.TestCase):
             )
             child.returncode = -signal.SIGTERM
             self.assertTrue(completed.nonfixture)
-            self.assertTrue(completed.evidence["reaped"])
+            self.assertTrue(completed.evidence["controller_asserted_reaped"])
             self.assertFalse(Path(f"/proc/{child.pid}").exists())
         finally:
             if child.poll() is None:
@@ -636,6 +660,14 @@ class ProcessAndPhaseTests(unittest.TestCase):
             "machine": os.uname().machine,
             "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip(),
         })
+        for hostile in ("/tmp/myPFTbuild", "bad\u009fargument"):
+            with self.assertRaisesRegex(AUTH.AuthenticationError, "malformed"):
+                AUTH.spawn_exec_gated_process(
+                    executable="/usr/bin/sleep",
+                    argv=["/usr/bin/sleep", hostile],
+                    environment={"LC_ALL": "C"}, kernel=kernel,
+                    new_process_group=True,
+                )
         pin = AUTH.spawn_exec_gated_process(
             executable="/usr/bin/sleep", argv=["/usr/bin/sleep", "60"],
             environment={"LC_ALL": "C"}, kernel=kernel,
@@ -699,7 +731,7 @@ class ProcessAndPhaseTests(unittest.TestCase):
                     receipt("origin", identity, "READY", "a" * 32),
                     monotonic_ns=120_000_000,
                 )
-                self.assertTrue(ack.startswith("ACK/READY/"))
+                self.assertTrue(ack.startswith("UNAPPROVED_LOCAL_ACK/READY/"))
                 observer.end(monotonic_ns=150_000_000)
                 shutil.rmtree(proc_root / str(expected["pid"]))
                 completed = AUTH.complete_parent_owned_process(
@@ -787,7 +819,17 @@ class PublicationTests(unittest.TestCase):
             target = stage / name
             target.write_bytes(f"image-{index}-{name}\n".encode())
             target.chmod(0o444)
-            images.append({"path": name, "authority": AUTH.file_expectation(target)})
+            authority = AUTH.file_expectation(target)
+            images.append({
+                "path": name,
+                **{
+                    field: authority[field]
+                    for field in ("bytes", "sha256", "md5")
+                },
+                "file_type": "ordinary",
+                "mode": "0444",
+                "link_count": 1,
+            })
         stage.chmod(0o700)
         return images
 
@@ -795,21 +837,26 @@ class PublicationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
             (root / "checkpoints").mkdir()
-            images = self.make_staging(root, ["z-image.dmtcp", "a-image.dmtcp"])
+            images = self.make_staging(root, ["a-image.dmtcp", "z-image.dmtcp"])
             with AUTH.AnchoredFilesystem(root) as filesystem:
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, "path-sorted",
+                ):
+                    AUTH.publish_checkpoint_no_replace(
+                        filesystem=filesystem,
+                        staging_directory="staging/checkpoint-e",
+                        publication_parent="checkpoints",
+                        images=list(reversed(images)),
+                        challenges=challenges(),
+                        resource_limits=fixture_limits(),
+                    )
                 publication = AUTH.publish_checkpoint_no_replace(
                     filesystem=filesystem, staging_directory="staging/checkpoint-e",
                     publication_parent="checkpoints", images=images,
                     challenges=challenges(), resource_limits=fixture_limits(),
                 )
                 try:
-                    direct_files = [{
-                        "path": item["path"],
-                        **{
-                            field: item["authority"][field]
-                            for field in ("bytes", "sha256", "md5")
-                        },
-                    } for item in images]
+                    direct_files = copy.deepcopy(images)
                     expected_manifest_sha256 = DIRECT.canonical_sha256(direct_files)
                     self.assertEqual(
                         publication.evidence["ordered_manifest_sha256"],
@@ -830,7 +877,7 @@ class PublicationTests(unittest.TestCase):
                     self.assertEqual([
                         Path(item).name for item in
                         publication.evidence["ordered_restart_image_argv"]
-                    ], ["z-image.dmtcp", "a-image.dmtcp"])
+                    ], ["a-image.dmtcp", "z-image.dmtcp"])
                     self.assertTrue(all(
                         item.startswith(f"checkpoints/{expected_manifest_sha256}/")
                         and not item.startswith("/")
@@ -850,7 +897,7 @@ class PublicationTests(unittest.TestCase):
                     # Recreating identical staging content cannot replace an
                     # already content-addressed destination.
                     images_again = self.make_staging(
-                        root, ["z-image.dmtcp", "a-image.dmtcp"],
+                        root, ["a-image.dmtcp", "z-image.dmtcp"],
                     )
                     with self.assertRaisesRegex(
                         AUTH.AuthenticationError, "no-replace",
@@ -860,6 +907,61 @@ class PublicationTests(unittest.TestCase):
                             publication_parent="checkpoints", images=images_again,
                             challenges=challenges(), resource_limits=fixture_limits(),
                         )
+                finally:
+                    publication.close()
+
+    def test_publication_builds_real_direct_process_checkpoint(self) -> None:
+        values = DIRECT_TEST.checkpoint_protocol_fixture()
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "checkpoints").mkdir()
+            images = self.make_staging(
+                root, ["ckpt_0.dmtcp", "ckpt_1.dmtcp"],
+            )
+            with AUTH.AnchoredFilesystem(root) as filesystem:
+                publication = AUTH.publish_checkpoint_no_replace(
+                    filesystem=filesystem,
+                    staging_directory="staging/checkpoint-e",
+                    publication_parent="checkpoints",
+                    images=images,
+                    challenges=values["challenges"],
+                    resource_limits=AUTH._make_observation(
+                        "resource-limits", values["limits"], False,
+                    ),
+                )
+                try:
+                    image_manifest = {
+                        "schema": 1,
+                        "kind": "candle-flyspeck-dmtcp-image-manifest-v1",
+                        "checkpoint_token":
+                            values["challenges"]["checkpoint_token"],
+                        "file_count": len(images),
+                        "total_bytes": sum(item["bytes"] for item in images),
+                        "ordered_file_sha256":
+                            publication.evidence["ordered_manifest_sha256"],
+                        "files": copy.deepcopy(
+                            publication.evidence["direct_protocol_image_files"]
+                        ),
+                        "authentication_scope": DIRECT.CONTROLLER_ASSERTION_SCOPE,
+                        "anchored_nofollow_rehash": False,
+                        "pft_used": False,
+                    }
+                    arguments = DIRECT_TEST.checkpoint_arguments(values)
+                    arguments["image_manifest"] = image_manifest
+                    arguments["atomic_publication"] = copy.deepcopy(
+                        publication.evidence[
+                            "direct_protocol_atomic_publication"
+                        ]
+                    )
+                    checkpoint = DIRECT.build_process_checkpoint(**arguments)
+                    self.assertEqual(
+                        checkpoint["image_set"]["ordered_file_sha256"],
+                        DIRECT.canonical_sha256(image_manifest["files"]),
+                    )
+                    self.assertEqual(
+                        checkpoint["atomic_publication"]["published_path"],
+                        f"checkpoints/{image_manifest['ordered_file_sha256']}",
+                    )
                 finally:
                     publication.close()
 
@@ -963,7 +1065,15 @@ class LifecycleTests(unittest.TestCase):
             target = stage / name
             target.write_bytes(f"checkpoint-{index}\n".encode())
             target.chmod(0o444)
-            images.append({"path": name, "authority": AUTH.file_expectation(target)})
+            authority = AUTH.file_expectation(target)
+            images.append({
+                "path": name,
+                **{
+                    field: authority[field]
+                    for field in ("bytes", "sha256", "md5")
+                },
+                "file_type": "ordinary", "mode": "0444", "link_count": 1,
+            })
         stage.chmod(0o700)
         filesystem = AUTH.AnchoredFilesystem(root)
         publication = AUTH.publish_checkpoint_no_replace(
@@ -1051,7 +1161,7 @@ class LifecycleTests(unittest.TestCase):
                     "challenge_value": "5" * 32,
                     "controller": {"process": resumed_process},
                     "receipt_observation_scope":
-                        "controller-supplied-bytes-received-and-timestamped-by-parent",
+                        "controller-asserted-unapproved-bytes-locally-timestamped",
                 }, False)
                 result = observer.finish(
                     completed_launcher=completed, resumed_phase=resume,
@@ -1082,7 +1192,8 @@ class LifecycleTests(unittest.TestCase):
                 },
                 "termination": ({"kind": "signal", "value": int(signal.SIGKILL)}
                                 if killed else {"kind": "exit", "value": 0}),
-                "reaped": True, "proc_absent_after_reap": True,
+                "controller_asserted_reaped": True,
+                "controller_asserted_proc_absent_after_reap": True,
             }, False)
 
         tokens = [completed(10, 1), completed(11, 10)]
@@ -1162,7 +1273,7 @@ class LifecycleTests(unittest.TestCase):
                     "controller": {"process": process},
                     "resource_limits": limit_values(),
                     "receipt_observation_scope":
-                        "controller-supplied-bytes-received-and-timestamped-by-parent",
+                        "controller-asserted-unapproved-bytes-locally-timestamped",
                     "post_ready_action_receipt_count": 0,
                     "begin_monotonic_ns": 1000 + phase_index * 100,
                     "end_monotonic_ns": 1050 + phase_index * 100,
@@ -1308,35 +1419,59 @@ class LifecycleTests(unittest.TestCase):
                 ):
                     self.assertFalse(evidence[field], field)
                 self.assertEqual(
-                    AUTH.decode_unapproved_candidate(
+                    AUTH.decode_unapproved_candidate_schema_layout(
                         AUTH.canonical_json_bytes(evidence)
                     ), evidence,
                 )
                 for field in (
-                    "os_evidence_authenticated", "runtime_qualified", "pft_used",
+                    "lifecycle_complete", "os_evidence_authenticated",
+                    "runtime_qualified", "checkpoint_protocol_qualified",
+                    "s2_approved", "s3_approved", "release_promoted", "pft_used",
                 ):
                     forged = copy.deepcopy(evidence)
                     forged[field] = True
                     payload = copy.deepcopy(forged)
-                    del payload["candidate_payload_sha256"]
-                    forged["candidate_payload_sha256"] = AUTH.canonical_sha256(payload)
+                    del payload["self_reported_schema_layout_sha256"]
+                    forged["self_reported_schema_layout_sha256"] = (
+                        AUTH.canonical_sha256(payload)
+                    )
                     with self.assertRaisesRegex(
                         AUTH.AuthenticationError, "overclaims",
                     ):
-                        AUTH.validate_unapproved_candidate(forged)
+                        AUTH.check_unapproved_candidate_schema_layout(forged)
+                coherently_mutated = copy.deepcopy(evidence)
+                coherently_mutated["kernel"]["release"] = "other-kernel"
+                coherently_mutated["resource_limits"][
+                    "max_address_space_bytes"
+                ] += 1
+                coherently_mutated["phases"][0]["challenge_value"] = "f" * 32
+                coherently_mutated["phases"][0][
+                    "receipt_observation_scope"
+                ] = "controller-mutated-untrusted-observation"
+                payload = copy.deepcopy(coherently_mutated)
+                del payload["self_reported_schema_layout_sha256"]
+                coherently_mutated["self_reported_schema_layout_sha256"] = (
+                    AUTH.canonical_sha256(payload)
+                )
+                self.assertEqual(
+                    AUTH.check_unapproved_candidate_schema_layout(
+                        coherently_mutated
+                    ), coherently_mutated,
+                    "schema/layout checks must not masquerade as source integrity",
+                )
                 forged_path = copy.deepcopy(evidence)
                 forged_path["checkpoint_publication"][
                     "direct_protocol_image_files"
                 ][0]["path"] = "PfT-image.dmtcp"
                 payload = copy.deepcopy(forged_path)
-                del payload["candidate_payload_sha256"]
-                forged_path["candidate_payload_sha256"] = (
+                del payload["self_reported_schema_layout_sha256"]
+                forged_path["self_reported_schema_layout_sha256"] = (
                     AUTH.canonical_sha256(payload)
                 )
                 with self.assertRaisesRegex(
                     AUTH.AuthenticationError, "PFT namespace",
                 ):
-                    AUTH.validate_unapproved_candidate(forged_path)
+                    AUTH.check_unapproved_candidate_schema_layout(forged_path)
                 coherently_forged_path = copy.deepcopy(evidence)
                 forged_publication = coherently_forged_path[
                     "checkpoint_publication"
@@ -1347,7 +1482,7 @@ class LifecycleTests(unittest.TestCase):
                 forged_publication["ordered_images"][0]["path"] = (
                     "PfT-image.dmtcp"
                 )
-                forged_manifest = AUTH.direct_ordered_manifest_sha256(
+                forged_manifest = AUTH.direct_canonical_sha256(
                     forged_publication["direct_protocol_image_files"]
                 )
                 forged_directory = f"checkpoints/{forged_manifest}"
@@ -1366,14 +1501,58 @@ class LifecycleTests(unittest.TestCase):
                     forged_publication["direct_protocol_image_files"]
                 ]
                 payload = copy.deepcopy(coherently_forged_path)
-                del payload["candidate_payload_sha256"]
-                coherently_forged_path["candidate_payload_sha256"] = (
+                del payload["self_reported_schema_layout_sha256"]
+                coherently_forged_path["self_reported_schema_layout_sha256"] = (
                     AUTH.canonical_sha256(payload)
                 )
                 with self.assertRaisesRegex(
                     AUTH.AuthenticationError, "PFT namespace",
                 ):
-                    AUTH.validate_unapproved_candidate(coherently_forged_path)
+                    AUTH.check_unapproved_candidate_schema_layout(
+                        coherently_forged_path
+                    )
+                nested_mutators = {
+                    "origin-tree": lambda item, text: item[
+                        "origin_process_tree"
+                    ].update({"members": [{"process": {
+                        "executable": text, "argv": [text],
+                        "environment": {"PATH": text},
+                    }}]}),
+                    "phase-argv": lambda item, text: item["phases"][0][
+                        "controller"
+                    ]["process"].update({"argv": [text]}),
+                    "coordinator-argv": lambda item, text: item[
+                        "coordinator"
+                    ]["process"].update({"argv": [text]}),
+                    "restart-argv": lambda item, text: item["restart"][
+                        "launcher"
+                    ]["process"].update({"argv": [text]}),
+                    "ld-preload": lambda item, text: item["environments"][
+                        "checkpoint"
+                    ].update({"LD_PRELOAD": text}),
+                    "environment-key": lambda item, text: item["environments"][
+                        "checkpoint"
+                    ].update({text: "untrusted"}),
+                }
+                for hostile_text, message in (
+                    ("/tmp/myPFTbuild.so", "PFT namespace"),
+                    ("/tmp/control\u0085.so", "Unicode control"),
+                ):
+                    for surface, mutate in nested_mutators.items():
+                        with self.subTest(surface=surface, text=hostile_text):
+                            hostile = copy.deepcopy(evidence)
+                            mutate(hostile, hostile_text)
+                            payload = copy.deepcopy(hostile)
+                            del payload["self_reported_schema_layout_sha256"]
+                            hostile["self_reported_schema_layout_sha256"] = (
+                                AUTH.canonical_sha256(payload)
+                            )
+                            with self.assertRaisesRegex(
+                                AUTH.AuthenticationError, message,
+                            ):
+                                AUTH.check_unapproved_candidate_schema_layout(
+                                    hostile
+                                )
                 prior = phase_tokens[0].evidence["event_file"]
                 target = Path("/") / prior["path"]
                 original = target.read_bytes()
