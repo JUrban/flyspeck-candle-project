@@ -18,6 +18,12 @@ python3 scripts/test-compatibility-ledger.py
 python3 scripts/test-compatibility-triage.py
 ```
 
+The ledger checker derives the workspace root from `REPOS_ROOT`, so the
+project repository may itself be a main checkout or a Git worktree.  If the
+direct Candle worktree is not at the default sibling
+`worktrees/candle-loader-v13`, pass its manifest as the optional second
+argument: `check-compatibility-ledger.sh REPOS_ROOT DIRECT_MANIFEST`.
+
 The generator refuses a different repository HEAD or tracked dirty state.  It
 uses `git ls-files`, so untracked build products cannot enter the result.  Output
 ordering, JSON encoding, finding IDs, and summaries are deterministic.  The
