@@ -496,10 +496,12 @@ exported `to_closProg` (11m23s), `to_bvlProg` (8m37s), `to_dataProg`
 (4m21s), `lexerProg` (4m28s), generic `parserProg` (14m01s), `caml_lexProg`
 (11m02s), the large `caml_parserProg` (36m45s), `pancake_lexProg` (3m53s),
 `pancake_parseProg` (4m47s), and `reg_allocProg` (26m42s).  The remaining
-dependency count has fallen from 25 to 15 and `inferProg` is active in its
-known long, mostly silent constraint preprocessing at one full core and about
-13.1 GiB RSS.  The large parser peaked near 31 GiB RSS; combined cold replay
-plus the separate PFT oracle remained near 70 GiB, so the exceptional 120-GiB
-allowance was not needed.  This is a live interim milestone only: stage 2, the
-x64 bootstrap, the x64 proof, the terminal manifest, and the public gate all
-remain pending.
+dependency count has since fallen from 25 to 12.  `inferProg` passed in
+41m29s, saving the cold `open_ienv_v_thm` and `infer_open_v_thm` before the
+declaration-inference translation and theory export.  `explorerProg` and
+`decodeProg` then exported in 8m49s and 8m43s; `sexp_parserProg` is active.
+The large parser peaked near 31 GiB RSS, while these later stages have remained
+below about 18 GiB; combined cold replay plus the separate PFT oracle remained
+near or below 70 GiB, so the exceptional 120-GiB allowance was not needed.
+This is a live interim milestone only: stage 2, the x64 bootstrap, the x64
+proof, the terminal manifest, and the public gate all remain pending.
