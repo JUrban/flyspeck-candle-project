@@ -79,6 +79,12 @@ CHECKPOINT_ATTEMPT_PLAN_POLICY = (
 CHECKPOINT_DIAGNOSTIC_PILOT_KIND = (
     "candle-flyspeck-checkpoint-diagnostic-pilot-v1"
 )
+CHECKPOINT_CONTROLLER_CHALLENGES_KIND = (
+    "candle-flyspeck-checkpoint-controller-challenges-v1"
+)
+CHECKPOINT_CONTROLLER_CHALLENGES_POLICY = (
+    "externally-predeclared-distinct-nonces-and-tokens-v1"
+)
 PROCESS_CHECKPOINT_KIND = "candle-flyspeck-process-checkpoint-v1"
 PROCESS_CHECKPOINT_POLICY = (
     "live-ready-observation-atomic-content-addressed-dmtcp-images-v1"
@@ -116,6 +122,9 @@ CHECKPOINT_TIMING_POLICY = (
 )
 CHECKPOINT_SELECTION_POLICY = (
     "first-nonfinal-action-at-or-after-half-diagnostic-action-time-v1"
+)
+CONTROLLER_ASSERTION_SCOPE = (
+    "controller-asserted-unapproved-without-anchored-os-revalidation-v1"
 )
 RESUME_SAVINGS_NUMERATOR = 3
 RESUME_SAVINGS_DENOMINATOR = 4
@@ -2135,6 +2144,8 @@ def _validate_unapproved_flags(value: dict[str, Any], label: str) -> None:
         value.get("direct_s2_execution_approved") is False and
         value.get("direct_s3_coverage_approved") is False and
         value.get("v1_3_s3_release_approved") is False and
+        value.get("runtime_qualified") is False and
+        value.get("os_evidence_authenticated") is False and
         value.get("pft_used") is False and
         value.get("s2_s3_evidence") is False,
         f"{label} must remain categorically unapproved and PFT-free",
@@ -2189,7 +2200,8 @@ def _validate_dmtcp_authority(value: object) -> dict[str, Any]:
         require(
             isinstance(item, dict) and set(item) == {
                 "role", "path", "bytes", "sha256", "md5",
-            },
+            } and item.get("path") ==
+            f"/usr/local/bin/dmtcp_{item.get('role')}",
             f"malformed DMTCP executable record: {index}",
         )
         _validate_absolute_path(item.get("path"),
@@ -2342,8 +2354,62 @@ def _checkpoint_action_projection(action: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _validate_controller_challenges(value: object) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "policy", "challenge_id",
+        "diagnostic_pilot_nonce", "origin_attempt_nonce", "checkpoint_token",
+        "resume_nonce", "resume_token", "clean_attempt_nonces",
+        "authenticated_plan", "diagnostic_pilot", "dmtcp_authority",
+        "resource_limits", "runtime_environment", "checkpoint_environment",
+        "pft_used",
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == CHECKPOINT_CONTROLLER_CHALLENGES_KIND and
+        value.get("policy") == CHECKPOINT_CONTROLLER_CHALLENGES_POLICY and
+        value.get("pft_used") is False,
+        "malformed externally supplied controller challenges",
+    )
+    _hex(value.get("challenge_id"), HEX64, "controller challenge ID")
+    nonce_fields = (
+        "diagnostic_pilot_nonce", "origin_attempt_nonce", "resume_nonce",
+    )
+    nonces = [
+        _hex(value.get(field), HEX32, f"controller {field}")
+        for field in nonce_fields
+    ]
+    clean_nonces = value.get("clean_attempt_nonces")
+    require(
+        isinstance(clean_nonces, list) and len(clean_nonces) == 2,
+        "controller challenges require exactly two clean-attempt nonces",
+    )
+    nonces.extend(
+        _hex(item, HEX32, f"controller clean-attempt nonce: {index}")
+        for index, item in enumerate(clean_nonces, start=1)
+    )
+    tokens = [
+        _hex(value.get(field), HEX64, f"controller {field}")
+        for field in ("checkpoint_token", "resume_token")
+    ]
+    require(
+        len(set(nonces)) == len(nonces) and
+        len(set(tokens + [value["challenge_id"]])) == 3,
+        "controller challenges contain reused nonces or tokens",
+    )
+    for field in (
+        "authenticated_plan", "diagnostic_pilot", "dmtcp_authority",
+        "resource_limits", "runtime_environment", "checkpoint_environment",
+    ):
+        _validate_content_record(
+            value.get(field), f"controller challenge {field}",
+        )
+    return value
+
+
 def _validate_checkpoint_diagnostic_pilot(
     value: object, authenticated_plan: object,
+    controller_challenges: dict[str, Any],
 ) -> list[int]:
     fields = {
         "schema", "kind", "authenticated_plan", "attempt_nonce",
@@ -2362,8 +2428,12 @@ def _validate_checkpoint_diagnostic_pilot(
         value.get("promotion") is False and value.get("pft_used") is False,
         "malformed or plan-spliced checkpoint diagnostic pilot",
     )
-    _hex(value.get("attempt_nonce"), HEX32,
-         "checkpoint diagnostic-pilot nonce")
+    require(
+        _hex(value.get("attempt_nonce"), HEX32,
+             "checkpoint diagnostic-pilot nonce") ==
+        controller_challenges["diagnostic_pilot_nonce"],
+        "diagnostic pilot nonce was not externally predeclared",
+    )
     elapsed = value.get("action_elapsed_ns")
     require(
         isinstance(elapsed, list) and len(elapsed) == FINAL_ACTION_COUNT and
@@ -2423,25 +2493,28 @@ def _checkpoint_timing_contract() -> dict[str, Any]:
         "savings_numerator": RESUME_SAVINGS_NUMERATOR,
         "savings_denominator": RESUME_SAVINGS_DENOMINATOR,
         "integer_cross_multiplication": True,
-        "rss_and_disk_sampling_required": True,
+        "address_space_rss_disk_cadence_sampling_required": True,
+        "measurement_authentication_scope": CONTROLLER_ASSERTION_SCOPE,
     }
 
 
 CHECKPOINT_UNAPPROVED_FIELDS = {
     "promotion", "approval_included", "direct_s2_execution_approved",
     "direct_s3_coverage_approved", "v1_3_s3_release_approved", "pft_used",
-    "s2_s3_evidence",
+    "s2_s3_evidence", "runtime_qualified", "os_evidence_authenticated",
 }
 
 
 def validate_checkpoint_attempt_plan(
     value: object, *, authenticated_plan: object,
     diagnostic_pilot: object, dmtcp_authority: object,
+    controller_challenges: object,
 ) -> dict[str, Any]:
     """Validate a pre-attempt policy value against separately supplied inputs."""
     fields = {
         "schema", "kind", "policy", "state", "authenticated_plan",
-        "diagnostic_pilot", "dmtcp_authority", "final_boundary_id",
+        "diagnostic_pilot", "dmtcp_authority", "controller_challenges",
+        "final_boundary_id",
         "final_action_count", "checkpoint_boundary", "handshake",
         "timing_policy", "resource_limits", "runtime_environment",
         "checkpoint_environment", *CHECKPOINT_UNAPPROVED_FIELDS,
@@ -2459,14 +2532,26 @@ def validate_checkpoint_attempt_plan(
     )
     _validate_unapproved_flags(value, "checkpoint attempt plan")
     authority = _validate_dmtcp_authority(dmtcp_authority)
+    challenges = _validate_controller_challenges(controller_challenges)
     actions = _validate_checkpoint_plan_actions(authenticated_plan)
     elapsed = _validate_checkpoint_diagnostic_pilot(
-        diagnostic_pilot, authenticated_plan,
+        diagnostic_pilot, authenticated_plan, challenges,
     )
     require(
         value["authenticated_plan"] == _content_record(authenticated_plan) and
         value["diagnostic_pilot"] == _content_record(diagnostic_pilot) and
-        value["dmtcp_authority"] == _content_record(authority),
+        value["dmtcp_authority"] == _content_record(authority) and
+        value["controller_challenges"] == _content_record(challenges) and
+        challenges["authenticated_plan"] ==
+        _content_record(authenticated_plan) and
+        challenges["diagnostic_pilot"] == _content_record(diagnostic_pilot) and
+        challenges["dmtcp_authority"] == _content_record(authority) and
+        challenges["resource_limits"] ==
+        _content_record(value["resource_limits"]) and
+        challenges["runtime_environment"] ==
+        _content_record(value["runtime_environment"]) and
+        challenges["checkpoint_environment"] ==
+        _content_record(value["checkpoint_environment"]),
         "checkpoint attempt plan differs from authenticated source inputs",
     )
     require(
@@ -2486,13 +2571,17 @@ def validate_checkpoint_attempt_plan(
 
 def build_checkpoint_attempt_plan(
     authenticated_plan: object, diagnostic_pilot: object,
-    dmtcp_authority: object, resource_limits: object,
+    dmtcp_authority: object, controller_challenges: object,
+    resource_limits: object,
     runtime_environment: object, checkpoint_environment: object,
 ) -> dict[str, Any]:
     authority = copy.deepcopy(_validate_dmtcp_authority(dmtcp_authority))
+    challenges = copy.deepcopy(
+        _validate_controller_challenges(controller_challenges)
+    )
     actions = _validate_checkpoint_plan_actions(authenticated_plan)
     elapsed = _validate_checkpoint_diagnostic_pilot(
-        diagnostic_pilot, authenticated_plan,
+        diagnostic_pilot, authenticated_plan, challenges,
     )
     _validate_checkpoint_resource_limits(resource_limits)
     _validate_clean_runtime_environment(runtime_environment)
@@ -2505,6 +2594,7 @@ def build_checkpoint_attempt_plan(
         "authenticated_plan": _content_record(authenticated_plan),
         "diagnostic_pilot": _content_record(diagnostic_pilot),
         "dmtcp_authority": _content_record(authority),
+        "controller_challenges": _content_record(challenges),
         "final_boundary_id": FINAL_BOUNDARY_ID,
         "final_action_count": FINAL_ACTION_COUNT,
         "checkpoint_boundary": _derive_checkpoint_boundary(actions, elapsed),
@@ -2518,79 +2608,21 @@ def build_checkpoint_attempt_plan(
         "direct_s2_execution_approved": False,
         "direct_s3_coverage_approved": False,
         "v1_3_s3_release_approved": False,
+        "runtime_qualified": False,
+        "os_evidence_authenticated": False,
         "pft_used": False,
         "s2_s3_evidence": False,
     }
     return validate_checkpoint_attempt_plan(
         value, authenticated_plan=authenticated_plan,
         diagnostic_pilot=diagnostic_pilot, dmtcp_authority=authority,
+        controller_challenges=challenges,
     )
-
-
-def _validate_checkpoint_plan_envelope(value: object) -> dict[str, Any]:
-    fields = {
-        "schema", "kind", "policy", "state", "authenticated_plan",
-        "diagnostic_pilot", "dmtcp_authority", "final_boundary_id",
-        "final_action_count", "checkpoint_boundary", "handshake",
-        "timing_policy", "resource_limits", "runtime_environment",
-        "checkpoint_environment", *CHECKPOINT_UNAPPROVED_FIELDS,
-    }
-    require(
-        isinstance(value, dict) and set(value) == fields and
-        type(value.get("schema")) is int and value["schema"] == 1 and
-        value.get("kind") == CHECKPOINT_ATTEMPT_PLAN_KIND and
-        value.get("policy") == CHECKPOINT_ATTEMPT_PLAN_POLICY and
-        value.get("state") == "predeclared-before-release-attempt" and
-        value.get("final_boundary_id") == FINAL_BOUNDARY_ID and
-        type(value.get("final_action_count")) is int and
-        value["final_action_count"] == FINAL_ACTION_COUNT,
-        "malformed authenticated checkpoint plan envelope",
-    )
-    _validate_unapproved_flags(value, "authenticated checkpoint plan")
-    for field in ("authenticated_plan", "diagnostic_pilot", "dmtcp_authority"):
-        _validate_content_record(value.get(field),
-                                 f"checkpoint plan {field}")
-    boundary = value.get("checkpoint_boundary")
-    require(
-        isinstance(boundary, dict) and set(boundary) == {
-            "selection_policy", "action_index", "completed_action_count",
-            "action", "next_action",
-        } and boundary.get("selection_policy") ==
-        CHECKPOINT_SELECTION_POLICY and
-        type(boundary.get("action_index")) is int and
-        0 <= boundary["action_index"] < FINAL_ACTION_COUNT - 1 and
-        type(boundary.get("completed_action_count")) is int and
-        boundary["completed_action_count"] == boundary["action_index"] + 1,
-        "malformed authenticated checkpoint boundary",
-    )
-    for offset, field in enumerate(("action", "next_action")):
-        action = boundary.get(field)
-        expected_index = boundary["action_index"] + offset
-        require(
-            isinstance(action, dict) and set(action) == {
-                "index", "selected_source", "source_sha256", "source_md5",
-            } and type(action.get("index")) is int and
-            action["index"] == expected_index,
-            f"malformed checkpoint boundary {field}",
-        )
-        _validate_logical_source_key(
-            action.get("selected_source"), f"checkpoint boundary {field}",
-        )
-        _hex(action.get("source_sha256"), HEX64,
-             f"checkpoint boundary {field} SHA-256")
-        _hex(action.get("source_md5"), HEX32,
-             f"checkpoint boundary {field} MD5")
-    require(value.get("handshake") == _checkpoint_handshake_contract() and
-            value.get("timing_policy") == _checkpoint_timing_contract(),
-            "authenticated checkpoint policy contract drift")
-    _validate_checkpoint_resource_limits(value.get("resource_limits"))
-    _validate_clean_runtime_environment(value.get("runtime_environment"))
-    return value
 
 
 def _validate_checkpoint_origin_attempt(
     value: object, checkpoint_plan: dict[str, Any],
-    dmtcp_authority: dict[str, Any],
+    dmtcp_authority: dict[str, Any], controller_challenges: dict[str, Any],
 ) -> dict[str, Any]:
     fields = {
         "schema", "kind", "state", "attempt_nonce", "boundary_id",
@@ -2617,18 +2649,24 @@ def _validate_checkpoint_origin_attempt(
         value.get("s2_s3_evidence") is False,
         "malformed or plan-spliced checkpoint origin attempt",
     )
-    _hex(value.get("attempt_nonce"), HEX32,
-         "checkpoint origin-attempt nonce")
+    require(
+        _hex(value.get("attempt_nonce"), HEX32,
+             "checkpoint origin-attempt nonce") ==
+        controller_challenges["origin_attempt_nonce"],
+        "checkpoint origin nonce was not externally predeclared",
+    )
     return value
 
 
 def _ready_marker(
-    origin_nonce: str, checkpoint_token: str, boundary: dict[str, Any],
+    origin_nonce: str, checkpoint_token: str, challenge_id: str,
+    boundary: dict[str, Any],
 ) -> str:
     action = boundary["action"]
     next_action = boundary["next_action"]
     return (
-        f"{CHECKPOINT_READY_PREFIX} {origin_nonce} {checkpoint_token} "
+        f"{CHECKPOINT_READY_PREFIX} {challenge_id} {origin_nonce} "
+        f"{checkpoint_token} "
         f"{action['index']:03d} {action['source_sha256']} "
         f"{next_action['index']:03d} {next_action['source_sha256']}"
     )
@@ -2636,6 +2674,7 @@ def _ready_marker(
 
 def _validate_ready_observation(
     value: object, checkpoint_plan: dict[str, Any], origin_nonce: str,
+    controller_challenges: dict[str, Any],
 ) -> dict[str, Any]:
     fields = {
         "schema", "kind", "origin_attempt_nonce", "checkpoint_token",
@@ -2643,7 +2682,9 @@ def _validate_ready_observation(
         "next_action_index", "next_source_sha256", "ready_marker",
         "marker_count", "stream_byte_offset", "observed_monotonic_ns",
         "live_controller_observation", "flushed_before_observation",
-        "blocked_before_next_action", "next_action_observed", "pft_used",
+        "blocked_before_next_action", "next_action_observed",
+        "post_ready_action_event_count", "controller_challenge_id",
+        "authentication_scope", "pft_used",
     }
     boundary = checkpoint_plan["checkpoint_boundary"]
     require(
@@ -2671,13 +2712,22 @@ def _validate_ready_observation(
         value.get("flushed_before_observation") is True and
         value.get("blocked_before_next_action") is True and
         value.get("next_action_observed") is False and
+        type(value.get("post_ready_action_event_count")) is int and
+        value["post_ready_action_event_count"] == 0 and
+        value.get("controller_challenge_id") ==
+        controller_challenges["challenge_id"] and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE and
         value.get("pft_used") is False,
         "malformed, late, or non-live checkpoint READY observation",
     )
-    token = _hex(value.get("checkpoint_token"), HEX64,
-                 "checkpoint token")
+    token = _hex(value.get("checkpoint_token"), HEX64, "checkpoint token")
+    require(token == controller_challenges["checkpoint_token"],
+            "checkpoint token was not externally predeclared")
     require(value.get("ready_marker") ==
-            _ready_marker(origin_nonce, token, boundary),
+            _ready_marker(
+                origin_nonce, token, controller_challenges["challenge_id"],
+                boundary,
+            ),
             "checkpoint READY marker differs from its authenticated boundary")
     return value
 
@@ -2687,13 +2737,16 @@ def _validate_checkpoint_image_manifest(
 ) -> dict[str, Any]:
     fields = {
         "schema", "kind", "checkpoint_token", "file_count", "total_bytes",
-        "ordered_file_sha256", "files", "pft_used",
+        "ordered_file_sha256", "files", "authentication_scope",
+        "anchored_nofollow_rehash", "pft_used",
     }
     require(
         isinstance(value, dict) and set(value) == fields and
         type(value.get("schema")) is int and value["schema"] == 1 and
         value.get("kind") == "candle-flyspeck-dmtcp-image-manifest-v1" and
         value.get("checkpoint_token") == checkpoint_token and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE and
+        value.get("anchored_nofollow_rehash") is False and
         value.get("pft_used") is False,
         "malformed or token-spliced checkpoint image manifest",
     )
@@ -2738,35 +2791,63 @@ def _validate_capture_timeline(value: object, ready_ns: int) -> dict[str, Any]:
     fields = {
         "ready_observed_monotonic_ns", "checkpoint_requested_monotonic_ns",
         "checkpoint_completed_monotonic_ns", "origin_terminated_monotonic_ns",
-        "images_published_monotonic_ns",
+        "images_published_monotonic_ns", "authentication_scope",
     }
     require(
         isinstance(value, dict) and set(value) == fields and
         all(type(value.get(field)) is int and value[field] > 0
-            for field in fields) and
+            for field in fields - {"authentication_scope"}) and
         value["ready_observed_monotonic_ns"] == ready_ns and
         value["ready_observed_monotonic_ns"] <=
         value["checkpoint_requested_monotonic_ns"] <
         value["checkpoint_completed_monotonic_ns"] <=
         value["origin_terminated_monotonic_ns"] <
-        value["images_published_monotonic_ns"],
+        value["images_published_monotonic_ns"] and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE,
         "checkpoint capture timeline is incomplete or out of order",
     )
     return value
 
 
 def _validate_origin_process(value: object) -> dict[str, Any]:
+    fields = {
+        "pid", "process_group_id", "start_ticks", "owned_process_tree",
+        "all_owned_processes_terminated", "all_owned_processes_reaped",
+        "termination_signal", "post_ready_action_event_count",
+        "authentication_scope",
+    }
     require(
-        isinstance(value, dict) and set(value) == {
-            "pid", "process_group_id", "start_ticks", "terminated",
-            "termination_signal", "reaped",
-        } and all(type(value.get(field)) is int and value[field] > 0
+        isinstance(value, dict) and set(value) == fields and
+        all(type(value.get(field)) is int and value[field] > 0
                   for field in ("pid", "process_group_id", "start_ticks")) and
-        value.get("terminated") is True and
+        value.get("all_owned_processes_terminated") is True and
+        value.get("all_owned_processes_reaped") is True and
         type(value.get("termination_signal")) is int and
         value["termination_signal"] in {9, 15} and
-        value.get("reaped") is True,
-        "checkpoint origin process was not uniquely identified, killed, and reaped",
+        type(value.get("post_ready_action_event_count")) is int and
+        value["post_ready_action_event_count"] == 0 and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE,
+        "checkpoint origin process tree was not killed and reaped before replay",
+    )
+    tree = value.get("owned_process_tree")
+    require(isinstance(tree, list) and tree,
+            "checkpoint owned process tree is empty")
+    identities: list[tuple[int, int]] = []
+    for index, process in enumerate(tree):
+        require(
+            isinstance(process, dict) and set(process) == {
+                "pid", "parent_pid", "start_ticks", "terminated", "reaped",
+            } and all(type(process.get(field)) is int and process[field] >= 0
+                      for field in ("pid", "parent_pid", "start_ticks")) and
+            process["pid"] > 0 and process["start_ticks"] > 0 and
+            process.get("terminated") is True and process.get("reaped") is True,
+            f"checkpoint owned process was not killed and reaped: {index}",
+        )
+        identities.append((process["pid"], process["start_ticks"]))
+    require(
+        len(set(identities)) == len(identities) and
+        identities[0] == (value["pid"], value["start_ticks"]),
+        "checkpoint owned process identities are reused or omit the root",
     )
     return value
 
@@ -2779,6 +2860,7 @@ def _validate_atomic_checkpoint_publication(
             "staging_path", "published_path", "staging_device",
             "published_parent_device", "rename_noreplace", "parent_fsync",
             "image_files_read_only", "image_directory_read_only",
+            "authentication_scope", "anchored_nofollow_rehash",
         }, "malformed checkpoint atomic-publication record",
     )
     staging = _safe_relative(value.get("staging_path"),
@@ -2797,8 +2879,10 @@ def _validate_atomic_checkpoint_publication(
         value.get("rename_noreplace") is True and
         value.get("parent_fsync") is True and
         value.get("image_files_read_only") is True and
-        value.get("image_directory_read_only") is True,
-        "checkpoint images were not atomically published read-only by content",
+        value.get("image_directory_read_only") is True and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE and
+        value.get("anchored_nofollow_rehash") is False,
+        "checkpoint publication is not an exact unapproved controller assertion",
     )
     return value
 
@@ -2807,7 +2891,8 @@ def _validate_process_checkpoint_envelope(value: object) -> dict[str, Any]:
     fields = {
         "schema", "kind", "policy", "status", "checkpoint_attempt_plan",
         "origin_attempt", "ready_observation", "image_manifest",
-        "dmtcp_authority", "origin_attempt_nonce", "checkpoint_token",
+        "checkpoint_measurement", "dmtcp_authority", "origin_attempt_nonce",
+        "checkpoint_token",
         "final_boundary_id", "final_action_count", "checkpoint_boundary",
         "capture_timeline", "origin_process", "image_set",
         "atomic_publication", *CHECKPOINT_UNAPPROVED_FIELDS,
@@ -2826,7 +2911,7 @@ def _validate_process_checkpoint_envelope(value: object) -> dict[str, Any]:
     _validate_unapproved_flags(value, "authenticated process checkpoint")
     for field in (
         "checkpoint_attempt_plan", "origin_attempt", "ready_observation",
-        "image_manifest", "dmtcp_authority",
+        "image_manifest", "checkpoint_measurement", "dmtcp_authority",
     ):
         _validate_content_record(value.get(field),
                                  f"process checkpoint {field}")
@@ -2838,15 +2923,19 @@ def _validate_process_checkpoint_envelope(value: object) -> dict[str, Any]:
 
 
 def validate_process_checkpoint(
-    value: object, *, checkpoint_plan: object, origin_attempt: object,
-    ready_observation: object, image_manifest: object,
-    dmtcp_authority: object,
+    value: object, *, checkpoint_plan: object, authenticated_plan: object,
+    diagnostic_pilot: object, controller_challenges: object,
+    origin_attempt: object, ready_observation: object,
+    image_manifest: object, checkpoint_measurement: object,
+    capture_timeline: object, origin_process: object,
+    atomic_publication: object, dmtcp_authority: object,
 ) -> dict[str, Any]:
     """Bind a checkpoint record to separately authenticated capture inputs."""
     fields = {
         "schema", "kind", "policy", "status", "checkpoint_attempt_plan",
         "origin_attempt", "ready_observation", "image_manifest",
-        "dmtcp_authority", "origin_attempt_nonce", "checkpoint_token",
+        "checkpoint_measurement", "dmtcp_authority", "origin_attempt_nonce",
+        "checkpoint_token",
         "final_boundary_id", "final_action_count", "checkpoint_boundary",
         "capture_timeline", "origin_process", "image_set",
         "atomic_publication", *CHECKPOINT_UNAPPROVED_FIELDS,
@@ -2857,26 +2946,35 @@ def validate_process_checkpoint(
         "malformed process-checkpoint record",
     )
     _validate_process_checkpoint_envelope(value)
-    plan = _validate_checkpoint_plan_envelope(checkpoint_plan)
     authority = _validate_dmtcp_authority(dmtcp_authority)
-    require(plan["dmtcp_authority"] == _content_record(authority),
-            "checkpoint plan and DMTCP authority differ")
-    _validate_checkpoint_environment(plan.get("checkpoint_environment"),
-                                     authority)
+    challenges = _validate_controller_challenges(controller_challenges)
+    plan = validate_checkpoint_attempt_plan(
+        checkpoint_plan, authenticated_plan=authenticated_plan,
+        diagnostic_pilot=diagnostic_pilot, dmtcp_authority=authority,
+        controller_challenges=challenges,
+    )
     origin = _validate_checkpoint_origin_attempt(
-        origin_attempt, plan, authority,
+        origin_attempt, plan, authority, challenges,
     )
     origin_nonce = origin["attempt_nonce"]
     ready = _validate_ready_observation(
-        ready_observation, plan, origin_nonce,
+        ready_observation, plan, origin_nonce, challenges,
     )
     token = ready["checkpoint_token"]
     images = _validate_checkpoint_image_manifest(image_manifest, token)
+    measurement = _validate_attempt_measurement(
+        checkpoint_measurement,
+        phase="checkpoint-origin-through-image-publication",
+        resource_limits=plan["resource_limits"],
+        expected_nonce=origin_nonce,
+        controller_challenge_id=challenges["challenge_id"],
+    )
     require(
         value["checkpoint_attempt_plan"] == _content_record(plan) and
         value["origin_attempt"] == _content_record(origin) and
         value["ready_observation"] == _content_record(ready) and
         value["image_manifest"] == _content_record(images) and
+        value["checkpoint_measurement"] == _content_record(measurement) and
         value["dmtcp_authority"] == _content_record(authority),
         "process checkpoint differs from authenticated source inputs",
     )
@@ -2887,10 +2985,10 @@ def validate_process_checkpoint(
             value.get("checkpoint_boundary"), plan["checkpoint_boundary"],
         ), "process-checkpoint nonce, token, or boundary drift",
     )
-    _validate_capture_timeline(
-        value.get("capture_timeline"), ready["observed_monotonic_ns"],
+    timeline = _validate_capture_timeline(
+        capture_timeline, ready["observed_monotonic_ns"],
     )
-    _validate_origin_process(value.get("origin_process"))
+    process = _validate_origin_process(origin_process)
     image_set = value.get("image_set")
     require(
         isinstance(image_set, dict) and set(image_set) == {
@@ -2904,26 +3002,48 @@ def validate_process_checkpoint(
     limits = plan["resource_limits"]
     require(images["total_bytes"] <= limits["max_checkpoint_image_bytes"],
             "checkpoint images exceed the predeclared resource limit")
-    _validate_atomic_checkpoint_publication(
-        value.get("atomic_publication"), images["ordered_file_sha256"],
+    publication = _validate_atomic_checkpoint_publication(
+        atomic_publication, images["ordered_file_sha256"],
+    )
+    require(
+        _same_canonical_value(value.get("capture_timeline"), timeline) and
+        _same_canonical_value(value.get("origin_process"), process) and
+        _same_canonical_value(value.get("atomic_publication"), publication),
+        "process checkpoint differs from external controller observations",
     )
     return value
 
 
 def build_process_checkpoint(
-    checkpoint_plan: object, origin_attempt: object,
-    ready_observation: object, image_manifest: object,
+    checkpoint_plan: object, authenticated_plan: object,
+    diagnostic_pilot: object, controller_challenges: object,
+    origin_attempt: object, ready_observation: object,
+    image_manifest: object, checkpoint_measurement: object,
     dmtcp_authority: object, capture_timeline: object,
     origin_process: object, atomic_publication: object,
 ) -> dict[str, Any]:
-    plan = _validate_checkpoint_plan_envelope(checkpoint_plan)
     authority = _validate_dmtcp_authority(dmtcp_authority)
-    origin = _validate_checkpoint_origin_attempt(origin_attempt, plan, authority)
+    challenges = _validate_controller_challenges(controller_challenges)
+    plan = validate_checkpoint_attempt_plan(
+        checkpoint_plan, authenticated_plan=authenticated_plan,
+        diagnostic_pilot=diagnostic_pilot, dmtcp_authority=authority,
+        controller_challenges=challenges,
+    )
+    origin = _validate_checkpoint_origin_attempt(
+        origin_attempt, plan, authority, challenges,
+    )
     ready = _validate_ready_observation(
-        ready_observation, plan, origin["attempt_nonce"],
+        ready_observation, plan, origin["attempt_nonce"], challenges,
     )
     images = _validate_checkpoint_image_manifest(
         image_manifest, ready["checkpoint_token"],
+    )
+    measurement = _validate_attempt_measurement(
+        checkpoint_measurement,
+        phase="checkpoint-origin-through-image-publication",
+        resource_limits=plan["resource_limits"],
+        expected_nonce=origin["attempt_nonce"],
+        controller_challenge_id=challenges["challenge_id"],
     )
     _validate_capture_timeline(
         capture_timeline, ready["observed_monotonic_ns"],
@@ -2941,6 +3061,7 @@ def build_process_checkpoint(
         "origin_attempt": _content_record(origin),
         "ready_observation": _content_record(ready),
         "image_manifest": _content_record(images),
+        "checkpoint_measurement": _content_record(measurement),
         "dmtcp_authority": _content_record(authority),
         "origin_attempt_nonce": origin["attempt_nonce"],
         "checkpoint_token": ready["checkpoint_token"],
@@ -2960,77 +3081,92 @@ def build_process_checkpoint(
         "direct_s2_execution_approved": False,
         "direct_s3_coverage_approved": False,
         "v1_3_s3_release_approved": False,
+        "runtime_qualified": False,
+        "os_evidence_authenticated": False,
         "pft_used": False,
         "s2_s3_evidence": False,
     }
     return validate_process_checkpoint(
-        value, checkpoint_plan=plan, origin_attempt=origin,
+        value, checkpoint_plan=plan, authenticated_plan=authenticated_plan,
+        diagnostic_pilot=diagnostic_pilot,
+        controller_challenges=challenges, origin_attempt=origin,
         ready_observation=ready, image_manifest=images,
+        checkpoint_measurement=measurement,
+        capture_timeline=capture_timeline, origin_process=origin_process,
+        atomic_publication=atomic_publication,
         dmtcp_authority=authority,
     )
 
 
-def _validate_clean_capture_envelope(value: object) -> dict[str, Any]:
-    fields = {
-        "schema", "kind", "boundary_id", "action_count", "receipt",
-        "authenticated_plan", "semantic_projection", "coverage_projection",
-        "cross_runtime_coverage_projection", "authority", "promotion",
-        "approval_included", "direct_s2_execution_approved",
-        "direct_s3_coverage_approved", "v1_3_s3_release_approved",
-        "pft_used", "s2_s3_evidence",
-    }
-    require(
-        isinstance(value, dict) and set(value) == fields and
-        type(value.get("schema")) is int and value["schema"] == 2 and
-        value.get("kind") == AUTHENTICATED_CAPTURE_KIND and
-        value.get("boundary_id") == FINAL_BOUNDARY_ID and
-        type(value.get("action_count")) is int and
-        value["action_count"] == FINAL_ACTION_COUNT,
-        "malformed authenticated clean-capture envelope",
-    )
-    _validate_unapproved_flags(value, "authenticated clean capture")
-    _validate_content_record(value.get("receipt"), "clean-capture receipt")
-    _validate_content_record(value.get("authenticated_plan"),
-                             "clean-capture plan")
-    validate_semantic_projection(value.get("semantic_projection"))
-    validate_coverage_projection(value.get("coverage_projection"))
-    validate_cross_runtime_coverage_projection(
-        value.get("cross_runtime_coverage_projection")
-    )
-    _validate_capture_authority(value.get("authority"))
-    return value
-
-
-def _validate_clean_candidates(value: object) -> list[dict[str, Any]]:
+def _validate_clean_candidates(
+    value: object, *, expected_authority: object,
+    authenticated_checkpoint_plan: object,
+    controller_challenges: dict[str, Any],
+    resource_limits: dict[str, Any],
+) -> list[dict[str, Any]]:
     require(isinstance(value, list) and len(value) == 2,
             "resume qualification requires exactly two clean candidates")
     nonces: list[str] = []
+    receipt_sha256s: list[str] = []
     capture_sha256s: list[str] = []
     for index, candidate in enumerate(value, start=1):
         require(
             isinstance(candidate, dict) and set(candidate) == {
-                "attempt_nonce", "capture",
+                "capture", "raw_receipt", "authenticated_plan",
+                "controller_measurement",
             }, f"malformed clean resume candidate: {index}",
         )
-        nonces.append(_hex(
-            candidate.get("attempt_nonce"), HEX32,
-            f"clean resume candidate nonce: {index}",
-        ))
-        capture = _validate_clean_capture_envelope(candidate.get("capture"))
+        raw_receipt = candidate["raw_receipt"]
+        require(isinstance(raw_receipt, dict),
+                f"malformed clean raw receipt: {index}")
+        nonce = _hex(
+            raw_receipt.get("attempt_nonce"), HEX32,
+            f"clean raw receipt nonce: {index}",
+        )
+        require(
+            nonce == controller_challenges["clean_attempt_nonces"][index - 1],
+            f"clean receipt nonce was not externally predeclared: {index}",
+        )
+        require(
+            _same_canonical_value(
+                candidate["authenticated_plan"], authenticated_checkpoint_plan,
+            ), f"clean attempt plan differs from checkpoint plan: {index}",
+        )
+        capture = validate_authenticated_schema6_capture(
+            candidate["capture"], receipt=raw_receipt,
+            authenticated_plan=candidate["authenticated_plan"],
+            expected_authority=expected_authority,
+        )
+        measurement = _validate_attempt_measurement(
+            candidate["controller_measurement"], phase="clean-full",
+            resource_limits=resource_limits, expected_nonce=nonce,
+            controller_challenge_id=controller_challenges["challenge_id"],
+        )
+        require(measurement["attempt_nonce"] == raw_receipt["attempt_nonce"],
+                f"clean receipt and controller measurement nonce differ: {index}")
+        nonces.append(nonce)
+        receipt_sha256s.append(_content_record(raw_receipt)["sha256"])
         capture_sha256s.append(_content_record(capture)["sha256"])
-    require(len(set(nonces)) == 2 and len(set(capture_sha256s)) == 2,
-            "clean resume candidates or nonces are not distinct")
+    require(
+        len(set(nonces)) == 2 and len(set(receipt_sha256s)) == 2 and
+        len(set(capture_sha256s)) == 2,
+        "clean receipts, captures, or actual attempt nonces are not distinct",
+    )
     return value
 
 
 def _validate_attempt_measurement(
-    value: object, *, phase: str,
+    value: object, *, phase: str, resource_limits: dict[str, Any],
+    expected_nonce: str, controller_challenge_id: str,
 ) -> dict[str, Any]:
     fields = {
         "schema", "kind", "phase", "attempt_nonce", "wall_clock",
         "wall_ns", "cpu_scope", "cpu_ns", "peak_aggregate_rss_kib",
-        "peak_retained_disk_bytes", "sample_count", "sampling_complete",
-        "pft_used",
+        "peak_address_space_bytes", "peak_retained_disk_bytes",
+        "sampling_interval_milliseconds", "sample_count",
+        "maximum_observed_sampling_gap_milliseconds", "sampling_complete",
+        "controller_challenge_id",
+        "authentication_scope", "pft_used",
     }
     require(
         isinstance(value, dict) and set(value) == fields and
@@ -3044,9 +3180,24 @@ def _validate_attempt_measurement(
         all(type(value.get(field)) is int and value[field] > 0
             for field in (
                 "wall_ns", "cpu_ns", "peak_aggregate_rss_kib",
-                "peak_retained_disk_bytes", "sample_count",
+                "peak_address_space_bytes", "peak_retained_disk_bytes",
+                "sampling_interval_milliseconds",
+                "maximum_observed_sampling_gap_milliseconds", "sample_count",
             )) and value["sample_count"] >= 2 and
+        value["attempt_nonce"] == expected_nonce and
+        value["sampling_interval_milliseconds"] ==
+        resource_limits["sampling_interval_milliseconds"] and
+        value["maximum_observed_sampling_gap_milliseconds"] <=
+        value["sampling_interval_milliseconds"] and
+        value["peak_address_space_bytes"] <=
+        resource_limits["max_address_space_bytes"] and
+        value["peak_aggregate_rss_kib"] <=
+        resource_limits["max_aggregate_rss_kib"] and
+        value["peak_retained_disk_bytes"] <=
+        resource_limits["max_retained_disk_bytes"] and
         value.get("sampling_complete") is True and
+        value.get("controller_challenge_id") == controller_challenge_id and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE and
         value.get("pft_used") is False,
         f"malformed or incomplete {phase} measurement",
     )
@@ -3054,13 +3205,167 @@ def _validate_attempt_measurement(
     return value
 
 
+def _validate_restart_context(
+    value: object, *, checkpoint: dict[str, Any], image_manifest: dict[str, Any],
+    checkpoint_plan: dict[str, Any], dmtcp_authority: dict[str, Any],
+    controller_challenges: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "process_checkpoint", "image_manifest",
+        "dmtcp_authority", "resume_nonce", "resume_token", "argv",
+        "environment", "restarted_process", "coordinator", "image_rehash",
+        "authentication_scope", "pft_used",
+    }
+    restart_path = next(
+        item["path"] for item in dmtcp_authority["executables"]
+        if item["role"] == "restart"
+    )
+    publication = checkpoint["atomic_publication"]
+    expected_argv = [
+        restart_path, "--coord-port",
+        checkpoint_plan["checkpoint_environment"]["DMTCP_COORD_PORT"],
+        "--ckptdir", publication["published_path"],
+    ]
+    expected_environment = {
+        **checkpoint_plan["runtime_environment"],
+        **checkpoint_plan["checkpoint_environment"],
+    }
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") == "candle-flyspeck-dmtcp-restart-context-v1" and
+        value.get("process_checkpoint") == _content_record(checkpoint) and
+        value.get("image_manifest") == _content_record(image_manifest) and
+        value.get("dmtcp_authority") == _content_record(dmtcp_authority) and
+        value.get("resume_nonce") == controller_challenges["resume_nonce"] and
+        value.get("resume_token") == controller_challenges["resume_token"] and
+        value.get("argv") == expected_argv and
+        value.get("environment") == expected_environment and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE and
+        value.get("pft_used") is False,
+        "malformed or source-spliced DMTCP restart context",
+    )
+    restarted = value.get("restarted_process")
+    coordinator = value.get("coordinator")
+    process_fields = {"pid", "process_group_id", "start_ticks"}
+    coordinator_fields = {"pid", "start_ticks", "port"}
+    require(
+        isinstance(restarted, dict) and set(restarted) == process_fields and
+        all(type(restarted.get(field)) is int and restarted[field] > 0
+            for field in process_fields) and
+        isinstance(coordinator, dict) and set(coordinator) == coordinator_fields and
+        all(type(coordinator.get(field)) is int and coordinator[field] > 0
+            for field in coordinator_fields) and
+        coordinator["port"] == int(
+            checkpoint_plan["checkpoint_environment"]["DMTCP_COORD_PORT"]
+        ) and restarted["pid"] != coordinator["pid"],
+        "restart process or coordinator identity is incomplete",
+    )
+    origin_identities = {
+        (item["pid"], item["start_ticks"])
+        for item in checkpoint["origin_process"]["owned_process_tree"]
+    }
+    require(
+        (restarted["pid"], restarted["start_ticks"]) not in origin_identities and
+        (coordinator["pid"], coordinator["start_ticks"]) not in origin_identities,
+        "restart reused an origin process identity",
+    )
+    rehash = value.get("image_rehash")
+    require(
+        isinstance(rehash, dict) and set(rehash) == {
+            "authentication_scope", "anchored_nofollow", "file_count",
+            "total_bytes", "ordered_file_sha256", "files",
+        } and rehash.get("authentication_scope") ==
+        CONTROLLER_ASSERTION_SCOPE and
+        rehash.get("anchored_nofollow") is False and
+        rehash.get("file_count") == image_manifest["file_count"] and
+        rehash.get("total_bytes") == image_manifest["total_bytes"] and
+        rehash.get("ordered_file_sha256") ==
+        image_manifest["ordered_file_sha256"] and
+        _same_canonical_value(rehash.get("files"), image_manifest["files"]),
+        "restart image rehash assertion differs from the checkpoint manifest",
+    )
+    return value
+
+
+def _validate_raw_suffix_event_receipt(
+    value: object, *, checkpoint: dict[str, Any], image_manifest: dict[str, Any],
+    restart_context: dict[str, Any], authenticated_plan: dict[str, Any],
+    controller_challenges: dict[str, Any],
+) -> dict[str, Any]:
+    fields = {
+        "schema", "kind", "process_checkpoint", "image_manifest",
+        "restart_context", "resume_nonce", "resume_token",
+        "suffix_start_action_index", "suffix_action_count",
+        "precheckpoint_action_replay_count", "event_count",
+        "ordered_event_sha256", "action_events", "semantic_projection",
+        "coverage_projection", "cross_runtime_coverage_projection",
+        "authentication_scope", "pft_used",
+    }
+    suffix_start = checkpoint["checkpoint_boundary"]["next_action"]["index"]
+    require(
+        isinstance(value, dict) and set(value) == fields and
+        type(value.get("schema")) is int and value["schema"] == 1 and
+        value.get("kind") ==
+        "candle-flyspeck-raw-resumed-suffix-event-receipt-v1" and
+        value.get("process_checkpoint") == _content_record(checkpoint) and
+        value.get("image_manifest") == _content_record(image_manifest) and
+        value.get("restart_context") == _content_record(restart_context) and
+        value.get("resume_nonce") == controller_challenges["resume_nonce"] and
+        value.get("resume_token") == controller_challenges["resume_token"] and
+        type(value.get("suffix_start_action_index")) is int and
+        value["suffix_start_action_index"] == suffix_start and
+        type(value.get("suffix_action_count")) is int and
+        value["suffix_action_count"] == FINAL_ACTION_COUNT - suffix_start and
+        type(value.get("precheckpoint_action_replay_count")) is int and
+        value["precheckpoint_action_replay_count"] == 0 and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE and
+        value.get("pft_used") is False,
+        "malformed or source-spliced raw resumed suffix receipt",
+    )
+    events = value.get("action_events")
+    require(
+        isinstance(events, list) and
+        len(events) == FINAL_ACTION_COUNT - suffix_start and
+        type(value.get("event_count")) is int and
+        value["event_count"] == len(events) and
+        value.get("ordered_event_sha256") == canonical_sha256(events),
+        "raw resumed suffix event sequence is incomplete or mis-hashed",
+    )
+    plan_actions = _validate_checkpoint_plan_actions(authenticated_plan)
+    for offset, event in enumerate(events):
+        action = plan_actions[suffix_start + offset]
+        require(
+            isinstance(event, dict) and set(event) == {
+                "index", "selected_source", "source_sha256", "source_md5",
+                "outcome",
+            } and event.get("index") == action["index"] and
+            event.get("selected_source") == action["selected_source"] and
+            event.get("source_sha256") == action["source_sha256"] and
+            event.get("source_md5") == action["source_md5"] and
+            event.get("outcome") in ACTION_OUTCOMES,
+            f"raw resumed suffix event differs from the plan: {offset}",
+        )
+    validate_semantic_projection(value.get("semantic_projection"))
+    validate_coverage_projection(value.get("coverage_projection"))
+    validate_cross_runtime_coverage_projection(
+        value.get("cross_runtime_coverage_projection")
+    )
+    return value
+
+
 def _validate_resumed_result(
-    value: object, checkpoint: dict[str, Any],
+    value: object, checkpoint: dict[str, Any], *, image_manifest: object,
+    restart_context: object, raw_suffix_event_receipt: object,
+    checkpoint_plan: object, authenticated_plan: object,
+    dmtcp_authority: object,
+    controller_challenges: object, expected_authority: object,
 ) -> dict[str, Any]:
     fields = {
         "schema", "kind", "state", "origin_attempt_nonce", "resume_nonce",
-        "resume_token", "process_checkpoint", "authority", "boundary_id",
-        "action_count",
+        "resume_token", "process_checkpoint", "image_manifest",
+        "restart_context", "raw_suffix_event_receipt", "authority",
+        "boundary_id", "action_count",
         "suffix_start_action_index", "suffix_action_count",
         "precheckpoint_action_replay_count", "semantic_projection",
         "coverage_projection", "cross_runtime_coverage_projection",
@@ -3068,6 +3373,21 @@ def _validate_resumed_result(
     }
     boundary = checkpoint["checkpoint_boundary"]
     suffix_start = boundary["next_action"]["index"]
+    images = _validate_checkpoint_image_manifest(
+        image_manifest, checkpoint["checkpoint_token"],
+    )
+    challenges = _validate_controller_challenges(controller_challenges)
+    authority = _validate_dmtcp_authority(dmtcp_authority)
+    restart = _validate_restart_context(
+        restart_context, checkpoint=checkpoint, image_manifest=images,
+        checkpoint_plan=checkpoint_plan, dmtcp_authority=authority,
+        controller_challenges=challenges,
+    )
+    suffix = _validate_raw_suffix_event_receipt(
+        raw_suffix_event_receipt, checkpoint=checkpoint, image_manifest=images,
+        restart_context=restart, authenticated_plan=authenticated_plan,
+        controller_challenges=challenges,
+    )
     require(
         isinstance(value, dict) and set(value) == fields and
         type(value.get("schema")) is int and value["schema"] == 1 and
@@ -3075,7 +3395,12 @@ def _validate_resumed_result(
         value.get("state") == "completed-unapproved" and
         value.get("origin_attempt_nonce") ==
         checkpoint["origin_attempt_nonce"] and
+        value.get("resume_nonce") == challenges["resume_nonce"] and
+        value.get("resume_token") == challenges["resume_token"] and
         value.get("process_checkpoint") == _content_record(checkpoint) and
+        value.get("image_manifest") == _content_record(images) and
+        value.get("restart_context") == _content_record(restart) and
+        value.get("raw_suffix_event_receipt") == _content_record(suffix) and
         value.get("boundary_id") == FINAL_BOUNDARY_ID and
         type(value.get("action_count")) is int and
         value["action_count"] == FINAL_ACTION_COUNT and
@@ -3102,28 +3427,49 @@ def _validate_resumed_result(
     validate_cross_runtime_coverage_projection(
         value.get("cross_runtime_coverage_projection")
     )
-    _validate_capture_authority(value.get("authority"))
+    capture_authority = _validate_capture_authority(value.get("authority"))
+    expected = _validate_capture_authority(expected_authority)
+    require(_same_canonical_value(capture_authority, expected),
+            "resumed-result authority differs from expected authority")
+    require(
+        _same_canonical_value(
+            value["semantic_projection"], suffix["semantic_projection"],
+        ) and _same_canonical_value(
+            value["coverage_projection"], suffix["coverage_projection"],
+        ) and _same_canonical_value(
+            value["cross_runtime_coverage_projection"],
+            suffix["cross_runtime_coverage_projection"],
+        ), "resumed-result projections differ from the raw suffix receipt",
+    )
     return value
 
 
 def _resumed_marker(
-    checkpoint: dict[str, Any], resume_nonce: str, resume_token: str,
+    checkpoint: dict[str, Any], image_manifest: dict[str, Any],
+    challenge_id: str, resume_nonce: str, resume_token: str,
 ) -> str:
     next_action = checkpoint["checkpoint_boundary"]["next_action"]
     return (
-        f"{CHECKPOINT_RESUMED_PREFIX} {checkpoint['origin_attempt_nonce']} "
+        f"{CHECKPOINT_RESUMED_PREFIX} {challenge_id} "
+        f"{checkpoint['origin_attempt_nonce']} "
         f"{checkpoint['checkpoint_token']} {resume_nonce} {resume_token} "
+        f"{image_manifest['ordered_file_sha256']} "
         f"{next_action['index']:03d} {next_action['source_sha256']}"
     )
 
 
 def _validate_resumed_observation(
     value: object, checkpoint: dict[str, Any], resumed_result: dict[str, Any],
+    *, image_manifest: dict[str, Any], restart_context: dict[str, Any],
+    raw_suffix_event_receipt: dict[str, Any],
+    controller_challenges: dict[str, Any],
 ) -> dict[str, Any]:
     fields = {
         "schema", "kind", "origin_attempt_nonce", "checkpoint_token",
         "resume_nonce", "resume_token", "next_action_index",
-        "next_source_sha256", "resumed_marker", "marker_count",
+        "next_source_sha256", "process_checkpoint", "image_manifest",
+        "restart_context", "raw_suffix_event_receipt", "resumed_marker",
+        "marker_count", "controller_challenge_id", "authentication_scope",
         "stream_byte_offset", "resumed_observed_monotonic_ns",
         "next_action_observed_monotonic_ns", "live_controller_observation",
         "replayed_precheckpoint_action_count", "pft_used",
@@ -3139,6 +3485,11 @@ def _validate_resumed_observation(
         value.get("checkpoint_token") == checkpoint["checkpoint_token"] and
         value.get("resume_nonce") == resumed_result["resume_nonce"] and
         value.get("resume_token") == resumed_result["resume_token"] and
+        value.get("process_checkpoint") == _content_record(checkpoint) and
+        value.get("image_manifest") == _content_record(image_manifest) and
+        value.get("restart_context") == _content_record(restart_context) and
+        value.get("raw_suffix_event_receipt") ==
+        _content_record(raw_suffix_event_receipt) and
         type(value.get("next_action_index")) is int and
         value["next_action_index"] == next_action["index"] and
         value.get("next_source_sha256") == next_action["source_sha256"] and
@@ -3152,6 +3503,9 @@ def _validate_resumed_observation(
         value["resumed_observed_monotonic_ns"] <
         value["next_action_observed_monotonic_ns"] and
         value.get("live_controller_observation") is True and
+        value.get("controller_challenge_id") ==
+        controller_challenges["challenge_id"] and
+        value.get("authentication_scope") == CONTROLLER_ASSERTION_SCOPE and
         type(value.get("replayed_precheckpoint_action_count")) is int and
         value["replayed_precheckpoint_action_count"] == 0 and
         value.get("pft_used") is False,
@@ -3159,7 +3513,8 @@ def _validate_resumed_observation(
     )
     require(
         value.get("resumed_marker") == _resumed_marker(
-            checkpoint, resumed_result["resume_nonce"],
+            checkpoint, image_manifest, controller_challenges["challenge_id"],
+            resumed_result["resume_nonce"],
             resumed_result["resume_token"],
         ), "RESUMED marker differs from authenticated resume inputs",
     )
@@ -3197,6 +3552,7 @@ def _timing_comparison(
 
 def _resource_comparison(
     checkpoint_plan: dict[str, Any], checkpoint: dict[str, Any],
+    checkpoint_measurement: dict[str, Any],
     clean_measurements: list[dict[str, Any]],
     resume_measurement: dict[str, Any],
 ) -> dict[str, Any]:
@@ -3205,41 +3561,76 @@ def _resource_comparison(
                  for item in clean_measurements]
     clean_disk = [item["peak_retained_disk_bytes"]
                   for item in clean_measurements]
+    clean_address_space = [item["peak_address_space_bytes"]
+                           for item in clean_measurements]
     image_bytes = checkpoint["image_set"]["total_bytes"]
     within = (
         all(item <= limits["max_aggregate_rss_kib"] for item in clean_rss) and
+        checkpoint_measurement["peak_aggregate_rss_kib"] <=
+        limits["max_aggregate_rss_kib"] and
         resume_measurement["peak_aggregate_rss_kib"] <=
         limits["max_aggregate_rss_kib"] and
+        all(item <= limits["max_address_space_bytes"]
+            for item in clean_address_space) and
+        checkpoint_measurement["peak_address_space_bytes"] <=
+        limits["max_address_space_bytes"] and
+        resume_measurement["peak_address_space_bytes"] <=
+        limits["max_address_space_bytes"] and
         all(item <= limits["max_retained_disk_bytes"] for item in clean_disk) and
+        checkpoint_measurement["peak_retained_disk_bytes"] <=
+        limits["max_retained_disk_bytes"] and
         resume_measurement["peak_retained_disk_bytes"] <=
         limits["max_retained_disk_bytes"] and
         image_bytes <= limits["max_checkpoint_image_bytes"]
     )
     return {
-        "policy": "complete-sampling-within-predeclared-ceilings-v1",
+        "policy": (
+            "controller-asserted-complete-sampling-within-predeclared-"
+            "ceilings-unapproved-v1"
+        ),
         "resource_limits": copy.deepcopy(limits),
         "clean_peak_aggregate_rss_kib": clean_rss,
+        "clean_peak_address_space_bytes": clean_address_space,
         "clean_peak_retained_disk_bytes": clean_disk,
+        "checkpoint_peak_aggregate_rss_kib":
+            checkpoint_measurement["peak_aggregate_rss_kib"],
+        "checkpoint_peak_address_space_bytes":
+            checkpoint_measurement["peak_address_space_bytes"],
+        "checkpoint_peak_retained_disk_bytes":
+            checkpoint_measurement["peak_retained_disk_bytes"],
         "resume_peak_aggregate_rss_kib":
             resume_measurement["peak_aggregate_rss_kib"],
+        "resume_peak_address_space_bytes":
+            resume_measurement["peak_address_space_bytes"],
         "resume_peak_retained_disk_bytes":
             resume_measurement["peak_retained_disk_bytes"],
         "checkpoint_image_bytes": image_bytes,
         "within_predeclared_limits": within,
+        "os_evidence_authenticated": False,
+        "runtime_qualified": False,
     }
 
 
 def validate_resume_attempt(
-    value: object, *, checkpoint_plan: object, process_checkpoint: object,
-    clean_candidates: object, resumed_result: object,
-    resumed_observation: object, clean_measurements: object,
+    value: object, *, checkpoint_plan: object, authenticated_plan: object,
+    diagnostic_pilot: object, controller_challenges: object,
+    process_checkpoint: object, origin_attempt: object,
+    ready_observation: object, image_manifest: object,
+    checkpoint_measurement: object, capture_timeline: object,
+    origin_process: object, atomic_publication: object,
+    clean_candidates: object,
+    resumed_result: object, restart_context: object,
+    raw_suffix_event_receipt: object, resumed_observation: object,
     resume_measurement: object, dmtcp_authority: object,
+    expected_capture_authority: object,
 ) -> dict[str, Any]:
     """Bind an unapproved comparison to authenticated clean/resume inputs."""
     fields = {
         "schema", "kind", "policy", "status", "checkpoint_attempt_plan",
         "process_checkpoint", "dmtcp_authority", "clean_attempts",
-        "resumed_result", "resumed_observation", "resume_measurement",
+        "checkpoint_measurement", "resumed_result", "restart_context",
+        "raw_suffix_event_receipt", "resumed_observation",
+        "resume_measurement",
         "origin_attempt_nonce", "resume_nonce", "resume_token",
         "final_boundary_id", "final_action_count", "semantic_projection",
         "coverage_projection", "cross_runtime_coverage_projection",
@@ -3258,58 +3649,80 @@ def validate_resume_attempt(
         "malformed resume-attempt record",
     )
     _validate_unapproved_flags(value, "resume attempt")
-    plan = _validate_checkpoint_plan_envelope(checkpoint_plan)
-    checkpoint = _validate_process_checkpoint_envelope(process_checkpoint)
     authority = _validate_dmtcp_authority(dmtcp_authority)
-    require(
-        checkpoint["checkpoint_attempt_plan"] == _content_record(plan) and
-        checkpoint["dmtcp_authority"] == _content_record(authority) and
-        plan["dmtcp_authority"] == _content_record(authority) and
-        _same_canonical_value(
-            checkpoint["checkpoint_boundary"], plan["checkpoint_boundary"],
-        ),
-        "resume inputs do not share one checkpoint plan and DMTCP authority",
+    capture_authority = _validate_capture_authority(
+        expected_capture_authority
     )
-    _validate_checkpoint_environment(plan["checkpoint_environment"], authority)
-    candidates = _validate_clean_candidates(clean_candidates)
-    resumed = _validate_resumed_result(resumed_result, checkpoint)
+    challenges = _validate_controller_challenges(controller_challenges)
+    plan = validate_checkpoint_attempt_plan(
+        checkpoint_plan, authenticated_plan=authenticated_plan,
+        diagnostic_pilot=diagnostic_pilot, dmtcp_authority=authority,
+        controller_challenges=challenges,
+    )
+    checkpoint = validate_process_checkpoint(
+        process_checkpoint, checkpoint_plan=plan,
+        authenticated_plan=authenticated_plan, diagnostic_pilot=diagnostic_pilot,
+        controller_challenges=challenges, origin_attempt=origin_attempt,
+        ready_observation=ready_observation, image_manifest=image_manifest,
+        checkpoint_measurement=checkpoint_measurement,
+        capture_timeline=capture_timeline, origin_process=origin_process,
+        atomic_publication=atomic_publication,
+        dmtcp_authority=authority,
+    )
+    images = _validate_checkpoint_image_manifest(
+        image_manifest, checkpoint["checkpoint_token"],
+    )
+    candidates = _validate_clean_candidates(
+        clean_candidates, expected_authority=capture_authority,
+        authenticated_checkpoint_plan=authenticated_plan,
+        controller_challenges=challenges,
+        resource_limits=plan["resource_limits"],
+    )
+    restart = _validate_restart_context(
+        restart_context, checkpoint=checkpoint, image_manifest=images,
+        checkpoint_plan=plan, dmtcp_authority=authority,
+        controller_challenges=challenges,
+    )
+    suffix = _validate_raw_suffix_event_receipt(
+        raw_suffix_event_receipt, checkpoint=checkpoint, image_manifest=images,
+        restart_context=restart, authenticated_plan=authenticated_plan,
+        controller_challenges=challenges,
+    )
+    resumed = _validate_resumed_result(
+        resumed_result, checkpoint, image_manifest=images,
+        restart_context=restart, raw_suffix_event_receipt=suffix,
+        checkpoint_plan=plan, authenticated_plan=authenticated_plan,
+        dmtcp_authority=authority, controller_challenges=challenges,
+        expected_authority=capture_authority,
+    )
     observation = _validate_resumed_observation(
-        resumed_observation, checkpoint, resumed,
-    )
-    require(
-        isinstance(clean_measurements, list) and len(clean_measurements) == 2,
-        "resume qualification requires two clean measurements",
+        resumed_observation, checkpoint, resumed, image_manifest=images,
+        restart_context=restart, raw_suffix_event_receipt=suffix,
+        controller_challenges=challenges,
     )
     clean_metrics = [
-        _validate_attempt_measurement(item, phase="clean-full")
-        for item in clean_measurements
+        _validate_attempt_measurement(
+            item["controller_measurement"], phase="clean-full",
+            resource_limits=plan["resource_limits"],
+            expected_nonce=item["raw_receipt"]["attempt_nonce"],
+            controller_challenge_id=challenges["challenge_id"],
+        ) for item in candidates
     ]
-    for candidate, measurement in zip(candidates, clean_metrics, strict=True):
-        require(candidate["attempt_nonce"] == measurement["attempt_nonce"],
-                "clean candidate and measurement nonce differ")
     resume_metric = _validate_attempt_measurement(
         resume_measurement, phase="restart-through-final-validation",
+        resource_limits=plan["resource_limits"],
+        expected_nonce=challenges["resume_nonce"],
+        controller_challenge_id=challenges["challenge_id"],
     )
     require(resume_metric["attempt_nonce"] == resumed["resume_nonce"],
             "resumed result and measurement nonce differ")
     all_nonces = [
         checkpoint["origin_attempt_nonce"], resumed["resume_nonce"],
-        *(item["attempt_nonce"] for item in candidates),
+        *(item["raw_receipt"]["attempt_nonce"] for item in candidates),
     ]
     require(len(set(all_nonces)) == 4,
             "origin, resume, and clean attempt nonces are not distinct")
     clean_captures = [item["capture"] for item in candidates]
-    require(
-        all(item["authenticated_plan"] == plan["authenticated_plan"]
-            for item in clean_captures) and
-        all(_same_canonical_value(
-                item["authority"], clean_captures[0]["authority"],
-            ) for item in clean_captures) and
-        _same_canonical_value(
-            resumed["authority"], clean_captures[0]["authority"],
-        ),
-        "clean and resumed inputs do not share one plan and runtime authority",
-    )
     semantic = resumed["semantic_projection"]
     coverage = resumed["coverage_projection"]
     cross_coverage = resumed["cross_runtime_coverage_projection"]
@@ -3325,7 +3738,7 @@ def validate_resume_attempt(
     )
     timing = _timing_comparison(clean_metrics, resume_metric)
     resources = _resource_comparison(
-        plan, checkpoint, clean_metrics, resume_metric,
+        plan, checkpoint, checkpoint_measurement, clean_metrics, resume_metric,
     )
     require(timing["materially_cheaper"] is True,
             "resume is not at least 25 percent cheaper in wall and CPU time")
@@ -3334,8 +3747,11 @@ def validate_resume_attempt(
     expected_clean = [
         {
             "ordinal": index,
-            "attempt_nonce": candidate["attempt_nonce"],
+            "attempt_nonce": candidate["raw_receipt"]["attempt_nonce"],
             "capture": _content_record(candidate["capture"]),
+            "raw_receipt": _content_record(candidate["raw_receipt"]),
+            "authenticated_plan":
+                _content_record(candidate["authenticated_plan"]),
             "measurement": _content_record(measurement),
         }
         for index, (candidate, measurement) in enumerate(
@@ -3347,7 +3763,11 @@ def validate_resume_attempt(
         value["process_checkpoint"] == _content_record(checkpoint) and
         value["dmtcp_authority"] == _content_record(authority) and
         value["clean_attempts"] == expected_clean and
+        value["checkpoint_measurement"] ==
+        _content_record(checkpoint_measurement) and
         value["resumed_result"] == _content_record(resumed) and
+        value["restart_context"] == _content_record(restart) and
+        value["raw_suffix_event_receipt"] == _content_record(suffix) and
         value["resumed_observation"] == _content_record(observation) and
         value["resume_measurement"] == _content_record(resume_metric),
         "resume attempt differs from authenticated source inputs",
@@ -3368,31 +3788,84 @@ def validate_resume_attempt(
 
 
 def build_resume_attempt(
-    checkpoint_plan: object, process_checkpoint: object,
-    clean_candidates: object, resumed_result: object,
-    resumed_observation: object, clean_measurements: object,
+    checkpoint_plan: object, authenticated_plan: object,
+    diagnostic_pilot: object, controller_challenges: object,
+    process_checkpoint: object, origin_attempt: object,
+    ready_observation: object, image_manifest: object,
+    checkpoint_measurement: object, capture_timeline: object,
+    origin_process: object, atomic_publication: object,
+    clean_candidates: object,
+    resumed_result: object, restart_context: object,
+    raw_suffix_event_receipt: object, resumed_observation: object,
     resume_measurement: object, dmtcp_authority: object,
+    expected_capture_authority: object,
 ) -> dict[str, Any]:
-    plan = _validate_checkpoint_plan_envelope(checkpoint_plan)
-    checkpoint = _validate_process_checkpoint_envelope(process_checkpoint)
     authority = _validate_dmtcp_authority(dmtcp_authority)
-    candidates = _validate_clean_candidates(clean_candidates)
-    resumed = _validate_resumed_result(resumed_result, checkpoint)
-    observation = _validate_resumed_observation(
-        resumed_observation, checkpoint, resumed,
+    capture_authority = _validate_capture_authority(expected_capture_authority)
+    challenges = _validate_controller_challenges(controller_challenges)
+    plan = validate_checkpoint_attempt_plan(
+        checkpoint_plan, authenticated_plan=authenticated_plan,
+        diagnostic_pilot=diagnostic_pilot, dmtcp_authority=authority,
+        controller_challenges=challenges,
     )
-    require(isinstance(clean_measurements, list) and len(clean_measurements) == 2,
-            "resume qualification requires two clean measurements")
+    checkpoint = validate_process_checkpoint(
+        process_checkpoint, checkpoint_plan=plan,
+        authenticated_plan=authenticated_plan, diagnostic_pilot=diagnostic_pilot,
+        controller_challenges=challenges, origin_attempt=origin_attempt,
+        ready_observation=ready_observation, image_manifest=image_manifest,
+        checkpoint_measurement=checkpoint_measurement,
+        capture_timeline=capture_timeline, origin_process=origin_process,
+        atomic_publication=atomic_publication,
+        dmtcp_authority=authority,
+    )
+    images = _validate_checkpoint_image_manifest(
+        image_manifest, checkpoint["checkpoint_token"],
+    )
+    candidates = _validate_clean_candidates(
+        clean_candidates, expected_authority=capture_authority,
+        authenticated_checkpoint_plan=authenticated_plan,
+        controller_challenges=challenges,
+        resource_limits=plan["resource_limits"],
+    )
+    restart = _validate_restart_context(
+        restart_context, checkpoint=checkpoint, image_manifest=images,
+        checkpoint_plan=plan, dmtcp_authority=authority,
+        controller_challenges=challenges,
+    )
+    suffix = _validate_raw_suffix_event_receipt(
+        raw_suffix_event_receipt, checkpoint=checkpoint, image_manifest=images,
+        restart_context=restart, authenticated_plan=authenticated_plan,
+        controller_challenges=challenges,
+    )
+    resumed = _validate_resumed_result(
+        resumed_result, checkpoint, image_manifest=images,
+        restart_context=restart, raw_suffix_event_receipt=suffix,
+        checkpoint_plan=plan, authenticated_plan=authenticated_plan,
+        dmtcp_authority=authority, controller_challenges=challenges,
+        expected_authority=capture_authority,
+    )
+    observation = _validate_resumed_observation(
+        resumed_observation, checkpoint, resumed, image_manifest=images,
+        restart_context=restart, raw_suffix_event_receipt=suffix,
+        controller_challenges=challenges,
+    )
     clean_metrics = [
-        _validate_attempt_measurement(item, phase="clean-full")
-        for item in clean_measurements
+        _validate_attempt_measurement(
+            item["controller_measurement"], phase="clean-full",
+            resource_limits=plan["resource_limits"],
+            expected_nonce=item["raw_receipt"]["attempt_nonce"],
+            controller_challenge_id=challenges["challenge_id"],
+        ) for item in candidates
     ]
     resume_metric = _validate_attempt_measurement(
         resume_measurement, phase="restart-through-final-validation",
+        resource_limits=plan["resource_limits"],
+        expected_nonce=challenges["resume_nonce"],
+        controller_challenge_id=challenges["challenge_id"],
     )
     timing = _timing_comparison(clean_metrics, resume_metric)
     resources = _resource_comparison(
-        plan, checkpoint, clean_metrics, resume_metric,
+        plan, checkpoint, checkpoint_measurement, clean_metrics, resume_metric,
     )
     value = {
         "schema": 1,
@@ -3402,11 +3875,15 @@ def build_resume_attempt(
         "checkpoint_attempt_plan": _content_record(plan),
         "process_checkpoint": _content_record(checkpoint),
         "dmtcp_authority": _content_record(authority),
+        "checkpoint_measurement": _content_record(checkpoint_measurement),
         "clean_attempts": [
             {
                 "ordinal": index,
-                "attempt_nonce": candidate["attempt_nonce"],
+                "attempt_nonce": candidate["raw_receipt"]["attempt_nonce"],
                 "capture": _content_record(candidate["capture"]),
+                "raw_receipt": _content_record(candidate["raw_receipt"]),
+                "authenticated_plan":
+                    _content_record(candidate["authenticated_plan"]),
                 "measurement": _content_record(measurement),
             }
             for index, (candidate, measurement) in enumerate(
@@ -3414,6 +3891,8 @@ def build_resume_attempt(
             )
         ],
         "resumed_result": _content_record(resumed),
+        "restart_context": _content_record(restart),
+        "raw_suffix_event_receipt": _content_record(suffix),
         "resumed_observation": _content_record(observation),
         "resume_measurement": _content_record(resume_metric),
         "origin_attempt_nonce": checkpoint["origin_attempt_nonce"],
@@ -3433,14 +3912,24 @@ def build_resume_attempt(
         "direct_s2_execution_approved": False,
         "direct_s3_coverage_approved": False,
         "v1_3_s3_release_approved": False,
+        "runtime_qualified": False,
+        "os_evidence_authenticated": False,
         "pft_used": False,
         "s2_s3_evidence": False,
     }
     return validate_resume_attempt(
-        value, checkpoint_plan=plan, process_checkpoint=checkpoint,
+        value, checkpoint_plan=plan, authenticated_plan=authenticated_plan,
+        diagnostic_pilot=diagnostic_pilot, controller_challenges=challenges,
+        process_checkpoint=checkpoint, origin_attempt=origin_attempt,
+        ready_observation=ready_observation, image_manifest=images,
+        checkpoint_measurement=checkpoint_measurement,
+        capture_timeline=capture_timeline, origin_process=origin_process,
+        atomic_publication=atomic_publication,
         clean_candidates=candidates, resumed_result=resumed,
-        resumed_observation=observation, clean_measurements=clean_metrics,
-        resume_measurement=resume_metric, dmtcp_authority=authority,
+        restart_context=restart, raw_suffix_event_receipt=suffix,
+        resumed_observation=observation, resume_measurement=resume_metric,
+        dmtcp_authority=authority,
+        expected_capture_authority=capture_authority,
     )
 
 

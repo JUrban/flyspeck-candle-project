@@ -701,6 +701,19 @@ def checkpoint_protocol_fixture() -> dict:
             list(subject.CHECKPOINT_FORBIDDEN_ENVIRONMENT_NAMES),
         "pft_used": False,
     }
+    challenges = {
+        "schema": 1,
+        "kind": subject.CHECKPOINT_CONTROLLER_CHALLENGES_KIND,
+        "policy": subject.CHECKPOINT_CONTROLLER_CHALLENGES_POLICY,
+        "challenge_id": "9" * 64,
+        "diagnostic_pilot_nonce": "d" * 32,
+        "origin_attempt_nonce": "8" * 32,
+        "checkpoint_token": "e" * 64,
+        "resume_nonce": "3" * 32,
+        "resume_token": "4" * 64,
+        "clean_attempt_nonces": ["1" * 32, "2" * 32],
+        "pft_used": False,
+    }
     pilot = {
         "schema": 1,
         "kind": subject.CHECKPOINT_DIAGNOSTIC_PILOT_KIND,
@@ -739,11 +752,20 @@ def checkpoint_protocol_fixture() -> dict:
             item["path"] for item in authority["injected_libraries"]
         ),
     }
+    challenges.update({
+        "authenticated_plan": subject._content_record(authenticated_plan),
+        "diagnostic_pilot": subject._content_record(pilot),
+        "dmtcp_authority": subject._content_record(authority),
+        "resource_limits": subject._content_record(limits),
+        "runtime_environment": subject._content_record(runtime_environment),
+        "checkpoint_environment":
+            subject._content_record(checkpoint_environment),
+    })
     checkpoint_plan = subject.build_checkpoint_attempt_plan(
-        authenticated_plan, pilot, authority, limits,
+        authenticated_plan, pilot, authority, challenges, limits,
         runtime_environment, checkpoint_environment,
     )
-    origin_nonce = "8" * 32
+    origin_nonce = challenges["origin_attempt_nonce"]
     origin_attempt = {
         "schema": 1,
         "kind": "candle-flyspeck-checkpointable-full-attempt-v1",
@@ -759,7 +781,7 @@ def checkpoint_protocol_fixture() -> dict:
         "pft_used": False,
         "s2_s3_evidence": False,
     }
-    token = "e" * 64
+    token = challenges["checkpoint_token"]
     boundary = checkpoint_plan["checkpoint_boundary"]
     ready = {
         "schema": 1,
@@ -771,7 +793,9 @@ def checkpoint_protocol_fixture() -> dict:
         "source_sha256": boundary["action"]["source_sha256"],
         "next_action_index": boundary["next_action"]["index"],
         "next_source_sha256": boundary["next_action"]["source_sha256"],
-        "ready_marker": subject._ready_marker(origin_nonce, token, boundary),
+        "ready_marker": subject._ready_marker(
+            origin_nonce, token, challenges["challenge_id"], boundary,
+        ),
         "marker_count": 1,
         "stream_byte_offset": 1234,
         "observed_monotonic_ns": 10_000,
@@ -779,6 +803,9 @@ def checkpoint_protocol_fixture() -> dict:
         "flushed_before_observation": True,
         "blocked_before_next_action": True,
         "next_action_observed": False,
+        "post_ready_action_event_count": 0,
+        "controller_challenge_id": challenges["challenge_id"],
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
         "pft_used": False,
     }
     files = [
@@ -801,6 +828,29 @@ def checkpoint_protocol_fixture() -> dict:
         "total_bytes": sum(item["bytes"] for item in files),
         "ordered_file_sha256": subject.canonical_sha256(files),
         "files": files,
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
+        "anchored_nofollow_rehash": False,
+        "pft_used": False,
+    }
+    checkpoint_measurement = {
+        "schema": 1,
+        "kind": "candle-flyspeck-direct-attempt-measurement-v1",
+        "phase": "checkpoint-origin-through-image-publication",
+        "attempt_nonce": origin_nonce,
+        "wall_clock": "CLOCK_MONOTONIC",
+        "wall_ns": 500,
+        "cpu_scope": "owned-process-tree-user-plus-system-nanoseconds",
+        "cpu_ns": 400,
+        "peak_aggregate_rss_kib": 12_000,
+        "peak_address_space_bytes": 20_000,
+        "peak_retained_disk_bytes": 30_000,
+        "sampling_interval_milliseconds":
+            limits["sampling_interval_milliseconds"],
+        "maximum_observed_sampling_gap_milliseconds": 1000,
+        "sample_count": 10,
+        "sampling_complete": True,
+        "controller_challenge_id": challenges["challenge_id"],
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
         "pft_used": False,
     }
     timeline = {
@@ -809,14 +859,24 @@ def checkpoint_protocol_fixture() -> dict:
         "checkpoint_completed_monotonic_ns": 12_000,
         "origin_terminated_monotonic_ns": 12_000,
         "images_published_monotonic_ns": 13_000,
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
     }
     origin_process = {
         "pid": 123,
         "process_group_id": 123,
         "start_ticks": 456,
-        "terminated": True,
+        "owned_process_tree": [{
+            "pid": 123,
+            "parent_pid": 0,
+            "start_ticks": 456,
+            "terminated": True,
+            "reaped": True,
+        }],
+        "all_owned_processes_terminated": True,
+        "all_owned_processes_reaped": True,
         "termination_signal": 15,
-        "reaped": True,
+        "post_ready_action_event_count": 0,
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
     }
     atomic_publication = {
         "staging_path": "staging/checkpoint-e",
@@ -828,9 +888,12 @@ def checkpoint_protocol_fixture() -> dict:
         "parent_fsync": True,
         "image_files_read_only": True,
         "image_directory_read_only": True,
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
+        "anchored_nofollow_rehash": False,
     }
     checkpoint = subject.build_process_checkpoint(
-        checkpoint_plan, origin_attempt, ready, images, authority,
+        checkpoint_plan, authenticated_plan, pilot, challenges,
+        origin_attempt, ready, images, checkpoint_measurement, authority,
         timeline, origin_process, atomic_publication,
     )
     capture_authority = {
@@ -841,23 +904,149 @@ def checkpoint_protocol_fixture() -> dict:
         "hol4_commit": "3" * 40,
         "flyspeck_commit": "f" * 40,
     }
-    clean_one = subject.build_authenticated_schema6_capture(
-        raw_receipt, authenticated_plan, capture_authority,
-    )
-    clean_two = copy.deepcopy(clean_one)
-    clean_two["receipt"]["sha256"] = "0" * 64
-    clean_candidates = [
-        {"attempt_nonce": "1" * 32, "capture": clean_one},
-        {"attempt_nonce": "2" * 32, "capture": clean_two},
+    clean_receipts = []
+    clean_captures = []
+    for nonce in challenges["clean_attempt_nonces"]:
+        receipt = copy.deepcopy(raw_receipt)
+        receipt["attempt_nonce"] = nonce
+        receipt["physical_source_trace"]["nonce"] = nonce
+        receipt["lp_consumption_contract"]["nonce"] = nonce
+        receipt["lp_certificate_consumption"]["nonce"] = nonce
+        receipt["semantic_coverage"]["physical_source_observation_sha256"] = (
+            subject.canonical_sha256(receipt["physical_source_trace"])
+        )
+        receipt["semantic_coverage"][
+            "lp_certificate_consumption_contract_sha256"
+        ] = subject.canonical_sha256(receipt["lp_consumption_contract"])
+        receipt["semantic_coverage"][
+            "lp_certificate_consumption_observation_sha256"
+        ] = subject.canonical_sha256(receipt["lp_certificate_consumption"])
+        clean_receipts.append(receipt)
+        clean_captures.append(subject.build_authenticated_schema6_capture(
+            receipt, authenticated_plan, capture_authority,
+        ))
+    clean_measurements = [
+        {
+            "schema": 1,
+            "kind": "candle-flyspeck-direct-attempt-measurement-v1",
+            "phase": "clean-full",
+            "attempt_nonce": receipt["attempt_nonce"],
+            "wall_clock": "CLOCK_MONOTONIC",
+            "wall_ns": wall,
+            "cpu_scope": "owned-process-tree-user-plus-system-nanoseconds",
+            "cpu_ns": cpu,
+            "peak_aggregate_rss_kib": 10_000,
+            "peak_address_space_bytes": 18_000,
+            "peak_retained_disk_bytes": 20_000,
+            "sampling_interval_milliseconds":
+                limits["sampling_interval_milliseconds"],
+            "maximum_observed_sampling_gap_milliseconds": 1000,
+            "sample_count": 10,
+            "sampling_complete": True,
+            "controller_challenge_id": challenges["challenge_id"],
+            "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
+            "pft_used": False,
+        }
+        for receipt, wall, cpu in zip(
+            clean_receipts, (1000, 1100), (800, 900), strict=True,
+        )
     ]
+    clean_candidates = [
+        {
+            "capture": capture,
+            "raw_receipt": receipt,
+            "authenticated_plan": copy.deepcopy(authenticated_plan),
+            "controller_measurement": measurement,
+        }
+        for capture, receipt, measurement in zip(
+            clean_captures, clean_receipts, clean_measurements, strict=True,
+        )
+    ]
+    restart_context = {
+        "schema": 1,
+        "kind": "candle-flyspeck-dmtcp-restart-context-v1",
+        "process_checkpoint": subject._content_record(checkpoint),
+        "image_manifest": subject._content_record(images),
+        "dmtcp_authority": subject._content_record(authority),
+        "resume_nonce": challenges["resume_nonce"],
+        "resume_token": challenges["resume_token"],
+        "argv": [
+            "/usr/local/bin/dmtcp_restart", "--coord-port",
+            checkpoint_environment["DMTCP_COORD_PORT"], "--ckptdir",
+            atomic_publication["published_path"],
+        ],
+        "environment": {**runtime_environment, **checkpoint_environment},
+        "restarted_process": {
+            "pid": 234,
+            "process_group_id": 234,
+            "start_ticks": 567,
+        },
+        "coordinator": {
+            "pid": 235,
+            "start_ticks": 568,
+            "port": int(checkpoint_environment["DMTCP_COORD_PORT"]),
+        },
+        "image_rehash": {
+            "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
+            "anchored_nofollow": False,
+            "file_count": images["file_count"],
+            "total_bytes": images["total_bytes"],
+            "ordered_file_sha256": images["ordered_file_sha256"],
+            "files": copy.deepcopy(images["files"]),
+        },
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
+        "pft_used": False,
+    }
+    suffix_events = [
+        {
+            "index": action["index"],
+            "selected_source": action["selected_source"],
+            "source_sha256": action["source_sha256"],
+            "source_md5": action["source_md5"],
+            "outcome": "load",
+        }
+        for action in authenticated_plan["actions"][
+            boundary["next_action"]["index"]:
+        ]
+    ]
+    raw_suffix_event_receipt = {
+        "schema": 1,
+        "kind": "candle-flyspeck-raw-resumed-suffix-event-receipt-v1",
+        "process_checkpoint": subject._content_record(checkpoint),
+        "image_manifest": subject._content_record(images),
+        "restart_context": subject._content_record(restart_context),
+        "resume_nonce": challenges["resume_nonce"],
+        "resume_token": challenges["resume_token"],
+        "suffix_start_action_index": boundary["next_action"]["index"],
+        "suffix_action_count": len(suffix_events),
+        "precheckpoint_action_replay_count": 0,
+        "event_count": len(suffix_events),
+        "ordered_event_sha256": subject.canonical_sha256(suffix_events),
+        "action_events": suffix_events,
+        "semantic_projection": copy.deepcopy(
+            clean_captures[0]["semantic_projection"]
+        ),
+        "coverage_projection": copy.deepcopy(
+            clean_captures[0]["coverage_projection"]
+        ),
+        "cross_runtime_coverage_projection": copy.deepcopy(
+            clean_captures[0]["cross_runtime_coverage_projection"]
+        ),
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
+        "pft_used": False,
+    }
     resumed = {
         "schema": 1,
         "kind": subject.AUTHENTICATED_RESUMED_RESULT_KIND,
         "state": "completed-unapproved",
         "origin_attempt_nonce": origin_nonce,
-        "resume_nonce": "3" * 32,
-        "resume_token": "4" * 64,
+        "resume_nonce": challenges["resume_nonce"],
+        "resume_token": challenges["resume_token"],
         "process_checkpoint": subject._content_record(checkpoint),
+        "image_manifest": subject._content_record(images),
+        "restart_context": subject._content_record(restart_context),
+        "raw_suffix_event_receipt":
+            subject._content_record(raw_suffix_event_receipt),
         "authority": copy.deepcopy(capture_authority),
         "boundary_id": subject.FINAL_BOUNDARY_ID,
         "action_count": subject.FINAL_ACTION_COUNT,
@@ -865,16 +1054,22 @@ def checkpoint_protocol_fixture() -> dict:
         "suffix_action_count":
             subject.FINAL_ACTION_COUNT - boundary["next_action"]["index"],
         "precheckpoint_action_replay_count": 0,
-        "semantic_projection": copy.deepcopy(clean_one["semantic_projection"]),
-        "coverage_projection": copy.deepcopy(clean_one["coverage_projection"]),
+        "semantic_projection": copy.deepcopy(
+            clean_captures[0]["semantic_projection"]
+        ),
+        "coverage_projection": copy.deepcopy(
+            clean_captures[0]["coverage_projection"]
+        ),
         "cross_runtime_coverage_projection": copy.deepcopy(
-            clean_one["cross_runtime_coverage_projection"]
+            clean_captures[0]["cross_runtime_coverage_projection"]
         ),
         "promotion": False,
         "approval_included": False,
         "direct_s2_execution_approved": False,
         "direct_s3_coverage_approved": False,
         "v1_3_s3_release_approved": False,
+        "runtime_qualified": False,
+        "os_evidence_authenticated": False,
         "pft_used": False,
         "s2_s3_evidence": False,
     }
@@ -885,39 +1080,27 @@ def checkpoint_protocol_fixture() -> dict:
         "checkpoint_token": token,
         "resume_nonce": resumed["resume_nonce"],
         "resume_token": resumed["resume_token"],
+        "process_checkpoint": subject._content_record(checkpoint),
+        "image_manifest": subject._content_record(images),
+        "restart_context": subject._content_record(restart_context),
+        "raw_suffix_event_receipt":
+            subject._content_record(raw_suffix_event_receipt),
         "next_action_index": boundary["next_action"]["index"],
         "next_source_sha256": boundary["next_action"]["source_sha256"],
         "resumed_marker": subject._resumed_marker(
-            checkpoint, resumed["resume_nonce"], resumed["resume_token"],
+            checkpoint, images, challenges["challenge_id"],
+            resumed["resume_nonce"], resumed["resume_token"],
         ),
         "marker_count": 1,
         "stream_byte_offset": 2000,
         "resumed_observed_monotonic_ns": 20_000,
         "next_action_observed_monotonic_ns": 21_000,
         "live_controller_observation": True,
+        "controller_challenge_id": challenges["challenge_id"],
+        "authentication_scope": subject.CONTROLLER_ASSERTION_SCOPE,
         "replayed_precheckpoint_action_count": 0,
         "pft_used": False,
     }
-    clean_measurements = [
-        {
-            "schema": 1,
-            "kind": "candle-flyspeck-direct-attempt-measurement-v1",
-            "phase": "clean-full",
-            "attempt_nonce": candidate["attempt_nonce"],
-            "wall_clock": "CLOCK_MONOTONIC",
-            "wall_ns": wall,
-            "cpu_scope": "owned-process-tree-user-plus-system-nanoseconds",
-            "cpu_ns": cpu,
-            "peak_aggregate_rss_kib": 10_000,
-            "peak_retained_disk_bytes": 20_000,
-            "sample_count": 10,
-            "sampling_complete": True,
-            "pft_used": False,
-        }
-        for candidate, wall, cpu in zip(
-            clean_candidates, (1000, 1100), (800, 900), strict=True,
-        )
-    ]
     resume_measurement = {
         **copy.deepcopy(clean_measurements[0]),
         "phase": "restart-through-final-validation",
@@ -927,13 +1110,17 @@ def checkpoint_protocol_fixture() -> dict:
         "peak_retained_disk_bytes": 40_000,
     }
     resume_attempt = subject.build_resume_attempt(
-        checkpoint_plan, checkpoint, clean_candidates, resumed,
-        resumed_observation, clean_measurements, resume_measurement, authority,
+        checkpoint_plan, authenticated_plan, pilot, challenges,
+        checkpoint, origin_attempt, ready, images, checkpoint_measurement,
+        timeline, origin_process, atomic_publication,
+        clean_candidates, resumed, restart_context, raw_suffix_event_receipt,
+        resumed_observation, resume_measurement, authority, capture_authority,
     )
     return {
         "authenticated_plan": authenticated_plan,
         "authority": authority,
         "pilot": pilot,
+        "challenges": challenges,
         "limits": limits,
         "runtime_environment": runtime_environment,
         "checkpoint_environment": checkpoint_environment,
@@ -945,8 +1132,13 @@ def checkpoint_protocol_fixture() -> dict:
         "origin_process": origin_process,
         "atomic_publication": atomic_publication,
         "checkpoint": checkpoint,
+        "checkpoint_measurement": checkpoint_measurement,
+        "capture_authority": capture_authority,
+        "clean_receipts": clean_receipts,
         "clean_candidates": clean_candidates,
         "resumed": resumed,
+        "restart_context": restart_context,
+        "raw_suffix_event_receipt": raw_suffix_event_receipt,
         "resumed_observation": resumed_observation,
         "clean_measurements": clean_measurements,
         "resume_measurement": resume_measurement,
@@ -957,9 +1149,13 @@ def checkpoint_protocol_fixture() -> dict:
 def rebuild_checkpoint(values: dict, **changes) -> dict:
     return subject.build_process_checkpoint(
         changes.get("checkpoint_plan", values["checkpoint_plan"]),
+        changes.get("authenticated_plan", values["authenticated_plan"]),
+        changes.get("pilot", values["pilot"]),
+        changes.get("challenges", values["challenges"]),
         changes.get("origin_attempt", values["origin_attempt"]),
         changes.get("ready", values["ready"]),
         changes.get("images", values["images"]),
+        changes.get("checkpoint_measurement", values["checkpoint_measurement"]),
         changes.get("authority", values["authority"]),
         changes.get("timeline", values["timeline"]),
         changes.get("origin_process", values["origin_process"]),
@@ -970,14 +1166,99 @@ def rebuild_checkpoint(values: dict, **changes) -> dict:
 def rebuild_resume(values: dict, **changes) -> dict:
     return subject.build_resume_attempt(
         changes.get("checkpoint_plan", values["checkpoint_plan"]),
+        changes.get("authenticated_plan", values["authenticated_plan"]),
+        changes.get("pilot", values["pilot"]),
+        changes.get("challenges", values["challenges"]),
         changes.get("checkpoint", values["checkpoint"]),
+        changes.get("origin_attempt", values["origin_attempt"]),
+        changes.get("ready", values["ready"]),
+        changes.get("images", values["images"]),
+        changes.get("checkpoint_measurement", values["checkpoint_measurement"]),
+        changes.get("timeline", values["timeline"]),
+        changes.get("origin_process", values["origin_process"]),
+        changes.get("atomic_publication", values["atomic_publication"]),
         changes.get("clean_candidates", values["clean_candidates"]),
         changes.get("resumed", values["resumed"]),
+        changes.get("restart_context", values["restart_context"]),
+        changes.get(
+            "raw_suffix_event_receipt", values["raw_suffix_event_receipt"],
+        ),
         changes.get("resumed_observation", values["resumed_observation"]),
-        changes.get("clean_measurements", values["clean_measurements"]),
         changes.get("resume_measurement", values["resume_measurement"]),
         changes.get("authority", values["authority"]),
+        changes.get("capture_authority", values["capture_authority"]),
     )
+
+
+def plan_arguments(values: dict) -> dict:
+    return {
+        "authenticated_plan": values["authenticated_plan"],
+        "diagnostic_pilot": values["pilot"],
+        "dmtcp_authority": values["authority"],
+        "controller_challenges": values["challenges"],
+    }
+
+
+def checkpoint_arguments(values: dict) -> dict:
+    return {
+        "checkpoint_plan": values["checkpoint_plan"],
+        "authenticated_plan": values["authenticated_plan"],
+        "diagnostic_pilot": values["pilot"],
+        "controller_challenges": values["challenges"],
+        "origin_attempt": values["origin_attempt"],
+        "ready_observation": values["ready"],
+        "image_manifest": values["images"],
+        "checkpoint_measurement": values["checkpoint_measurement"],
+        "capture_timeline": values["timeline"],
+        "origin_process": values["origin_process"],
+        "atomic_publication": values["atomic_publication"],
+        "dmtcp_authority": values["authority"],
+    }
+
+
+def resume_arguments(values: dict) -> dict:
+    return {
+        **checkpoint_arguments(values),
+        "process_checkpoint": values["checkpoint"],
+        "clean_candidates": values["clean_candidates"],
+        "resumed_result": values["resumed"],
+        "restart_context": values["restart_context"],
+        "raw_suffix_event_receipt": values["raw_suffix_event_receipt"],
+        "resumed_observation": values["resumed_observation"],
+        "resume_measurement": values["resume_measurement"],
+        "expected_capture_authority": values["capture_authority"],
+    }
+
+
+def rebind_resume_chain(
+    values: dict, *, checkpoint: dict | None = None,
+    restart_context: dict | None = None,
+    raw_suffix_event_receipt: dict | None = None,
+) -> dict:
+    """Rehash a malicious chain so tests reach the external-source checks."""
+    checkpoint = copy.deepcopy(checkpoint or values["checkpoint"])
+    restart = copy.deepcopy(restart_context or values["restart_context"])
+    restart["process_checkpoint"] = subject._content_record(checkpoint)
+    suffix = copy.deepcopy(
+        raw_suffix_event_receipt or values["raw_suffix_event_receipt"]
+    )
+    suffix["process_checkpoint"] = subject._content_record(checkpoint)
+    suffix["restart_context"] = subject._content_record(restart)
+    resumed = copy.deepcopy(values["resumed"])
+    resumed["process_checkpoint"] = subject._content_record(checkpoint)
+    resumed["restart_context"] = subject._content_record(restart)
+    resumed["raw_suffix_event_receipt"] = subject._content_record(suffix)
+    observation = copy.deepcopy(values["resumed_observation"])
+    observation["process_checkpoint"] = subject._content_record(checkpoint)
+    observation["restart_context"] = subject._content_record(restart)
+    observation["raw_suffix_event_receipt"] = subject._content_record(suffix)
+    return {
+        "checkpoint": checkpoint,
+        "restart_context": restart,
+        "raw_suffix_event_receipt": suffix,
+        "resumed": resumed,
+        "resumed_observation": observation,
+    }
 
 
 class DirectReleaseProtocolTests(unittest.TestCase):
@@ -1832,43 +2113,26 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             self.assertFalse(record["direct_s2_execution_approved"])
             self.assertFalse(record["direct_s3_coverage_approved"])
             self.assertFalse(record["v1_3_s3_release_approved"])
+            self.assertFalse(record["runtime_qualified"])
+            self.assertFalse(record["os_evidence_authenticated"])
             self.assertFalse(record["pft_used"])
             self.assertFalse(record["s2_s3_evidence"])
 
     def test_checkpoint_protocol_canonical_bytes_and_duplicate_keys(self) -> None:
         values = checkpoint_protocol_fixture()
-        plan_arguments = {
-            "authenticated_plan": values["authenticated_plan"],
-            "diagnostic_pilot": values["pilot"],
-            "dmtcp_authority": values["authority"],
-        }
-        checkpoint_arguments = {
-            "checkpoint_plan": values["checkpoint_plan"],
-            "origin_attempt": values["origin_attempt"],
-            "ready_observation": values["ready"],
-            "image_manifest": values["images"],
-            "dmtcp_authority": values["authority"],
-        }
-        resume_arguments = {
-            "checkpoint_plan": values["checkpoint_plan"],
-            "process_checkpoint": values["checkpoint"],
-            "clean_candidates": values["clean_candidates"],
-            "resumed_result": values["resumed"],
-            "resumed_observation": values["resumed_observation"],
-            "clean_measurements": values["clean_measurements"],
-            "resume_measurement": values["resume_measurement"],
-            "dmtcp_authority": values["authority"],
-        }
+        plan_inputs = plan_arguments(values)
+        checkpoint_inputs = checkpoint_arguments(values)
+        resume_inputs = resume_arguments(values)
         for label, value, validator, arguments in (
             ("plan", values["checkpoint_plan"],
              subject.validate_canonical_checkpoint_attempt_plan_bytes,
-             plan_arguments),
+             plan_inputs),
             ("checkpoint", values["checkpoint"],
              subject.validate_canonical_process_checkpoint_bytes,
-             checkpoint_arguments),
+             checkpoint_inputs),
             ("resume", values["resume_attempt"],
              subject.validate_canonical_resume_attempt_bytes,
-             resume_arguments),
+             resume_inputs),
         ):
             data = subject.canonical_json_bytes(value)
             with self.subTest(label=label):
@@ -1877,7 +2141,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                     validator(data + b" ", **arguments)
         with self.assertRaisesRegex(subject.ProtocolError, "duplicate JSON key"):
             subject.validate_canonical_checkpoint_attempt_plan_bytes(
-                b'{"schema":1,"schema":1}\n', **plan_arguments,
+                b'{"schema":1,"schema":1}\n', **plan_inputs,
             )
 
     def test_checkpoint_plan_rejects_posthoc_boundary_and_source_splicing(
@@ -1892,6 +2156,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 authenticated_plan=values["authenticated_plan"],
                 diagnostic_pilot=values["pilot"],
                 dmtcp_authority=values["authority"],
+                controller_challenges=values["challenges"],
             )
         forged_pilot = copy.deepcopy(values["pilot"])
         forged_pilot["action_elapsed_ns"][148] = 1
@@ -1901,6 +2166,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 authenticated_plan=values["authenticated_plan"],
                 diagnostic_pilot=forged_pilot,
                 dmtcp_authority=values["authority"],
+                controller_challenges=values["challenges"],
             )
         no_half_boundary = copy.deepcopy(values["pilot"])
         no_half_boundary["action_elapsed_ns"][-1] *= 10
@@ -1910,7 +2176,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(subject.ProtocolError, "no nonfinal"):
             subject.build_checkpoint_attempt_plan(
                 values["authenticated_plan"], no_half_boundary,
-                values["authority"], values["limits"],
+                values["authority"], values["challenges"], values["limits"],
                 values["runtime_environment"],
                 values["checkpoint_environment"],
             )
@@ -1924,6 +2190,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 values["checkpoint_plan"], authenticated_plan=forged_plan,
                 diagnostic_pilot=values["pilot"],
                 dmtcp_authority=values["authority"],
+                controller_challenges=values["challenges"],
             )
 
     def test_checkpoint_plan_rejects_dmtcp_pft_environment_and_resource_drift(
@@ -1937,7 +2204,8 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(subject.ProtocolError, "PFT namespace"):
             subject.build_checkpoint_attempt_plan(
                 values["authenticated_plan"], values["pilot"], authority,
-                values["limits"], values["runtime_environment"],
+                values["challenges"], values["limits"],
+                values["runtime_environment"],
                 values["checkpoint_environment"],
             )
         environment = copy.deepcopy(values["checkpoint_environment"])
@@ -1945,7 +2213,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(subject.ProtocolError, "LD_PRELOAD"):
             subject.build_checkpoint_attempt_plan(
                 values["authenticated_plan"], values["pilot"],
-                values["authority"], values["limits"],
+                values["authority"], values["challenges"], values["limits"],
                 values["runtime_environment"], environment,
             )
         limits = copy.deepcopy(values["limits"])
@@ -1953,9 +2221,20 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         with self.assertRaisesRegex(subject.ProtocolError, "resource limits"):
             subject.build_checkpoint_attempt_plan(
                 values["authenticated_plan"], values["pilot"],
-                values["authority"], limits,
+                values["authority"], values["challenges"], limits,
                 values["runtime_environment"],
                 values["checkpoint_environment"],
+            )
+
+        challenges = copy.deepcopy(values["challenges"])
+        challenges["checkpoint_token"] = "f" * 64
+        with self.assertRaisesRegex(subject.ProtocolError, "source inputs"):
+            subject.validate_checkpoint_attempt_plan(
+                values["checkpoint_plan"],
+                authenticated_plan=values["authenticated_plan"],
+                diagnostic_pilot=values["pilot"],
+                dmtcp_authority=values["authority"],
+                controller_challenges=challenges,
             )
 
     def test_process_checkpoint_rejects_nonlive_ready_and_timeline_reorder(
@@ -1968,6 +2247,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             ("flushed_before_observation", False),
             ("blocked_before_next_action", False),
             ("next_action_observed", True),
+            ("post_ready_action_event_count", 1),
         ):
             ready = copy.deepcopy(values["ready"])
             ready[field] = replacement
@@ -1979,6 +2259,15 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         timeline["checkpoint_requested_monotonic_ns"] = 9_999
         with self.assertRaisesRegex(subject.ProtocolError, "timeline"):
             rebuild_checkpoint(values, timeline=timeline)
+        ready = copy.deepcopy(values["ready"])
+        ready["checkpoint_token"] = "f" * 64
+        ready["ready_marker"] = subject._ready_marker(
+            ready["origin_attempt_nonce"], ready["checkpoint_token"],
+            values["challenges"]["challenge_id"],
+            values["checkpoint_plan"]["checkpoint_boundary"],
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "predeclared"):
+            rebuild_checkpoint(values, ready=ready)
 
     def test_process_checkpoint_rejects_image_and_publication_attacks(self) -> None:
         values = checkpoint_protocol_fixture()
@@ -2005,18 +2294,15 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         images = copy.deepcopy(values["images"])
         images["files"][0]["sha256"] = "0" * 64
         images["ordered_file_sha256"] = subject.canonical_sha256(images["files"])
+        arguments = checkpoint_arguments(values)
+        arguments["image_manifest"] = images
         with self.assertRaisesRegex(subject.ProtocolError, "source inputs"):
             subject.validate_process_checkpoint(
-                values["checkpoint"],
-                checkpoint_plan=values["checkpoint_plan"],
-                origin_attempt=values["origin_attempt"],
-                ready_observation=values["ready"],
-                image_manifest=images,
-                dmtcp_authority=values["authority"],
+                values["checkpoint"], **arguments,
             )
         publication = copy.deepcopy(values["atomic_publication"])
         publication["rename_noreplace"] = False
-        with self.assertRaisesRegex(subject.ProtocolError, "atomically"):
+        with self.assertRaisesRegex(subject.ProtocolError, "controller assertion"):
             rebuild_checkpoint(values, atomic_publication=publication)
 
     def test_process_checkpoint_rejects_origin_reuse_and_authenticated_splice(
@@ -2024,30 +2310,145 @@ class DirectReleaseProtocolTests(unittest.TestCase):
     ) -> None:
         values = checkpoint_protocol_fixture()
         process = copy.deepcopy(values["origin_process"])
-        process["reaped"] = False
+        process["all_owned_processes_reaped"] = False
         with self.assertRaisesRegex(subject.ProtocolError, "reaped"):
+            rebuild_checkpoint(values, origin_process=process)
+        process = copy.deepcopy(values["origin_process"])
+        process["post_ready_action_event_count"] = 1
+        with self.assertRaisesRegex(subject.ProtocolError, "process tree"):
             rebuild_checkpoint(values, origin_process=process)
         ready = copy.deepcopy(values["ready"])
         ready["stream_byte_offset"] += 1
+        arguments = checkpoint_arguments(values)
+        arguments["ready_observation"] = ready
         with self.assertRaisesRegex(subject.ProtocolError, "source inputs"):
             subject.validate_process_checkpoint(
-                values["checkpoint"],
-                checkpoint_plan=values["checkpoint_plan"],
-                origin_attempt=values["origin_attempt"],
-                ready_observation=ready,
-                image_manifest=values["images"],
-                dmtcp_authority=values["authority"],
+                values["checkpoint"], **arguments,
             )
+
+    def test_resume_rejects_coherently_rehashed_plan_and_process_splices(
+        self,
+    ) -> None:
+        values = checkpoint_protocol_fixture()
+        plan = copy.deepcopy(values["checkpoint_plan"])
+        plan["checkpoint_boundary"]["action"]["source_sha256"] = "0" * 64
+        checkpoint = copy.deepcopy(values["checkpoint"])
+        checkpoint["checkpoint_attempt_plan"] = subject._content_record(plan)
+        checkpoint["checkpoint_boundary"] = copy.deepcopy(
+            plan["checkpoint_boundary"]
+        )
+        chain = rebind_resume_chain(values, checkpoint=checkpoint)
+        with self.assertRaisesRegex(subject.ProtocolError, "boundary"):
+            rebuild_resume(values, checkpoint_plan=plan, **chain)
+
+        checkpoint = copy.deepcopy(values["checkpoint"])
+        checkpoint["origin_process"]["all_owned_processes_reaped"] = False
+        checkpoint["origin_process"]["owned_process_tree"][0]["reaped"] = False
+        chain = rebind_resume_chain(values, checkpoint=checkpoint)
+        with self.assertRaisesRegex(subject.ProtocolError, "reaped"):
+            rebuild_resume(
+                values, origin_process=checkpoint["origin_process"], **chain,
+            )
+
+    def test_clean_candidates_require_full_sources_and_external_authority(
+        self,
+    ) -> None:
+        values = checkpoint_protocol_fixture()
+        candidates = copy.deepcopy(values["clean_candidates"])
+        candidates[1]["capture"]["receipt"]["sha256"] = "0" * 64
+        with self.assertRaisesRegex(subject.ProtocolError, "source content"):
+            rebuild_resume(values, clean_candidates=candidates)
+
+        candidates = copy.deepcopy(values["clean_candidates"])
+        candidates[1] = copy.deepcopy(candidates[0])
+        with self.assertRaisesRegex(subject.ProtocolError, "predeclared"):
+            rebuild_resume(values, clean_candidates=candidates)
+
+        candidates = copy.deepcopy(values["clean_candidates"])
+        candidates[1]["controller_measurement"]["attempt_nonce"] = "7" * 32
+        with self.assertRaisesRegex(subject.ProtocolError, "measurement"):
+            rebuild_resume(values, clean_candidates=candidates)
+
+        authority = copy.deepcopy(values["capture_authority"])
+        authority["candle_commit"] = "d" * 40
+        with self.assertRaisesRegex(subject.ProtocolError, "authority"):
+            rebuild_resume(values, capture_authority=authority)
+
+    def test_restart_suffix_and_unqualified_filesystem_claims_are_bound(
+        self,
+    ) -> None:
+        values = checkpoint_protocol_fixture()
+        authority = copy.deepcopy(values["authority"])
+        authority["executables"][0]["path"] = "/project/bin/dmtcp_command"
+        with self.assertRaisesRegex(subject.ProtocolError, "executable"):
+            rebuild_resume(values, authority=authority)
+
+        restart = copy.deepcopy(values["restart_context"])
+        restart["argv"][0] = "/project/bin/dmtcp_command"
+        with self.assertRaisesRegex(subject.ProtocolError, "restart context"):
+            rebuild_resume(values, restart_context=restart)
+
+        restart = copy.deepcopy(values["restart_context"])
+        restart["restarted_process"]["pid"] = values["origin_process"]["pid"]
+        restart["restarted_process"]["start_ticks"] = (
+            values["origin_process"]["start_ticks"]
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "reused"):
+            rebuild_resume(values, restart_context=restart)
+
+        suffix = copy.deepcopy(values["raw_suffix_event_receipt"])
+        suffix["action_events"][0]["source_sha256"] = "0" * 64
+        suffix["ordered_event_sha256"] = subject.canonical_sha256(
+            suffix["action_events"]
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "differs from the plan"):
+            rebuild_resume(values, raw_suffix_event_receipt=suffix)
+
+        restart = copy.deepcopy(values["restart_context"])
+        restart["image_rehash"]["anchored_nofollow"] = True
+        chain = rebind_resume_chain(values, restart_context=restart)
+        with self.assertRaisesRegex(subject.ProtocolError, "image rehash"):
+            rebuild_resume(values, **chain)
+        self.assertFalse(values["images"]["anchored_nofollow_rehash"])
+        self.assertFalse(
+            values["restart_context"]["image_rehash"]["anchored_nofollow"]
+        )
+
+    def test_all_phases_enforce_address_space_and_sampling_cadence(self) -> None:
+        values = checkpoint_protocol_fixture()
+        measurement = copy.deepcopy(values["checkpoint_measurement"])
+        measurement["peak_address_space_bytes"] = (
+            values["limits"]["max_address_space_bytes"] + 1
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "measurement"):
+            rebuild_checkpoint(values, checkpoint_measurement=measurement)
+
+        measurement = copy.deepcopy(values["checkpoint_measurement"])
+        measurement["maximum_observed_sampling_gap_milliseconds"] += 1
+        with self.assertRaisesRegex(subject.ProtocolError, "measurement"):
+            rebuild_checkpoint(values, checkpoint_measurement=measurement)
+
+        measurement = copy.deepcopy(values["resume_measurement"])
+        measurement["sampling_interval_milliseconds"] -= 1
+        with self.assertRaisesRegex(subject.ProtocolError, "measurement"):
+            rebuild_resume(values, resume_measurement=measurement)
+
+        candidates = copy.deepcopy(values["clean_candidates"])
+        candidates[0]["controller_measurement"]["peak_address_space_bytes"] = (
+            values["limits"]["max_address_space_bytes"] + 1
+        )
+        with self.assertRaisesRegex(subject.ProtocolError, "measurement"):
+            rebuild_resume(values, clean_candidates=candidates)
 
     def test_resume_rejects_nonce_token_and_prefix_replay(self) -> None:
         values = checkpoint_protocol_fixture()
         resumed = copy.deepcopy(values["resumed"])
         resumed["resume_nonce"] = values["checkpoint"]["origin_attempt_nonce"]
-        with self.assertRaisesRegex(subject.ProtocolError, "nonce or token"):
+        with self.assertRaisesRegex(subject.ProtocolError, "malformed"):
             rebuild_resume(values, resumed=resumed)
         resumed = copy.deepcopy(values["resumed"])
         resumed["resume_token"] = values["checkpoint"]["checkpoint_token"]
-        with self.assertRaisesRegex(subject.ProtocolError, "nonce or token"):
+        with self.assertRaisesRegex(subject.ProtocolError, "malformed"):
             rebuild_resume(values, resumed=resumed)
         resumed = copy.deepcopy(values["resumed"])
         resumed["precheckpoint_action_replay_count"] = 1
@@ -2081,7 +2482,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         resumed["semantic_projection"]["theorems"][0]["theorem_sha256"] = (
             "0" * 64
         )
-        with self.assertRaisesRegex(subject.ProtocolError, "differs from a clean"):
+        with self.assertRaisesRegex(subject.ProtocolError, "raw suffix receipt"):
             rebuild_resume(values, resumed=resumed)
         resumed = copy.deepcopy(values["resumed"])
         resumed["coverage_projection"]["action_events"]["records"][0][
@@ -2124,14 +2525,14 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         measurement["peak_aggregate_rss_kib"] = (
             values["limits"]["max_aggregate_rss_kib"] + 1
         )
-        with self.assertRaisesRegex(subject.ProtocolError, "resource limits"):
+        with self.assertRaisesRegex(subject.ProtocolError, "measurement"):
             rebuild_resume(values, resume_measurement=measurement)
 
     def test_resume_rejects_clean_reuse_pft_and_authenticated_splice(self) -> None:
         values = checkpoint_protocol_fixture()
         candidates = copy.deepcopy(values["clean_candidates"])
-        candidates[1]["attempt_nonce"] = candidates[0]["attempt_nonce"]
-        with self.assertRaisesRegex(subject.ProtocolError, "not distinct"):
+        candidates[1] = copy.deepcopy(candidates[0])
+        with self.assertRaisesRegex(subject.ProtocolError, "predeclared|distinct"):
             rebuild_resume(values, clean_candidates=candidates)
         measurement = copy.deepcopy(values["resume_measurement"])
         measurement["pft_used"] = True
@@ -2143,24 +2544,8 @@ class DirectReleaseProtocolTests(unittest.TestCase):
             rebuild_resume(values, resumed=resumed)
         resumed = copy.deepcopy(values["resumed"])
         resumed["resume_token"] = "5" * 64
-        observation = copy.deepcopy(values["resumed_observation"])
-        observation["resume_token"] = resumed["resume_token"]
-        observation["resumed_marker"] = subject._resumed_marker(
-            values["checkpoint"], resumed["resume_nonce"],
-            resumed["resume_token"],
-        )
-        with self.assertRaisesRegex(subject.ProtocolError, "source inputs"):
-            subject.validate_resume_attempt(
-                values["resume_attempt"],
-                checkpoint_plan=values["checkpoint_plan"],
-                process_checkpoint=values["checkpoint"],
-                clean_candidates=values["clean_candidates"],
-                resumed_result=resumed,
-                resumed_observation=observation,
-                clean_measurements=values["clean_measurements"],
-                resume_measurement=values["resume_measurement"],
-                dmtcp_authority=values["authority"],
-            )
+        with self.assertRaisesRegex(subject.ProtocolError, "malformed"):
+            rebuild_resume(values, resumed=resumed)
 
     def test_resume_rejects_cross_record_plan_authority_and_boundary_splices(
         self,
@@ -2168,24 +2553,24 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         values = checkpoint_protocol_fixture()
         candidates = copy.deepcopy(values["clean_candidates"])
         candidates[1]["capture"]["authenticated_plan"]["bytes"] += 1
-        with self.assertRaisesRegex(subject.ProtocolError, "plan and runtime"):
+        with self.assertRaisesRegex(subject.ProtocolError, "source content"):
             rebuild_resume(values, clean_candidates=candidates)
 
         candidates = copy.deepcopy(values["clean_candidates"])
         candidates[1]["capture"]["authority"]["candle_commit"] = "d" * 40
-        with self.assertRaisesRegex(subject.ProtocolError, "plan and runtime"):
+        with self.assertRaisesRegex(subject.ProtocolError, "authority"):
             rebuild_resume(values, clean_candidates=candidates)
 
         resumed = copy.deepcopy(values["resumed"])
         resumed["authority"]["candle_commit"] = "d" * 40
-        with self.assertRaisesRegex(subject.ProtocolError, "plan and runtime"):
+        with self.assertRaisesRegex(subject.ProtocolError, "expected authority"):
             rebuild_resume(values, resumed=resumed)
 
         checkpoint = copy.deepcopy(values["checkpoint"])
         checkpoint["checkpoint_boundary"]["action"]["source_sha256"] = "0" * 64
         resumed = copy.deepcopy(values["resumed"])
         resumed["process_checkpoint"] = subject._content_record(checkpoint)
-        with self.assertRaisesRegex(subject.ProtocolError, "checkpoint plan"):
+        with self.assertRaisesRegex(subject.ProtocolError, "boundary drift"):
             rebuild_resume(values, checkpoint=checkpoint, resumed=resumed)
 
         plan = copy.deepcopy(values["checkpoint_plan"])
@@ -2194,7 +2579,7 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         checkpoint["checkpoint_attempt_plan"] = subject._content_record(plan)
         resumed = copy.deepcopy(values["resumed"])
         resumed["process_checkpoint"] = subject._content_record(checkpoint)
-        with self.assertRaisesRegex(subject.ProtocolError, "LD_PRELOAD"):
+        with self.assertRaisesRegex(subject.ProtocolError, "source inputs"):
             rebuild_resume(
                 values, checkpoint_plan=plan, checkpoint=checkpoint,
                 resumed=resumed,
@@ -2205,7 +2590,8 @@ class DirectReleaseProtocolTests(unittest.TestCase):
         for key in (
             "promotion", "approval_included", "direct_s2_execution_approved",
             "direct_s3_coverage_approved", "v1_3_s3_release_approved",
-            "pft_used", "s2_s3_evidence",
+            "runtime_qualified", "os_evidence_authenticated", "pft_used",
+            "s2_s3_evidence",
         ):
             forged = copy.deepcopy(values["resume_attempt"])
             forged[key] = True
@@ -2213,26 +2599,13 @@ class DirectReleaseProtocolTests(unittest.TestCase):
                 subject.ProtocolError,
             ):
                 subject.validate_resume_attempt(
-                    forged,
-                    checkpoint_plan=values["checkpoint_plan"],
-                    process_checkpoint=values["checkpoint"],
-                    clean_candidates=values["clean_candidates"],
-                    resumed_result=values["resumed"],
-                    resumed_observation=values["resumed_observation"],
-                    clean_measurements=values["clean_measurements"],
-                    resume_measurement=values["resume_measurement"],
-                    dmtcp_authority=values["authority"],
+                    forged, **resume_arguments(values),
                 )
         forged = copy.deepcopy(values["checkpoint"])
         forged["self_approved"] = True
         with self.assertRaisesRegex(subject.ProtocolError, "malformed"):
             subject.validate_process_checkpoint(
-                forged,
-                checkpoint_plan=values["checkpoint_plan"],
-                origin_attempt=values["origin_attempt"],
-                ready_observation=values["ready"],
-                image_manifest=values["images"],
-                dmtcp_authority=values["authority"],
+                forged, **checkpoint_arguments(values),
             )
 
     def test_unapproved_three_way_comparison_fixture_is_exact(self) -> None:
