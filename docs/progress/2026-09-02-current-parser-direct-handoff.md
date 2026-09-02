@@ -107,3 +107,12 @@ compatibility, diagnostic direct cutpoints d0/d1, current-binary Great-100
 comparison against the accepted 130/130 reference artifact, and then the
 eight cumulative direct boundaries through nonlinear/LP final assembly.  PFT
 remains an independent oracle and cannot advance S2 or S3.
+
+Before the Great-100 comparison, integrate the separately tested retry-consumer
+repair recorded in `2026-09-02-s1-reference-retry-consumer.md`.  The reference
+root legitimately selects one `attempt-0002` after preserving an interrupted
+attempt, while the pre-repair consumers hard-code `attempt-0001`.  Keep the
+current `cb3bbcb...` parser gates first: a later Candle approval/consumer commit
+changes the source head and therefore requires fresh link provenance and fresh
+direct-source plans rather than retroactively changing these retained parser
+results.
