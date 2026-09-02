@@ -89,3 +89,13 @@ files, and the one explicit exclusion.  This is an approved reference input,
 not current-binary S1 evidence.  It must be integrated only after the retained
 `cb3bbcb...` parser gates, then linked at its new exact head before the two
 current Candle Great-100 runs.
+
+The approval commit changes no member of the authenticated five-file bootstrap
+closure.  After the current-head parser results are retained, it may therefore
+use the existing byte-identical schema-7 transition path for diagnostic
+Great-100 comparison and compatibility repair.  Schema 7 is not promotable:
+once the runtime/source fixes settle, the final S1/S2 head still requires its
+own canonical bootstrap and ordinary two-argument schema-6 link before the two
+release-evidence Great-100 runs.  This sequencing applies the speed advice by
+postponing that expensive final rebuild until the frontend/runtime frontier is
+quiet, without weakening the release boundary.
