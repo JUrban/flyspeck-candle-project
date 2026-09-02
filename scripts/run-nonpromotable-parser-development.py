@@ -31,10 +31,6 @@ CAPABILITY_LINE = (
     b"caml_parser$run\tstdin-exact-bytes\tparser-only\t"
     b"no-inference\tno-evaluation\n"
 )
-RESULT_RE = re.compile(
-    rb"CANDLE_CAMLPARSER_DIAGNOSTIC_V1\t[0-9a-f]{64}\t"
-    rb"(OK|PARSE_ERROR)\n\Z"
-)
 HEX40_RE = re.compile(r"^[0-9a-f]{40}$")
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 PROFILE_CONTRACTS = {
@@ -186,7 +182,7 @@ def process_limits(cpu_seconds: int, address_space_bytes: int, output_bytes: int
 
 def invoke(
     runtime: Path,
-    argument: str,
+    arguments: list[str],
     stdin: bytes,
     timeout_seconds: int,
     cpu_seconds: int,
@@ -196,7 +192,7 @@ def invoke(
     started = time.monotonic()
     try:
         completed = subprocess.run(
-            [str(runtime), argument],
+            [str(runtime), *arguments],
             input=stdin,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -231,21 +227,27 @@ def invoke(
         }
 
 
-def classify(result: dict[str, Any]) -> str:
-    match = RESULT_RE.fullmatch(result["stdout"])
+def classify(result: dict[str, Any], nonce: str) -> str:
+    require(re.fullmatch(r"[0-9a-f]{64}", nonce) is not None, "invalid request nonce")
+    ok = (
+        b"CANDLE_CAMLPARSER_DIAGNOSTIC_V1\t"
+        + nonce.encode() + b"\tOK\n"
+    )
+    parse_error = (
+        b"CANDLE_CAMLPARSER_DIAGNOSTIC_V1\t"
+        + nonce.encode() + b"\tPARSE_ERROR\n"
+    )
     if (
         not result["timed_out"]
         and result["exit_code"] == 0
         and result["stderr"] == b""
-        and match is not None
-        and match.group(1) == b"OK"
+        and result["stdout"] == ok
     ):
         return "parse-ok"
     if (
         not result["timed_out"]
         and result["exit_code"] == 65
-        and match is not None
-        and match.group(1) == b"PARSE_ERROR"
+        and result["stdout"] == parse_error
     ):
         return "parse-error"
     if result["timed_out"]:
@@ -312,7 +314,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
             "private runtime image differs from captured bytes",
         )
         capability = invoke(
-            execution_runtime, CAPABILITY_ARGUMENT, b"",
+            execution_runtime, [CAPABILITY_ARGUMENT], b"",
             arguments.timeout_seconds, arguments.max_cpu_seconds,
             address_space_bytes, output_bytes,
         )
@@ -332,12 +334,13 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
         counts: Counter[str] = Counter()
         started = time.monotonic()
         for index, (entry, prepared) in enumerate(zip(plan["inputs"], prepared_inputs)):
+            nonce = f"{index:064x}"
             result = invoke(
-                execution_runtime, RUN_ARGUMENT, prepared,
+                execution_runtime, [RUN_ARGUMENT, nonce], prepared,
                 arguments.timeout_seconds, arguments.max_cpu_seconds,
                 address_space_bytes, output_bytes,
             )
-            outcome = classify(result)
+            outcome = classify(result, nonce)
             counts[outcome] += 1
             stdout_relative = f"attempts/{index:03d}.stdout"
             stderr_relative = f"attempts/{index:03d}.stderr"
@@ -346,6 +349,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
             attempts.append({
                 "index": index,
                 "source_key": entry["source_key"],
+                "nonce": nonce,
                 "prepared_bytes": len(prepared),
                 "prepared_sha256": hashlib.sha256(prepared).hexdigest(),
                 "elapsed_seconds": result["elapsed_seconds"],
