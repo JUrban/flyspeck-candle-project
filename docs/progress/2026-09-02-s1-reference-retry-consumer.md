@@ -58,8 +58,34 @@ were accepted.
   former generic diagnostic and was updated to the new stricter `attempt
   sequence` diagnostic.  Its focused rerun passes.
 
-This repair only makes the audited reference collection consumable.  It does
-not create the independent approval artifact, qualify the current Candle
-binary, establish S1, or advance S2/S3.  The canonical bootstrap, ordinary
-link, and 20/400 parser gates remain ahead of approval installation and the
-two current-binary Great-100 runs.
+The consumer repair by itself only makes the audited reference collection
+consumable; it does not qualify the current Candle binary, establish S1, or
+advance S2/S3.  The canonical bootstrap, ordinary link, and 20/400 parser
+gates remain ahead of approval installation and the two current-binary
+Great-100 runs.
+
+## Approval assembly
+
+After the repair passed, the independent review decision at project commit
+`424532f2895f4bc6c9f3eb30df9e9c2d27ac3831` was materialized on the same
+separate Candle branch.  Commit
+`4c20d9d` (`Approve audited Great 100 reference identities`) retains 1,172
+ordinary single-link evidence files for the 130 selected attempts plus the
+collection contract/receipt.  The approval contains 65 ordered target records,
+two nonce-distinct runs per target, and all 97 expected theorem identities.
+
+- approval SHA-256:
+  `57adc0ce2968d155c56c918ef96447cd89c330dd6ffc4203e717f203deeb37f0`;
+- inventory contract SHA-256:
+  `3021163dbf52b66cb8e8f733b5eb7c409ccd9f21b94e20d55cb3569388fb8d99`;
+- regenerated manifest SHA-256:
+  `2c5d99eea9847f2ec9e9556dd8076b5505c45d47f7c33fd7135259d5e99b875d`;
+- retained evidence apparent size: approximately 2.5 GiB; and
+- structural audit: zero symlinks or multiply linked files.
+
+The complete approval consumer replay passed once during assembly, and the
+independent manifest `--check` replay passed again with 65 targets, 66 source
+files, and the one explicit exclusion.  This is an approved reference input,
+not current-binary S1 evidence.  It must be integrated only after the retained
+`cb3bbcb...` parser gates, then linked at its new exact head before the two
+current Candle Great-100 runs.
