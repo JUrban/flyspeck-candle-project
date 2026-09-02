@@ -102,17 +102,39 @@ exited 1 with the generic nonzero-exit message. Treat it separately from the
 50 canonical parser errors.
 
 The PEG often reports a failed structure at its opening `module`, so the raw
-locations do not mean general module declarations are unsupported. A
-declaration-level localization pass already separates the first failures into
-several real candidate families:
+locations do not mean general module declarations are unsupported. Project
+commit `32cf9a1...` adds a reproducible lexical-item localizer. It binds the
+schema-3 plan, the non-promotable sweep, the exact executable, and OCaml
+4.14.1; retains candidate/stdout/stderr bytes; and makes no parser or release
+claim. Two immutable runs are retained:
+
+| Localization | Reduction | Candidates | Parser calls | Summary SHA-256 |
+| --- | --- | ---: | ---: | --- |
+| `nonpromotable-parser-localization-ac15ba0-attempt-001` | none | 50 | 2,326 | `9bc0c70be151e1b5d63a9ec56acf82a42a7cc7f0cb16ea56a1b68a242ce23dd9` |
+| `nonpromotable-parser-localization-ac15ba0-attempt-002` | OCaml-valid line ddmin | 50 | 2,499 | `7079983091e3a946f2478722dc285d007f12cfb1b271b5c78328022806a83ee2` |
+
+Every failed input has an independently non-passing outer-structure item.
+Forty initial items parse under plain OCaml 4.14.1 and were line-reduced while
+preserving both that fact and Candle exit 65. Ten are HOL Light/Camlp dialect
+items and were deliberately not reduced under the wrong plain-OCaml oracle.
+The localized batch separates into several real candidate families:
 
 - record type declarations, record construction, and lowercase field access;
 - `include` and signature-constrained module bodies;
 - annotated/parenthesized recursive bindings and optional arguments;
 - tuple/list/record patterns and expression-sequence edge cases;
-- large generated expressions and theorem declarations whose minimal failing
-  syntax still needs reduction; and
-- one direct lexer error for the OCaml string escape `\_` in `ineq.hl`.
+- large generated expressions and theorem declarations containing HOL Light
+  infix/dialect syntax that need a matching dialect oracle; and
+- a layered case in `ineq.hl`: whole-file lexing first exposes the unsupported
+  string escape `\_`, while chunk isolation also exposes an earlier parser
+  gap in an assignment expression.
+
+Focused in-memory probes confirm that ordinary tuple bindings, array indexing,
+`try`, trailing list separators, and mutually bound lets already parse. Small
+counterexamples remain for structural records, unqualified field projection,
+path-only `include`, optional/parenthesized recursive arguments, trailing
+sequences before `)`/`end`/`done`, and several constructor-pattern forms.
+This prevents treating all 50 files as one speculative grammar repair.
 
 These are candidates, not yet approved parser extensions. Each must be
 minimized against OCaml 4.14.1 and the real Candle loader. Prefer a narrow
@@ -125,9 +147,11 @@ proof/cold/bootstrap cycle.
 
 1. Preserve and finish canonical attempt 004. If it publishes, validate its
    dependency-transition repair and retain it as `f2f50a44...` authority.
-2. Minimize/classify the complete 51-item development batch. Record corpus
-   counts and select bounded frontend repairs or authenticated source
-   normalizations.
+2. Finish semantic classification of the minimized batch and implement the
+   first bounded frontend repairs on the isolated CakeML branch
+   `codex/flyspeck-v13-frontend-batch`. Record corpus counts and use
+   authenticated source normalization only for genuinely isolated dialect
+   forms where a general parser/semantic extension is not justified.
 3. Re-run the development 20/400 gates after each coherent batch and require
    20/20 then 400/400 before another final CakeML proof replay.
 4. At the final CakeML frontend head, replay focused parser tests, translated
