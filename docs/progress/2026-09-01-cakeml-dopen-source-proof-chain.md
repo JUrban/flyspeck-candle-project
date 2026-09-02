@@ -640,3 +640,57 @@ only after that commit and the public gate.  Prepared commit `103691ef` is
 categorically not reusable: it has the wrong parent and old pin, and differs
 from `c2f7888` in twenty paths.  The final fresh worktree and reserved branch
 remain absent during the active cold replay.
+
+## Cold terminal, final repin, and canonical launch
+
+The pristine replay completed at `2026-09-02T02:21:02Z`.  Its last five
+theories exported as follows: `evaluate_init` in 10m51s, `repl_types` in
+45.0s, `repl_init` in 2m00s, repaired `replProof` in 10m21s, and
+`x64BootstrapProof` in 11m23s.  The repaired REPL proof saved
+`evaluate_decs_compiler64_prog` and `semantics_prog_compiler64_prog`; the
+final proof saved the compiled parser-diagnostic theorems, Candle soundness,
+and the axiom-free, FHOL Light, and HOL Light consistency theorems before its
+no-cheat check and export.
+
+The enclosing final stage passed in 6h06m45s at 32,462,468 KiB maximum RSS,
+zero swaps, and exit status zero.  All five stage receipts have exact commands,
+zero exit status, and zero swaps.  The controller wrote `stage=complete`, left
+PGID `207531` empty, and printed terminal-manifest SHA-256
+`c1645ffb347b8063ff06cc8cc531d8f8cac2c21a2203b3831287936087049c50`.
+This is now closed compiler-qualification evidence; it is not S2/S3 source
+execution evidence.
+
+The authorized fresh Candle worktree was created directly from `c2f7888...`.
+Its exact eight-file repin regenerated the manifest and 20/400 descriptors at
+the predicted byte identities while the two generated ML files remained
+byte-identical.  Static selection checks, the focused suite, full lightweight
+suite, and compatibility suite passed at 159/159, 339/339, and 63/63.  Repin
+commit `20901a6bb3149667f35f16911faaa4f74bf5e54b` has exactly the audited
+eight-file diff and no worktree dirt.
+
+The first two canonical attempts then failed closed before launching Holmake,
+exposing two warm-tree assumptions in the provenance constants.  Attempt 001
+expected 1,785 CakeML make-dependency paths, but the authenticated cold
+production closure has exactly 1,777: the eight absent files are only
+`dopenTests`, `camlTests`, and two `pathToMods*Probe` diagnostic theory
+families.  Commit `56561c872803f5f53742c158dd8974bed76c84c3` binds the exact
+1,777-path cold closure with SHA-256
+`c2c81322b7213b90f8301aa389caca64792d25591118f2b256a17f74c2add626`.
+Attempt 002 then found that the cold x64 proof had added exactly
+`x64_stepLib.ui` and `x64_stepLib.uo` to the HOL proof-object closure.  Commit
+`cb3bbcb7127b04154536b6f8ca6e8b8498d62774` binds the resulting exact 2,909
+paths with SHA-256
+`546bb4d3dcf2df6d65db91c8dd0a41de444902b4d48dc60b2b81ff6f51fb00a7`.
+No post-qualification theory product was synthesized to satisfy a stale warm
+constant.  The provenance tests pass 43/43, the exact-head complete suite
+passes 339/339, and a read-only audit passes every preflight inventory
+component together.
+
+Fresh attempt-003 gate receipt SHA-256
+`8e1d1a2b86fac29ffeb1b142d8a525077082781b65ede692ce3f032b9e016e29`
+binds Candle `cb3bbcb...`, the cold terminal digest, CakeML `c2e26f43c...`,
+and HOL4 `a390cbab...`.  Canonical attempt 003 has published its 6,964,622-byte
+read-only preflight, archived the prior forced-output stratum, and is now
+running the exact cache-disabled `Holmake -j1 cake.S` build over 18 theory
+files.  Canonical provenance, ordinary two-argument link, and parser execution
+remain pending.
