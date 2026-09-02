@@ -694,3 +694,22 @@ read-only preflight, archived the prior forced-output stratum, and is now
 running the exact cache-disabled `Holmake -j1 cake.S` build over 18 theory
 files.  Canonical provenance, ordinary two-argument link, and parser execution
 remain pending.
+
+In parallel, the exact current-head source-only inputs have been republished.
+The 20-input parser plan has plan SHA-256 `77b72a8d192d310bce95a822f428706e7679f801ae1e0c5c87e20a43cdce9b93`
+and host-materialization SHA-256
+`699ae69e691c2f0338723f2f1c09015d091f5d8af5bca8d0ca967686232c63d6`.
+The 400-input plan has plan SHA-256
+`f042b108b6770f669a93da91d4a7bc6970e1e9c17919d15f759573f65102d118`
+and host-materialization SHA-256
+`2d0c346464e660ce9aedb93e841dc9abf952c96f52d219221b0b7126bc22382c`.
+Both have all inputs ready and none unsupported.
+
+The direct-source planner correctly rejected reuse of the historical
+normalization overlay against the current authority.  A fresh 18-output
+overlay and 119,855,733-byte LP input tree were therefore published before
+the current direct plan.  That plan has SHA-256
+`c325833e96dbb4f41fc0a3c2ba5b6512be94bf16b0b74128f5c0b1f42d179904`
+and closes 297 actions, 400 sources, 43 generated inputs, eight cumulative
+boundaries, and two diagnostic cutpoints.  These plans remain host-only and
+categorically do not advance S2 or S3.
