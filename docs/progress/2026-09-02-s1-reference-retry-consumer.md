@@ -54,9 +54,9 @@ were accepted.
   attempt plus retry, a distinct producer/reviewer validator, and negative
   sequence/ledger mutations.
 - Finalizer focused positive and retry-corruption tests: 3/3 pass.
-- Full finalizer suite: 66 functional tests passed; one assertion expected the
-  former generic diagnostic and was updated to the new stricter `attempt
-  sequence` diagnostic.  Its focused rerun passes.
+- After updating the one assertion that expected the former generic diagnostic
+  to require the stricter `attempt sequence` diagnostic, the complete
+  finalizer suite passes 67/67 in 428.102 seconds.
 
 The consumer repair by itself only makes the audited reference collection
 consumable; it does not qualify the current Candle binary, establish S1, or
