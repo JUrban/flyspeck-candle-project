@@ -90,8 +90,20 @@ not current-binary S1 evidence.  It must be integrated only after the retained
 `cb3bbcb...` parser gates, then linked at its new exact head before the two
 current Candle Great-100 runs.
 
-The approval commit changes no member of the authenticated five-file bootstrap
-closure.  After the current-head parser results are retained, it may therefore
+Test-only descendant `7d6637f` closes the post-approval regression boundary.
+The manifest tests now distinguish approved reference identities from the
+still-missing current-binary observations, and producer fixtures explicitly
+synthesize a pre-approval target while a new negative test requires the
+committed approved target to reject recollection.  The focused approval suite
+passes 14/14 in 245.894 seconds, the focused producer suite passes 28/28, and
+the complete isolated lightweight discovery passes 340/340 in 381.783
+seconds.  Three redundant full evidence replays were removed from negative
+fixtures; the one exact manifest-regeneration replay remains in the broad
+suite.
+
+The approval commit and its test-only descendant change no member of the
+authenticated five-file bootstrap closure.  After the current-head parser
+results are retained, the descendant may therefore
 use the existing byte-identical schema-7 transition path for diagnostic
 Great-100 comparison and compatibility repair.  Schema 7 is not promotable:
 once the runtime/source fixes settle, the final S1/S2 head still requires its
@@ -100,19 +112,19 @@ release-evidence Great-100 runs.  This sequencing applies the speed advice by
 postponing that expensive final rebuild until the frontend/runtime frontier is
 quiet, without weakening the release boundary.
 
-Fresh source-only inputs for diagnostic head `4c20d9d...` are already
+Fresh source-only inputs for exact diagnostic head `7d6637f...` are already
 materialized:
 
 | Input | Plan/receipt SHA-256 | Host SHA-256 |
 | --- | --- | --- |
-| parser pilot, 20/20 ready | `2f4cf726a27ea384b81d02cc0de6865ed3bc9c34628e795aee085651568397df` | `ea90f3e6d992bf964194091c136987c12223fd7fa3fed135ae12eaf7e9bebc01` |
-| parser inventory, 400/400 ready | `3483a03f054e7c1ab33ac185fb345fced2bc9b8f7208d20fb6ce4c193345761d` | `a1845c06fe3c51f29d1e3024589e71013b222cdf510b369456331c06fde0e2ea` |
-| direct cumulative plan | `69809f879c152a737ed3be31c0715d0d663f610a0ef1b54def6586b08db1ba11` | `1ce37f15b2c8a58a9590f9966ed1d7577687e8242880b65f51ec1d301c5e4434` |
+| parser pilot, 20/20 ready | `780ce5a363ad979305ad990f4b08cd7c022a14d0374d221399a08e3f8f598b25` | `b0cc9b2691ebf0460bbc7b7e1f81a6efc2b90831020a04d8dcf65797fb7f608e` |
+| parser inventory, 400/400 ready | `e5f4eb96ba748bc4367dc4bca2c872c51ad9d86111da352f59a55d36cd84f063` | `8d40e312c4fdfa105bf4c47e40f2cd833b1ceace2386082e59bb92fe256dd75a` |
+| direct cumulative plan | `f72d04f9fc5d29951d4ddfa696ef5f818271fa214c70286c5169bbac80827229` | `7e0b6a52249e74e71f6dd7d6985f95ea2d58fa3051667e3bae94eb6af6148d15` |
 
 The direct plan again closes 297 actions, 400 sources, 43 generated inputs,
 18 normalized outputs, eight cumulative boundaries, and two diagnostic
 cutpoints.  Its schedule SHA-256 is
-`fb6508bcb040996b987529191866ef3e3ef42cb29de1020b9b53e95c9305c363`.
+`fd89bb34256c7e00ba0d1cc62145a77861ac1014863f0fee3e4d31f901d9f280`.
 These are host-only plans and confer no parser, S1, S2, or S3 status.
 
 For schema-7 compatibility triage, invoke the 65 manifest names through
