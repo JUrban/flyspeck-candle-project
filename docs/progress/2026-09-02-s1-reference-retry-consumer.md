@@ -15,6 +15,15 @@ literal `attempt-0001`.  Therefore the accepted reference root could not have
 entered the current-binary comparison path.  This was a fail-closed consumer
 defect, not a defect in the retained reference execution.
 
+A second stale equality check required the retained producer collector to be
+byte-identical to the later Candle approval consumer.  The actual producer
+collector SHA-256 is `f91d1fdb...`; the current descendant reviewer validator
+is `22af9401...`.  The project finalizer already requires these roles to be
+different.  Candle now validates the producer path/head/at-head hash and binds
+it to the authenticated collection contract, while replaying the retained
+artifacts with the current committed consumer.  This restores the intended
+independent-review boundary without accepting an unbound producer.
+
 ## Repair boundary
 
 Candle branch `codex/flyspeck-v13-s1-reference-retry-approval`, based on
@@ -42,7 +51,8 @@ were accepted.
 ## Verification and status
 
 - Candle `test_top100_manifest`: 14/14 pass, including a retained interrupted
-  attempt plus retry and negative sequence/ledger mutations.
+  attempt plus retry, a distinct producer/reviewer validator, and negative
+  sequence/ledger mutations.
 - Finalizer focused positive and retry-corruption tests: 3/3 pass.
 - Full finalizer suite: 66 functional tests passed; one assertion expected the
   former generic diagnostic and was updated to the new stricter `attempt
