@@ -298,6 +298,46 @@ def file_record(data: bytes, path: str) -> dict:
     return {"path": path, "bytes": len(data), "sha256": sha256(data)}
 
 
+def validate_development_binding(
+    result: dict, plan_data: bytes, runtime_data: bytes,
+) -> None:
+    """Accept the historical receipt and the reproducible runner receipt."""
+    common = (
+        result.get("kind")
+        == "nonpromotable-development-parser-all-inventory"
+        and result.get("promotion_allowed") is False
+    )
+    if result.get("schema") == 1:
+        require(
+            common
+            and result.get("plan_sha256") == sha256(plan_data)
+            and result.get("runtime_sha256") == sha256(runtime_data),
+            "historical development result does not bind plan and runtime",
+        )
+        return
+    if result.get("schema") == 2:
+        plan = result.get("plan")
+        runtime = result.get("runtime")
+        require(
+            common
+            and result.get("profile") == "all-inventory"
+            and result.get("s1_evidence") is False
+            and result.get("s2_evidence") is False
+            and result.get("s3_evidence") is False
+            and result.get("ordinary_linked_provenance_consumed") is False
+            and isinstance(plan, dict)
+            and plan.get("bytes") == len(plan_data)
+            and plan.get("sha256") == sha256(plan_data)
+            and isinstance(runtime, dict)
+            and runtime.get("bytes") == len(runtime_data)
+            and runtime.get("sha256") == sha256(runtime_data)
+            and runtime.get("ordinary_linked_provenance_consumed") is False,
+            "development result does not bind plan and runtime",
+        )
+        return
+    raise LocalizationError("unsupported development parser result schema")
+
+
 def localize(
     plan_root: Path,
     development_result_root: Path,
@@ -322,19 +362,25 @@ def localize(
         and isinstance(inputs, list) and len(inputs) == 400,
         "localizer requires quotation-aware all-inventory plan schema 3",
     )
-    require(
-        result.get("kind") == "nonpromotable-development-parser-all-inventory"
-        and result.get("promotion_allowed") is False
-        and result.get("plan_sha256") == sha256(plan_data)
-        and isinstance(attempts, list) and len(attempts) == len(inputs),
-        "development result does not bind the supplied plan",
-    )
     runtime_data = runtime.read_bytes()
     require(
-        result.get("runtime_sha256") == sha256(runtime_data)
-        and runtime.is_file() and os.access(runtime, os.X_OK),
-        "development result does not bind the executable runtime",
+        runtime.is_file() and os.access(runtime, os.X_OK),
+        "development runtime is not an executable file",
     )
+    validate_development_binding(result, plan_data, runtime_data)
+    require(
+        isinstance(attempts, list) and len(attempts) == len(inputs),
+        "development result attempt count differs from plan",
+    )
+    for index, (entry, attempt) in enumerate(zip(inputs, attempts)):
+        require(
+            isinstance(attempt, dict)
+            and attempt.get("index") == index
+            and attempt.get("source_key") == entry.get("source_key")
+            and attempt.get("prepared_sha256")
+            == entry.get("prepared_input", {}).get("sha256"),
+            f"development result attempt does not bind plan input: {index}",
+        )
     require(
         subprocess.run(
             [str(ocamlc), "-version"], stdout=subprocess.PIPE,

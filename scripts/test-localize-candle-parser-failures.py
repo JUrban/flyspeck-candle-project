@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import importlib.util
+import hashlib
 import sys
 import unittest
 from pathlib import Path
@@ -72,6 +73,45 @@ class ParserFailureLocalizerTests(unittest.TestCase):
             source, lambda candidate: b"failure" in candidate,
         )
         self.assertEqual(minimized, b"keep failure\n")
+
+    def test_reproducible_runner_receipt_binding(self) -> None:
+        plan = b'{"plan":true}\n'
+        runtime = b"runtime bytes"
+        result = {
+            "schema": 2,
+            "kind": "nonpromotable-development-parser-all-inventory",
+            "profile": "all-inventory",
+            "promotion_allowed": False,
+            "s1_evidence": False,
+            "s2_evidence": False,
+            "s3_evidence": False,
+            "ordinary_linked_provenance_consumed": False,
+            "plan": {
+                "bytes": len(plan),
+                "sha256": hashlib.sha256(plan).hexdigest(),
+            },
+            "runtime": {
+                "bytes": len(runtime),
+                "sha256": hashlib.sha256(runtime).hexdigest(),
+                "ordinary_linked_provenance_consumed": False,
+            },
+        }
+        subject.validate_development_binding(result, plan, runtime)
+        result["s2_evidence"] = True
+        with self.assertRaisesRegex(subject.LocalizationError, "does not bind"):
+            subject.validate_development_binding(result, plan, runtime)
+
+    def test_historical_runner_receipt_binding_remains_supported(self) -> None:
+        plan = b"plan"
+        runtime = b"runtime"
+        result = {
+            "schema": 1,
+            "kind": "nonpromotable-development-parser-all-inventory",
+            "promotion_allowed": False,
+            "plan_sha256": hashlib.sha256(plan).hexdigest(),
+            "runtime_sha256": hashlib.sha256(runtime).hexdigest(),
+        }
+        subject.validate_development_binding(result, plan, runtime)
 
 
 if __name__ == "__main__":
