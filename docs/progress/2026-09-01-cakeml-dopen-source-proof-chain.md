@@ -576,6 +576,19 @@ completed 87 of 119 theories, with the historically heavy
 32 theories, final-stage closure, the controller-printed terminal manifest,
 and the public gate all remain pending.
 
+The replay has since completed the full word and stack backend chain through
+the repaired `backendProof`, bringing the cold closure to 106 of 119 theories.
+The heaviest nodes remained close to their independent successful timings:
+`data_to_word_memoryProof` took 16m12s, `data_to_word_assignProof` 14m31s,
+`word_allocProof` 14m51s, `stack_allocProof` 11m28s,
+`word_to_stackProof` 22m36s, and `stack_to_labProof` 9m41s.  Most importantly,
+`backendProof` saved `compile_correct'`, `compile_correct`, and
+`compile_correct_eval` before exporting in 3m17s.  This closes another exact
+warm-integration failure boundary under the pristine controller.  Thirteen
+theories remain with `x64_targetProof` active; the later repaired `envRel`,
+`inferSound`, and `replProof` boundaries and the terminal manifest are still
+pending, so the Candle pin remains on HOLD.
+
 ### Post-terminal repin handoff audit
 
 An independent read-only adversarial audit conditionally accepts the planned
