@@ -589,6 +589,20 @@ theories remain with `x64_targetProof` active; the later repaired `envRel`,
 `inferSound`, and `replProof` boundaries and the terminal manifest are still
 pending, so the Candle pin remains on HOLD.
 
+The cold target and REPL prelude has now advanced to 114 of 119 theories.
+`x64_targetProof` saved `x64_encoder_correct` and exported in 14m24s;
+`x64_configProof` followed in 17.9s.  The repaired `envRel` then saved the
+open-environment existence and preservation results, including
+`env_rel_open_tenv_exists`, `env_rel_open_ienv_exists`, and `env_rel_open`,
+before exporting in 5.7s.  After `infer_eComplete`, `infer_eSound`, and
+`type_eDeterm` exported, the repaired `inferSound` integration boundary passed
+in 16.7s.  `evaluate_skip` then exported in 2m58s, substantially below its
+pessimistic historical completion interval.  Five theories remain with
+`evaluate_init` active: `evaluate_init`, `repl_types`, `repl_init`, repaired
+`replProof`, and `x64BootstrapProof`.  The terminal receipt is still empty and
+the Candle pin remains on HOLD until the controller exits, prints its
+authenticated terminal-manifest digest, and leaves its process group empty.
+
 ### Post-terminal repin handoff audit
 
 An independent read-only adversarial audit conditionally accepts the planned
