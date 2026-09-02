@@ -114,3 +114,10 @@ The direct plan again closes 297 actions, 400 sources, 43 generated inputs,
 cutpoints.  Its schedule SHA-256 is
 `fb6508bcb040996b987529191866ef3e3ef42cb29de1020b9b53e95c9305c363`.
 These are host-only plans and confer no parser, S1, S2, or S3 status.
+
+For schema-7 compatibility triage, invoke the 65 manifest names through
+`regression.py --test` rather than `--top100`.  The selected-suite path still
+loads the approved expected identities and reports match/mismatch, but does
+not create suite/process nonces, schema-4 process evidence, or a closed S1
+suite.  The guarded `--top100` path correctly continues to require an ordinary
+schema-6 record and is reserved for the later final-head rebuild.
