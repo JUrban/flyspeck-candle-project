@@ -3623,14 +3623,15 @@ def capture_collection_evidence(
             receipt["outcome"] == "complete" and receipt["closed"] is True and
             receipt["approval_status"] == "candidates_unapproved" and
             receipt["promotion_allowed"] is False and
-            receipt["failure_attempt_count"] == 0 and
-            receipt["failures"] == [] and
+            receipt["failure_attempt_count"] >= 0 and
+            isinstance(receipt["failures"], list) and
             receipt["publication_interruptions"] == [],
             "reference collection receipt is not closed and exact")
     sweeps = receipt["sweeps"]
     require(isinstance(sweeps, list) and len(sweeps) == 2,
             "reference collection receipt lacks two sweeps")
     successes: dict[tuple[int, int], dict[str, Any]] = {}
+    interrupted_attempts: list[dict[str, Any]] = []
     for sweep_index, sweep in enumerate(sweeps, 1):
         require(isinstance(sweep, dict) and set(sweep) == {
             "sweep", "target_count", "completed_count", "pending_count",
@@ -3653,17 +3654,57 @@ def capture_collection_evidence(
                     row["index"] == target_index and
                     row["name"] == target["name"] and
                     row["state"] == "complete" and
-                    row["attempt_count"] == 1 and
-                    row["attempts"] == [{
-                        "attempt": "attempt-0001", "state": "complete",
-                    }] and
+                    row["attempt_count"] >= 1 and
+                    isinstance(row["attempts"], list) and
+                    len(row["attempts"]) == row["attempt_count"] and
                     isinstance(row["success"], dict),
                     "malformed reference collection target success")
+            for attempt_index, attempt in enumerate(row["attempts"], 1):
+                attempt_name = f"attempt-{attempt_index:04d}"
+                final_attempt = attempt_index == row["attempt_count"]
+                expected_fields = {"attempt", "state"} if final_attempt else {
+                    "attempt", "state", "artifacts",
+                }
+                require(isinstance(attempt, dict) and
+                        set(attempt) == expected_fields and
+                        attempt.get("attempt") == attempt_name and
+                        attempt.get("state") ==
+                        ("complete" if final_attempt else "interrupted"),
+                        "malformed reference collection attempt sequence")
+                if final_attempt:
+                    continue
+                artifacts = attempt["artifacts"]
+                expected_names = {
+                    "candidate.json", "plan.json", "request.ml",
+                    "transcript.log",
+                }
+                require(isinstance(artifacts, dict) and
+                        set(artifacts) == expected_names,
+                        "malformed interrupted reference attempt artifacts")
+                for filename, record in artifacts.items():
+                    expected_path = (
+                        f"sweep-{sweep_index}/target-{target_index:03d}/"
+                        f"{attempt_name}/{filename}")
+                    require(isinstance(record, dict) and set(record) == {
+                        "path", "bytes", "sha256",
+                    } and record.get("path") == expected_path and
+                            is_int(record.get("bytes")) and
+                            record["bytes"] >= 0 and
+                            isinstance(record.get("sha256"), str) and
+                            SHA256_RE.fullmatch(record["sha256"]) is not None,
+                            "malformed interrupted reference attempt artifact")
+                interrupted_attempts.append({
+                    "sweep": sweep_index,
+                    "target_index": target_index,
+                    "target": target["name"],
+                    **attempt,
+                })
             success = row["success"]
             require(set(success) == {
                 "attempt", "receipt_path", "receipt", "session_nonce",
                 "artifacts",
-            } and success["attempt"] == "attempt-0001" and
+            } and success["attempt"] ==
+                    f"attempt-{row['attempt_count']:04d}" and
                     success["receipt_path"] ==
                     (f"sweep-{sweep_index}/target-{target_index:03d}/"
                      f"{success['attempt']}/success.json") and
@@ -3674,6 +3715,9 @@ def capture_collection_evidence(
                     isinstance(success["artifacts"], dict),
                     "malformed aggregate collection success")
             successes[(sweep_index, target_index)] = success
+    require(receipt["failure_attempt_count"] == len(interrupted_attempts) and
+            receipt["failures"] == interrupted_attempts,
+            "reference collection interruption ledger mismatch")
     collection_capture = {
         name: {
             "archive_path": snapshot.archive_path,

@@ -1159,6 +1159,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             "validation_wall_seconds": 900,
         }
         collection_rows = {1: [], 2: []}
+        collection_failures = []
         targets = []
         for target_index, semantic in enumerate(self.semantics):
             target = self.manifest["targets"][target_index]
@@ -1343,9 +1344,11 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "candidate_identities": candidate_identities,
                 }
                 sweep = run_index + 1
+                retry = sweep == 2 and target_index == 35
+                attempt_name = "attempt-0002" if retry else "attempt-0001"
                 directory = (
                     self.approval_root / f"sweep-{sweep}" /
-                    f"target-{target_index + 1:03d}" / "attempt-0001")
+                    f"target-{target_index + 1:03d}" / attempt_name)
                 directory.mkdir(parents=True, exist_ok=True)
                 values = {
                     "candidate": (json.dumps(candidate, indent=2) + "\n").encode(),
@@ -1431,19 +1434,47 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 })
                 relative_success = success_path.relative_to(
                     self.approval_root).as_posix()
+                attempts = []
+                if retry:
+                    interrupted_directory = (
+                        self.approval_root / f"sweep-{sweep}" /
+                        f"target-{target_index + 1:03d}" / "attempt-0001")
+                    interrupted_directory.mkdir(parents=True, exist_ok=True)
+                    interrupted_artifacts = {}
+                    for filename in (
+                            "candidate.json", "plan.json", "request.ml",
+                            "transcript.log"):
+                        interrupted_path = interrupted_directory / filename
+                        interrupted_path.write_bytes(
+                            f"interrupted {filename}\n".encode())
+                        interrupted_artifacts[filename] = {
+                            "path": interrupted_path.relative_to(
+                                self.approval_root).as_posix(),
+                            **record(interrupted_path),
+                        }
+                    interrupted = {
+                        "attempt": "attempt-0001", "state": "interrupted",
+                        "artifacts": interrupted_artifacts,
+                    }
+                    attempts.append(interrupted)
+                    collection_failures.append({
+                        "sweep": sweep, "target_index": target_index + 1,
+                        "target": target["name"], **deepcopy(interrupted),
+                    })
+                attempts.append({
+                    "attempt": attempt_name, "state": "complete"})
                 collection_rows[sweep].append({
                     "index": target_index + 1, "name": target["name"],
-                    "state": "complete", "attempt_count": 1,
+                    "state": "complete", "attempt_count": len(attempts),
                     "success": {
-                        "attempt": "attempt-0001",
+                        "attempt": attempt_name,
                         "receipt_path": relative_success,
                         "receipt": {"path": relative_success,
                                     **record(success_path)},
                         "session_nonce": nonce,
                         "artifacts": collected_artifacts,
                     },
-                    "attempts": [{"attempt": "attempt-0001",
-                                  "state": "complete"}],
+                    "attempts": attempts,
                 })
             targets.append({
                 "name": semantic["name"],
@@ -1573,8 +1604,9 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                          **record(contract_path)},
             "sweep_count": 2, "target_count": 65,
             "total_target_runs": 130, "completed_target_runs": 130,
-            "pending_target_runs": 0, "failure_attempt_count": 0,
-            "failures": [], "publication_interruptions": [],
+            "pending_target_runs": 0,
+            "failure_attempt_count": len(collection_failures),
+            "failures": collection_failures, "publication_interruptions": [],
             "outcome": "complete", "closed": True,
             "approval_status": "candidates_unapproved",
             "promotion_allowed": False,
@@ -2758,6 +2790,20 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_collection_documents(contract, receipt)
         self.assert_rejected("malformed reference collection target success")
 
+    def test_collection_retry_sequence_gap_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        row = receipt["sweeps"][1]["targets"][35]
+        row["attempts"][0]["attempt"] = "attempt-0002"
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("attempt sequence")
+
+    def test_collection_retry_ledger_mismatch_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        receipt["failures"][0]["artifacts"]["candidate.json"][
+            "sha256"] = "0" * 64
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("interruption ledger mismatch")
+
     def test_collection_runtime_type_confusion_rejects(self) -> None:
         contract, receipt = self.fixture.collection_documents()
         external = contract["external_runtime"]
@@ -2867,7 +2913,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             {"fabricated": True},
         ]
         self.fixture.replace_collection_documents(contract, receipt)
-        self.assert_rejected("target success")
+        self.assert_rejected("attempt sequence")
 
     def test_rebound_collection_core_runtime_is_rejected(self) -> None:
         contract_path = self.fixture.candle_root / self.fixture.approval[
