@@ -99,3 +99,18 @@ own canonical bootstrap and ordinary two-argument schema-6 link before the two
 release-evidence Great-100 runs.  This sequencing applies the speed advice by
 postponing that expensive final rebuild until the frontend/runtime frontier is
 quiet, without weakening the release boundary.
+
+Fresh source-only inputs for diagnostic head `4c20d9d...` are already
+materialized:
+
+| Input | Plan/receipt SHA-256 | Host SHA-256 |
+| --- | --- | --- |
+| parser pilot, 20/20 ready | `2f4cf726a27ea384b81d02cc0de6865ed3bc9c34628e795aee085651568397df` | `ea90f3e6d992bf964194091c136987c12223fd7fa3fed135ae12eaf7e9bebc01` |
+| parser inventory, 400/400 ready | `3483a03f054e7c1ab33ac185fb345fced2bc9b8f7208d20fb6ce4c193345761d` | `a1845c06fe3c51f29d1e3024589e71013b222cdf510b369456331c06fde0e2ea` |
+| direct cumulative plan | `69809f879c152a737ed3be31c0715d0d663f610a0ef1b54def6586b08db1ba11` | `1ce37f15b2c8a58a9590f9966ed1d7577687e8242880b65f51ec1d301c5e4434` |
+
+The direct plan again closes 297 actions, 400 sources, 43 generated inputs,
+18 normalized outputs, eight cumulative boundaries, and two diagnostic
+cutpoints.  Its schedule SHA-256 is
+`fb6508bcb040996b987529191866ef3e3ef42cb29de1020b9b53e95c9305c363`.
+These are host-only plans and confer no parser, S1, S2, or S3 status.
