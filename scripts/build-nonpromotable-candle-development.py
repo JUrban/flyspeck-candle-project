@@ -30,6 +30,8 @@ CAPABILITY_LINE = (
     b"caml_parser$run\tstdin-exact-bytes\tparser-only\t"
     b"no-inference\tno-evaluation\n"
 )
+CANDLE_SMOKE_INPUT = b"let candle_development_smoke = 1;;\n"
+CANDLE_SMOKE_SUFFIX = b"# val candle_development_smoke = 1: int\n# "
 SOURCE_PATH = Path(__file__).resolve()
 
 
@@ -220,6 +222,23 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
         "linked runtime failed the exact parser-only capability handshake",
     )
 
+    (staging / "candle-smoke.stdin").write_bytes(CANDLE_SMOKE_INPUT)
+    candle_smoke_result = run_captured(
+        ["/usr/bin/timeout", "30s", "./cake", "--candle"],
+        staging, "candle-smoke", stdin=staging / "candle-smoke.stdin",
+    )
+    require(
+        candle_smoke_result["exit_code"] == 0,
+        "linked runtime failed the Candle boot smoke command",
+    )
+    require(
+        candle_smoke_result["stderr"]["bytes"] == 0
+        and (staging / "candle-smoke.stdout").read_bytes().endswith(
+            CANDLE_SMOKE_SUFFIX
+        ),
+        "linked runtime did not select and evaluate the Candle boot",
+    )
+
     material_names = [
         "cake.S.orig", "cake.S", "cake", "config_enc_str.txt",
         "candle_boot.ml", "basis_ffi.c", "Makefile", "cake.S.patch",
@@ -227,6 +246,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
         "patch.stderr", "build.stdout", "build.stderr", "build.time",
         "types.stdout", "insulate.stdout", "insulate.stderr",
         "capability.stdout", "capability.stderr",
+        "candle-smoke.stdin", "candle-smoke.stdout", "candle-smoke.stderr",
     ]
     products = {
         name: file_record(staging / name, name)
@@ -260,6 +280,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
         "types": types_result,
         "insulation": insulate_result,
         "capability": capability_result,
+        "candle_smoke": candle_smoke_result,
         "products": products,
     }
     (staging / "DEVELOPMENT-NONPROMOTABLE.json").write_bytes(json_bytes(receipt))

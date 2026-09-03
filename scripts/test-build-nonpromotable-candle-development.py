@@ -75,6 +75,10 @@ class DevelopmentCandleLinkTests(unittest.TestCase):
             " sys.stdout.write('CANDLE_CAMLPARSER_DIAGNOSTIC_CAPABILITY_V1\\t'"
             "+ 'caml_parser$run\\tstdin-exact-bytes\\tparser-only\\t'"
             "+ 'no-inference\\tno-evaluation\\n')\n"
+            "elif sys.argv[1:] == ['--candle']:\n"
+            " assert sys.stdin.buffer.read() == "
+            "b'let candle_development_smoke = 1;;\\n'\n"
+            " sys.stdout.write('# val candle_development_smoke = 1: int\\n# ')\n"
             "else:\n raise SystemExit(2)\n",
         )
         self._write(
@@ -119,6 +123,14 @@ class DevelopmentCandleLinkTests(unittest.TestCase):
             receipt["capability"]["command"],
             ["./cake", subject.CAPABILITY_ARGUMENT],
         )
+        self.assertEqual(
+            receipt["candle_smoke"]["command"],
+            ["/usr/bin/timeout", "30s", "./cake", "--candle"],
+        )
+        self.assertEqual(
+            (result / "candle-smoke.stdin").read_bytes(),
+            subject.CANDLE_SMOKE_INPUT,
+        )
         self.assertEqual((result / "cake.S").read_text(), "new\n")
         self.assertIn("Option.valOf", (result / "types.txt").read_text())
         self.assertEqual(stat.S_IMODE(result.stat().st_mode), 0o555)
@@ -137,6 +149,21 @@ class DevelopmentCandleLinkTests(unittest.TestCase):
         arguments.cakeml_commit = "b" * 40
         with self.assertRaisesRegex(subject.ContractError, "HEAD mismatch"):
             subject.run(arguments)
+        self.assertFalse((self.root / "result").exists())
+
+    def test_wrong_candle_boot_selection_is_rejected(self) -> None:
+        ffi = self.cakeml / "basis/basis_ffi.c"
+        ffi.write_text(
+            ffi.read_text().replace(
+                "sys.stdout.write('# val candle_development_smoke = 1: int\\n# ')",
+                "sys.stdout.write('wrong boot\\n')",
+            )
+        )
+        self.cakeml_commit = self._commit(self.cakeml)
+        with self.assertRaisesRegex(
+            subject.ContractError, "did not select and evaluate the Candle boot",
+        ):
+            subject.run(self.arguments())
         self.assertFalse((self.root / "result").exists())
 
 
