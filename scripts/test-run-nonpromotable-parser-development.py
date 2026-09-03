@@ -51,6 +51,8 @@ class DevelopmentParserRunnerTests(unittest.TestCase):
             " raise SystemExit(2)\n"
         )
         self.runtime.chmod(0o755)
+        self.runtime_link_receipt = self.root / "DEVELOPMENT-NONPROMOTABLE.json"
+        self.write_runtime_link_receipt()
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -96,14 +98,45 @@ class DevelopmentParserRunnerTests(unittest.TestCase):
         (self.plan_root / "plan.json").write_bytes(subject.json_bytes(plan))
         return plan
 
+    def write_runtime_link_receipt(self) -> None:
+        data = self.runtime.read_bytes()
+        receipt = {
+            "schema": 1,
+            "kind": "nonpromotable-candle-development-link",
+            "promotion_allowed": False,
+            "s1_evidence": False,
+            "s2_evidence": False,
+            "s3_evidence": False,
+            "ordinary_linked_provenance_produced": False,
+            "repositories": {
+                "cakeml": {
+                    "commit": COMMIT_A, "root": "/fixture/cakeml",
+                    "tracked_worktree_clean": True,
+                },
+                "candle": {
+                    "commit": COMMIT_B, "root": "/fixture/candle",
+                    "tracked_worktree_clean": True,
+                },
+                "hol4": {
+                    "commit": COMMIT_C, "root": "/fixture/hol4",
+                    "tracked_worktree_clean": True,
+                },
+            },
+            "products": {
+                "cake": {
+                    "path": "cake", "bytes": len(data),
+                    "sha256": hashlib.sha256(data).hexdigest(),
+                },
+            },
+        }
+        self.runtime_link_receipt.write_bytes(subject.json_bytes(receipt))
+
     def arguments(self, name="result"):
         return argparse.Namespace(
             profile="pilot",
             plan_root=self.plan_root,
             runtime=self.runtime,
-            runtime_cakeml_commit=COMMIT_A,
-            runtime_candle_commit=COMMIT_B,
-            runtime_hol4_commit=COMMIT_C,
+            runtime_link_receipt=self.runtime_link_receipt,
             output_root=self.root / name,
             timeout_seconds=10,
             max_cpu_seconds=10,
@@ -150,7 +183,15 @@ class DevelopmentParserRunnerTests(unittest.TestCase):
         self.write_plan()
         self.runtime.write_text("#!/bin/sh\nprintf 'wrong\\n'\n")
         self.runtime.chmod(0o755)
+        self.write_runtime_link_receipt()
         with self.assertRaisesRegex(subject.ContractError, "capability handshake"):
+            subject.run(self.arguments())
+        self.assertFalse((self.root / "result").exists())
+
+    def test_runtime_link_identity_mismatch_is_rejected_before_publication(self) -> None:
+        self.write_plan()
+        self.runtime.write_bytes(self.runtime.read_bytes() + b"# drift\n")
+        with self.assertRaisesRegex(subject.ContractError, "runtime identity"):
             subject.run(self.arguments())
         self.assertFalse((self.root / "result").exists())
 

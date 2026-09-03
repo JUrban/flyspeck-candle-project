@@ -24,10 +24,13 @@ class DevelopmentCandleLinkTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.cakeml = self.root / "cakeml"
         self.candle = self.root / "candle"
+        self.hol4 = self.root / "hol4"
         self._make_cakeml_fixture()
         self._make_candle_fixture()
+        self._write(self.hol4, "README", "HOL4 fixture\n")
         self.cakeml_commit = self._commit(self.cakeml)
         self.candle_commit = self._commit(self.candle)
+        self.hol4_commit = self._commit(self.hol4)
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -98,7 +101,8 @@ class DevelopmentCandleLinkTests(unittest.TestCase):
             cakeml_commit=self.cakeml_commit,
             candle_root=self.candle,
             candle_commit=self.candle_commit,
-            hol4_commit="a" * 40,
+            hol4_root=self.hol4,
+            hol4_commit=self.hol4_commit,
             output_root=self.root / name,
         )
 
@@ -107,6 +111,14 @@ class DevelopmentCandleLinkTests(unittest.TestCase):
         result = self.root / "result"
         self.assertFalse(receipt["promotion_allowed"])
         self.assertFalse(receipt["ordinary_linked_provenance_produced"])
+        self.assertEqual(
+            receipt["repositories"]["hol4"]["commit"], self.hol4_commit,
+        )
+        self.assertEqual(receipt["types"]["command"], ["./cake", "--types"])
+        self.assertEqual(
+            receipt["capability"]["command"],
+            ["./cake", subject.CAPABILITY_ARGUMENT],
+        )
         self.assertEqual((result / "cake.S").read_text(), "new\n")
         self.assertIn("Option.valOf", (result / "types.txt").read_text())
         self.assertEqual(stat.S_IMODE(result.stat().st_mode), 0o555)

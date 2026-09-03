@@ -134,13 +134,14 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
     require(arguments.output_root.is_absolute(), "output root must be absolute")
     require(arguments.output_root.parent.is_dir(), "output parent does not exist")
     require(not arguments.output_root.exists(), "output root already exists")
-    require(HEX40_RE.fullmatch(arguments.hol4_commit) is not None, "invalid HOL4 commit")
-
     cakeml = git_identity(
         arguments.cakeml_root, arguments.cakeml_commit, "CakeML",
     )
     candle = git_identity(
         arguments.candle_root, arguments.candle_commit, "Candle",
+    )
+    hol4 = git_identity(
+        arguments.hol4_root, arguments.hol4_commit, "HOL4",
     )
     sources = {
         "cake.S.orig": arguments.cakeml_root
@@ -194,7 +195,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
     (staging / "cake").chmod(0o755)
 
     types_result = run_captured(
-        [str(staging / "cake"), "--types"], staging, "types",
+        ["./cake", "--types"], staging, "types",
     )
     require(types_result["exit_code"] == 0, "cake --types failed")
     require(types_result["stdout"]["bytes"] == 0, "cake --types wrote unexpected stdout")
@@ -210,7 +211,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
     require((staging / "insulate.ml").is_file(), "insulation output is missing")
 
     capability_result = run_captured(
-        [str(staging / "cake"), CAPABILITY_ARGUMENT], staging, "capability",
+        ["./cake", CAPABILITY_ARGUMENT], staging, "capability",
     )
     require(capability_result["exit_code"] == 0, "parser capability command failed")
     require(
@@ -250,7 +251,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
         "repositories": {
             "cakeml": cakeml,
             "candle": candle,
-            "hol4_commit": arguments.hol4_commit,
+            "hol4": hol4,
         },
         "controller": file_record(SOURCE_PATH, str(SOURCE_PATH)),
         "captured_sources": captured,
@@ -278,6 +279,7 @@ def main() -> int:
     parser.add_argument("--cakeml-commit", required=True)
     parser.add_argument("--candle-root", type=Path, required=True)
     parser.add_argument("--candle-commit", required=True)
+    parser.add_argument("--hol4-root", type=Path, required=True)
     parser.add_argument("--hol4-commit", required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     receipt = run(parser.parse_args())

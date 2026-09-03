@@ -169,6 +169,55 @@ def validate_plan(plan_root: Path, profile: str) -> tuple[dict[str, Any], bytes,
     return plan, plan_data, prepared_inputs
 
 
+def validate_development_link_receipt(
+    receipt_path: Path, runtime_path: Path, runtime_data: bytes,
+) -> tuple[bytes, dict[str, str]]:
+    require(receipt_path.is_absolute(), "development link receipt path must be absolute")
+    require(
+        receipt_path == runtime_path.parent / "DEVELOPMENT-NONPROMOTABLE.json",
+        "development runtime and link receipt are not a single published bundle",
+    )
+    receipt_data = read_regular(receipt_path, "development link receipt")
+    receipt = decode_object(receipt_data, "development link receipt")
+    require(
+        receipt.get("schema") == 1
+        and receipt.get("kind") == "nonpromotable-candle-development-link",
+        "development link receipt identity mismatch",
+    )
+    require(
+        receipt.get("promotion_allowed") is False
+        and receipt.get("s1_evidence") is False
+        and receipt.get("s2_evidence") is False
+        and receipt.get("s3_evidence") is False
+        and receipt.get("ordinary_linked_provenance_produced") is False,
+        "development link receipt does not preserve the non-promotable boundary",
+    )
+    products = receipt.get("products")
+    require(isinstance(products, dict), "development link receipt products missing")
+    require(
+        products.get("cake") == bytes_record(runtime_data, "cake"),
+        "development runtime identity differs from link receipt",
+    )
+    repositories = receipt.get("repositories")
+    require(isinstance(repositories, dict), "development link repositories missing")
+    commits: dict[str, str] = {}
+    for key, label in (("cakeml", "CakeML"), ("candle", "Candle"), ("hol4", "HOL4")):
+        identity = repositories.get(key)
+        require(isinstance(identity, dict), f"development link {label} identity missing")
+        commit = identity.get("commit")
+        root = identity.get("root")
+        require(
+            isinstance(commit, str)
+            and HEX40_RE.fullmatch(commit) is not None
+            and identity.get("tracked_worktree_clean") is True
+            and isinstance(root, str)
+            and Path(root).is_absolute(),
+            f"development link {label} identity malformed",
+        )
+        commits[key] = commit
+    return receipt_data, commits
+
+
 def process_limits(cpu_seconds: int, address_space_bytes: int, output_bytes: int):
     def apply() -> None:
         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
@@ -265,18 +314,16 @@ def write_readonly(path: Path, data: bytes) -> None:
 
 
 def run(arguments: argparse.Namespace) -> dict[str, Any]:
-    for label, commit in (
-        ("runtime CakeML", arguments.runtime_cakeml_commit),
-        ("runtime Candle patch", arguments.runtime_candle_commit),
-        ("runtime HOL4", arguments.runtime_hol4_commit),
-    ):
-        require(HEX40_RE.fullmatch(commit) is not None, f"invalid {label} commit")
     require(arguments.timeout_seconds > 0, "timeout must be positive")
     require(arguments.max_cpu_seconds > 0, "CPU limit must be positive")
     require(arguments.max_address_space_gib > 0, "address-space limit must be positive")
     require(arguments.max_output_mib > 0, "output limit must be positive")
     require(arguments.plan_root.is_absolute(), "plan root must be absolute")
     require(arguments.runtime.is_absolute(), "runtime path must be absolute")
+    require(
+        arguments.runtime_link_receipt.is_absolute(),
+        "development link receipt path must be absolute",
+    )
     require(arguments.output_root.is_absolute(), "output root must be absolute")
     require(arguments.output_root.parent.is_dir(), "output parent does not exist")
     require(not arguments.output_root.exists(), "output root already exists")
@@ -287,12 +334,18 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
     runtime_data = read_regular(arguments.runtime, "development runtime")
     runtime_mode = arguments.runtime.lstat().st_mode
     require(runtime_mode & 0o111, "development runtime is not executable")
+    link_receipt_data, runtime_commits = validate_development_link_receipt(
+        arguments.runtime_link_receipt, arguments.runtime, runtime_data,
+    )
     runtime_record = bytes_record(runtime_data)
     runtime_record.update({
         "path": str(arguments.runtime),
-        "cakeml_commit": arguments.runtime_cakeml_commit,
-        "candle_patch_commit": arguments.runtime_candle_commit,
-        "hol4_commit": arguments.runtime_hol4_commit,
+        "cakeml_commit": runtime_commits["cakeml"],
+        "candle_patch_commit": runtime_commits["candle"],
+        "hol4_commit": runtime_commits["hol4"],
+        "development_link_receipt": bytes_record(
+            link_receipt_data, str(arguments.runtime_link_receipt),
+        ),
         "ordinary_linked_provenance_consumed": False,
         "execution": "private-copy-of-captured-runtime-bytes",
     })
@@ -422,9 +475,7 @@ def main() -> int:
     parser.add_argument("--profile", choices=tuple(PROFILE_CONTRACTS), required=True)
     parser.add_argument("--plan-root", type=Path, required=True)
     parser.add_argument("--runtime", type=Path, required=True)
-    parser.add_argument("--runtime-cakeml-commit", required=True)
-    parser.add_argument("--runtime-candle-commit", required=True)
-    parser.add_argument("--runtime-hol4-commit", required=True)
+    parser.add_argument("--runtime-link-receipt", type=Path, required=True)
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--timeout-seconds", type=int, default=600)
     parser.add_argument("--max-cpu-seconds", type=int, default=600)
