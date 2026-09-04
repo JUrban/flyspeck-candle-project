@@ -10,7 +10,7 @@ independent oracle and contributes nothing to direct S2/S3 qualification.
 The source authorities at this checkpoint are:
 
 - CakeML frontend batch `a38cba3b4c07ca6c9d960eb168fe5a4b6d4a09a6`;
-- Candle `50e1e38034a5a40e07d0817c23426c3c64574610`;
+- Candle `d96929e49c42f0487bc5728397ce3be453dd8376`;
 - HOL4 `a390cbabd3a4521bab4ee20281e3e42933a8a3ae`; and
 - Flyspeck `1ce0353008eba83d3c76ae9a25c3c242e4802d53`.
 
@@ -272,9 +272,9 @@ Final archive consumption, kernel-state/theorem fingerprints, independent
 comparison, and clean direct execution remain mandatory release gates.
 
 Candle commit `50e1e38` records that decision together with explicit,
-receipt-bound 4096 MiB heaps for both the parser diagnostic and direct stratum
-runner, a mandatory 4 GiB virtual-address headroom check, and the manifest
-generator's generated-driver fixed point.  Actual materialization produced a
+receipt-bound CakeML heap settings, a mandatory 4 GiB virtual-address headroom
+check, and the manifest generator's generated-driver fixed point.  Actual
+materialization produced a
 20-output read-only overlay; its normalization receipt has SHA-256
 `3b2eeb14c3f655a0b8faf7032b697635adee5133b3791029b9c5fa62da3b2ed8`,
 and its archive bytes have the expected SHA-256 `ad53b6c2...3b64efb2`.
@@ -287,9 +287,16 @@ and `b7f699507446c04b116a5868a861a513c5fd2b6f22fe0cacf3b6fd0b79cc6fdf`.
 This does not contradict the successful incremental full-Candle evaluation:
 the deliberately coarse diagnostic calls `caml_parser$run` over the entire
 source and retains the returned AST.  It does show that 4 GiB is not an
-operational diagnostic setting for the archive.  An exact 16 GiB comparison
-is in progress while the direct runtime remains at its independently measured
-4 GiB setting.
+operational diagnostic setting for the archive.  The corrected exact 16 GiB
+comparison passed in 1:02:04 at 16,782,080 KiB RSS with exit zero, empty
+stderr, and the nonce-bound `OK` protocol.  Its stdout and GNU-time files have
+SHA-256 `4a64cb04cdfb3c0fbeb6eee8a669e74acd21cd4c731cb6df8d48959db04e0d68`
+and `d562dbba8eaa67091f04134486077bd6c3e295ebba95ed3f525ad2bfb045e974`.
+Candle follow-up `d96929e` therefore gives the coarse parser diagnostic a
+16,384 MiB heap, 24 GiB address space, and 7,200-second wall/CPU defaults while
+the direct incremental runtime remains at its independently measured 4,096
+MiB heap.  All 56 parser-controller tests pass in 70.57 seconds at 271,496 KiB
+maximum RSS.
 
 One first 16 GiB launch is excluded as an invocation error: its hand-entered
 nonce was 58 rather than 64 lowercase hexadecimal characters, so the runtime
