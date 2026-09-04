@@ -31,7 +31,9 @@ class DevelopmentParserRunnerTests(unittest.TestCase):
         self.runtime = self.root / "runtime"
         self.runtime.write_text(
             "#!/usr/bin/python3\n"
+            "import os\n"
             "import sys\n"
+            "assert os.environ == {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'CML_HEAP_SIZE': '64'}\n"
             "cap = '--candle-parser-diagnostic-capability-v1'\n"
             "run = '--candle-parser-diagnostic-v1'\n"
             "if sys.argv[1] == cap:\n"
@@ -140,8 +142,9 @@ class DevelopmentParserRunnerTests(unittest.TestCase):
             output_root=self.root / name,
             timeout_seconds=10,
             max_cpu_seconds=10,
-            max_address_space_gib=1,
+            max_address_space_gib=8,
             max_output_mib=1,
+            cml_heap_size_mib=64,
         )
 
     def test_pass_is_published_but_never_promotable(self) -> None:
@@ -153,6 +156,8 @@ class DevelopmentParserRunnerTests(unittest.TestCase):
         for field in ("promotion_allowed", "s1_evidence", "s2_evidence", "s3_evidence"):
             self.assertFalse(receipt[field])
         self.assertFalse(receipt["ordinary_linked_provenance_consumed"])
+        self.assertEqual(receipt["limits"]["cml_heap_size_mib_per_process"], 64)
+        self.assertEqual(receipt["child_environment"]["CML_HEAP_SIZE"], "64")
         result = self.root / "result"
         published = json.loads((result / "DEVELOPMENT-NONPROMOTABLE.json").read_text())
         self.assertEqual(published, receipt)
@@ -193,6 +198,15 @@ class DevelopmentParserRunnerTests(unittest.TestCase):
         self.runtime.write_bytes(self.runtime.read_bytes() + b"# drift\n")
         with self.assertRaisesRegex(subject.ContractError, "runtime identity"):
             subject.run(self.arguments())
+        self.assertFalse((self.root / "result").exists())
+
+    def test_heap_requires_four_gib_address_space_headroom(self) -> None:
+        self.write_plan()
+        arguments = self.arguments()
+        arguments.cml_heap_size_mib = 4096
+        arguments.max_address_space_gib = 7
+        with self.assertRaisesRegex(subject.ContractError, "4 GiB"):
+            subject.run(arguments)
         self.assertFalse((self.root / "result").exists())
 
 

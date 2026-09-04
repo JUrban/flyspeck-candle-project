@@ -237,6 +237,7 @@ def invoke(
     cpu_seconds: int,
     address_space_bytes: int,
     output_bytes: int,
+    cml_heap_size_mib: int,
 ) -> dict[str, Any]:
     started = time.monotonic()
     try:
@@ -248,7 +249,11 @@ def invoke(
             check=False,
             close_fds=True,
             cwd="/",
-            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+            env={
+                "PATH": "/usr/bin:/bin",
+                "LC_ALL": "C",
+                "CML_HEAP_SIZE": str(cml_heap_size_mib),
+            },
             timeout=timeout_seconds,
             start_new_session=True,
             preexec_fn=process_limits(cpu_seconds, address_space_bytes, output_bytes),
@@ -318,6 +323,12 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
     require(arguments.max_cpu_seconds > 0, "CPU limit must be positive")
     require(arguments.max_address_space_gib > 0, "address-space limit must be positive")
     require(arguments.max_output_mib > 0, "output limit must be positive")
+    require(arguments.cml_heap_size_mib > 0, "CakeML heap size must be positive")
+    require(
+        arguments.max_address_space_gib * 1024
+        >= arguments.cml_heap_size_mib + 4096,
+        "address-space limit must leave at least 4 GiB beyond the CakeML heap",
+    )
     require(arguments.plan_root.is_absolute(), "plan root must be absolute")
     require(arguments.runtime.is_absolute(), "runtime path must be absolute")
     require(
@@ -369,7 +380,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
         capability = invoke(
             execution_runtime, [CAPABILITY_ARGUMENT], b"",
             arguments.timeout_seconds, arguments.max_cpu_seconds,
-            address_space_bytes, output_bytes,
+            address_space_bytes, output_bytes, arguments.cml_heap_size_mib,
         )
         require(
             not capability["timed_out"]
@@ -391,7 +402,7 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
             result = invoke(
                 execution_runtime, [RUN_ARGUMENT, nonce], prepared,
                 arguments.timeout_seconds, arguments.max_cpu_seconds,
-                address_space_bytes, output_bytes,
+                address_space_bytes, output_bytes, arguments.cml_heap_size_mib,
             )
             outcome = classify(result, nonce)
             counts[outcome] += 1
@@ -450,7 +461,13 @@ def run(arguments: argparse.Namespace) -> dict[str, Any]:
             "timeout_seconds_per_process": arguments.timeout_seconds,
             "cpu_seconds_per_process": arguments.max_cpu_seconds,
             "address_space_gib_per_process": arguments.max_address_space_gib,
+            "cml_heap_size_mib_per_process": arguments.cml_heap_size_mib,
             "output_mib_per_stream": arguments.max_output_mib,
+        },
+        "child_environment": {
+            "CML_HEAP_SIZE": str(arguments.cml_heap_size_mib),
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
         },
         "attempt_count": len(attempts),
         "outcome_counts": dict(sorted(counts.items())),
@@ -481,6 +498,7 @@ def main() -> int:
     parser.add_argument("--max-cpu-seconds", type=int, default=600)
     parser.add_argument("--max-address-space-gib", type=int, default=16)
     parser.add_argument("--max-output-mib", type=int, default=1)
+    parser.add_argument("--cml-heap-size-mib", type=int, default=4096)
     arguments = parser.parse_args()
     receipt = run(arguments)
     print(
