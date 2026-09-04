@@ -376,14 +376,25 @@ maximum RSS, with no major faults or swaps.  The conversion theory alone took
 2m01s.  Its 4,439,041-byte log and exit-status hashes are
 `c7245184a75befac9423a9b63d8a2358f712148d01468f28040b7ac76447c905`
 and `9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa`.
-The dedicated translated-parser replay for this committed head is in
-progress; no translated success is claimed yet.
+The dedicated translated-parser replay for this committed head then passed.
+`caml_parserProgTheory` itself exported in 41m59s; the complete two-target
+serial invocation took 44:59.03, peaked at 44,955,200 KiB RSS, incurred no
+major faults or swaps, and exited zero.  It separately translated
+`select_expr_nterm`, saved the mutual expression side/value theorems, proved
+and applied `ptree_Expr_preconds`, and translated the public
+`caml_parser$run_parser` and `caml_parser$run` entry points.  Its 77,264-byte
+log and exit-status hashes are
+`2d06effd056af25cb9550a05a82225c6611149b12df00b48aa4984eb55e734ce`
+and `9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa`.
+This restores the previously measured approximately 44-minute translation
+scale and closes the source-level performance regression.  It remains a warm,
+path-bound development result, not release evidence.
 
 The next sequence is therefore:
 
 1. finish the exact selected normalized-archive parser timing and use it to
    set a conservative per-input controller limit;
-2. finish the serial warm rebuild of batched CakeML head `a38cba3b4`;
+2. finish the serial warm rebuild of optimized CakeML head `06a639c4d`;
 3. require the real-Candle boot smoke and then exact 20/20 and 400/400 parser
    gates; and
 4. only then spend on the pristine-cold release bootstrap and formal gates.
