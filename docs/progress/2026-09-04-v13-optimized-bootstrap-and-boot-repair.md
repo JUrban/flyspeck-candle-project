@@ -93,3 +93,42 @@ Candle `d96929e49c42f0487bc5728397ce3be453dd8376`, and HOL4
 The next gates remain the fresh current-head 20-input parser pilot, independent
 consumption, and then the exact 400-input inventory.  Only after those pass is
 the pristine-cold/canonical replay justified.
+
+## Explicit development heap and passing pilot
+
+Prelaunch review found that the development parser runner bounded virtual
+address space but inherited the runtime's one-GiB C default heap.  That would
+not execute the intended 4-GiB pilot and 16-GiB archive measurements.  Project
+commit `7a681e53e2a80eb7954c4461d715dd78ad9af909` therefore adds an explicit
+`--cml-heap-size-mib` option, passes only the fixed child environment including
+that value, records it in the result receipt, and requires at least four GiB
+of address-space headroom.  Six runner tests and seven localizer tests pass.
+The committed runner has SHA-256
+`57e0339f1cb7d892e7645ec7c4486216f656926142bb9bfbb3627a59cceaba26`.
+
+The fresh Candle-`d96929e` pilot materialization is
+`/project/flyspeck-candle-runs/parser-pilot-materialization-d96929e`.
+Its plan and host-materialization SHA-256 identities are
+`95dbee3a5797da4a92285501f2440ed3ff714f7160868cb3db1780f195ec9d71`
+and `1198676f083d0df912cb97c0db7cee4ea738b22efa8bfa622134ddab5bfea9dd`.
+It contains exactly 20 ready inputs and no unsupported input.
+
+The exact pilot then passed 20/20 in 14.156415 seconds with a 4,096-MiB heap,
+16-GiB address limit, and 7,200-second wall/CPU limits.  Its sealed result is
+`/project/flyspeck-candle-runs/nonpromotable-parser-pilot-result-8a8926906-d96929e-attempt-001`,
+whose receipt has SHA-256
+`cb6d631fa63c18fa35197da4ab8f5352ef2e3100cf134354df6a196afe81f9c0`.
+An independent shell-side validation required its exact 44-file and two-
+directory mode closure, all receipt fields and negative promotion claims, all
+20 transcript hashes, exact nonce-bound `OK` lines, and empty stderr files.
+That validation passed.
+
+The pilot authorized fresh materialization of the 400-input profile at
+`/project/flyspeck-candle-runs/all-inventory-materialization-d96929e`.
+It has exactly 400 ready inputs, zero unsupported, plan SHA-256
+`e4308994f28211ff3982925a25a71231b16d0384c017362ba73c62797f597e82`,
+and host-materialization SHA-256
+`86556f695a54c16845b3fd50dac83d06a5596bfde9809b0534334599a199225c`.
+The 9,103,338-byte normalized archive is input 256.  Its 400-input run is
+active with a receipt-bound 16,384-MiB heap and 24-GiB address limit; it remains
+development-only until completion and independent result validation.
