@@ -132,3 +132,37 @@ and host-materialization SHA-256
 The 9,103,338-byte normalized archive is input 256.  Its 400-input run is
 active with a receipt-bound 16,384-MiB heap and 24-GiB address limit; it remains
 development-only until completion and independent result validation.
+
+## Passing exact 400-input parser gate
+
+The 400-input run completed with `development-parse-pass`: exactly 400 attempts
+and 400 `parse-ok` outcomes.  It took 7,103.426662 seconds.  The normalized
+archive was the slowest input and passed in 3,640.166531 seconds, slightly
+faster than its earlier isolated 3,724-second calibration.  The result root is
+`/project/flyspeck-candle-runs/nonpromotable-parser-all-inventory-result-8a8926906-d96929e-attempt-001`.
+Its receipt has SHA-256
+`c34619c8f850c1da87714b57139bdd001a82d014ef81a14b37d2084b7edc7312`.
+
+An independent shell-side consumer required:
+
+- the exact 804-file and two-directory inventory, with all files mode `0444`,
+  both directories mode `0555`, and no other filesystem object type;
+- receipt schema/kind, exactly 400 attempts, exactly 400 successes, and every
+  promotion/S1/S2/S3 field false;
+- the exact runtime and plan digests, 16,384-MiB heap, 24-GiB address limit,
+  7,200-second wall/CPU limits, and minimal child environment;
+- every stdout and stderr digest in the receipt; and
+- all 400 exact nonce-bound `OK` lines with every stderr file empty.
+
+That independent validation passed.  The runtime SHA-256 remains
+`dd8a693bc88b75b5599a91777b93629417993cdb5338bb7cb0f40d38d246190f`
+and the copied plan remains
+`e4308994f28211ff3982925a25a71231b16d0384c017362ba73c62797f597e82`.
+This closes the development frontend corpus gate, including the quotation-
+aware inputs and archive-scale parser risk.  It still makes no S2/S3 claim.
+
+The next authorized spend is the pristine-cold proof replay at CakeML
+`8a8926906ec97204eeec961496d191103cda3229`, followed by a current-head
+canonical bootstrap and ordinary schema-6 link.  The formal parser receipts
+must then be rerun against that qualified binary before direct Flyspeck
+execution.
