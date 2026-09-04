@@ -329,6 +329,56 @@ CakeML changes address 14 of the 15 localized syntax candidates.  The exact
 unselected-3.10 normalization above closes the remaining candidate without
 deleting the converter rejection or producing a misleading AST.
 
+## Warm-head translation regression and selector repair
+
+The serial warm rebuild of CakeML head `a38cba3b4` did not complete within a
+reasonable development window.  Attempt 003 spent more than six hours in the
+mutual `ptree_Expr` translation after the last saved source-theory boundary.
+The active Poly/ML worker continuously consumed approximately one CPU, so this
+was not the `-j2` futex deadlock described above.  Its resident set was
+observed rising to approximately 36.5 GiB and then falling through several GC
+cycles without reaching the next translated-theorem boundary.  It was
+interrupted cleanly at 6:01:06 and all build descendants exited.  The retained
+development evidence has status 130 and hashes:
+
+- build log
+  `dcf9c3dcb4a01795e166b046fd5c8514ec0144cefd0771dffb5b1fbb6cadfece`;
+- exit-status file
+  `f5bde7eb9f6c71611dc5726e8aca3eb4eba3e386da49e0a4ed5c295a90a73a0d`;
+  and
+- GNU-time file
+  `adbeec8343a44664c11125dc92d5350ab356513a3ebe45e54444d6b072415d4b`.
+
+GNU time measured the waiting Holmake parent and therefore reported only
+251,456 KiB maximum RSS and exit zero; those two fields do not describe the
+heavy descendant and are explicitly rejected.  The shell-level status and
+the directly observed descendant process establish the interruption, not a
+theorem failure.
+
+A source audit localized the regression to the three new `nterm_of`-dependent
+branches inside the already-large mutual converter.  A first proposed repair
+moved those tests into structural `Nd` clauses.  HOL accepted the definition
+and generated its induction theorem, but simplification of the enlarged
+induction theorem had not reached the next boundary after 25 minutes.  That
+experiment was interrupted and rejected.  Its non-promotable build log and
+pipeline-status file have SHA-256
+`9deb131debd787803008e23ca060d6495f2b4c329b70f06f8dceffac71c4af5d`
+and `85a0e6eb5530a682fa88345a5e7a144248f49e5b71b3eb587a9db5cd2957495a`.
+
+CakeML commit `06a639c4d` instead factors the lookahead into the small
+`select_expr_nterm` helper, translates that helper separately, and leaves one
+recursive converter call at each of the three sites.  It preserves the old
+`nterm_of` failure on an impossible leaf and selects exactly the same target
+nonterminal for every node, so this is a translation-shape change rather than
+an AST change.  The serial focused build passed both
+`camlPtreeConversionTheory` and `camlTestsTheory` in 7:15.31, at 2,838,768 KiB
+maximum RSS, with no major faults or swaps.  The conversion theory alone took
+2m01s.  Its 4,439,041-byte log and exit-status hashes are
+`c7245184a75befac9423a9b63d8a2358f712148d01468f28040b7ac76447c905`
+and `9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa`.
+The dedicated translated-parser replay for this committed head is in
+progress; no translated success is claimed yet.
+
 The next sequence is therefore:
 
 1. finish the exact selected normalized-archive parser timing and use it to
