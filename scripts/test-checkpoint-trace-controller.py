@@ -183,6 +183,47 @@ raise SystemExit(os.waitstatus_to_exitcode(status))
                     pass
                 session.close()
 
+    def test_observer_timeout_kills_controller_and_tracee(self):
+        session = subject.start_trace(
+            [PYTHON, "-I", "-S", "-c", "import time; time.sleep(30)"],
+            ENVIRONMENT, 40,
+        )
+        root_pidfd = -1
+        try:
+            while not process_packets({"packets": session.packets}, "tracee-launch"):
+                self.assertIsNotNone(subject.receive_packet(session))
+            root_pid = process_packets(
+                {"packets": session.packets}, "tracee-launch",
+            )[0]["payload"]["root_pid"]
+            root_pidfd = os.pidfd_open(root_pid, 0)
+            session.channel.settimeout(0.01)
+            with self.assertRaisesRegex(
+                subject.TraceControllerError, "event stream timed out",
+            ):
+                subject.collect_trace(session)
+            poller = select.poll()
+            poller.register(root_pidfd, select.POLLIN)
+            self.assertTrue(poller.poll(5000), "timeout did not EXITKILL tracee")
+        finally:
+            if root_pidfd >= 0:
+                try:
+                    signal.pidfd_send_signal(root_pidfd, signal.SIGKILL, None, 0)
+                except ProcessLookupError:
+                    pass
+                os.close(root_pidfd)
+            if not session.collected:
+                try:
+                    signal.pidfd_send_signal(
+                        session.controller_pidfd, signal.SIGKILL, None, 0,
+                    )
+                except ProcessLookupError:
+                    pass
+                try:
+                    os.waitpid(session.controller_pid, 0)
+                except ChildProcessError:
+                    pass
+                session.close()
+
     @unittest.skipUnless(platform.machine() == "x86_64", "x86_64 clone syscall fixture")
     def test_clone_untraced_is_detected_and_rejected(self):
         code = """
