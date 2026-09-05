@@ -63,49 +63,50 @@ class PublishedParserResultTests(unittest.TestCase):
             subject.transcript_paths(value, 1)
 
     def test_resource_contract_is_exact(self):
-        expected = {
-            "timeout_seconds": subject.PARSER_TIMEOUT_SECONDS,
-            "cpu_seconds": subject.PARSER_CPU_SECONDS,
-            "address_space_bytes": subject.PARSER_ADDRESS_SPACE_GIB * subject.GIB,
-            "effective_stdout_file_bytes": subject.MIB,
-            "effective_stderr_file_bytes": subject.MIB,
-            "capture": "fresh-private-ordinary-files-rlimit-fsize",
-            "child_process_creation_rlimit_nproc": 0,
-            "core_file_bytes": 0,
-            "runtime_environment": subject.PARSER_RUNTIME_ENVIRONMENT,
-        }
-        self.assertEqual(subject.validate_resource_limits(expected), expected)
-        for field, replacement in (
-            ("timeout_seconds", 601),
-            ("address_space_bytes", 120 * subject.GIB),
-            ("capture", "relabeled"),
+        for profile, address_space_gib, heap_mib in (
+            ("pilot", 16, 4096),
+            ("all-inventory", 24, 16384),
         ):
-            altered = dict(expected)
-            altered[field] = replacement
-            with self.assertRaisesRegex(subject.ResultError, "exact contract"):
-                subject.validate_resource_limits(altered)
+            expected = subject.expected_resource_limits(profile)
+            self.assertEqual(
+                expected["address_space_bytes"], address_space_gib * subject.GIB,
+            )
+            self.assertEqual(
+                expected["runtime_environment"]["CML_HEAP_SIZE"], str(heap_mib),
+            )
+            self.assertEqual(
+                subject.validate_resource_limits(expected, profile), expected,
+            )
+            for field, replacement in (
+                ("timeout_seconds", 601),
+                ("address_space_bytes", 120 * subject.GIB),
+                ("capture", "relabeled"),
+            ):
+                altered = dict(expected)
+                altered[field] = replacement
+                with self.assertRaisesRegex(subject.ResultError, "exact contract"):
+                    subject.validate_resource_limits(altered, profile)
+
+        with self.assertRaisesRegex(subject.ResultError, "unknown parser"):
+            subject.expected_resource_limits("unknown")
 
     def test_resource_contract_rejects_runtime_environment_changes(self):
-        expected = {
-            "timeout_seconds": subject.PARSER_TIMEOUT_SECONDS,
-            "cpu_seconds": subject.PARSER_CPU_SECONDS,
-            "address_space_bytes": subject.PARSER_ADDRESS_SPACE_GIB * subject.GIB,
-            "effective_stdout_file_bytes": subject.MIB,
-            "effective_stderr_file_bytes": subject.MIB,
-            "capture": "fresh-private-ordinary-files-rlimit-fsize",
-            "child_process_creation_rlimit_nproc": 0,
-            "core_file_bytes": 0,
-            "runtime_environment": subject.PARSER_RUNTIME_ENVIRONMENT,
-        }
+        expected = subject.expected_resource_limits("all-inventory")
+        runtime_environment = expected["runtime_environment"]
         for environment in (
-            {**subject.PARSER_RUNTIME_ENVIRONMENT, "CML_HEAP_SIZE": "4096"},
-            {**subject.PARSER_RUNTIME_ENVIRONMENT, "UNEXPECTED": "1"},
+            {**runtime_environment, "CML_HEAP_SIZE": "4096"},
+            {**runtime_environment, "UNEXPECTED": "1"},
             {"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
         ):
             altered = dict(expected)
             altered["runtime_environment"] = environment
             with self.assertRaisesRegex(subject.ResultError, "exact contract"):
-                subject.validate_resource_limits(altered)
+                subject.validate_resource_limits(altered, "all-inventory")
+
+    def test_profile_substitution_is_rejected(self):
+        pilot = subject.expected_resource_limits("pilot")
+        with self.assertRaisesRegex(subject.ResultError, "exact contract"):
+            subject.validate_resource_limits(pilot, "all-inventory")
 
     def test_loader_ignores_timestamp_valid_ignored_bytecode(self):
         with tempfile.TemporaryDirectory() as temporary:

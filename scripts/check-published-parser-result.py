@@ -39,11 +39,15 @@ GIB = 1024 * 1024 * 1024
 MIB = 1024 * 1024
 PARSER_TIMEOUT_SECONDS = 7200
 PARSER_CPU_SECONDS = 7200
-PARSER_ADDRESS_SPACE_GIB = 24
-PARSER_CML_HEAP_SIZE_MIB = 16384
-PARSER_RUNTIME_ENVIRONMENT = {
-    **EXACT_ENVIRONMENT,
-    "CML_HEAP_SIZE": str(PARSER_CML_HEAP_SIZE_MIB),
+PARSER_PROFILE_RESOURCES = {
+    "pilot": {
+        "address_space_gib": 16,
+        "cml_heap_size_mib": 4096,
+    },
+    "all-inventory": {
+        "address_space_gib": 24,
+        "cml_heap_size_mib": 16384,
+    },
 }
 GIT_OPTIONS = (
     "-c", "core.fsmonitor=false",
@@ -165,18 +169,29 @@ def exact_positive_integer(value: Any, label: str) -> int:
     return value
 
 
-def validate_resource_limits(value: Any) -> dict[str, Any]:
-    expected = {
+def expected_resource_limits(profile: str) -> dict[str, Any]:
+    require(profile in PARSER_PROFILE_RESOURCES,
+            "unknown parser resource-limit profile")
+    profile_resources = PARSER_PROFILE_RESOURCES[profile]
+    runtime_environment = {
+        **EXACT_ENVIRONMENT,
+        "CML_HEAP_SIZE": str(profile_resources["cml_heap_size_mib"]),
+    }
+    return {
         "timeout_seconds": PARSER_TIMEOUT_SECONDS,
         "cpu_seconds": PARSER_CPU_SECONDS,
-        "address_space_bytes": PARSER_ADDRESS_SPACE_GIB * GIB,
+        "address_space_bytes": profile_resources["address_space_gib"] * GIB,
         "effective_stdout_file_bytes": MIB,
         "effective_stderr_file_bytes": MIB,
         "capture": "fresh-private-ordinary-files-rlimit-fsize",
         "child_process_creation_rlimit_nproc": 0,
         "core_file_bytes": 0,
-        "runtime_environment": PARSER_RUNTIME_ENVIRONMENT,
+        "runtime_environment": runtime_environment,
     }
+
+
+def validate_resource_limits(value: Any, profile: str) -> dict[str, Any]:
+    expected = expected_resource_limits(profile)
     require(value == expected, "parser resource limits differ from exact contract")
     return expected
 
@@ -334,7 +349,9 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
         runtime_result = {
             field: receipt[field] for field in controller.RUNTIME_RESULT_FIELDS
         }
-        limits = validate_resource_limits(receipt.get("resource_limits"))
+        limits = validate_resource_limits(
+            receipt.get("resource_limits"), arguments.profile,
+        )
         timeout = limits["timeout_seconds"]
         cpu = limits["cpu_seconds"]
         address_bytes = limits["address_space_bytes"]
