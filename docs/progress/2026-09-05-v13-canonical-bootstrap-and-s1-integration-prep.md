@@ -138,6 +138,34 @@ focused set passes 43/43.  The 353-test full pass and 63-test compatibility
 pass above apply to the unchanged runtime/controller implementation at parent
 `6461afa`; the follow-up changes only this unit-test source.
 
+## Current-head direct-stratum plan preparation
+
+The exact parser controller inventory checks at Candle `419a96e` pass for all
+20 pilot nodes and all 400 all-inventory nodes.  The four predeclared pilot and
+all-inventory plan/result destinations under `flyspeck-candle-runs` were also
+confirmed absent; they remain uncreated until the canonical link exists.
+
+Direct-stratum plan attempt 001 intentionally failed before staging because
+the older `v13-normalized-overlay-4c20d9d` directory set did not satisfy the
+current 20-entry normalization contract.  No attempt-001 plan directory was
+created or reused.  A fresh exact overlay was published at
+`v13-normalized-overlay-419a96e-attempt-001`; its schema-3 receipt SHA-256 is
+`3b2eeb14c3f655a0b8faf7032b697635adee5133b3791029b9c5fa62da3b2ed8`
+and its contract SHA-256 is
+`2e7274c15ec56ffe864e11c100b2fb8493471111117b83036a116e2cfff00f0b`.
+
+Plan attempt 002 then independently validated the clean pinned Candle and
+Flyspeck roots, all 400 source nodes, the new 20-output overlay, and the
+existing generated LP input against the unchanged current
+`dc9f9e5d60b3b43a1275a450e643bb1d8ce4843d517cdf4d84a6dc5c318a8816`
+contract.  It published
+`v13-stratum-plan-419a96e-attempt-002` with plan SHA-256
+`310cb1961a4dd2a5e902f1c87baa7f54f51093fa5624139cd62221cbcf573c98`:
+297 ordered actions, eight cumulative boundaries, two diagnostic cutpoints,
+43 generated inputs, and exact 0555/0444 root/file modes.  This is an
+authenticated host scheduling plan only.  It has not started Candle and is not
+S2/S3 evidence.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
