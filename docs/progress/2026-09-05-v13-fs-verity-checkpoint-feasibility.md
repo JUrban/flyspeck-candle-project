@@ -96,6 +96,12 @@ OK
 
 `py_compile` and `git diff --check` also pass.
 
+The complete project regression at implementation commit `5a3a0be` also
+passed: all 22 `scripts/test-*.py` programs and all 339 discovered test
+methods.  This includes 49 direct-release protocol tests, 67 hostile S1
+finalizer tests, and 14 top-100 sweep-controller tests in addition to the
+26 checkpoint-authenticator tests above.
+
 ## Remaining authority gap
 
 fs-verity closes only mutation of one inode's contents.  A same-UID process can
