@@ -90,6 +90,44 @@ This is integration readiness, not S1.  The 65-load Great 100 source workload
 must still execute through the linked current compiler under the approved
 schema, and its semantic fingerprints must pass the independent reviewer.
 
+## Nonpromotable full-suite transition diagnostic
+
+The merged runner originally rejected schema 7 before it could execute any
+full-suite fingerprint comparison.  Selected-test mode was not an adequate
+substitute: it did not close the ordered 65-target contract, process evidence,
+or final transcript/fingerprint revalidation.  Waiting for a second long
+canonical bootstrap at the merged head would therefore have delayed discovery
+of Great 100 compatibility failures until after the expensive build.
+
+Candidate commit `6461afad080d1576b1abc9cb7745241e957444c4` adds the distinct
+`--top100-transition-diagnostic` mode.  It requires the same clean checkout,
+independent approval, exact 65/66/97 source closure, execution closure, fresh
+evidence destinations, process nonces, transcript rehashing, runtime-state
+checks, resource sampling, and fingerprint comparisons as the promotable
+suite.  It accepts only a schema-7 link with the exact diagnostic-only status
+and transition mode.  Its report suite is
+`top100-transition-diagnostic`, its explicit promotion fields are false, and
+the suite-name check makes `s1_evidence.suite_closed` false even when all 65
+targets match.  Ordinary `--top100` still accepts only an exact-root schema-6
+link and is the only runner mode that can close S1.  The two CLI modes and link
+classes are mutually exclusive.
+
+Command-level testing of the documented isolated invocation also found that
+the merged runner's ambient `reference_protocol` import failed under
+`python3 -I`, while that active protocol source was absent from the recorded
+execution closure.  The same commit replaces the import with a stable
+descriptor-based exact sibling-source load, rejects symlink and hard-link
+substitution, and adds `candle/reference_protocol.py` to the authenticated
+execution contract.
+
+The committed candidate is clean and passes 42 focused schema/fingerprint/
+transition tests, all 353 Candle tests in 390.457 seconds, and all 63 separate
+compatibility tests in 6.258 seconds.  The isolated CLI now lists the exact 65
+targets under `python3 -I`.  No schema-7 runtime has yet been linked, so these
+are controller tests rather than a Great 100 runtime result and make no S1
+claim.  The transition diagnostic remains scheduled only after the active
+current-head bootstrap, exact link, and parser pilot/all-inventory gates.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
