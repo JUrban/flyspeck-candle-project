@@ -64,14 +64,15 @@ class PublishedParserResultTests(unittest.TestCase):
 
     def test_resource_contract_is_exact(self):
         expected = {
-            "timeout_seconds": 600,
-            "cpu_seconds": 600,
-            "address_space_bytes": 16 * subject.GIB,
+            "timeout_seconds": subject.PARSER_TIMEOUT_SECONDS,
+            "cpu_seconds": subject.PARSER_CPU_SECONDS,
+            "address_space_bytes": subject.PARSER_ADDRESS_SPACE_GIB * subject.GIB,
             "effective_stdout_file_bytes": subject.MIB,
             "effective_stderr_file_bytes": subject.MIB,
             "capture": "fresh-private-ordinary-files-rlimit-fsize",
             "child_process_creation_rlimit_nproc": 0,
             "core_file_bytes": 0,
+            "runtime_environment": subject.PARSER_RUNTIME_ENVIRONMENT,
         }
         self.assertEqual(subject.validate_resource_limits(expected), expected)
         for field, replacement in (
@@ -81,6 +82,28 @@ class PublishedParserResultTests(unittest.TestCase):
         ):
             altered = dict(expected)
             altered[field] = replacement
+            with self.assertRaisesRegex(subject.ResultError, "exact contract"):
+                subject.validate_resource_limits(altered)
+
+    def test_resource_contract_rejects_runtime_environment_changes(self):
+        expected = {
+            "timeout_seconds": subject.PARSER_TIMEOUT_SECONDS,
+            "cpu_seconds": subject.PARSER_CPU_SECONDS,
+            "address_space_bytes": subject.PARSER_ADDRESS_SPACE_GIB * subject.GIB,
+            "effective_stdout_file_bytes": subject.MIB,
+            "effective_stderr_file_bytes": subject.MIB,
+            "capture": "fresh-private-ordinary-files-rlimit-fsize",
+            "child_process_creation_rlimit_nproc": 0,
+            "core_file_bytes": 0,
+            "runtime_environment": subject.PARSER_RUNTIME_ENVIRONMENT,
+        }
+        for environment in (
+            {**subject.PARSER_RUNTIME_ENVIRONMENT, "CML_HEAP_SIZE": "4096"},
+            {**subject.PARSER_RUNTIME_ENVIRONMENT, "UNEXPECTED": "1"},
+            {"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+        ):
+            altered = dict(expected)
+            altered["runtime_environment"] = environment
             with self.assertRaisesRegex(subject.ResultError, "exact contract"):
                 subject.validate_resource_limits(altered)
 

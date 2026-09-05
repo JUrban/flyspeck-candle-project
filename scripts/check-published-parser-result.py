@@ -37,6 +37,14 @@ from typing import Any
 EXACT_ENVIRONMENT = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
 GIB = 1024 * 1024 * 1024
 MIB = 1024 * 1024
+PARSER_TIMEOUT_SECONDS = 7200
+PARSER_CPU_SECONDS = 7200
+PARSER_ADDRESS_SPACE_GIB = 24
+PARSER_CML_HEAP_SIZE_MIB = 16384
+PARSER_RUNTIME_ENVIRONMENT = {
+    **EXACT_ENVIRONMENT,
+    "CML_HEAP_SIZE": str(PARSER_CML_HEAP_SIZE_MIB),
+}
 GIT_OPTIONS = (
     "-c", "core.fsmonitor=false",
     "-c", "core.untrackedCache=false",
@@ -159,14 +167,15 @@ def exact_positive_integer(value: Any, label: str) -> int:
 
 def validate_resource_limits(value: Any) -> dict[str, Any]:
     expected = {
-        "timeout_seconds": 600,
-        "cpu_seconds": 600,
-        "address_space_bytes": 16 * GIB,
+        "timeout_seconds": PARSER_TIMEOUT_SECONDS,
+        "cpu_seconds": PARSER_CPU_SECONDS,
+        "address_space_bytes": PARSER_ADDRESS_SPACE_GIB * GIB,
         "effective_stdout_file_bytes": MIB,
         "effective_stderr_file_bytes": MIB,
         "capture": "fresh-private-ordinary-files-rlimit-fsize",
         "child_process_creation_rlimit_nproc": 0,
         "core_file_bytes": 0,
+        "runtime_environment": PARSER_RUNTIME_ENVIRONMENT,
     }
     require(value == expected, "parser resource limits differ from exact contract")
     return expected
@@ -357,11 +366,24 @@ def _validate_with_pins(arguments: argparse.Namespace) -> dict[str, Any]:
             candle_root, policy,
         )
         expected_receipt = controller.build_diagnostic_receipt(
-            plan, expected_plan_data, expected_host, current_controller_execution,
-            lock.record, timeout, cpu, address_bytes // GIB, stdout_bytes,
-            linked_bytes, linked, None, retained_runtime,
-            receipt.get("runtime_execution"), receipt.get("snapshot"),
-            runtime_result, transcript_files,
+            plan=plan,
+            expected_plan_data=expected_plan_data,
+            expected_host=expected_host,
+            controller_execution=current_controller_execution,
+            runtime_lock_record=lock.record,
+            timeout_seconds=timeout,
+            max_cpu_seconds=cpu,
+            max_address_space_gib=address_bytes // GIB,
+            max_output_bytes=stdout_bytes,
+            runtime_environment=limits["runtime_environment"],
+            linked_bytes=linked_bytes,
+            linked=linked,
+            transition_snapshot=None,
+            runtime_snapshot=retained_runtime,
+            runtime_execution=receipt.get("runtime_execution"),
+            inventory=receipt.get("snapshot"),
+            runtime_result=runtime_result,
+            transcript_files=transcript_files,
         )
         require(controller.json_bytes(expected_receipt) == receipt_data,
                 "published parser receipt differs from independent reconstruction")
