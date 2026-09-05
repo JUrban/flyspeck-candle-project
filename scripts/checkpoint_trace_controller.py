@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import os
@@ -237,6 +237,7 @@ class _Tracee:
     pidfd: int
     identity: dict[str, Any]
     options_set: bool
+    fork_event_registered: bool
 
 
 class _Emitter:
@@ -326,6 +327,23 @@ def _find_untraced_descendants(
     return sorted(set(offenders))
 
 
+def _reject_untraced_descendants(offenders: list[int]) -> None:
+    held: list[tuple[int, int]] = []
+    try:
+        for pid in offenders:
+            try:
+                descriptor = os.pidfd_open(pid, 0)
+            except ProcessLookupError:
+                continue
+            held.append((pid, descriptor))
+        for pid, descriptor in held:
+            _kill_pidfd(descriptor, pid)
+    finally:
+        for _, descriptor in held:
+            os.close(descriptor)
+    raise TraceControllerError(f"untraced descendant detected: {offenders}")
+
+
 def _cleanup_tracees(tracees: dict[int, _Tracee]) -> None:
     for pid, process in list(tracees.items()):
         _kill_pidfd(process.pidfd, pid)
@@ -353,7 +371,7 @@ def _trace_workload(
     tracees: dict[int, _Tracee] = {}
     event_counts = {name: 0 for name in (
         "fork", "vfork", "clone", "exec", "exit-stop", "terminal",
-        "signal-stop",
+        "signal-stop", "provisional-child-stop",
     )}
     root_pid = _spawn_tracee(argv, environment, emitter.channel)
     locally_closed = False
@@ -363,7 +381,7 @@ def _trace_workload(
                 os.WSTOPSIG(status) == signal.SIGSTOP,
                 "root tracee did not enter the pre-exec stop")
         root_pidfd, root_identity = _open_identity(root_pid)
-        tracees[root_pid] = _Tracee(root_pidfd, root_identity, True)
+        tracees[root_pid] = _Tracee(root_pidfd, root_identity, True, True)
         _ptrace(PTRACE_SETOPTIONS, root_pid, PTRACE_OPTIONS)
         emitter.send("tracee-launch", {
             "root_pid": root_pid,
@@ -391,17 +409,37 @@ def _trace_workload(
                     offenders = _find_untraced_descendants(
                         os.getpid(), tracees,
                     )
-                    require(not offenders,
-                            f"untraced descendant detected: {offenders}")
+                    if offenders:
+                        _reject_untraced_descendants(offenders)
                     next_scan = now + 0.010
                 time.sleep(0.001)
                 continue
 
             process = tracees.get(pid)
+            if (process is None and os.WIFSTOPPED(status) and
+                    os.WSTOPSIG(status) == signal.SIGSTOP):
+                provisional_pidfd, provisional_identity = _open_identity(pid)
+                parent_pid = provisional_identity["parent_pid"]
+                if parent_pid not in tracees:
+                    os.close(provisional_pidfd)
+                    raise TraceControllerError(
+                        f"unregistered child stop observed for pid {pid}"
+                    )
+                process = _Tracee(
+                    provisional_pidfd, provisional_identity, False, False,
+                )
+                tracees[pid] = process
+                event_counts["provisional-child-stop"] += 1
+                emitter.send("provisional-child-stop", {
+                    "parent": tracees[parent_pid].identity,
+                    "child": provisional_identity,
+                })
             require(process is not None,
                     f"unregistered child status observed for pid {pid}")
             if os.WIFEXITED(status) or os.WIFSIGNALED(status):
                 event_counts["terminal"] += 1
+                require(process.fork_event_registered,
+                        f"pid {pid} terminated before its fork event")
                 emitter.send("terminal", {
                     "process": process.identity,
                     "exit_code": os.WEXITSTATUS(status)
@@ -422,12 +460,20 @@ def _trace_workload(
                 PTRACE_EVENT_FORK, PTRACE_EVENT_VFORK, PTRACE_EVENT_CLONE,
             }:
                 child_pid = _ptrace_event_message(pid)
-                require(child_pid > 0 and child_pid not in tracees,
-                        "duplicate or malformed ptrace child event")
-                child_pidfd, child_identity = _open_identity(child_pid)
-                tracees[child_pid] = _Tracee(
-                    child_pidfd, child_identity, False,
-                )
+                require(child_pid > 0, "malformed ptrace child event")
+                child = tracees.get(child_pid)
+                if child is None:
+                    child_pidfd, child_identity = _open_identity(child_pid)
+                    child = _Tracee(
+                        child_pidfd, child_identity, False, True,
+                    )
+                    tracees[child_pid] = child
+                else:
+                    require(not child.fork_event_registered and
+                            child.identity["parent_pid"] == pid,
+                            "duplicate or mismatched ptrace child event")
+                    child.fork_event_registered = True
+                    child_identity = child.identity
                 name = EVENT_NAMES[ptrace_event]
                 event_counts[name] += 1
                 emitter.send(name, {
@@ -466,8 +512,8 @@ def _trace_workload(
             _ptrace(PTRACE_CONT, pid, delivery_signal)
 
         offenders = _find_untraced_descendants(os.getpid(), tracees)
-        require(not offenders,
-                f"untraced descendants remained after closure: {offenders}")
+        if offenders:
+            _reject_untraced_descendants(offenders)
         try:
             unknown_pid, _ = os.waitpid(-1, WALL | os.WNOHANG)
         except ChildProcessError:
@@ -530,6 +576,7 @@ class TraceSession:
     channel: socket.socket
     next_sequence: int = 0
     collected: bool = False
+    packets: list[dict[str, Any]] = field(default_factory=list)
 
     def close(self) -> None:
         self.channel.close()
@@ -622,6 +669,7 @@ def receive_packet(session: TraceSession) -> dict[str, Any] | None:
             canonical_json_bytes(packet) == data,
             "trace packet contract mismatch")
     session.next_sequence += 1
+    session.packets.append(packet)
     return packet
 
 
@@ -653,23 +701,20 @@ def _validate_identity_stream(packets: list[dict[str, Any]]) -> None:
                     "pid identity changed within trace event stream")
 
 
-def collect_trace(
-    session: TraceSession, initial_packets: list[dict[str, Any]] | None = None,
-) -> dict[str, Any]:
+def collect_trace(session: TraceSession) -> dict[str, Any]:
     require(not session.collected, "trace session was already collected")
-    packets = list(initial_packets or [])
     try:
         while True:
             packet = receive_packet(session)
             if packet is None:
                 break
-            packets.append(packet)
     finally:
         session.channel.close()
     _, status = os.waitpid(session.controller_pid, 0)
     session.collected = True
     os.close(session.controller_pidfd)
     session.controller_pidfd = -1
+    packets = list(session.packets)
     require(packets and packets[-1]["event"] == "done" and
             sum(packet["event"] == "done" for packet in packets) == 1,
             "trace controller did not close its event stream")
