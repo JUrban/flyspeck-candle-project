@@ -111,6 +111,26 @@ Materialization is not parser evidence.  Execution still waits for successful
 canonical receipt validation and the ordinary schema-6 link.  The 400-input
 materialization remains gated on independent acceptance of this pilot.
 
+## Rejected development-binary shortcut
+
+The older native development executable has the same pinned CakeML frontend
+commit and predates the current Candle head only in host-side manifest,
+provenance, and parser-descriptor commits.  It was therefore considered as a
+possible way to expose an early d0 compatibility failure while the canonical
+bootstrap continued.
+
+That shortcut was not executed.  The 923-byte d0 prefix is not a standalone
+runtime input: the direct runner first validates an ordinary same-head link,
+copies every runtime-consumed byte into a disjoint read-only snapshot, writes
+the exact source/normalization/generated-input configuration, instruments each
+action with a nonce-bound ledger check, and adds source-trace and semantic
+observation postludes.  Feeding the raw prefix to the development executable
+would omit those controls and could produce a misleading success or an
+irrelevant setup failure.  Fabricating linked provenance merely to reach the
+formal runner would be worse.  No diagnostic result root was created and no
+gate was weakened; d0 remains queued after the canonical link and both parser
+consumer gates.
+
 ## Next exact sequence
 
 1. Let the current canonical build finish untouched and validate its external
