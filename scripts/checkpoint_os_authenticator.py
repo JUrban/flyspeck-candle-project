@@ -18,6 +18,7 @@ from __future__ import annotations
 import copy
 import ctypes
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -26,6 +27,7 @@ import platform
 import re
 import signal
 import stat
+import struct
 import subprocess
 import time
 from dataclasses import dataclass
@@ -79,6 +81,21 @@ UUID = re.compile(
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 )
 PFT_NAMESPACE = re.compile(r"pft", re.IGNORECASE)
+
+FS_IOC_ENABLE_VERITY = 0x40806685
+FS_IOC_MEASURE_VERITY = 0xC0046686
+FS_VERITY_IOCTL_ABI_MACHINE = "x86_64"
+FS_VERITY_HASH_ALGORITHM_SHA256 = 1
+FS_VERITY_SHA256_DIGEST_BYTES = 32
+FS_VERITY_MAX_DIGEST_BYTES = 64
+FS_VERITY_MEASUREMENT_KIND = "candle-flyspeck-fs-verity-measurement-v1"
+FS_VERITY_MEASUREMENT_POLICY = (
+    "kernel-enforced-read-integrity-for-held-readonly-inode-v1"
+)
+FS_VERITY_ENABLE_KIND = "candle-flyspeck-fs-verity-enable-observation-v1"
+FS_VERITY_ENABLE_POLICY = (
+    "explicit-irreversible-enable-then-held-fd-measurement-v1"
+)
 
 DMTCP_VERSION = "4.1.0"
 DMTCP_AUTHORITY_KIND = "candle-flyspeck-dmtcp-authority-v1"
@@ -451,6 +468,156 @@ def _require_observation(value: object, kind: str, *, nonfixture: bool = True) -
             value.kind == kind and (not nonfixture or value.nonfixture),
             f"missing sealed nonfixture {kind} observation")
     return value
+
+
+def _readonly_regular_fd(fd: object, label: str) -> os.stat_result:
+    require(type(fd) is int and fd >= 0, f"malformed {label} fd")
+    try:
+        descriptor_flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        descriptor_fd_flags = fcntl.fcntl(fd, fcntl.F_GETFD)
+        observed = os.fstat(fd)
+    except OSError as error:
+        raise AuthenticationError(f"cannot inspect {label} fd") from error
+    require((descriptor_flags & os.O_ACCMODE) == os.O_RDONLY,
+            f"{label} fd is not read-only")
+    require(descriptor_fd_flags & fcntl.FD_CLOEXEC,
+            f"{label} fd is not close-on-exec")
+    require(stat.S_ISREG(observed.st_mode), f"{label} fd is not regular")
+    require(platform.machine() == FS_VERITY_IOCTL_ABI_MACHINE,
+            f"{label} ioctl ABI is not pinned x86_64")
+    return observed
+
+
+def _fsverity_ioctl(
+    fd: int, request: int, argument: bytearray, label: str,
+    runner: Callable[[int, int, bytearray, bool], object],
+) -> None:
+    try:
+        runner(fd, request, argument, True)
+    except OSError as error:
+        error_name = errno.errorcode.get(error.errno, "UNKNOWN")
+        raise AuthenticationError(
+            f"{label} ioctl failed: errno {error.errno} ({error_name})"
+        ) from error
+
+
+def measure_fsverity_fd(
+    fd: int, *,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None = None,
+) -> _Observation:
+    """Measure kernel-enforced fs-verity on one already-held read-only inode.
+
+    A successful result binds the retained inode and its kernel Merkle digest.
+    It does not authenticate a pathname, signer, caller history, or restart
+    namespace and therefore is not release approval.
+    """
+    before = _readonly_regular_fd(fd, "fs-verity measurement")
+    buffer = bytearray(
+        struct.pack("=HH", 0, FS_VERITY_MAX_DIGEST_BYTES) +
+        bytes(FS_VERITY_MAX_DIGEST_BYTES)
+    )
+    runner = fcntl.ioctl if ioctl_runner is None else ioctl_runner
+    _fsverity_ioctl(
+        fd, FS_IOC_MEASURE_VERITY, buffer, "FS_IOC_MEASURE_VERITY", runner,
+    )
+    algorithm, digest_size = struct.unpack_from("=HH", buffer)
+    require(
+        algorithm == FS_VERITY_HASH_ALGORITHM_SHA256 and
+        digest_size == FS_VERITY_SHA256_DIGEST_BYTES,
+        "fs-verity measurement is not exact SHA-256",
+    )
+    digest = bytes(buffer[4:4 + digest_size]).hex()
+    _hex(digest, HEX64, "fs-verity SHA-256 digest")
+    after = os.fstat(fd)
+    require(_stat_identity(before) == _stat_identity(after),
+            "fs-verity inode changed while measured")
+    return _make_observation("fs-verity-measurement", {
+        "schema": 1,
+        "kind": FS_VERITY_MEASUREMENT_KIND,
+        "policy": FS_VERITY_MEASUREMENT_POLICY,
+        "ioctl_abi": "linux-x86_64-uapi-v1",
+        "hash_algorithm": "sha256",
+        "digest": digest,
+        "bytes": before.st_size,
+        "device": before.st_dev,
+        "inode": before.st_ino,
+        "mode": f"0{stat.S_IMODE(before.st_mode):03o}",
+        "uid": before.st_uid,
+        "gid": before.st_gid,
+        "link_count": before.st_nlink,
+        "claim": (
+            "held-inode read integrity only; not pathname identity, source "
+            "authenticity, process-history evidence, or release approval"
+        ),
+        "approval_included": False,
+        "pft_used": False,
+    }, ioctl_runner is None)
+
+
+def enable_fsverity_fd(
+    fd: int, *, block_size: int,
+    confirm_irreversible: bool = False,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None = None,
+) -> _Observation:
+    """Explicitly enable fs-verity and immediately measure the retained fd.
+
+    Enabling fs-verity cannot be undone on that inode.  Callers must pass the
+    literal confirmation flag and should use this only after final content has
+    been closed and all writable descriptors have been eliminated.
+    """
+    require(confirm_irreversible is True,
+            "fs-verity enable requires explicit irreversible confirmation")
+    before = _readonly_regular_fd(fd, "fs-verity enable")
+    require(type(block_size) is int and block_size >= 1024 and
+            block_size & (block_size - 1) == 0,
+            "fs-verity block size is not an exact supported power of two")
+    try:
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        filesystem_block_size = os.fstatvfs(fd).f_bsize
+    except (OSError, ValueError) as error:
+        raise AuthenticationError(
+            "cannot derive fs-verity block-size authority"
+        ) from error
+    require(type(page_size) is int and page_size > 0 and
+            type(filesystem_block_size) is int and filesystem_block_size > 0 and
+            block_size <= min(page_size, filesystem_block_size),
+            "fs-verity block size exceeds page or filesystem block size")
+    enable_argument = bytearray(struct.pack(
+        "=IIIIQIIQ11Q",
+        1, FS_VERITY_HASH_ALGORITHM_SHA256, block_size, 0, 0, 0, 0, 0,
+        *([0] * 11),
+    ))
+    require(len(enable_argument) == 128,
+            "fs-verity enable argument has an unexpected ABI size")
+    runner = fcntl.ioctl if ioctl_runner is None else ioctl_runner
+    _fsverity_ioctl(
+        fd, FS_IOC_ENABLE_VERITY, enable_argument,
+        "FS_IOC_ENABLE_VERITY", runner,
+    )
+    after = os.fstat(fd)
+    require(
+        before.st_dev == after.st_dev and before.st_ino == after.st_ino and
+        before.st_mode == after.st_mode and before.st_uid == after.st_uid and
+        before.st_gid == after.st_gid and before.st_nlink == after.st_nlink and
+        before.st_size == after.st_size and before.st_mtime_ns == after.st_mtime_ns,
+        "fs-verity inode identity or content metadata changed while enabled",
+    )
+    measurement = measure_fsverity_fd(fd, ioctl_runner=ioctl_runner)
+    return _make_observation("fs-verity-enable", {
+        "schema": 1,
+        "kind": FS_VERITY_ENABLE_KIND,
+        "policy": FS_VERITY_ENABLE_POLICY,
+        "version": 1,
+        "hash_algorithm": "sha256",
+        "block_size": block_size,
+        "measurement": copy.deepcopy(measurement.evidence),
+        "claim": (
+            "irreversible kernel read-integrity enablement for one held inode; "
+            "not pathname identity, protected authority, or release approval"
+        ),
+        "approval_included": False,
+        "pft_used": False,
+    }, ioctl_runner is None and measurement.nonfixture)
 
 
 def _readelf_needed_from_fd(

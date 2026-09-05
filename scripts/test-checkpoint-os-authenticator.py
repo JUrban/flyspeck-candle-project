@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import errno
 import hashlib
 import importlib.util
 import json
@@ -12,6 +13,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import struct
 import subprocess
 import sys
 import tempfile
@@ -146,6 +148,117 @@ def make_fake_proc(root: Path, *, pid: int = 4321, pgid: int = 4321,
         "vdso_sha256": hashlib.sha256(vdso).hexdigest(),
         "kernel": kernel,
     }
+
+
+class FsVerityTests(unittest.TestCase):
+    def test_exact_enable_and_measurement_abi_is_fail_closed(self) -> None:
+        digest = bytes.fromhex("ab" * 32)
+        calls: list[tuple[int, bytes]] = []
+
+        def fake_ioctl(
+            _fd: int, request: int, argument: bytearray, mutate: bool,
+        ) -> int:
+            self.assertIs(mutate, True)
+            calls.append((request, bytes(argument)))
+            if request == AUTH.FS_IOC_ENABLE_VERITY:
+                self.assertEqual(len(argument), 128)
+                self.assertEqual(
+                    struct.unpack("=IIIIQIIQ11Q", argument),
+                    (1, 1, 4096, 0, 0, 0, 0, 0, *([0] * 11)),
+                )
+            elif request == AUTH.FS_IOC_MEASURE_VERITY:
+                self.assertEqual(len(argument), 68)
+                struct.pack_into("=HH32s", argument, 0, 1, 32, digest)
+            else:
+                self.fail(f"unexpected ioctl request {request}")
+            return 0
+
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "image.dmtcp"
+            path.write_bytes(b"closed checkpoint bytes")
+            descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC)
+            try:
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, "irreversible confirmation",
+                ):
+                    AUTH.enable_fsverity_fd(
+                        descriptor, block_size=4096,
+                        ioctl_runner=fake_ioctl,
+                    )
+                enabled = AUTH.enable_fsverity_fd(
+                    descriptor, block_size=4096,
+                    confirm_irreversible=True, ioctl_runner=fake_ioctl,
+                )
+            finally:
+                os.close(descriptor)
+        self.assertFalse(enabled.nonfixture)
+        self.assertEqual(
+            [request for request, _argument in calls],
+            [AUTH.FS_IOC_ENABLE_VERITY, AUTH.FS_IOC_MEASURE_VERITY],
+        )
+        self.assertEqual(enabled.evidence["block_size"], 4096)
+        measurement = enabled.evidence["measurement"]
+        self.assertEqual(measurement["digest"], digest.hex())
+        self.assertEqual(measurement["ioctl_abi"], "linux-x86_64-uapi-v1")
+        self.assertFalse(measurement["approval_included"])
+        self.assertFalse(enabled.evidence["approval_included"])
+        self.assertFalse(enabled.evidence["pft_used"])
+
+    def test_measurement_rejects_writable_fd_and_malformed_kernel_result(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "image.dmtcp"
+            path.write_bytes(b"checkpoint")
+            writable = os.open(path, os.O_WRONLY | os.O_CLOEXEC)
+            try:
+                with self.assertRaisesRegex(AUTH.AuthenticationError, "read-only"):
+                    AUTH.measure_fsverity_fd(writable, ioctl_runner=lambda *_: 0)
+            finally:
+                os.close(writable)
+
+            descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC)
+            try:
+                def wrong_algorithm(
+                    _fd: int, _request: int, argument: bytearray, _mutate: bool,
+                ) -> int:
+                    struct.pack_into("=HH32s", argument, 0, 2, 32, bytes(32))
+                    return 0
+
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, "not exact SHA-256",
+                ):
+                    AUTH.measure_fsverity_fd(
+                        descriptor, ioctl_runner=wrong_algorithm,
+                    )
+
+                def unavailable(*_arguments: object) -> int:
+                    raise OSError(errno.EOPNOTSUPP, "unsupported")
+
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, r"errno 95 \(ENOTSUP\)",
+                ):
+                    AUTH.measure_fsverity_fd(
+                        descriptor, ioctl_runner=unavailable,
+                    )
+            finally:
+                os.close(descriptor)
+
+    def test_enable_rejects_boolean_and_out_of_bounds_block_sizes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "image.dmtcp"
+            path.write_bytes(b"checkpoint")
+            descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC)
+            try:
+                for block_size in (True, 0, 1000, 8192):
+                    with self.subTest(block_size=block_size), self.assertRaises(
+                        AUTH.AuthenticationError,
+                    ):
+                        AUTH.enable_fsverity_fd(
+                            descriptor, block_size=block_size,
+                            confirm_irreversible=True,
+                            ioctl_runner=lambda *_: 0,
+                        )
+            finally:
+                os.close(descriptor)
 
 
 def rewrite_fake_process(root: Path, expected: dict[str, object]) -> None:
