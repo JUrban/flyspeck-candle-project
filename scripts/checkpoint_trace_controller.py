@@ -777,17 +777,25 @@ def _validate_identity_stream(packets: list[dict[str, Any]]) -> None:
 
 def collect_trace(session: TraceSession) -> dict[str, Any]:
     require(not session.collected, "trace session was already collected")
+    stream_error: BaseException | None = None
     try:
         while True:
             packet = receive_packet(session)
             if packet is None:
                 break
+    except BaseException as error:
+        stream_error = error
+        _kill_pidfd(session.controller_pidfd, session.controller_pid)
     finally:
         session.channel.close()
-    _, status = os.waitpid(session.controller_pid, 0)
-    session.collected = True
-    os.close(session.controller_pidfd)
-    session.controller_pidfd = -1
+    try:
+        _, status = os.waitpid(session.controller_pid, 0)
+    finally:
+        session.collected = True
+        os.close(session.controller_pidfd)
+        session.controller_pidfd = -1
+    if stream_error is not None:
+        raise stream_error
     packets = list(session.packets)
     require(packets and packets[-1]["event"] == "done" and
             sum(packet["event"] == "done" for packet in packets) == 1,
