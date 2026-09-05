@@ -243,6 +243,35 @@ The practical next optimization experiment is therefore an isolated `-j2`
 and authenticated-cache benchmark after the current canonical result is
 retained.  It must not mutate or relabel the active release-evidence run.
 
+## Nonpromotable lifecycle trace prototype
+
+The separate project branch
+`codex/flyspeck-v13-trace-controller-prototype` ends at `33b2c25` and adds a
+standalone continuous ptrace diagnostic.  It enables fork/vfork/clone/exec/
+exit events plus `EXITKILL`, acts as a child subreaper, pins task identities
+with pidfds, and transports canonical sequenced events over an anonymous
+`SOCK_SEQPACKET` channel whose kernel `SCM_CREDENTIALS` must match the exact
+controller pid/uid/gid.  Legal child-stop-before-parent-fork-event ordering is
+handled provisionally and must later reconcile with the fork event.
+
+An inherited `no_new_privs` seccomp filter traps legacy
+`clone(CLONE_UNTRACED)` before it creates an escaping child.  It also traps all
+`clone3` calls because classic BPF cannot dereference the flags pointer; this
+is an explicit compatibility limitation, not a release policy.  A `/proc`
+descendant scan remains defense in depth.  Controller death and observer
+timeout terminate the complete traced tree through pidfd-directed controller
+termination and inherited `EXITKILL`.
+
+Eight live fixture tests cover ordinary closure, transient double fork plus
+`setsid` and descendant exec, wrong sender credentials, simulated PID reuse,
+three-process controller-death cleanup, observer timeout, an actual
+`CLONE_UNTRACED` syscall, and launch rejection.  The final suite passed 50
+consecutive repetitions.  The report hard-codes authentication, promotion,
+S2, and S3 false.  This prototype was not wired into the checkpoint protocol
+and did not execute Candle, Flyspeck, or PFT.  A protected launcher/finalizer,
+delegated task/resource boundary, immutable storage, signed challenge, and
+authenticated restart closure remain external prerequisites for G6.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
