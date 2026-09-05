@@ -308,6 +308,12 @@ not one successful run.  The archive additionally requires an authorization
 receipt from an external authority and its digest through an out-of-band
 channel; the project must not manufacture either value itself.
 
+The pinned finalizer project candidate at `642ad42` was then exercised through
+all 67 tests in `scripts/test-finalize-top100-report.py`; the complete hostile
+fixture matrix passed in 432.851 seconds.  This validates the finalizer code
+path against its synthetic mutation cases, but does not replace the two future
+real Candle reports or their external authorization.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
