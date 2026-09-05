@@ -206,6 +206,43 @@ cross their ordinary/diagnostic CLI modes.  One checklist statement claiming
 closure is current.  The final-head canonical bootstrap and ordinary
 schema-6 Great 100 run remain mandatory.
 
+## Independent strategy and speed-advice reassessment
+
+`/project/audit1.md` correctly identifies the decisive v1.3 distinction:
+HOL Light-to-PFT-to-Candle replay is a valuable independent validation lane,
+but cannot satisfy direct source-execution S2 or S3.  The current README,
+governing acceptance ledger, this report, and the executable plan now state
+that boundary explicitly.  The active critical path is the verified compiler
+and Dopen work, exact Great 100 source execution, cumulative direct Flyspeck
+strata, nonlinear/LP leaves, and finally two reproducible direct whole runs
+plus real resume/corruption evidence.  The PFT process is not inspected or
+used as a source-result substitute.
+
+The suggestions in `docs/advice/external-advice-speed.md` are directionally
+sound but have different assurance scopes:
+
+- cheap exact 20/400 frontend gates and batching compatibility fixes before
+  bootstraps are high-value and are now explicit launch gates;
+- content-addressed HOL theory reuse is appropriate for development loops,
+  but cannot replace the required fresh-cold final builds;
+- `Holmake -j2` deserves a disposable development benchmark after the active
+  run, while `-j4` should wait for measured peak overlap; the current
+  canonical controller pins `-j1`, exact ordered targets, and the complete
+  command transcript, so changing it mid-run would invalidate the receipt;
+- the apparently unrelated architecture translations are not removable by a
+  command-line switch in the pinned tree: `arm8Prog` opens `x64Prog`,
+  `riscvProg` opens `arm8Prog`, `mipsProg` opens `riscvProg`, and
+  `compiler64Prog` imports `mipsProg`.  An x64-only compiler would require a
+  separately proved specialization and should be evaluated as a longer-term
+  optimization rather than applied to this release candidate; and
+- splitting giant theories could improve future development latency, but is
+  a substantial upstream proof refactor and is lower priority than closing
+  the current direct execution gates.
+
+The practical next optimization experiment is therefore an isolated `-j2`
+and authenticated-cache benchmark after the current canonical result is
+retained.  It must not mutate or relabel the active release-evidence run.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
