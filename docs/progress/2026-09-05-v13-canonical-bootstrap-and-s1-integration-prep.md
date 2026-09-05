@@ -246,7 +246,7 @@ retained.  It must not mutate or relabel the active release-evidence run.
 ## Nonpromotable lifecycle trace prototype
 
 The separate project branch
-`codex/flyspeck-v13-trace-controller-prototype` ends at `33b2c25` and adds a
+`codex/flyspeck-v13-trace-controller-prototype` ends at `7002461` and adds a
 standalone continuous ptrace diagnostic.  It enables fork/vfork/clone/exec/
 exit events plus `EXITKILL`, acts as a child subreaper, pins task identities
 with pidfds, and transports canonical sequenced events over an anonymous
@@ -266,11 +266,12 @@ Eight live fixture tests cover ordinary closure, transient double fork plus
 `setsid` and descendant exec, wrong sender credentials, simulated PID reuse,
 three-process controller-death cleanup, observer timeout, an actual
 `CLONE_UNTRACED` syscall, and launch rejection.  The final suite passed 50
-consecutive repetitions.  The report hard-codes authentication, promotion,
-S2, and S3 false.  This prototype was not wired into the checkpoint protocol
-and did not execute Candle, Flyspeck, or PFT.  A protected launcher/finalizer,
-delegated task/resource boundary, immutable storage, signed challenge, and
-authenticated restart closure remain external prerequisites for G6.
+consecutive repetitions, and all 22 project test programs pass (324 tests).
+The report hard-codes authentication, promotion, S2, and S3 false.  This
+prototype was not wired into the checkpoint protocol and did not execute
+Candle, Flyspeck, or PFT.  A protected launcher/finalizer, delegated
+task/resource boundary, immutable storage, signed challenge, and authenticated
+restart closure remain external prerequisites for G6.
 
 ## Next gates
 
