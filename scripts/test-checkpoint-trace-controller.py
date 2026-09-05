@@ -139,20 +139,40 @@ raise SystemExit(os.waitstatus_to_exitcode(status))
             with self.assertRaisesRegex(subject.TraceControllerError, "pid identity"):
                 subject._validate_identity_stream([packet(0, 100, 200), changed])
 
-    def test_controller_death_exitkills_tracee(self):
-        code = "import time; time.sleep(30)"
+    def test_controller_death_exitkills_complete_tracee_tree(self):
+        code = """
+import os
+import time
+first = os.fork()
+if first == 0:
+    os.setsid()
+    os.fork()
+time.sleep(30)
+"""
         session = subject.start_trace(
             [PYTHON, "-I", "-S", "-c", code], ENVIRONMENT, 40,
         )
         root_pid = None
-        root_pidfd = -1
+        tracee_pidfds = {}
         try:
-            while root_pid is None:
+            while (root_pid is None or
+                   len(process_packets(
+                       {"packets": session.packets}, "fork",
+                   )) < 2):
                 packet = subject.receive_packet(session)
                 self.assertIsNotNone(packet)
                 if packet["event"] == "tracee-launch":
                     root_pid = packet["payload"]["root_pid"]
-            root_pidfd = os.pidfd_open(root_pid, 0)
+            tracee_pids = {root_pid} | {
+                packet["payload"]["child"]["pid"]
+                for packet in process_packets(
+                    {"packets": session.packets}, "fork",
+                )
+            }
+            self.assertEqual(len(tracee_pids), 3)
+            tracee_pidfds = {
+                pid: os.pidfd_open(pid, 0) for pid in tracee_pids
+            }
             signal.pidfd_send_signal(
                 session.controller_pidfd, signal.SIGKILL, None, 0,
             )
@@ -160,16 +180,20 @@ raise SystemExit(os.waitstatus_to_exitcode(status))
                 subject.TraceControllerError, "did not close",
             ):
                 subject.collect_trace(session)
-            poller = select.poll()
-            poller.register(root_pidfd, select.POLLIN)
-            self.assertTrue(poller.poll(5000), "EXITKILL did not terminate tracee")
+            for pid, descriptor in tracee_pidfds.items():
+                poller = select.poll()
+                poller.register(descriptor, select.POLLIN)
+                self.assertTrue(
+                    poller.poll(5000),
+                    f"EXITKILL did not terminate tracee {pid}",
+                )
         finally:
-            if root_pidfd >= 0:
+            for pid, descriptor in tracee_pidfds.items():
                 try:
-                    signal.pidfd_send_signal(root_pidfd, signal.SIGKILL, None, 0)
+                    signal.pidfd_send_signal(descriptor, signal.SIGKILL, None, 0)
                 except ProcessLookupError:
                     pass
-                os.close(root_pidfd)
+                os.close(descriptor)
             if not session.collected:
                 try:
                     signal.pidfd_send_signal(

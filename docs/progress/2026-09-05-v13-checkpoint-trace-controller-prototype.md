@@ -80,15 +80,17 @@ syscall-entry mechanism that validates the pointed-to `clone_args` safely.
 2. transient double fork, `setsid`, and descendant exec closure;
 3. rejection of packets from the wrong kernel-reported sender pid;
 4. simulated PID start-time and pidfd-identity reuse rejection;
-5. controller death causing tracee termination through `EXITKILL`;
+5. controller death causing a double-fork/`setsid` tracee tree to terminate
+   through inherited `EXITKILL`;
 6. observer timeout killing the controller and tracee;
 7. seccomp rejection of an actual `CLONE_UNTRACED` syscall; and
 8. canonical-path, namespace, and environment launch rejections.
 
-The suite passes once and in 20 consecutive repetitions after the final
-timeout-cleanup change.  Earlier variants also passed 25 repeated suites both
-before and after the seccomp addition.  These are tiny fixtures only; they are
-not checkpoint, Candle, or Flyspeck executions.
+The suite passes once and in 50 consecutive repetitions after strengthening
+the controller-death case to cover all three traced processes.  Earlier
+variants also passed 20 repeated timeout-cleanup suites and 25 repeated suites
+both before and after the seccomp addition.  These are tiny fixtures only;
+they are not checkpoint, Candle, or Flyspeck executions.
 
 Run the focused tests with:
 
