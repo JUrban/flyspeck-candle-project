@@ -96,6 +96,15 @@ FS_VERITY_ENABLE_KIND = "candle-flyspeck-fs-verity-enable-observation-v1"
 FS_VERITY_ENABLE_POLICY = (
     "explicit-irreversible-enable-then-held-fd-measurement-v1"
 )
+FS_VERITY_STAGED_SEAL_KIND = (
+    "candle-flyspeck-fs-verity-staged-checkpoint-seal-v1"
+)
+FS_VERITY_STAGED_SEAL_POLICY = (
+    "exact-ordered-staged-checkpoint-inodes-enabled-before-publication-v1"
+)
+FS_VERITY_PUBLICATION_RECHECK_KIND = (
+    "candle-flyspeck-fs-verity-publication-recheck-v1"
+)
 
 DMTCP_VERSION = "4.1.0"
 DMTCP_AUTHORITY_KIND = "candle-flyspeck-dmtcp-authority-v1"
@@ -2333,6 +2342,247 @@ def rehash_checkpoint_for_restart(
         "restart_rehash_monotonic_ns": time.monotonic_ns(),
         "images": observations,
     }, publication.nonfixture and filesystem.root_path == "/")
+
+
+def seal_staged_checkpoint_images_fsverity(
+    *, filesystem: AnchoredFilesystem, staging_directory: str,
+    images: list[dict[str, Any]], block_size: int,
+    confirm_irreversible: bool = False,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None = None,
+) -> _Observation:
+    """Seal exact mode-0600 staging images, then transition them to 0444.
+
+    Linux requires owner write permission at FS_IOC_ENABLE_VERITY time.  This
+    operation therefore precedes no-replace publication.  It is intentionally
+    all-or-discard rather than transactionally atomic: if any image fails, the
+    caller must discard the unpublished staging directory.
+    """
+    require(confirm_irreversible is True,
+            "staged fs-verity seal requires explicit irreversible confirmation")
+    staging_directory = _safe_relative(
+        staging_directory, "fs-verity staging directory",
+    )
+    require(PurePosixPath(staging_directory).parts[0] == "staging" and
+            isinstance(images, list) and images,
+            "malformed staged fs-verity image set")
+    paths: list[str] = []
+    previous_path: str | None = None
+    for item in images:
+        require(isinstance(item, dict) and set(item) == {
+                    "path", "bytes", "sha256", "md5", "file_type", "mode",
+                    "link_count",
+                } and item.get("file_type") == "ordinary" and
+                item.get("mode") == "0444" and
+                type(item.get("link_count")) is int and
+                item.get("link_count") == 1,
+                "malformed staged fs-verity image record")
+        path = _safe_relative(item["path"], "fs-verity image path")
+        require(PurePosixPath(path).parent == PurePosixPath(".") and
+                path.endswith(".dmtcp") and
+                (previous_path is None or previous_path < path),
+                "staged fs-verity images are not path-sorted DMTCP images")
+        require(type(item.get("bytes")) is int and item["bytes"] >= 0,
+                "malformed staged fs-verity image size")
+        _hex(item.get("sha256"), HEX64, "staged image SHA-256")
+        _hex(item.get("md5"), HEX32, "staged image MD5")
+        previous_path = path
+        paths.append(path)
+    require(filesystem.exact_tree(staging_directory) == paths,
+            "staged fs-verity tree differs from selected images")
+    stage_fd = filesystem.open_directory(staging_directory)
+    try:
+        stage = os.fstat(stage_fd)
+        require(stage.st_uid == os.getuid() and stage.st_gid == os.getgid() and
+                stat.S_IMODE(stage.st_mode) == 0o700,
+                "fs-verity staging directory is not private mode 0700")
+    finally:
+        os.close(stage_fd)
+
+    records: list[dict[str, Any]] = []
+    all_nonfixture = filesystem.root_path == "/" and ioctl_runner is None
+    for item in images:
+        relative = f"{staging_directory}/{item['path']}"
+        authority_0600 = {
+            "bytes": item["bytes"], "sha256": item["sha256"],
+            "md5": item["md5"], "mode": "0600",
+            "uid": os.getuid(), "gid": os.getgid(),
+        }
+        before = filesystem.authenticate_file(
+            relative, authority_0600, immutable=False,
+        )
+        parent_fd, name = filesystem._open_parent(relative)
+        flags = os.O_RDONLY | os.O_CLOEXEC
+        if hasattr(os, "O_NOFOLLOW"):
+            flags |= os.O_NOFOLLOW
+        try:
+            fd = os.open(name, flags, dir_fd=parent_fd)
+        finally:
+            os.close(parent_fd)
+        try:
+            held_before = _hash_open_fd(fd)
+            require(held_before["device"] == before["device"] and
+                    held_before["inode"] == before["inode"] and
+                    held_before["mode"] == "0600" and held_before["nlink"] == 1,
+                    "staged fs-verity fd differs from authenticated image")
+            enabled = enable_fsverity_fd(
+                fd, block_size=block_size, confirm_irreversible=True,
+                ioctl_runner=ioctl_runner,
+            )
+            os.fchmod(fd, 0o444)
+            os.fsync(fd)
+            measurement = measure_fsverity_fd(fd, ioctl_runner=ioctl_runner)
+            require(enabled.evidence["measurement"]["digest"] ==
+                    measurement.evidence["digest"],
+                    "fs-verity digest changed across final mode transition")
+            final_authority = {**authority_0600, "mode": "0444"}
+            named = filesystem.authenticate_file(
+                relative, final_authority, immutable=True,
+            )
+            held_after = _hash_open_fd(fd)
+            require(all(held_after[field] == final_authority[field]
+                        for field in (
+                            "bytes", "sha256", "md5", "mode", "uid", "gid",
+                        )) and held_after["nlink"] == 1 and
+                    held_after["device"] == named["device"] == before["device"] and
+                    held_after["inode"] == named["inode"] == before["inode"] and
+                    measurement.evidence["mode"] == "0444" and
+                    measurement.evidence["device"] == held_after["device"] and
+                    measurement.evidence["inode"] == held_after["inode"],
+                    "sealed staged image differs after mode transition")
+            records.append({
+                "path": item["path"],
+                "authority": copy.deepcopy(final_authority),
+                "identity": {
+                    "device": held_after["device"],
+                    "inode": held_after["inode"],
+                },
+                "measurement": copy.deepcopy(measurement.evidence),
+            })
+            all_nonfixture = (all_nonfixture and enabled.nonfixture and
+                              measurement.nonfixture)
+        finally:
+            os.close(fd)
+    require(filesystem.exact_tree(staging_directory) == paths,
+            "staged fs-verity tree changed while images were sealed")
+    final_stage_fd = filesystem.open_directory(staging_directory)
+    try:
+        final_stage = os.fstat(final_stage_fd)
+        require(final_stage.st_dev == stage.st_dev and
+                final_stage.st_ino == stage.st_ino and
+                final_stage.st_uid == stage.st_uid and
+                final_stage.st_gid == stage.st_gid and
+                stat.S_IMODE(final_stage.st_mode) == 0o700,
+                "fs-verity staging directory changed while images were sealed")
+    finally:
+        os.close(final_stage_fd)
+    direct_files = copy.deepcopy(images)
+    return _make_observation("fs-verity-staged-seal", {
+        "schema": 1,
+        "kind": FS_VERITY_STAGED_SEAL_KIND,
+        "policy": FS_VERITY_STAGED_SEAL_POLICY,
+        "staging_directory": staging_directory,
+        "block_size": block_size,
+        "image_count": len(records),
+        "ordered_manifest_sha256": direct_canonical_sha256(direct_files),
+        "ordered_image_seal_sha256": canonical_sha256(records),
+        "images": records,
+        "partial_failure_policy": "discard-entire-unpublished-staging-directory",
+        "claim": (
+            "kernel read integrity for exact unpublished staging inodes only; "
+            "not pathname, process-history, restart, or release approval"
+        ),
+        "approval_included": False,
+        "pft_used": False,
+    }, all_nonfixture)
+
+
+def recheck_checkpoint_publication_fsverity(
+    publication: PublicationPin, staged_seal: _Observation, *,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None = None,
+) -> _Observation:
+    """Bind a staged fs-verity seal to the retained published image set."""
+    require(isinstance(publication, PublicationPin) and
+            publication._seal is _OBSERVATION_SEAL and
+            publication.directory_fd >= 0 and len(publication.image_fds) > 0 and
+            len(publication.image_fds) ==
+            len(publication.evidence.get("ordered_images", [])),
+            "missing live checkpoint publication pin")
+    staged_seal = _require_observation(
+        staged_seal, "fs-verity-staged-seal", nonfixture=False,
+    )
+    evidence = staged_seal.evidence
+    expected_fields = {
+        "schema", "kind", "policy", "staging_directory", "block_size",
+        "image_count", "ordered_manifest_sha256", "ordered_image_seal_sha256",
+        "images", "partial_failure_policy", "claim", "approval_included",
+        "pft_used",
+    }
+    require(set(evidence) == expected_fields and
+            type(evidence.get("schema")) is int and
+            evidence.get("schema") == 1 and
+            evidence.get("kind") == FS_VERITY_STAGED_SEAL_KIND and
+            evidence.get("policy") == FS_VERITY_STAGED_SEAL_POLICY and
+            evidence.get("claim") == (
+                "kernel read integrity for exact unpublished staging inodes only; "
+                "not pathname, process-history, restart, or release approval"
+            ) and
+            evidence.get("partial_failure_policy") ==
+                "discard-entire-unpublished-staging-directory" and
+            evidence.get("ordered_manifest_sha256") ==
+                publication.evidence["ordered_manifest_sha256"] and
+            type(evidence.get("image_count")) is int and
+            evidence.get("image_count") == len(publication.image_fds) and
+            type(evidence.get("block_size")) is int and
+            evidence["block_size"] >= 1024 and
+            evidence["block_size"] & (evidence["block_size"] - 1) == 0 and
+            isinstance(evidence.get("images"), list) and
+            len(evidence["images"]) == len(publication.image_fds) and
+            evidence.get("ordered_image_seal_sha256") ==
+                canonical_sha256(evidence["images"]) and
+            evidence.get("approval_included") is False and
+            evidence.get("pft_used") is False,
+            "staged fs-verity seal does not bind the live publication")
+    records: list[dict[str, Any]] = []
+    all_nonfixture = publication.nonfixture and staged_seal.nonfixture
+    for item, expected, fd in zip(
+        publication.evidence["ordered_images"], evidence["images"],
+        publication.image_fds, strict=True,
+    ):
+        held = _hash_open_fd(fd)
+        require(set(expected) == {"path", "authority", "identity", "measurement"} and
+                expected["path"] == item["path"] and
+                expected["authority"] == item["authority"] and
+                expected["identity"] == item["identity"] and
+                all(held[field] == item["authority"][field]
+                    for field in (
+                        "bytes", "sha256", "md5", "mode", "uid", "gid",
+                    )) and held["nlink"] == 1 and
+                held["device"] == item["identity"]["device"] and
+                held["inode"] == item["identity"]["inode"],
+                "fs-verity image seal order or publication binding differs")
+        measured = measure_fsverity_fd(fd, ioctl_runner=ioctl_runner)
+        require(measured.evidence == expected["measurement"],
+                "fs-verity checkpoint measurement changed before restart")
+        records.append({
+            "path": item["path"],
+            "measurement": copy.deepcopy(measured.evidence),
+        })
+        all_nonfixture = all_nonfixture and measured.nonfixture
+    return _make_observation("fs-verity-publication-recheck", {
+        "schema": 1,
+        "kind": FS_VERITY_PUBLICATION_RECHECK_KIND,
+        "policy": FS_VERITY_STAGED_SEAL_POLICY,
+        "ordered_manifest_sha256": evidence["ordered_manifest_sha256"],
+        "ordered_image_seal_sha256": evidence["ordered_image_seal_sha256"],
+        "recheck_monotonic_ns": time.monotonic_ns(),
+        "images": records,
+        "claim": (
+            "staged fs-verity identities and measurements retained after "
+            "publication; not process-history, restart, or release approval"
+        ),
+        "approval_included": False,
+        "pft_used": False,
+    }, all_nonfixture)
 
 
 def authenticate_killed_process_tree(

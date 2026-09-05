@@ -923,7 +923,9 @@ class ProcessAndPhaseTests(unittest.TestCase):
 
 
 class PublicationTests(unittest.TestCase):
-    def make_staging(self, root: Path, names: list[str]) -> list[dict[str, object]]:
+    def make_staging(
+        self, root: Path, names: list[str], mode: int = 0o444,
+    ) -> list[dict[str, object]]:
         (root / "staging").mkdir(exist_ok=True)
         stage = root / "staging/checkpoint-e"
         stage.mkdir()
@@ -931,7 +933,7 @@ class PublicationTests(unittest.TestCase):
         for index, name in enumerate(names):
             target = stage / name
             target.write_bytes(f"image-{index}-{name}\n".encode())
-            target.chmod(0o444)
+            target.chmod(mode)
             authority = AUTH.file_expectation(target)
             images.append({
                 "path": name,
@@ -1022,6 +1024,193 @@ class PublicationTests(unittest.TestCase):
                         )
                 finally:
                     publication.close()
+
+    def test_exact_staged_fsverity_seal_publish_and_recheck(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "checkpoints").mkdir()
+            images = self.make_staging(
+                root, ["first-image.dmtcp", "second-image.dmtcp"], 0o600,
+            )
+            with AUTH.AnchoredFilesystem(root) as filesystem:
+                enable_calls: list[int] = []
+                measure_calls: list[int] = []
+                drift = False
+
+                def ioctl_runner(fd, request, argument, mutate):
+                    self.assertTrue(mutate)
+                    if request == AUTH.FS_IOC_ENABLE_VERITY:
+                        self.assertEqual(len(argument), 128)
+                        enable_calls.append(fd)
+                    elif request == AUTH.FS_IOC_MEASURE_VERITY:
+                        self.assertEqual(len(argument), 68)
+                        measure_calls.append(fd)
+                        size = os.fstat(fd).st_size
+                        digest = hashlib.sha256(os.pread(fd, size, 0)).digest()
+                        if drift:
+                            digest = bytes([digest[0] ^ 1]) + digest[1:]
+                        struct.pack_into(
+                            "=HH", argument, 0,
+                            AUTH.FS_VERITY_HASH_ALGORITHM_SHA256,
+                            AUTH.FS_VERITY_SHA256_DIGEST_BYTES,
+                        )
+                        argument[4:36] = digest
+                    else:
+                        self.fail(f"unexpected ioctl request {request}")
+                    return 0
+
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, "irreversible confirmation",
+                ):
+                    AUTH.seal_staged_checkpoint_images_fsverity(
+                        filesystem=filesystem,
+                        staging_directory="staging/checkpoint-e",
+                        images=images, block_size=4096,
+                        ioctl_runner=ioctl_runner,
+                    )
+                seal = AUTH.seal_staged_checkpoint_images_fsverity(
+                    filesystem=filesystem,
+                    staging_directory="staging/checkpoint-e",
+                    images=images, block_size=4096,
+                    confirm_irreversible=True, ioctl_runner=ioctl_runner,
+                )
+                self.assertFalse(seal.nonfixture)
+                self.assertEqual(
+                    [item["path"] for item in seal.evidence["images"]],
+                    ["first-image.dmtcp", "second-image.dmtcp"],
+                )
+                self.assertTrue(all(
+                    (root / "staging/checkpoint-e" / item["path"])
+                        .stat().st_mode & 0o777 == 0o444
+                    for item in images
+                ))
+                self.assertEqual(len(enable_calls), 2)
+                self.assertEqual(len(measure_calls), 4)
+
+                publication = AUTH.publish_checkpoint_no_replace(
+                    filesystem=filesystem,
+                    staging_directory="staging/checkpoint-e",
+                    publication_parent="checkpoints", images=images,
+                    challenges=challenges(), resource_limits=fixture_limits(),
+                )
+                try:
+                    self.assertFalse(seal.nonfixture)
+                    recheck = AUTH.recheck_checkpoint_publication_fsverity(
+                        publication, seal, ioctl_runner=ioctl_runner,
+                    )
+                    self.assertFalse(recheck.nonfixture)
+                    self.assertEqual(len(measure_calls), 6)
+                    for observation in (seal, recheck):
+                        self.assertFalse(observation.evidence["approval_included"])
+                        self.assertFalse(observation.evidence["pft_used"])
+
+                    drift = True
+                    with self.assertRaisesRegex(
+                        AUTH.AuthenticationError, "measurement changed",
+                    ):
+                        AUTH.recheck_checkpoint_publication_fsverity(
+                            publication, seal, ioctl_runner=ioctl_runner,
+                        )
+                finally:
+                    publication.close()
+
+    def test_staged_fsverity_rejects_mode_and_seal_drift(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "checkpoints").mkdir()
+            images = self.make_staging(root, ["only.dmtcp"])
+            with AUTH.AnchoredFilesystem(root) as filesystem:
+                def ioctl_runner(fd, request, argument, _mutate):
+                    if request == AUTH.FS_IOC_MEASURE_VERITY:
+                        struct.pack_into("=HH", argument, 0, 1, 32)
+                        argument[4:36] = b"v" * 32
+                    return 0
+                with self.assertRaises(AUTH.AuthenticationError):
+                    AUTH.seal_staged_checkpoint_images_fsverity(
+                        filesystem=filesystem,
+                        staging_directory="staging/checkpoint-e",
+                        images=images, block_size=4096,
+                        confirm_irreversible=True, ioctl_runner=ioctl_runner,
+                    )
+                boolean_link = copy.deepcopy(images)
+                boolean_link[0]["link_count"] = True
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, "malformed staged",
+                ):
+                    AUTH.seal_staged_checkpoint_images_fsverity(
+                        filesystem=filesystem,
+                        staging_directory="staging/checkpoint-e",
+                        images=boolean_link, block_size=4096,
+                        confirm_irreversible=True, ioctl_runner=ioctl_runner,
+                    )
+
+            (root / "staging/checkpoint-e").chmod(0o755)
+            (root / "staging/checkpoint-e/only.dmtcp").unlink()
+            (root / "staging/checkpoint-e").rmdir()
+            images = self.make_staging(root, ["sealed.dmtcp"], 0o600)
+            with AUTH.AnchoredFilesystem(root) as filesystem:
+                seal = AUTH.seal_staged_checkpoint_images_fsverity(
+                    filesystem=filesystem,
+                    staging_directory="staging/checkpoint-e",
+                    images=images, block_size=4096,
+                    confirm_irreversible=True, ioctl_runner=ioctl_runner,
+                )
+                publication = AUTH.publish_checkpoint_no_replace(
+                    filesystem=filesystem,
+                    staging_directory="staging/checkpoint-e",
+                    publication_parent="checkpoints", images=images,
+                    challenges=challenges(), resource_limits=fixture_limits(),
+                )
+                try:
+                    for field, value in (
+                        ("schema", True),
+                        ("block_size", True),
+                        ("claim", "promotable"),
+                        ("ordered_manifest_sha256", "f" * 64),
+                    ):
+                        hostile = copy.deepcopy(seal.evidence)
+                        hostile[field] = value
+                        hostile_seal = AUTH._make_observation(
+                            "fs-verity-staged-seal", hostile, False,
+                        )
+                        with self.subTest(field=field), self.assertRaisesRegex(
+                            AUTH.AuthenticationError, "does not bind",
+                        ):
+                            AUTH.recheck_checkpoint_publication_fsverity(
+                                publication, hostile_seal,
+                                ioctl_runner=ioctl_runner,
+                            )
+                finally:
+                    publication.close()
+
+    def test_staged_fsverity_rejects_tree_change_during_enable(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            images = self.make_staging(root, ["selected.dmtcp"], 0o600)
+            measurement_count = 0
+
+            def ioctl_runner(_fd, request, argument, _mutate):
+                nonlocal measurement_count
+                if request == AUTH.FS_IOC_MEASURE_VERITY:
+                    measurement_count += 1
+                    struct.pack_into("=HH", argument, 0, 1, 32)
+                    argument[4:36] = b"s" * 32
+                    if measurement_count == 2:
+                        extra = root / "staging/checkpoint-e/extra.dmtcp"
+                        extra.write_bytes(b"extra\n")
+                        extra.chmod(0o444)
+                return 0
+
+            with AUTH.AnchoredFilesystem(root) as filesystem:
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, "tree changed",
+                ):
+                    AUTH.seal_staged_checkpoint_images_fsverity(
+                        filesystem=filesystem,
+                        staging_directory="staging/checkpoint-e",
+                        images=images, block_size=4096,
+                        confirm_irreversible=True, ioctl_runner=ioctl_runner,
+                    )
 
     def test_publication_builds_real_direct_process_checkpoint(self) -> None:
         values = DIRECT_TEST.checkpoint_protocol_fixture()

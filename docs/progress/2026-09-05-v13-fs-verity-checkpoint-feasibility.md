@@ -3,9 +3,10 @@
 ## Scope and claim boundary
 
 This checkpoint establishes one host capability and adds a fail-closed helper
-for later direct-source checkpoint work.  It does not authenticate a complete
-process history, checkpoint publication, DMTCP restart, S2, S3, or release.
-The helper always records `approval_included=false` and `pft_used=false`.
+for later direct-source checkpoint work.  It does not independently authenticate
+a complete process history, checkpoint publication, DMTCP restart, S2, S3, or
+release.  The helper always records `approval_included=false` and
+`pft_used=false`.
 
 No PFT process or artifact was inspected or modified.
 
@@ -73,10 +74,52 @@ Btrfs limitation.  The local UAPI header and the corrected 4,096-byte call
 agree.  Every disposable pilot file and directory was removed after its
 result; no repository or retained evidence artifact was verity-enabled.
 
+## Exact publication-set integration
+
+The descriptor primitive is now connected to the existing exact checkpoint
+publication model without changing the direct-release evidence schema.
+`seal_staged_checkpoint_images_fsverity` authenticates a path-sorted,
+single-link, mode-0600 staging set against the final mode-0444 image manifest;
+enables and measures each held inode; changes it to mode 0444; rehashes it; and
+rechecks the exact staging directory inode and contents.  The operation records
+that a partial multi-image failure requires discarding the entire unpublished
+staging directory.  It never publishes a partly sealed set.
+
+`recheck_checkpoint_publication_fsverity` then requires the staged-seal image
+order, final content authorities, inode identities, and manifest digest to
+equal the retained no-replace publication.  It remeasures every published held
+descriptor and rejects any measurement change.  Both observations remain
+explicitly unapproved and non-promotable.
+
+This order is required in practice.  A first disposable integration attempt
+tried to enable verity after the existing publication transition and received
+`EACCES`.  A controlled mode comparison on otherwise identical Btrfs files
+then gave:
+
+```text
+mode 0644: FS_IOC_ENABLE_VERITY pass
+mode 0444: FS_IOC_ENABLE_VERITY EACCES
+```
+
+The corrected path seals while the owner-write bit is still present but all
+producer writers are closed; the kernel rejects a remaining writable open.
+Only after successful enablement does it transition to the manifest's mode
+0444 and call the existing atomic publisher.
+
+A fresh real-kernel two-image pilot passed this complete sequence.  The exact
+published manifest SHA-256 was
+`39207707ae6ca0be01b52fd9284abf3b3fada089733c787923b8f576e21d91d1`;
+the ordered seal SHA-256 was
+`6610c76b20d98f1f3883d483269f3ffb5530e5f873193add3f0b2db8e19cc203`;
+and the two Btrfs verity digests were distinct.  Both final measurements had
+mode 0444 and matched again through the retained publication descriptors.
+Every file used by the failed and successful integration pilots was disposable
+and has been removed.
+
 ## Verification
 
-The checkpoint authenticator suite now has 26 passing tests.  The three new
-tests cover:
+The checkpoint authenticator suite now has 29 passing tests.  The initial
+three primitive tests and three publication-set tests cover:
 
 - exact 128-byte enable and 68-byte measurement buffers;
 - explicit irreversible confirmation and exact block-size bounds;
@@ -84,23 +127,26 @@ tests cover:
 - exact SHA-256 algorithm/digest parsing;
 - normalized unsupported-ioctl failure;
 - rejection of booleans and oversized/non-power-of-two block sizes; and
-- retention of negative approval and PFT claims.
+- retention of negative approval and PFT claims;
+- exact seal-before-publish ordering and the 0600-to-0444 transition;
+- binding of the ordered manifest, paths, authorities, and inode identities;
+- rejection of a changed measurement or spliced seal; and
+- rejection of a staging-tree mutation during enablement.
 
 ```text
 PYTHONDONTWRITEBYTECODE=1 \
   python3 -I -S scripts/test-checkpoint-os-authenticator.py
 
-Ran 26 tests in 3.420s
+Ran 29 tests
 OK
 ```
 
 `py_compile` and `git diff --check` also pass.
 
-The complete project regression at implementation commit `5a3a0be` also
-passed: all 22 `scripts/test-*.py` programs and all 339 discovered test
-methods.  This includes 49 direct-release protocol tests, 67 hostile S1
-finalizer tests, and 14 top-100 sweep-controller tests in addition to the
-26 checkpoint-authenticator tests above.
+The earlier complete project regression at implementation commit `5a3a0be`
+passed all 22 `scripts/test-*.py` programs and all 339 then-discovered test
+methods.  A fresh complete regression for the publication-set integration is
+still required before its implementation commit is treated as tested.
 
 ## Remaining authority gap
 
