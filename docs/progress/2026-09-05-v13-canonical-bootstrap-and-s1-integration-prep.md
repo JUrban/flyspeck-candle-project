@@ -273,6 +273,36 @@ Candle, Flyspeck, or PFT.  A protected launcher/finalizer, delegated
 task/resource boundary, immutable storage, signed challenge, and authenticated
 restart closure remain external prerequisites for G6.
 
+## Cold-replay authority path repair
+
+The cold replay's terminal manifest binds its controller project by exact
+absolute path as well as commit.  Report-only commits had accidentally advanced
+that path beyond the pinned project head, which would have made the final-head
+bootstrap gate correctly reject the otherwise valid replay.  The clean report
+worktree and branch were moved to
+`/project/worktrees/flyspeck-project-candle-repin-prep-report-v13`, and the
+original path
+`/project/worktrees/flyspeck-project-candle-repin-prep-v13` was restored as a
+clean detached worktree at exact head
+`e325a3ef6b0cd4e88bcdbf432de170d967364fa3`.
+
+The restored controller and gate SHA-256 values are respectively
+`f2f12487eafdf29cbae2365975532ccbff7e3ca226d69ea1dc6085ebc1f49868`
+and
+`3ab66823cbb99be8484909ea816f6847f9cad2a22bcef7f6c4097066593c3b6e`,
+exactly matching the replay sidecars.  The terminal manifest hashes to
+`4a32ffc23f1c78410efaf3236722bc824fd57f48b044d6ec5bdb74a4c14d078d`
+and binds controller PID/PGID `1211468`, start ticks `367911279`, CakeML head
+`8a8926906ec97204eeec961496d191103cda3229`, and HOL4 head
+`a390cbabd3a4521bab4ee20281e3e42933a8a3ae`.  This was a project-worktree
+metadata correction only: no Candle, CakeML, HOL4, build output, or live
+bootstrap process was changed.
+
+The exact successor commands are recorded separately in
+`docs/progress/2026-09-05-v13-final-head-bootstrap-s1-launch-checklist.md`.
+That checklist deliberately keeps the path-bound historical gate authority
+separate from the final Candle source authority.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
