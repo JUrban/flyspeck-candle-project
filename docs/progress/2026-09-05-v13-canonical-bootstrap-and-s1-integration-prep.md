@@ -128,6 +128,16 @@ are controller tests rather than a Great 100 runtime result and make no S1
 claim.  The transition diagnostic remains scheduled only after the active
 current-head bootstrap, exact link, and parser pilot/all-inventory gates.
 
+A follow-up review confirmed that the apparent nested file-validator call in
+an earlier terminal excerpt was not present in either the live file or its Git
+blob; no implementation change was made for that false alarm.  Test-only
+commit `32fcb81e0735896f290de88f394ef8f9a3356bcd` instead adds the missing
+successful schema-7 record-writer fixture and checks all four copied bootstrap
+inputs, diagnostic promotion status, and the published JSON.  The expanded
+focused set passes 43/43.  The 353-test full pass and 63-test compatibility
+pass above apply to the unchanged runtime/controller implementation at parent
+`6461afa`; the follow-up changes only this unit-test source.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
