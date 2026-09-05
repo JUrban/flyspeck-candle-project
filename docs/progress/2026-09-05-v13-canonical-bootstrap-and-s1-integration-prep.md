@@ -314,6 +314,32 @@ fixture matrix passed in 432.851 seconds.  This validates the finalizer code
 path against its synthetic mutation cases, but does not replace the two future
 real Candle reports or their external authorization.
 
+## Final-head host plan candidate
+
+The fresh host-only direct plan
+`/project/flyspeck-candle-runs/v13-stratum-plan-32fcb81e-attempt-001`
+was materialized from clean final Candle head `32fcb81e`, integration base
+`419a96e`, pinned Flyspeck `1ce0353`, normalization overlay attempt 001, and
+the existing authenticated generated-input root.  Its `plan.json` SHA-256 is
+`9ed69b66802bed2e327eba5bdbcde58f310b6f8dbf5fbae070ee742395426050`.
+The receipt reports 297 actions, eight cumulative boundaries, two diagnostic
+cutpoints, 400 source nodes, 20 normalization outputs, and 43 generated
+inputs; the root/files have exact modes 0555/0444.
+
+An exact-source reconstruction reproduced the canonical plan, host schedule,
+and host materialization records.  Compared with current-head plan
+`310cb196...`, all ten generated cumulative/diagnostic prefix programs are
+byte-identical; the plan's only semantic JSON difference is the intended
+`candle_materialization_head` change from `419a96e...` to `32fcb81e...`, while
+the schedule changes because it binds the resulting new plan digest.  Empty
+sealed stderr and the successful producer stdout are retained as siblings.
+
+This remains scheduling material only and was created while the expensive
+canonical build used one CPU.  It does not run Candle, establish S1/S2/S3, or
+authorize skipping the current-head parser/diagnostic gates.  If transition
+diagnostics require any final-source commit, this plan becomes stale and must
+be regenerated at the new frozen head.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
