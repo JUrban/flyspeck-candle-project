@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import signal
 import socket
@@ -69,6 +70,13 @@ PTRACE_OPTIONS = (
     PTRACE_O_TRACEEXEC | PTRACE_O_TRACEEXIT | PTRACE_O_EXITKILL
 )
 PR_SET_CHILD_SUBREAPER = 36
+PR_SET_NO_NEW_PRIVS = 38
+PR_SET_SECCOMP = 22
+SECCOMP_MODE_FILTER = 2
+SECCOMP_RET_KILL_PROCESS = 0x80000000
+SECCOMP_RET_TRAP = 0x00030000
+SECCOMP_RET_ALLOW = 0x7FFF0000
+CLONE_UNTRACED = 0x00800000
 FORBIDDEN_TARGET = re.compile(r"pft", re.IGNORECASE)
 EVENT_NAMES = {
     PTRACE_EVENT_FORK: "fork",
@@ -123,6 +131,61 @@ def _set_subreaper() -> None:
         )
 
 
+class _SockFilter(ctypes.Structure):
+    _fields_ = [
+        ("code", ctypes.c_ushort),
+        ("jt", ctypes.c_ubyte),
+        ("jf", ctypes.c_ubyte),
+        ("value", ctypes.c_uint),
+    ]
+
+
+class _SockFprog(ctypes.Structure):
+    _fields_ = [
+        ("length", ctypes.c_ushort),
+        ("filters", ctypes.POINTER(_SockFilter)),
+    ]
+
+
+def _install_escape_filter() -> None:
+    authorities = {
+        "x86_64": {"audit_arch": 0xC000003E, "clone": 56, "clone3": 435},
+        "aarch64": {"audit_arch": 0xC00000B7, "clone": 220, "clone3": 435},
+    }
+    machine = platform.machine()
+    require(machine in authorities and struct.pack("=I", 1) == struct.pack("<I", 1),
+            "escape filter supports only little-endian x86_64/aarch64")
+    authority = authorities[machine]
+    # Classic seccomp BPF can inspect clone's value argument directly.  It
+    # cannot dereference clone3's argument pointer, so this diagnostic traps
+    # every clone3 call rather than allowing a possible CLONE_UNTRACED escape.
+    instructions = (_SockFilter * 11)(
+        _SockFilter(0x20, 0, 0, 4),
+        _SockFilter(0x15, 1, 0, authority["audit_arch"]),
+        _SockFilter(0x06, 0, 0, SECCOMP_RET_KILL_PROCESS),
+        _SockFilter(0x20, 0, 0, 0),
+        _SockFilter(0x15, 2, 0, authority["clone"]),
+        _SockFilter(0x15, 4, 0, authority["clone3"]),
+        _SockFilter(0x06, 0, 0, SECCOMP_RET_ALLOW),
+        _SockFilter(0x20, 0, 0, 16),
+        _SockFilter(0x45, 1, 0, CLONE_UNTRACED),
+        _SockFilter(0x06, 0, 0, SECCOMP_RET_ALLOW),
+        _SockFilter(0x06, 0, 0, SECCOMP_RET_TRAP),
+    )
+    program = _SockFprog(len(instructions), instructions)
+    library = _libc()
+    if library.prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0:
+        error_number = ctypes.get_errno()
+        raise TraceControllerError(
+            f"could not set no_new_privs: errno {error_number}"
+        )
+    if library.prctl(
+        PR_SET_SECCOMP, SECCOMP_MODE_FILTER, ctypes.addressof(program), 0, 0,
+    ) != 0:
+        error_number = ctypes.get_errno()
+        raise TraceControllerError(
+            f"could not install seccomp escape filter: errno {error_number}"
+        )
 def _decode_proc_stat(data: bytes) -> dict[str, int | str]:
     try:
         text = data.decode("ascii")
@@ -278,6 +341,7 @@ def _spawn_tracee(
             finally:
                 if devnull > 2:
                     os.close(devnull)
+            _install_escape_filter()
             result = _libc().ptrace(PTRACE_TRACEME, 0, None, None)
             if result != 0:
                 os._exit(126)
@@ -390,6 +454,12 @@ def _trace_workload(
                 "TRACEFORK", "TRACEVFORK", "TRACECLONE", "TRACEEXEC",
                 "TRACEEXIT", "EXITKILL",
             ],
+            "escape_filter": {
+                "architecture": platform.machine(),
+                "clone_untraced": "SECCOMP_RET_TRAP",
+                "clone3": "SECCOMP_RET_TRAP-all",
+                "no_new_privs": True,
+            },
         })
         _ptrace(PTRACE_CONT, root_pid)
         deadline = time.monotonic() + timeout_seconds
@@ -499,6 +569,10 @@ def _trace_workload(
                 })
                 delivery_signal = 0
             else:
+                if stop_signal == signal.SIGSYS:
+                    raise TraceControllerError(
+                        "seccomp trapped forbidden clone3 or CLONE_UNTRACED"
+                    )
                 if stop_signal == signal.SIGSTOP and not process.options_set:
                     _ptrace(PTRACE_SETOPTIONS, pid, PTRACE_OPTIONS)
                     process.options_set = True
@@ -762,6 +836,7 @@ def collect_trace(session: TraceSession) -> dict[str, Any]:
             "no protected launcher, cgroup, storage, signer, or finalizer",
             "local ptrace and credential observations are diagnostic only",
             "tracee standard streams are redirected to /dev/null",
+            "clone3 is rejected because classic seccomp BPF cannot inspect its flags pointer",
         ],
     }
 

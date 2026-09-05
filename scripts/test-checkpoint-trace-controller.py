@@ -207,7 +207,7 @@ os.waitpid(child, 0)
         self.assertFalse(report["local_trace_closed"])
         self.assertEqual(report["outcome"], "local-trace-rejected")
         self.assertEqual(len(report["errors"]), 1)
-        self.assertIn("untraced descendant", report["errors"][0]["message"])
+        self.assertIn("CLONE_UNTRACED", report["errors"][0]["message"])
         for field in (
             "os_evidence_authenticated", "trusted_lifecycle",
             "promotion_allowed", "s2_evidence", "s3_evidence", "pft_used",
