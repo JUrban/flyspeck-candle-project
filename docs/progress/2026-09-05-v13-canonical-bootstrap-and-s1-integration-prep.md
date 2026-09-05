@@ -166,13 +166,54 @@ contract.  It published
 authenticated host scheduling plan only.  It has not started Candle and is not
 S2/S3 evidence.
 
+## Parser-result consumer compatibility repair
+
+A read-only prelaunch audit found a fail-closed producer/consumer mismatch
+before either formal parser run consumed several hours.  Candle `419a96e`
+records the exact child `runtime_environment` in `resource_limits`, but the
+project consumer at `6eeb42d` still required the older object without that
+field and still prescribed the obsolete 600-second limits.  It also omitted
+the new runtime-environment argument when independently reconstructing the
+current receipt.  Consequently it would have rejected every current result.
+
+The isolated project branch
+`codex/flyspeck-v13-parser-result-consumer-v2` now ends at candidate commit
+`642ad42`.  It independently binds the two intended profiles:
+
+- pilot: 7,200 seconds wall/CPU, 16 GiB address space, 1 MiB per output
+  stream, and `CML_HEAP_SIZE=4096`;
+- all-inventory: 7,200 seconds wall/CPU, 24 GiB address space, 1 MiB per
+  output stream, and `CML_HEAP_SIZE=16384`.
+
+Both require the exact sealed child environment containing only `PATH`,
+`LC_ALL`, and `CML_HEAP_SIZE`.  Profile substitution, heap changes, missing
+or extra environment entries, and limit changes fail closed.  Receipt
+reconstruction uses named arguments, including the validated environment, to
+make its coupling to the current Candle controller signature explicit.
+
+All 21 project test programs pass on this clean branch: 318 tests total.  The
+set includes 9 focused parser-consumer tests, 34 canonical-bootstrap gate
+tests, 49 direct-release tests, 23 checkpoint-scaffold tests, 67 Great 100
+finalizer tests, and 14 reference-sweep tests.  This repairs the consumer
+candidate; no parser process has yet run and no S1/S2/S3 claim follows.
+
+A separate audit accepted the final-head schema-7 Great 100 diagnostic
+candidate at Candle `32fcb81` with no P0/P1 finding.  It confirmed the source
+and final trees are clean, the transition closure and pinned CakeML/HOL heads
+are unchanged, the merge tree is reproducible, and schema 6/schema 7 cannot
+cross their ordinary/diagnostic CLI modes.  One checklist statement claiming
+0/65 expected identities is stale prose; the executable 65-target manifest
+closure is current.  The final-head canonical bootstrap and ordinary
+schema-6 Great 100 run remain mandatory.
+
 ## Next gates
 
 1. Let canonical attempt 002 finish and validate its final provenance record.
 2. Perform the ordinary two-argument exact-root schema-6 Candle link and run
    the linked-provenance checker.
-3. Freshly materialize and run the quotation-aware 20-input pilot, then the
-   exact 400-input parser inventory.
+3. Re-review and use the clean profile-specific parser consumer, then freshly
+   materialize and run the quotation-aware 20-input pilot and exact 400-input
+   parser inventory; independently consume each result.
 4. Advance the tested Great 100 merge only after those current-head checks,
    use transition schema 7 for diagnostics only, and produce a new exact-root
    schema-6 release bootstrap at the final Candle head.
