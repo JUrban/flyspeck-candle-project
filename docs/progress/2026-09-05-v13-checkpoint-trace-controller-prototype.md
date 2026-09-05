@@ -92,6 +92,13 @@ variants also passed 20 repeated timeout-cleanup suites and 25 repeated suites
 both before and after the seccomp addition.  These are tiny fixtures only;
 they are not checkpoint, Candle, or Flyspeck executions.
 
+The complete project regression set also passes on the clean candidate: 22
+test programs and 324 tests, including the 67-case Great 100 finalizer, the
+49-case direct release protocol, the existing 23 checkpoint-scaffold tests,
+and these 8 new trace-controller tests.  That full pass applies to the
+executable/test sources at candidate parent `33b2c25`; this paragraph is the
+only subsequent change.
+
 Run the focused tests with:
 
 ```sh
