@@ -122,4 +122,3 @@ materialization remains gated on independent acceptance of this pilot.
 5. Run the schema-7 Great-100 transition diagnostic without promotion.
 6. Freeze the actual final Candle head and repeat a fresh clean bootstrap before
    ordinary S1 and broader direct-source execution.
-
