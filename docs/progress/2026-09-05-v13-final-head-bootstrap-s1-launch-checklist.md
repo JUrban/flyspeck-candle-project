@@ -13,11 +13,13 @@ REPLAY=/project/flyspeck-candle-runs/cakeml-frontend-cold-8a8926906-attempt-001
 FINAL=/project/worktrees/candle-post-bootstrap-integration-prep-v13
 CAKEML=/project/worktrees/cakeml-flyspeck-frontend-cold-8a8926906-v13
 HOL4=/project/worktrees/HOL-cakeml-dopen-v13
+FINALIZER_PROJECT=/project/worktrees/flyspeck-project-parser-result-consumer-v2
 
 PROJECT_HEAD=e325a3ef6b0cd4e88bcdbf432de170d967364fa3
 FINAL_HEAD=32fcb81e0735896f290de88f394ef8f9a3356bcd
 CAKEML_HEAD=8a8926906ec97204eeec961496d191103cda3229
 HOL4_HEAD=a390cbabd3a4521bab4ee20281e3e42933a8a3ae
+FINALIZER_HEAD=642ad428487e3dfe5d3f146cc141c7bbfc856a7a
 REPLAY_PID=1211468
 REPLAY_PGID=1211468
 REPLAY_START_TICKS=367911279
@@ -25,7 +27,9 @@ TERMINAL_SHA256=4a32ffc23f1c78410efaf3236722bc824fd57f48b044d6ec5bdb74a4c14d078d
 
 ATTEMPT=/project/flyspeck-candle-runs/cakeml-canonical-bootstrap-8a8926906-32fcb81e-attempt-001
 GATE=/project/flyspeck-candle-runs/cakeml-canonical-bootstrap-8a8926906-32fcb81e-attempt-001.gate.json
-S1=/project/flyspeck-candle-runs/great100-ordinary-32fcb81e-attempt-001
+S1_ONE=/project/flyspeck-candle-runs/great100-ordinary-32fcb81e-attempt-001
+S1_TWO=/project/flyspeck-candle-runs/great100-ordinary-32fcb81e-attempt-002
+S1_ARCHIVE=/project/flyspeck-candle-runs/great100-s1-archive-32fcb81e-attempt-001
 ```
 
 The project root is intentionally the restored historical gate worktree,
@@ -47,10 +51,14 @@ test "$(/usr/bin/git -C "$FINAL" rev-parse HEAD)" = "$FINAL_HEAD"
 test -z "$(/usr/bin/git -C "$FINAL" status --porcelain=v1 --untracked-files=all)"
 test "$(/usr/bin/git -C "$CAKEML" rev-parse HEAD)" = "$CAKEML_HEAD"
 test "$(/usr/bin/git -C "$HOL4" rev-parse HEAD)" = "$HOL4_HEAD"
+test "$(/usr/bin/git -C "$FINALIZER_PROJECT" rev-parse HEAD)" = "$FINALIZER_HEAD"
+test -z "$(/usr/bin/git -C "$FINALIZER_PROJECT" status --porcelain=v1 --untracked-files=all)"
 test "$(/usr/bin/sha256sum "$REPLAY/terminal-manifest.json" | /usr/bin/awk '{print $1}')" = "$TERMINAL_SHA256"
 test ! -e "$ATTEMPT" && test ! -L "$ATTEMPT"
 test ! -e "$GATE" && test ! -L "$GATE"
-test ! -e "$S1" && test ! -L "$S1"
+test ! -e "$S1_ONE" && test ! -L "$S1_ONE"
+test ! -e "$S1_TWO" && test ! -L "$S1_TWO"
+test ! -e "$S1_ARCHIVE" && test ! -L "$S1_ARCHIVE"
 test -z "$(/usr/bin/pgrep -x Holmake || true)"
 ```
 
@@ -137,47 +145,86 @@ Both linked checks must accept the ordinary exact-root schema-6 record.  The
 earlier schema-7 transition compiler is diagnostic only and must not survive
 as the linked authority for S1.
 
-## 5. Run ordinary Great 100 S1 evidence
+## 5. Run two distinct ordinary Great 100 candidates
 
-The committed approval is currently approved for all 65 targets, but the live
+The committed approval is currently approved for all 65 targets, but each live
 runner must independently reauthenticate it and match every observed identity.
 Use one worker and the same bounded per-target deadlines as the transition
-diagnostic.
+diagnostic.  The two fresh runs must have distinct suite and process nonces.
 
 ```sh
-/usr/bin/mkdir -m 0700 "$S1"
-
-(
-  cd "$FINAL"
-  set -o noclobber
-  exec 3>"$S1/controller.stdout"
-  exec 4>"$S1/controller.stderr"
-  set +o noclobber
-  status=0
+set -euo pipefail
+for RUN in "$S1_ONE" "$S1_TWO"; do
   /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
-    /usr/bin/python3 -I candle/regression.py \
-    --top100 -j 1 \
-    --inactivity-timeout 1800 --wall-timeout 14400 \
-    --json-report "$S1/report.json" \
-    --log-dir "$S1/logs" >&3 2>&4 || status=$?
-  exec 3>&-
-  exec 4>&-
-  /usr/bin/chmod 0444 "$S1/controller.stdout" "$S1/controller.stderr"
-  exit "$status"
-)
+    /usr/bin/python3 -I -S "$FINAL/candle/cakeml_artifact_provenance.py" \
+    check-linked --candle-root "$FINAL"
+
+  /usr/bin/mkdir -m 0700 "$RUN"
+  (
+    cd "$FINAL"
+    set -o noclobber
+    exec 3>"$RUN/controller.stdout"
+    exec 4>"$RUN/controller.stderr"
+    set +o noclobber
+    status=0
+    /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+      /usr/bin/python3 -I candle/regression.py \
+      --top100 -j 1 \
+      --inactivity-timeout 1800 --wall-timeout 14400 \
+      --json-report "$RUN/report.json" \
+      --log-dir "$RUN/logs" >&3 2>&4 || status=$?
+    exec 3>&-
+    exec 4>&-
+    /usr/bin/chmod 0444 "$RUN/controller.stdout" "$RUN/controller.stderr"
+    exit "$status"
+  )
+done
 ```
 
-A zero exit is necessary but not sufficient.  Re-run both linked checkers,
-rehash every retained transcript named by the report, and require:
+A zero exit is necessary but not sufficient.  For each run, re-run both linked
+checkers, rehash every retained transcript named by its report, and require:
 
 - `suite=top100`, schema 4, and exactly 65 ordered targets;
 - exact clean `candle_git_head=$FINAL_HEAD`;
 - linked schema 6 and one identical linked-record hash in every process;
 - 65 PASS with no FAIL, timeout, skip, stale identity, or mismatch;
 - all 65 approved theorem and post-state identities matched exactly;
-- `promotion.eligible=true` and `promotion.s1_evidence=true`; and
 - `s1_evidence.suite_closed=true`.
 
-Seal ordinary report/log files to mode 0444 and their directories to 0555 only
-after those checks pass.  S1 authorizes the cumulative direct-source strata;
-it is not S2 or S3 and does not authorize PFT evidence as a substitute.
+Also require the two reports to have distinct suite/process nonces while their
+linked-record, source-closure, independent-approval, and complete semantic
+projections agree exactly.  Seal ordinary report/log files to mode 0444 and
+their directories to 0555 only after those checks pass.
+
+## 6. Obtain external authorization and finalize S1
+
+Do not generate or self-approve the authorization receipt in this project.
+Give an independent authority the two immutable report bytes, suite nonces,
+linked-record hash, source-closure hash, semantic projection, independent
+approval identity, exact finalizer project/script identity, and exact Python
+and Git identities required by `docs/requirements-v1.3.md`.  The authority
+must return a canonical
+`candle-great100-finalization-authorization` schema-1 receipt, and its SHA-256
+must arrive through a channel distinct from the receipt itself.
+
+After assigning those externally supplied values literally:
+
+```sh
+AUTHORIZATION=/absolute/path/from-independent-authority/finalization-authorization.json
+AUTHORIZATION_SHA256=replace_with_out_of_band_64_lowercase_hex_digest
+
+test "$(/usr/bin/git -C "$FINALIZER_PROJECT" rev-parse HEAD)" = "$FINALIZER_HEAD"
+test -z "$(/usr/bin/git -C "$FINALIZER_PROJECT" status --porcelain=v1 --untracked-files=all)"
+test ! -e "$S1_ARCHIVE" && test ! -L "$S1_ARCHIVE"
+
+/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+  /usr/bin/python3 -I -S \
+  "$FINALIZER_PROJECT/scripts/finalize-top100-report.py" \
+  "$S1_ONE/report.json" "$S1_TWO/report.json" "$S1_ARCHIVE" \
+  --external-receipt "$AUTHORIZATION" \
+  --external-receipt-sha256 "$AUTHORIZATION_SHA256"
+```
+
+Only the accepted, closed two-run archive establishes S1 and authorizes the
+cumulative direct-source strata.  Either individual report is insufficient;
+S1 is not S2 or S3 and never authorizes PFT evidence as a substitute.

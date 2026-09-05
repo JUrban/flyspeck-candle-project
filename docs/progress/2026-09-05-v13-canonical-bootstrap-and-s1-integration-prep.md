@@ -301,7 +301,12 @@ bootstrap process was changed.
 The exact successor commands are recorded separately in
 `docs/progress/2026-09-05-v13-final-head-bootstrap-s1-launch-checklist.md`.
 That checklist deliberately keeps the path-bound historical gate authority
-separate from the final Candle source authority.
+separate from the final Candle source authority.  A subsequent independent
+ledger reread corrected that checklist before use: S1 promotion requires two
+distinct ordinary schema-4 runs and the project finalizer's closed archive,
+not one successful run.  The archive additionally requires an authorization
+receipt from an external authority and its digest through an out-of-band
+channel; the project must not manufacture either value itself.
 
 ## Next gates
 
@@ -312,8 +317,9 @@ separate from the final Candle source authority.
    materialize and run the quotation-aware 20-input pilot and exact 400-input
    parser inventory; independently consume each result.
 4. Advance the tested Great 100 merge only after those current-head checks,
-   use transition schema 7 for diagnostics only, and produce a new exact-root
-   schema-6 release bootstrap at the final Candle head.
+   use transition schema 7 for diagnostics only, produce a new exact-root
+   schema-6 release bootstrap at the final Candle head, then retain and
+   externally authorize/finalize two distinct ordinary Great 100 runs.
 5. Run S1 and the eight cumulative direct-source strata, then obtain the two
    clean matching whole-Flyspeck S2/S3 runs and the required matching resume
    and corruption-rejection evidence.
