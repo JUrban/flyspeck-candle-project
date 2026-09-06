@@ -166,6 +166,28 @@ let THE_DERANGEMENTS_FORMULA =
         ),
     ),
     SourceNormalization(
+        targets=("100/fourier",),
+        source="100/fourier.ml",
+        expected_sha256=(
+            "3034cc1f10555786b1f07760ece7f990ea7d0eda85ebe7a90ba2a1b3fad63d93"
+        ),
+        replacements=((
+            b'''                  IN_UNIV]]);;''',
+            b'''                  IN_UNIV]]);;
+
+(* Preserve the reference run's names for the invented type variables. *)
+let FOURIER_FEJER_CESARO_SUMMABLE_SIMPLE =
+  INST_TYPE
+    [(mk_vartype "?1855729",mk_vartype "?1856041");
+     (mk_vartype "?1855733",mk_vartype "?1856045")]
+    FOURIER_FEJER_CESARO_SUMMABLE_SIMPLE;;''',
+        ),),
+        rationale=(
+            "alpha-rename two deterministic invented type variables to the "
+            "names recorded by the approved reference theorem"
+        ),
+    ),
+    SourceNormalization(
         targets=("100/pascal",),
         source="100/pascal.ml",
         expected_sha256=(
