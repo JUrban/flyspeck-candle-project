@@ -2914,7 +2914,8 @@ class _ProjectionMountState:
 
 def _prepare_checkpoint_projection_mounts(
     publication: PublicationPin, staged_seal: _Observation,
-    projection_root: Path, *, root_fd: int, outer_uid: int, outer_gid: int,
+    projection_root: Path, *, root_fd: int, root_parent_fd: int,
+    root_name: str, outer_uid: int, outer_gid: int,
     ioctl_runner: Callable[[int, int, bytearray, bool], object] | None,
 ) -> _ProjectionMountState:
     """Create the exact read-only image view in the caller's mount namespace.
@@ -2923,44 +2924,52 @@ def _prepare_checkpoint_projection_mounts(
     This no-fork primitive deliberately installs neither seccomp nor a command;
     its returned directory fd keeps the mounted cwd pinned until ``close``.
     """
-    held_root = os.fstat(root_fd)
-    current_root_fd = os.open(
-        projection_root,
-        os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
-    )
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    held_parent = os.fstat(root_parent_fd)
+    current_parent_fd = os.open(projection_root.parent, flags)
     try:
-        current_root = os.fstat(current_root_fd)
-        require(
-            current_root.st_dev == held_root.st_dev and
-            current_root.st_ino == held_root.st_ino and
-            current_root.st_uid == held_root.st_uid and
-            current_root.st_gid == held_root.st_gid and
-            stat.S_IMODE(current_root.st_mode) ==
-            stat.S_IMODE(held_root.st_mode) == 0o700,
-            "checkpoint projection root changed before private mount",
+        current_parent = os.fstat(current_parent_fd)
+        require(current_parent.st_dev == held_parent.st_dev and
+                current_parent.st_ino == held_parent.st_ino and
+                current_parent.st_uid == held_parent.st_uid and
+                current_parent.st_gid == held_parent.st_gid and
+                stat.S_IMODE(current_parent.st_mode) ==
+                    stat.S_IMODE(held_parent.st_mode),
+                "checkpoint projection parent changed before private mount")
+        held_root = os.fstat(root_fd)
+        current_root_fd = os.open(
+            root_name, flags, dir_fd=current_parent_fd,
         )
-        _projection_mount(
-            "tmpfs", f"/proc/self/fd/{current_root_fd}", "tmpfs",
-            MS_NOSUID | MS_NODEV | MS_NOEXEC,
-            "mode=0700,size=1048576",
+        try:
+            current_root = os.fstat(current_root_fd)
+            require(
+                current_root.st_dev == held_root.st_dev and
+                current_root.st_ino == held_root.st_ino and
+                current_root.st_uid == held_root.st_uid and
+                current_root.st_gid == held_root.st_gid and
+                stat.S_IMODE(current_root.st_mode) ==
+                stat.S_IMODE(held_root.st_mode) == 0o700,
+                "checkpoint projection root changed before private mount",
+            )
+            _projection_mount(
+                "tmpfs", f"/proc/self/fd/{current_root_fd}", "tmpfs",
+                MS_NOSUID | MS_NODEV | MS_NOEXEC,
+                "mode=0700,size=1048576",
+            )
+        finally:
+            os.close(current_root_fd)
+        mounted_root_fd = os.open(
+            root_name, flags, dir_fd=current_parent_fd,
         )
     finally:
-        os.close(current_root_fd)
-    mounted_root = projection_root.stat()
-    require(stat.S_ISDIR(mounted_root.st_mode) and
-            stat.S_IMODE(mounted_root.st_mode) == 0o700 and
-            mounted_root.st_uid == 0 and mounted_root.st_gid == 0 and
-            not any(projection_root.iterdir()),
-            "checkpoint projection tmpfs root differs")
-    mounted_root_fd = os.open(
-        projection_root,
-        os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
-    )
+        os.close(current_parent_fd)
     try:
         mounted_root_held = os.fstat(mounted_root_fd)
-        require(mounted_root_held.st_dev == mounted_root.st_dev and
-                mounted_root_held.st_ino == mounted_root.st_ino and
-                stat.S_IMODE(mounted_root_held.st_mode) == 0o700,
+        require(stat.S_ISDIR(mounted_root_held.st_mode) and
+                stat.S_IMODE(mounted_root_held.st_mode) == 0o700 and
+                mounted_root_held.st_uid == 0 and
+                mounted_root_held.st_gid == 0 and
+                not os.listdir(mounted_root_fd),
                 "checkpoint projection mounted-root fd differs")
 
         source_directory = Path(publication.evidence["published_directory"])
@@ -3086,7 +3095,8 @@ def _checkpoint_projection_child(
     channel: socket.socket, publication: PublicationPin,
     staged_seal: _Observation, projection_root: Path,
     argv_prefix: list[str], environment: dict[str, str],
-    parent_pid: int, timeout_seconds: float, root_fd: int, executable_fd: int,
+    parent_pid: int, timeout_seconds: float, root_fd: int, root_parent_fd: int,
+    root_name: str, executable_fd: int,
     ioctl_runner: Callable[[int, int, bytearray, bool], object] | None,
 ) -> None:
     try:
@@ -3100,9 +3110,12 @@ def _checkpoint_projection_child(
         _projection_mount(None, "/", None, MS_REC | MS_PRIVATE)
         mount_state = _prepare_checkpoint_projection_mounts(
             publication, staged_seal, projection_root, root_fd=root_fd,
+            root_parent_fd=root_parent_fd, root_name=root_name,
             outer_uid=outer_uid, outer_gid=outer_gid,
             ioctl_runner=ioctl_runner,
         )
+        os.close(root_fd)
+        os.close(root_parent_fd)
 
         _install_projection_namespace_filter()
         capability_status = _drop_projection_capabilities()
@@ -3204,6 +3217,8 @@ class _ProjectionPreflightState:
     root: Path
     source: Path
     root_fd: int
+    root_parent_fd: int
+    root_name: str
     executable_fd: int
     executable: dict[str, Any]
     parent_namespaces: dict[str, dict[str, Any]]
@@ -3212,6 +3227,9 @@ class _ProjectionPreflightState:
         if self.root_fd >= 0:
             os.close(self.root_fd)
             self.root_fd = -1
+        if self.root_parent_fd >= 0:
+            os.close(self.root_parent_fd)
+            self.root_parent_fd = -1
         if self.executable_fd >= 0:
             os.close(self.executable_fd)
             self.executable_fd = -1
@@ -3233,6 +3251,7 @@ def _checkpoint_projection_preflight(
     require(root.is_absolute() and not root.is_symlink() and
             root.resolve(strict=True) == root and root.is_dir() and
             not any(root.iterdir()) and PFT_NAMESPACE.search(str(root)) is None and
+            PFT_NAMESPACE.search(str(source)) is None and
             not root.is_relative_to(source) and not source.is_relative_to(root),
             "checkpoint projection root is not fresh, canonical, and disjoint")
     root_stat = root.stat()
@@ -3277,55 +3296,64 @@ def _checkpoint_projection_preflight(
     open_nofollow = os.O_RDONLY | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         open_nofollow |= os.O_NOFOLLOW
-    root_fd = os.open(root, open_nofollow | os.O_DIRECTORY)
+    root_parent_fd = os.open(root.parent, open_nofollow | os.O_DIRECTORY)
     try:
-        executable_fd = os.open(argv_prefix[0], open_nofollow)
+        root_fd = os.open(
+            root.name, open_nofollow | os.O_DIRECTORY,
+            dir_fd=root_parent_fd,
+        )
         try:
-            root_held = os.fstat(root_fd)
-            executable = _hash_open_fd(executable_fd)
-            executable_mode = int(executable["mode"], 8)
-            executable_header = os.pread(executable_fd, 20, 0)
-            executable_class = (
-                executable_header[4] if len(executable_header) >= 5 else -1
-            )
-            executable_endian = (
-                executable_header[5] if len(executable_header) >= 6 else -1
-            )
-            executable_type = (
-                struct.unpack_from("<H", executable_header, 16)[0]
-                if len(executable_header) >= 20 else -1
-            )
-            executable_machine = (
-                struct.unpack_from("<H", executable_header, 18)[0]
-                if len(executable_header) >= 20 else -1
-            )
-            require(root_held.st_dev == root_stat.st_dev and
-                    root_held.st_ino == root_stat.st_ino and
-                    stat.S_IMODE(root_held.st_mode) == 0o700 and
-                    all(executable[field] == executable_authority[field]
-                        for field in executable_authority) and
-                    executable["uid"] != os.getuid() and
-                    executable["nlink"] == 1 and
-                    executable_mode & 0o111 != 0 and
-                    executable_mode & 0o022 == 0 and
-                    executable_header[:4] == b"\x7fELF" and
-                    executable_class == 2 and executable_endian == 1 and
-                    executable_type in {2, 3} and executable_machine == 62,
-                    "checkpoint projection root or executable identity differs")
-            executable["elf"] = {
-                "class": "ELF64",
-                "encoding": "little-endian",
-                "type": executable_type,
-                "machine": "x86-64",
-            }
+            executable_fd = os.open(argv_prefix[0], open_nofollow)
+            try:
+                root_held = os.fstat(root_fd)
+                executable = _hash_open_fd(executable_fd)
+                executable_mode = int(executable["mode"], 8)
+                executable_header = os.pread(executable_fd, 20, 0)
+                executable_class = (
+                    executable_header[4] if len(executable_header) >= 5 else -1
+                )
+                executable_endian = (
+                    executable_header[5] if len(executable_header) >= 6 else -1
+                )
+                executable_type = (
+                    struct.unpack_from("<H", executable_header, 16)[0]
+                    if len(executable_header) >= 20 else -1
+                )
+                executable_machine = (
+                    struct.unpack_from("<H", executable_header, 18)[0]
+                    if len(executable_header) >= 20 else -1
+                )
+                require(root_held.st_dev == root_stat.st_dev and
+                        root_held.st_ino == root_stat.st_ino and
+                        stat.S_IMODE(root_held.st_mode) == 0o700 and
+                        all(executable[field] == executable_authority[field]
+                            for field in executable_authority) and
+                        executable["uid"] != os.getuid() and
+                        executable["nlink"] == 1 and
+                        executable_mode & 0o111 != 0 and
+                        executable_mode & 0o022 == 0 and
+                        executable_header[:4] == b"\x7fELF" and
+                        executable_class == 2 and executable_endian == 1 and
+                        executable_type in {2, 3} and executable_machine == 62,
+                        "checkpoint projection root or executable identity differs")
+                executable["elf"] = {
+                    "class": "ELF64",
+                    "encoding": "little-endian",
+                    "type": executable_type,
+                    "machine": "x86-64",
+                }
+            except BaseException:
+                os.close(executable_fd)
+                raise
         except BaseException:
-            os.close(executable_fd)
+            os.close(root_fd)
             raise
     except BaseException:
-        os.close(root_fd)
+        os.close(root_parent_fd)
         raise
     return _ProjectionPreflightState(
         recheck=recheck, root=root, source=source, root_fd=root_fd,
+        root_parent_fd=root_parent_fd, root_name=root.name,
         executable_fd=executable_fd, executable=executable,
         parent_namespaces=parent_namespaces,
     )
@@ -3349,6 +3377,8 @@ def run_checkpoint_mount_projection_diagnostic(
     root = preflight.root
     source = preflight.source
     root_fd = preflight.root_fd
+    root_parent_fd = preflight.root_parent_fd
+    root_name = preflight.root_name
     executable_fd = preflight.executable_fd
     executable = preflight.executable
     parent_namespaces = preflight.parent_namespaces
@@ -3372,7 +3402,8 @@ def run_checkpoint_mount_projection_diagnostic(
         _checkpoint_projection_child(
             child_channel, publication, staged_seal, root,
             list(argv_prefix), dict(environment), os.getppid(),
-            float(timeout_seconds), root_fd, executable_fd, ioctl_runner,
+            float(timeout_seconds), root_fd, root_parent_fd, root_name,
+            executable_fd, ioctl_runner,
         )
         os._exit(126)
     child_channel.close()
