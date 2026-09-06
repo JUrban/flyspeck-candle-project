@@ -10,6 +10,7 @@ import signal
 import struct
 import sys
 import tempfile
+import time
 import unittest
 
 import checkpoint_os_authenticator as auth
@@ -437,6 +438,58 @@ while True:
                 session.finished = True
                 session.close()
         self.assertFalse(report["local_process_trace_closed"])
+        self.assertEqual(list(self.projection.iterdir()), [])
+
+    def test_manager_death_tears_down_live_multithreaded_namespace(self) -> None:
+        marker = self.root / "threads-live"
+        code = f"""
+import pathlib, threading, time
+barrier = threading.Barrier(3)
+def worker():
+    barrier.wait()
+    time.sleep(30)
+threads = [threading.Thread(target=worker) for _ in range(2)]
+for thread in threads: thread.start()
+barrier.wait()
+pathlib.Path({str(marker)!r}).write_text('live')
+time.sleep(30)
+"""
+        session = self.start(code, timeout=20)
+        retained_root_pidfd = -1
+        try:
+            self.assertEqual(
+                subject.receive_pidns_projection_packet(session)["event"],
+                "manager",
+            )
+            self.assertEqual(
+                subject.receive_pidns_projection_packet(session)["event"],
+                "ready",
+            )
+            retained_root_pidfd = os.dup(
+                session.transferred_pidfds[-1]["descriptor"],
+            )
+            subject.acknowledge_pidns_projection_ready(session)
+            deadline = time.monotonic() + 5
+            while not marker.exists() and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertTrue(marker.exists())
+            signal.pidfd_send_signal(
+                session.manager_pidfd, signal.SIGKILL, None, 0,
+            )
+            report = subject.finish_pidns_projection_trace(
+                session, require_success=False,
+            )
+            poller = select.poll()
+            poller.register(retained_root_pidfd, select.POLLIN)
+            self.assertTrue(poller.poll(5000))
+        finally:
+            if retained_root_pidfd >= 0:
+                os.close(retained_root_pidfd)
+            if not session.finished:
+                subject._abort_session(session)
+                session.finished = True
+                session.close()
+        self.assertFalse(report["local_task_trace_closed"])
         self.assertEqual(list(self.projection.iterdir()), [])
 
     def test_outer_timeout_kills_running_namespace(self) -> None:

@@ -649,6 +649,17 @@ def _task_evidence(task: _TaskIdentity) -> dict[str, Any]:
     return result
 
 
+def _require_held_task_identity(task: _TaskIdentity) -> None:
+    current = _task_directory_identity(task.directory_fd)
+    recorded = task.identity["task_directory"]
+    require(
+        {key: current[key] for key in ("device", "inode", "mode")} ==
+        {key: recorded[key] for key in ("device", "inode", "mode")} and
+        current["link_count"] <= recorded["link_count"],
+        "held exact proc task-directory identity changed",
+    )
+
+
 def _capture_task(
     inner_tid: int, processes: dict[int, _ProcessIdentity],
     *, expected_tgid: int | None = None,
@@ -939,6 +950,7 @@ def _trace_until_closed(
                 continue
             require(task is not None,
                     f"unregistered exact task status for {pid}")
+            _require_held_task_identity(task)
             task_tgid = int(task.identity["inner_tgid"])
             process = processes[task_tgid]
             if os.WIFEXITED(wait_status) or os.WIFSIGNALED(wait_status):
@@ -1225,9 +1237,13 @@ def _manager_main(
                 os.WSTOPSIG(wait_status) == signal.SIGSTOP,
                 "projected root did not reach its exact pre-exec stop")
         root_pidfd, root_identity = _open_process_identity(root_pid)
-        root_task_fd, root_task_identity = _open_task_identity(
-            root_pid, expected_tgid=root_pid,
-        )
+        try:
+            root_task_fd, root_task_identity = _open_task_identity(
+                root_pid, expected_tgid=root_pid,
+            )
+        except BaseException:
+            os.close(root_pidfd)
+            raise
         root_process = _ProcessIdentity(
             root_pidfd, root_identity, {root_pid}, 0,
         )
@@ -1630,6 +1646,95 @@ def _validate_task_evidence(task: Any, *, require_birth: bool) -> None:
         require(birth is None, "provisional task unexpectedly has birth evidence")
 
 
+def _validate_event_task_binding(
+    session: PidnsProjectionSession, packet: dict[str, Any],
+) -> None:
+    event = packet["event"]
+    payload = packet["payload"]
+    task = payload.get("task")
+    if task is None:
+        return
+    process = payload.get("process")
+    require(isinstance(process, dict) and
+            type(process.get("inner_tgid")) is int and
+            process.get("inner_pid") == process["inner_tgid"] ==
+                task["inner_tgid"] and
+            isinstance(process.get("pidfd"), dict),
+            "task event is not bound to one process-leader identity")
+    process_authority_received = any(
+        item["identity"]["nspid"][-1] == task["inner_tgid"]
+        for item in session.transferred_pidfds
+    )
+    require(process_authority_received,
+            "task event precedes its process-leader pidfd authority")
+    if task["inner_tid"] != task["inner_tgid"]:
+        require(payload["transferred_pidfd"] is False,
+                "nonleader task illegally transferred a pidfd")
+
+    if event == "provisional-child-stop":
+        require(type(payload.get("provisional_process")) is bool and
+                payload["provisional_process"] ==
+                    (task["inner_tid"] == task["inner_tgid"]) and
+                payload["transferred_pidfd"] ==
+                    payload["provisional_process"],
+                "provisional task/process authority differs")
+    elif event in {"fork", "vfork", "clone"}:
+        birth = payload.get("birth")
+        require(birth == task["birth"] and
+                payload.get("parent_inner_tid") ==
+                    birth["parent_inner_tid"] and
+                payload.get("parent_inner_pid") ==
+                    birth["parent_inner_tgid"],
+                "task birth edge differs from kernel event packet")
+        if birth["kind"] == "clone-thread":
+            require(event == "clone" and
+                    task["inner_tid"] != task["inner_tgid"] and
+                    payload["transferred_pidfd"] is False,
+                    "thread clone classification differs")
+        else:
+            require(birth["kind"] == event and
+                    task["inner_tid"] == task["inner_tgid"],
+                    "process birth classification differs")
+    elif event == "exec":
+        transition = payload.get("exec_transition")
+        require(isinstance(transition, dict) and set(transition) == {
+                    "event_inner_tid", "former_inner_tid",
+                    "nonleader_tid_rekey", "collapsed_inner_tids",
+                    "collapsed_tasks", "previous_task",
+                    "previous_process_start_ticks",
+                    "current_process_start_ticks", "executable_epoch",
+                } and transition["event_inner_tid"] == task["inner_tid"] ==
+                    task["inner_tgid"] and
+                transition["nonleader_tid_rekey"] ==
+                    (transition["former_inner_tid"] !=
+                     transition["event_inner_tid"]) and
+                transition["current_process_start_ticks"] ==
+                    process["start_ticks"] and
+                [item.get("inner_tid")
+                 for item in transition["collapsed_tasks"]] ==
+                    transition["collapsed_inner_tids"],
+                "exec task rekey/collapse evidence differs")
+        _validate_task_evidence(
+            transition["previous_task"], require_birth=True,
+        )
+        for collapsed in transition["collapsed_tasks"]:
+            _validate_task_evidence(collapsed, require_birth=True)
+        require(transition["former_inner_tid"] ==
+                transition["previous_task"]["inner_tid"] and
+                all(item["inner_tgid"] == task["inner_tgid"]
+                    for item in transition["collapsed_tasks"]),
+                "exec previous/collapsed task group differs")
+    elif event == "terminal":
+        require(type(payload.get("process_closed")) is bool and
+                type(payload.get("inner_tid")) is int and
+                payload["inner_tid"] == task["inner_tid"] and
+                payload.get("inner_pid") == task["inner_tgid"],
+                "terminal task identity differs")
+    else:
+        require(event in {"exit-stop", "signal-stop"},
+                "unexpected packet carrying task evidence")
+
+
 def receive_pidns_projection_packet(
     session: PidnsProjectionSession,
 ) -> dict[str, Any] | None:
@@ -1732,6 +1837,7 @@ def receive_pidns_projection_packet(
                 task,
                 require_birth=packet["event"] != "provisional-child-stop",
             )
+            _validate_event_task_binding(session, packet)
         session.next_sequence += 1
         session.packets.append(packet)
         session.raw_packets.append(raw)
