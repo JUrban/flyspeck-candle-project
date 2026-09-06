@@ -199,6 +199,15 @@ def _ptrace_event_message(pid: int) -> int:
     return int(value.value)
 
 
+def _continue_after_observed_exit_event(pid: int) -> bool:
+    """Resume an exact EXIT-event task, tolerating only terminal-race ESRCH."""
+    return _ptrace(
+        PTRACE_CONT, pid, 0,
+        context="task resume after observed PTRACE_EVENT_EXIT",
+        allow_esrch=True,
+    )
+
+
 def _install_filter(
     *, kill_syscalls: tuple[int, ...], clone_policy: bool,
 ) -> None:
@@ -1081,16 +1090,20 @@ def _trace_until_closed(
                     "task": _task_evidence(task),
                     "signal": stop_signal,
                 })
-            resumed = _ptrace(
-                PTRACE_CONT, pid, delivery_signal,
-                context=(
-                    f"task resume after ptrace event {ptrace_event} "
-                    f"and stop signal {stop_signal}"
-                ),
-                allow_esrch=ptrace_event == PTRACE_EVENT_EXIT,
-            )
-            if not resumed:
-                counts["exit-resume-esrch"] += 1
+            if ptrace_event == PTRACE_EVENT_EXIT:
+                # The kernel can report ESRCH while a nonleader is completing
+                # this already-observed exit.  Its held task FD remains owned,
+                # and success still requires the later exact terminal wait.
+                if not _continue_after_observed_exit_event(pid):
+                    counts["exit-resume-esrch"] += 1
+            else:
+                _ptrace(
+                    PTRACE_CONT, pid, delivery_signal,
+                    context=(
+                        f"task resume after ptrace event {ptrace_event} "
+                        f"and stop signal {stop_signal}"
+                    ),
+                )
             # A provisional child's initial stop can precede its parent's
             # birth-event stop.  Register the kernel edge while both remain
             # stopped, then release the parent before the newly bound child.
@@ -1662,7 +1675,8 @@ def _validate_event_task_binding(
             isinstance(process.get("pidfd"), dict),
             "task event is not bound to one process-leader identity")
     process_authority_received = any(
-        item["identity"]["nspid"][-1] == task["inner_tgid"]
+        item["identity"]["nspid"][-1] == task["inner_tgid"] and
+        item["identity"]["pidfd"] == process["pidfd"]
         for item in session.transferred_pidfds
     )
     require(process_authority_received,

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import copy
+import ctypes
+import errno
 import hashlib
 import os
 from pathlib import Path
@@ -11,7 +14,9 @@ import struct
 import sys
 import tempfile
 import time
+import types
 import unittest
+from unittest import mock
 
 import checkpoint_os_authenticator as auth
 import checkpoint_pidns_projection_controller as subject
@@ -136,6 +141,23 @@ class PidnsProjectionControllerTests(unittest.TestCase):
             timeout_seconds=timeout, ioctl_runner=self.ioctl_runner,
         )
 
+    def test_esrch_tolerance_is_exit_event_only(self) -> None:
+        class FailingPtrace:
+            @staticmethod
+            def ptrace(*_arguments):
+                ctypes.set_errno(errno.ESRCH)
+                return -1
+
+        with mock.patch.object(subject, "_libc", return_value=FailingPtrace()):
+            with self.assertRaises(subject.PidnsProjectionError):
+                subject._ptrace(
+                    subject.PTRACE_CONT, 3,
+                    context="synthetic non-exit resume",
+                )
+            self.assertFalse(
+                subject._continue_after_observed_exit_event(3),
+            )
+
     def test_exact_projection_and_true_task_trace_close(self) -> None:
         marker = self.root / "read-result"
         sentinel = os.open("/dev/null", os.O_RDONLY)
@@ -197,6 +219,17 @@ class PidnsProjectionControllerTests(unittest.TestCase):
             evidence["thread_identity_scope"],
             "held-exact-inner-proc-task-directories",
         )
+        reused_tgid_authority = copy.deepcopy(
+            evidence["transferred_processes"],
+        )
+        reused_tgid_authority[0]["identity"]["pidfd"]["inode"] += 1
+        hostile_session = types.SimpleNamespace(
+            transferred_pidfds=reused_tgid_authority,
+        )
+        with self.assertRaises(subject.PidnsProjectionError):
+            subject._validate_event_task_binding(
+                hostile_session, evidence["packets"][2],
+            )
 
     def test_double_fork_setsid_and_exec_are_closed_without_proc_scan(self) -> None:
         code = """
