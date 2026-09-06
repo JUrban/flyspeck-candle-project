@@ -113,18 +113,42 @@ TOP100_NORMALIZATIONS = (
 
 (* Read one controller acknowledgement without relying on OCaml's read_line,
    which is absent from Candle, or on whether the REPL left its newline. *)
-let rec candle_great100_csdp_read_status () =
-  match (!Cakeml.input1) () with
-  | Some '0' -> 0
-  | Some '1' -> 1
-  | Some '2' -> 2
-  | Some '3' -> 3
-  | Some ' ' -> candle_great100_csdp_read_status ()
-  | Some '\\t' -> candle_great100_csdp_read_status ()
-  | Some '\\r' -> candle_great100_csdp_read_status ()
-  | Some '\\n' -> candle_great100_csdp_read_status ()
-  | Some _ -> failwith "invalid diagnostic CSDP acknowledgement"
-  | None -> failwith "missing diagnostic CSDP acknowledgement";;''',
+let candle_great100_csdp_read_status () =
+  let rec read_digits n =
+    match (!Cakeml.input1) () with
+    | Some '0' -> read_digits (10 * n)
+    | Some '1' -> read_digits (10 * n + 1)
+    | Some '2' -> read_digits (10 * n + 2)
+    | Some '3' -> read_digits (10 * n + 3)
+    | Some '4' -> read_digits (10 * n + 4)
+    | Some '5' -> read_digits (10 * n + 5)
+    | Some '6' -> read_digits (10 * n + 6)
+    | Some '7' -> read_digits (10 * n + 7)
+    | Some '8' -> read_digits (10 * n + 8)
+    | Some '9' -> read_digits (10 * n + 9)
+    | Some '\\r' -> read_digits n
+    | Some '\\n' -> n
+    | Some _ -> failwith "invalid diagnostic CSDP acknowledgement"
+    | None -> failwith "missing diagnostic CSDP acknowledgement" in
+  let rec read_start () =
+    match (!Cakeml.input1) () with
+    | Some '0' -> read_digits 0
+    | Some '1' -> read_digits 1
+    | Some '2' -> read_digits 2
+    | Some '3' -> read_digits 3
+    | Some '4' -> read_digits 4
+    | Some '5' -> read_digits 5
+    | Some '6' -> read_digits 6
+    | Some '7' -> read_digits 7
+    | Some '8' -> read_digits 8
+    | Some '9' -> read_digits 9
+    | Some ' ' -> read_start ()
+    | Some '\\t' -> read_start ()
+    | Some '\\r' -> read_start ()
+    | Some '\\n' -> read_start ()
+    | Some _ -> failwith "invalid diagnostic CSDP acknowledgement"
+    | None -> failwith "missing diagnostic CSDP acknowledgement" in
+  read_start ();;''',
             ),
             (
                 b'''  file_of_string input_file (sdpa_of_problem "" obj mats);\n'''
@@ -1050,7 +1074,10 @@ def _csdp_progress_handler(binary, requests, load_failure):
                 raise load_failure(
                     f"diagnostic CSDP terminated abnormally: "
                     f"{completed.returncode}")
-            output_record = _file_record(expected_output)
+            output_record = (
+                _file_record(expected_output)
+                if expected_output.exists() or expected_output.is_symlink()
+                else None)
             request_record = {
                 "target": bridge["target"],
                 "index": request_index,

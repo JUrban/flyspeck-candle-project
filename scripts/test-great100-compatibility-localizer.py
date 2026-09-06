@@ -170,6 +170,34 @@ class CompatibilityLocalizerTest(unittest.TestCase):
             self.assertEqual(requests[0]["returncode"], 3)
             self.assertEqual(requests[0]["target"], "100/ceva")
 
+    def test_csdp_request_preserves_missing_output_for_target_search(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name).resolve()
+            input_path = directory / "sos.dat-s"
+            output_path = directory / "sos.out"
+            input_path.write_text("empty problem", encoding="ascii")
+            (directory / "param.csdp").write_text(
+                "printlevel=1\n", encoding="ascii")
+            sent = []
+            repl = SimpleNamespace(
+                _great100_csdp_bridge={
+                    "target": "100/ceva", "directory": directory},
+                process=SimpleNamespace(sendline=sent.append))
+            requests = []
+            handler = SUBJECT._csdp_progress_handler(
+                Path("/fixed/csdp"), requests, LocalFailure)
+            with mock.patch.object(
+                    SUBJECT.subprocess, "run",
+                    return_value=SimpleNamespace(returncode=206)):
+                handler(
+                    repl,
+                    f"{SUBJECT.CSDP_REQUEST_MARKER}\t"
+                    f"{input_path}\t{output_path}")
+
+            self.assertEqual(sent, ["206"])
+            self.assertEqual(requests[0]["returncode"], 206)
+            self.assertIsNone(requests[0]["output"])
+
     def test_normalization_accepts_selected_load_and_canonical_finish(self):
         repl = SimpleNamespace()
 
