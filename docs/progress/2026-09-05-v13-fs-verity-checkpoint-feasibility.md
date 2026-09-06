@@ -143,10 +143,12 @@ OK
 
 `py_compile` and `git diff --check` also pass.
 
-The earlier complete project regression at implementation commit `5a3a0be`
-passed all 22 `scripts/test-*.py` programs and all 339 then-discovered test
-methods.  A fresh complete regression for the publication-set integration is
-still required before its implementation commit is treated as tested.
+The fresh complete project regression at implementation commit `46d4319`
+passed all 22 `scripts/test-*.py` programs and all 342 discovered test methods
+in 852.577 seconds.  This includes 49 direct-release protocol tests, 67 hostile
+S1 finalizer tests, 14 top-100 sweep-controller tests, and the 29 checkpoint
+authenticator tests.  The finalizer and sweep programs took 428.645 and 286.604
+seconds respectively; every program exited zero.
 
 ## Remaining authority gap
 
