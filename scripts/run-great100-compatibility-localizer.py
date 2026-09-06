@@ -53,6 +53,63 @@ class ReferenceTarget:
     success: dict
 
 
+@dataclass(frozen=True)
+class SourceNormalization:
+    """Exact, diagnostic-only source rewrite for one or more targets."""
+
+    targets: tuple[str, ...]
+    source: str
+    expected_sha256: str
+    replacements: tuple[tuple[bytes, bytes], ...]
+    rationale: str
+
+
+TOP100_NORMALIZATIONS = (
+    SourceNormalization(
+        targets=("100/ramsey",),
+        source="100/ramsey.ml",
+        expected_sha256=(
+            "c27a2197fd0faa1a8197523ec8b7e8182a122959c3ce3b76f0f0f70326ced94f"
+        ),
+        replacements=(
+            (
+                b'''let rec mk_primed_var(name,ty) =\n'''
+                b'''  if can get_const_type name then mk_primed_var(name^"'",ty)\n'''
+                b'''  else mk_var(name,ty);;''',
+                b'''let rec mk_primed_var(name,ty) =\n'''
+                b'''  if can get_const_type name then\n'''
+                b'''    let next_name = name ^ "'" in\n'''
+                b'''    mk_primed_var(next_name,ty)\n'''
+                b'''  else mk_var(name,ty);;''',
+            ),
+            (
+                b'''  let check st l = (if l = [] then failwith st else l) in\n'''
+                b'''  let IMP_RES_THEN ttac impth =''',
+                b'''  let check_thm st l : thm list =\n'''
+                b'''    (if l = [] then failwith st else l) in\n'''
+                b'''  let check_tac st l : tactic list =\n'''
+                b'''    (if l = [] then failwith st else l) in\n'''
+                b'''  let IMP_RES_THEN ttac impth =''',
+            ),
+            (b'''        let res = check "IMP_RES_THEN: no resolvents " l in''',
+             b'''        let res = check_thm "IMP_RES_THEN: no resolvents " l in'''),
+            (b'''        let tacs = check "IMP_RES_THEN: no tactics" (mapfilter ttac res) in''',
+             b'''        let tacs = check_tac "IMP_RES_THEN: no tactics" (mapfilter ttac res) in'''),
+            (b'''      let imps = check "RES_THEN: no implication" ths in''',
+             b'''      let imps = check_thm "RES_THEN: no implication" ths in'''),
+            (b'''      let res = check "RES_THEN: no resolvents " l in''',
+             b'''      let res = check_thm "RES_THEN: no resolvents " l in'''),
+            (b'''      let tacs = check "RES_THEN: no tactics" (mapfilter ttac res) in''',
+             b'''      let tacs = check_tac "RES_THEN: no tactics" (mapfilter ttac res) in'''),
+        ),
+        rationale=(
+            "separate an infix expression from a tuple argument and split one "
+            "locally polymorphic helper into its theorem and tactic instances"
+        ),
+    ),
+)
+
+
 def _canonical_sha256(value):
     return hashlib.sha256(json.dumps(
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
@@ -558,6 +615,140 @@ def _prepare_destinations(report, log_dir):
     return report, log_dir
 
 
+def _ocaml_string(value):
+    """Quote the restricted path strings emitted into a Candle setup file."""
+    if any(character in value for character in ('"', "\\", "\n", "\r")):
+        raise ValueError(f"path cannot be represented safely in setup: {value!r}")
+    return f'"{value}"'
+
+
+def _stable_source_bytes(path):
+    before = _file_record(path)
+    source = Path(path).read_bytes()
+    after = _file_record(path)
+    if before != after or len(source) != before["bytes"]:
+        raise ValueError(f"source changed while reading: {path}")
+    return source, before
+
+
+def _materialize_normalizations(candle_root, log_dir, tests,
+                                specifications=TOP100_NORMALIZATIONS):
+    """Create exact derived inputs and the one-shot runtime overlay setup."""
+    selected_targets = {test.name for test in tests}
+    selected = [
+        specification for specification in specifications
+        if selected_targets.intersection(specification.targets)
+    ]
+    if not selected:
+        return None, {"active": False, "sources": []}
+
+    prepared = []
+    for specification in selected:
+        relative = Path(specification.source)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise ValueError(
+                f"normalization source is not a safe relative path: {relative}")
+        original = (candle_root / relative).resolve(strict=True)
+        if original.parent == candle_root or candle_root not in original.parents:
+            raise ValueError(f"normalization source escapes Candle root: {relative}")
+        source, original_record = _stable_source_bytes(original)
+        if original_record["sha256"] != specification.expected_sha256:
+            raise ValueError(
+                f"normalization source identity mismatch: {relative}")
+        normalized = source
+        for old, new in specification.replacements:
+            count = normalized.count(old)
+            if count != 1:
+                raise ValueError(
+                    f"normalization replacement count for {relative}: {count}")
+            normalized = normalized.replace(old, new, 1)
+        if normalized == source:
+            raise ValueError(f"normalization made no change: {relative}")
+        prepared.append((specification, relative, original, source,
+                         original_record, normalized))
+
+    overlay_root = log_dir / "normalizations"
+    overlay_root.mkdir(mode=0o700)
+    runtime_mappings = []
+    records = []
+    for (specification, relative, original, source, original_record,
+         normalized) in prepared:
+        output = overlay_root / relative
+        output.parent.mkdir(parents=True, exist_ok=True)
+        with output.open("xb") as destination:
+            destination.write(normalized)
+        output_record = _file_record(output)
+        original_md5 = hashlib.md5(
+            source, usedforsecurity=False).hexdigest()
+        normalized_md5 = hashlib.md5(
+            normalized, usedforsecurity=False).hexdigest()
+        runtime_mappings.append(
+            (str(original), str(output.resolve()), original_md5, normalized_md5))
+        records.append({
+            "targets": list(specification.targets),
+            "source": specification.source,
+            "rationale": specification.rationale,
+            "replacement_count": len(specification.replacements),
+            "original": original_record,
+            "normalized": output_record,
+            "runtime_md5": {
+                "original": original_md5,
+                "normalized": normalized_md5,
+            },
+        })
+
+    setup_lines = [
+        "let candle_great100_check_normalization label path expected =",
+        "  if Digest.to_hex (Digest.file path) = expected then ()",
+        "  else failwith (\"Great 100 normalization digest mismatch: \" ^ label);;",
+    ]
+    mapping_names = []
+    for index, (original, normalized, original_md5,
+                normalized_md5) in enumerate(runtime_mappings, 1):
+        original_name = f"candle_great100_original_{index}"
+        normalized_name = f"candle_great100_normalized_{index}"
+        mapping_names.append(f"({original_name},{normalized_name})")
+        setup_lines.extend([
+            f"let {original_name} = {_ocaml_string(original)};;",
+            f"let {normalized_name} = {_ocaml_string(normalized)};;",
+            ("candle_great100_check_normalization \"original\" "
+             f"{original_name} \"{original_md5}\";;"),
+            ("candle_great100_check_normalization \"normalized\" "
+             f"{normalized_name} \"{normalized_md5}\";;"),
+        ])
+    setup_lines.extend([
+        "Cakeml.configureNormalizationOverlay",
+        "  [" + ";".join(mapping_names) + "];;",
+    ])
+    setup_path = overlay_root / "setup.ml"
+    with setup_path.open("x", encoding="ascii", newline="\n") as setup:
+        setup.write("\n".join(setup_lines) + "\n")
+    return setup_path, {
+        "active": True,
+        "contract": (
+            "exact original SHA-256 plus single-occurrence rewrites; runtime "
+            "rechecks original and normalized MD5 before one-shot overlay"
+        ),
+        "promotion_eligible": False,
+        "setup": _file_record(setup_path),
+        "sources": records,
+    }
+
+
+def _load_after_normalization_setup(original_load, setup_path):
+    """Wrap CandleREPL.load so setup runs once, after hol.ml and before target."""
+    setup_path = str(Path(setup_path).resolve())
+
+    def load(repl, file):
+        if file != "hol.ml" and not getattr(
+                repl, "_great100_normalization_configured", False):
+            repl._great100_normalization_configured = True
+            original_load(repl, setup_path)
+        return original_load(repl, file)
+
+    return load
+
+
 def _result_record(regression, result, test):
     fingerprints = result.fingerprints
     return {
@@ -643,10 +834,13 @@ def main(argv=None):
         test.name: index for index, test in enumerate(regression.TOP100, 1)
     }
     references = _derive_references(candle_root, tests, canonical_indices)
+    normalization_setup, normalization_contract = _materialize_normalizations(
+        candle_root, log_dir, tests)
 
     original_request = regression._fingerprint_request_source
     original_reader = regression._read_fingerprint_records
     original_finish = regression.CandleREPL.finish
+    original_load = regression.CandleREPL.load
     regression._fingerprint_request_source = (
         lambda names, suite_nonce=None, process_nonce=None:
         _compact_request_source(
@@ -655,6 +849,9 @@ def main(argv=None):
         references, regression.LoadFailure)
     regression.CandleREPL.finish = (
         lambda repl: _finish_candle_at_eof(regression, repl))
+    if normalization_setup is not None:
+        regression.CandleREPL.load = _load_after_normalization_setup(
+            original_load, normalization_setup)
 
     requested_jobs = args.jobs
     jobs = regression.cap_jobs_for_heap(requested_jobs, args.heap_mb)
@@ -668,6 +865,7 @@ def main(argv=None):
         regression._fingerprint_request_source = original_request
         regression._read_fingerprint_records = original_reader
         regression.CandleREPL.finish = original_finish
+        regression.CandleREPL.load = original_load
 
     end_head, end_status = regression._git_state()
     if (end_head, end_status) != (head, status):
@@ -692,7 +890,8 @@ def main(argv=None):
         "format": "candle-great100-compatibility-localizer-v1",
         "warning": (
             "DIAGNOSTIC ONLY: MD5-plus-length comparison under an unapproved "
-            "serializer; never schema-7, S1, or promotable evidence."),
+            "serializer and optional exact source normalizations; never "
+            "schema-7, S1, or promotable evidence."),
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "started_utc": started_utc,
         "promotion": {
@@ -728,6 +927,7 @@ def main(argv=None):
             "process_termination": (
                 "ordinary zero exit after REPL stdin EOF; Candle does not "
                 "provide the OCaml exit binding assumed by regression.py"),
+            "source_normalizations": normalization_contract,
         },
         "execution": {
             "candle_root": str(candle_root),

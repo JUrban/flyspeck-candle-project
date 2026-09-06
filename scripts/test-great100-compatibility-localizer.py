@@ -37,6 +37,75 @@ class FakeRegression:
 
 
 class CompatibilityLocalizerTest(unittest.TestCase):
+    def test_exact_normalization_is_materialized_without_changing_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            candle_root = root / "candle"
+            log_dir = root / "logs"
+            source_path = candle_root / "100" / "sample.ml"
+            source_path.parent.mkdir(parents=True)
+            log_dir.mkdir()
+            source = b"before unique fragment after\n"
+            source_path.write_bytes(source)
+            specification = SUBJECT.SourceNormalization(
+                targets=("100/sample",),
+                source="100/sample.ml",
+                expected_sha256=hashlib.sha256(source).hexdigest(),
+                replacements=((b"unique fragment", b"normalized fragment"),),
+                rationale="test",
+            )
+            setup, contract = SUBJECT._materialize_normalizations(
+                candle_root, log_dir, [SimpleNamespace(name="100/sample")],
+                (specification,))
+
+            self.assertEqual(source_path.read_bytes(), source)
+            normalized = log_dir / "normalizations" / "100" / "sample.ml"
+            self.assertEqual(
+                normalized.read_bytes(), b"before normalized fragment after\n")
+            self.assertTrue(contract["active"])
+            self.assertFalse(contract["promotion_eligible"])
+            self.assertEqual(contract["sources"][0]["replacement_count"], 1)
+            setup_source = setup.read_text(encoding="ascii")
+            self.assertIn(str(source_path), setup_source)
+            self.assertIn(str(normalized), setup_source)
+            self.assertIn("configureNormalizationOverlay", setup_source)
+
+    def test_normalization_rejects_wrong_source_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            candle_root = root / "candle"
+            log_dir = root / "logs"
+            source_path = candle_root / "100" / "sample.ml"
+            source_path.parent.mkdir(parents=True)
+            log_dir.mkdir()
+            source_path.write_bytes(b"source\n")
+            specification = SUBJECT.SourceNormalization(
+                targets=("100/sample",), source="100/sample.ml",
+                expected_sha256="0" * 64,
+                replacements=((b"source", b"normalized"),), rationale="test")
+            with self.assertRaisesRegex(ValueError, "identity mismatch"):
+                SUBJECT._materialize_normalizations(
+                    candle_root, log_dir,
+                    [SimpleNamespace(name="100/sample")], (specification,))
+            self.assertFalse((log_dir / "normalizations").exists())
+
+    def test_normalization_setup_loads_once_between_hol_and_target(self):
+        calls = []
+
+        def original_load(repl, file):
+            calls.append(str(file))
+
+        repl = SimpleNamespace()
+        wrapped = SUBJECT._load_after_normalization_setup(
+            original_load, "/tmp/normalization-setup.ml")
+        wrapped(repl, "hol.ml")
+        wrapped(repl, "100/sample.ml")
+        wrapped(repl, "candle/fingerprint.ml")
+        self.assertEqual(calls, [
+            "hol.ml", "/tmp/normalization-setup.ml", "100/sample.ml",
+            "candle/fingerprint.ml",
+        ])
+
     def test_completed_session_uses_clean_eof_not_missing_exit_binding(self):
         class Process:
             exitstatus = 0
