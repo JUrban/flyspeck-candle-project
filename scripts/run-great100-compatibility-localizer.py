@@ -25,6 +25,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -1048,15 +1049,25 @@ def _csdp_progress_handler(binary, requests, load_failure):
             raise load_failure("CSDP request path escaped its target directory")
 
         try:
-            input_record = _file_record(expected_input)
-            params_record = _file_record(directory / "param.csdp")
+            params_path = directory / "param.csdp"
+            request_index = getattr(repl, "_great100_csdp_request_count", 0) + 1
+            repl._great100_csdp_request_count = request_index
+            request_stem = f"request-{request_index:03d}"
+            input_snapshot = directory / f"{request_stem}.input.dat-s"
+            params_snapshot = directory / f"{request_stem}.param.csdp"
+            with (expected_input.open("rb") as source,
+                  input_snapshot.open("xb") as destination):
+                shutil.copyfileobj(source, destination)
+            with (params_path.open("rb") as source,
+                  params_snapshot.open("xb") as destination):
+                shutil.copyfileobj(source, destination)
+            input_record = _file_record(input_snapshot)
+            params_record = _file_record(params_snapshot)
             if expected_output.exists() or expected_output.is_symlink():
                 _file_record(expected_output)
                 expected_output.unlink()
-            request_index = getattr(repl, "_great100_csdp_request_count", 0) + 1
-            repl._great100_csdp_request_count = request_index
-            stdout_path = directory / f"request-{request_index:03d}.stdout"
-            stderr_path = directory / f"request-{request_index:03d}.stderr"
+            stdout_path = directory / f"{request_stem}.stdout"
+            stderr_path = directory / f"{request_stem}.stderr"
             started = time.monotonic()
             with (stdout_path.open("xb") as stdout,
                   stderr_path.open("xb") as stderr):
@@ -1074,13 +1085,18 @@ def _csdp_progress_handler(binary, requests, load_failure):
                 raise load_failure(
                     f"diagnostic CSDP terminated abnormally: "
                     f"{completed.returncode}")
-            output_record = (
-                _file_record(expected_output)
-                if expected_output.exists() or expected_output.is_symlink()
-                else None)
+            output_record = None
+            if expected_output.exists() or expected_output.is_symlink():
+                output_snapshot = directory / f"{request_stem}.output.sol"
+                with (expected_output.open("rb") as source,
+                      output_snapshot.open("xb") as destination):
+                    shutil.copyfileobj(source, destination)
+                output_record = _file_record(output_snapshot)
             request_record = {
                 "target": bridge["target"],
                 "index": request_index,
+                "requested_input_path": str(expected_input),
+                "requested_output_path": str(expected_output),
                 "input": input_record,
                 "parameters": params_record,
                 "output": output_record,

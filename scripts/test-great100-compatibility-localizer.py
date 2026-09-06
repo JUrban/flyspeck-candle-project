@@ -169,6 +169,22 @@ class CompatibilityLocalizerTest(unittest.TestCase):
             self.assertEqual(len(requests), 1)
             self.assertEqual(requests[0]["returncode"], 3)
             self.assertEqual(requests[0]["target"], "100/ceva")
+            self.assertEqual(
+                Path(requests[0]["input"]["path"]).read_text(
+                    encoding="ascii"),
+                "problem")
+            self.assertEqual(
+                Path(requests[0]["parameters"]["path"]).read_text(
+                    encoding="ascii"),
+                "printlevel=1\n")
+            self.assertEqual(
+                Path(requests[0]["output"]["path"]).read_text(
+                    encoding="ascii"),
+                "solution")
+            self.assertEqual(
+                requests[0]["requested_input_path"], str(input_path))
+            self.assertEqual(
+                requests[0]["requested_output_path"], str(output_path))
 
     def test_csdp_request_preserves_missing_output_for_target_search(self):
         with tempfile.TemporaryDirectory() as directory_name:
@@ -197,6 +213,10 @@ class CompatibilityLocalizerTest(unittest.TestCase):
             self.assertEqual(sent, ["206"])
             self.assertEqual(requests[0]["returncode"], 206)
             self.assertIsNone(requests[0]["output"])
+            self.assertEqual(
+                Path(requests[0]["input"]["path"]).read_text(
+                    encoding="ascii"),
+                "empty problem")
 
     def test_normalization_accepts_selected_load_and_canonical_finish(self):
         repl = SimpleNamespace()
