@@ -1,5 +1,11 @@
 # v1.3 task-aware PID-namespace projection controller — 2026-09-06
 
+> **Independent-audit erratum:** the implementation and test transcript below
+> are preserved as an experimental milestone, but its process-authority and
+> observer-closure interpretations were too strong.  The branch is frozen,
+> must not be integrated or consumed, and does not establish general thread
+> support.  See `2026-09-06-v13-pidns-task-controller-audit-erratum.md`.
+
 ## Result
 
 The experimental `codex/flyspeck-v13-pidns-projection` branch now advances
@@ -11,10 +17,12 @@ The implementation is split across three reviewable commits:
 
 - `20e0515` separates process and task identity, permits traced legacy-clone
   threads, handles exec TID rekey/collapse, and adds the principal fixtures;
-- `a5451ae` adds strict outer event binding, held-task rechecks, and live
+- `a5451ae` adds outer event-shape checks, held-task rechecks, and live
   multithreaded manager-death coverage; and
-- `37d8987` narrows the observed-exit ESRCH case and binds retained process
-  authority by both NSpid/TGID and exact pidfd identity.
+- `37d8987` narrows the observed-exit ESRCH case and attempts to match retained
+  process authority by NSpid/TGID and pidfd `fstat` metadata.  The audit found
+  that this metadata is shared anon-inode metadata and does not bind a unique
+  process lifetime.
 
 ## Identity model
 
@@ -39,10 +47,12 @@ claim.  Only its parent's `PTRACE_EVENT_FORK`, `VFORK`, or `CLONE` event and
 `PTRACE_GETEVENTMSG` child TID register the edge.  Each registered birth has a
 unique sequence, kind, parent TID, and parent TGID.
 
-The outer observer retains every transferred process pidfd.  A later task
-event is accepted only when both the process's inner TGID/NSpid tail and exact
-pidfd `fstat` identity match a retained authority.  This closes ambiguity from
-numeric TGID reuse.  Thread events are required not to carry pidfds.
+The outer observer retains every transferred process pidfd and compares a
+later task event's inner TGID/NSpid tail and pidfd `fstat` dictionary.  The
+independent audit found this insufficient: Linux pidfds normally expose shared
+anon-inode device/inode/mode metadata, so the dictionary does not distinguish
+a stale pidfd after numeric TGID reuse.  Thread events are required not to
+carry pidfds, but unique process-lifetime binding is not established.
 
 ## Thread and exec behavior
 
@@ -57,7 +67,8 @@ nonleader executes, the wait PID is the TGID and the message is the former TID.
 The controller:
 
 - finds the former task in the existing TGID process record;
-- retains the existing process-leader pidfd as continuity authority;
+- retains the existing process-leader pidfd, which the manager treats as
+  continuity state but the outer observer does not uniquely authenticate;
 - explicitly records and retires every sibling task as exec-collapsed;
 - does not require per-task start ticks to remain stable across the rekey;
 - opens and authenticates the new exact `<tgid>/task/<tgid>` directory; and
@@ -65,8 +76,9 @@ The controller:
 
 The emitted exec transition includes former and event TIDs, the nonleader
 rekey flag, every collapsed task identity, previous/current process start
-ticks, and the executable epoch.  The observer checks the complete transition
-shape and task-group bindings.
+ticks, and the executable epoch.  The observer checks packet shape and local
+task-group relationships; it does not independently maintain a lifecycle FSM
+or recompute complete birth/exec-collapse/terminal closure.
 
 ## Exit and cleanup behavior
 
@@ -77,8 +89,9 @@ stop treats `ESRCH` as an error.  Even in the narrow accepted case, the task
 record and held directory FD remain live and success still requires the exact
 later terminal wait.  The result exposes an `exit-resume-esrch` count.
 
-Failure cleanup sends one kill through each unique process pidfd, rather than
-once per task.  The manager and bootstrap death chain, PID-namespace-init
+Failure cleanup sends one kill per process rather than per task.  It uses the
+pidfd API when available but has an audited P2 numeric-PID fallback that is not
+safe against reuse.  The manager and bootstrap death chain, PID-namespace-init
 teardown, `EXITKILL`, outer timeout, and unfinished-session abort remain in
 place.  A live fixture with two running worker threads confirms that killing
 the manager makes the retained root pidfd readable and leaves the outer
@@ -96,7 +109,8 @@ KiB maximum RSS.  Coverage includes:
 - two concurrent worker threads with held task identities and no task pidfds;
 - a fork issued by a nonleader thread;
 - nonleader exec TID rekey and sibling exec-collapse;
-- hostile same-TGID/different-pidfd authority rejection;
+- synthetic same-TGID/different-`fstat`-dictionary rejection, which does not
+  exercise real stale-pidfd/TGID reuse;
 - synthetic ESRCH rejection outside the dedicated exit-event helper;
 - stopped and live-multithreaded manager-death teardown;
 - outer timeout; and
@@ -120,18 +134,20 @@ compatibility remain false.  The fresh primary procfs is rooted in the private
 PID namespace, but host paths remain visible and arbitrary dynamically derived
 post-ACK reads are not observed or excluded.
 
-The task-aware model has not yet run a real DMTCP restart.  `clone3` remains an
-intentional compatibility gap; a workload without legacy fallback fails
+The successful low-thread-count fixtures do not justify the broad emitted
+`threads_supported=true` field; consumers must treat that field as invalid.
+The task-aware model has not completed a real DMTCP restart.  `clone3` remains
+an intentional compatibility gap; a workload without legacy fallback fails
 closed.  An exec-collapse packet currently carries every retired sibling task,
 so an extremely large thread group could exceed the 128 KiB packet bound and
-fail closed; bounded chunking would be needed before claiming large-thread-set
-support.  Held task-directory identities are manager-local diagnostic
-evidence, not an outer transferable task handle.  The controller's security
-claims must therefore remain no stronger than those above.
+fail closed.  Held task-directory identities are manager-local diagnostic
+evidence, not an outer transferable task handle.  The missing unique
+process-lifetime binding and independently recomputed observer closure are P1
+gaps, so this branch is not an integration or consumption candidate.
 
-## Next gate
+## Frozen disposition
 
-Run a disposable, low-thread-count DMTCP 4.1.0 checkpoint/restart fixture
-through this controller, preserving every nonclaim.  Before scaling to larger
-thread sets, define a bounded multi-packet exec-collapse protocol and extend
-the observer FSM accordingly.
+Do not run another restart, extend this controller, integrate the branch, or
+consume its records before the higher-priority post-G3/G4 review redirects the
+work.  A later repair would require a real per-process lifetime binding and an
+outer lifecycle FSM that recomputes closure; neither is implemented here.

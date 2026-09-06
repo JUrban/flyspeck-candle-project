@@ -1,5 +1,10 @@
 # v1.3 task-aware PID-namespace DMTCP first attempt — 2026-09-06
 
+> **Disposition update:** the independent task-controller audit found two P1
+> lifecycle-authority gaps.  The experimental branch is frozen and must not be
+> integrated or consumed; see
+> `2026-09-06-v13-pidns-task-controller-audit-erratum.md`.
+
 ## Result
 
 The first bounded real-DMTCP attempt failed closed before a live restart could
@@ -12,8 +17,7 @@ PID-namespace projection diagnostic failed: projected root process did not exit 
 No resumed receipt was created.  The projected tree was empty after cleanup,
 both disposable coordinators exited, and all origin/restart launcher sessions
 were reaped.  There was no restart retry or DMTCP-specific controller change
-after this single attempt.  The branch remains open only for the separately
-identified process-lifecycle authority correction.
+after this single attempt.
 
 This negative result does not establish or refute DMTCP compatibility with the
 task-aware controller.  The attempted `--join-coordinator` target had already
@@ -90,8 +94,7 @@ networking, and PFT exclusion all remain false.  No independent-oracle process
 or artifact was inspected, hashed, signalled, or used.  The canonical CakeML
 build and parser pipeline were not touched.
 
-Any later restart attempt must start its fresh coordinator immediately before
-the controller or give the coordinator a lifetime that exceeds setup/sealing
-time.  No such retry belongs to this record.  The only pending work on this
-branch is the separately scoped repair to process-lifecycle authority; this
-report makes no claim about that unresolved boundary.
+Any later restart attempt would need to start its fresh coordinator immediately
+before the controller or give the coordinator a lifetime that exceeds
+setup/sealing time.  No such retry belongs to this record.  The branch is
+frozen pending post-G3/G4 prioritization and must not be integrated or consumed.
