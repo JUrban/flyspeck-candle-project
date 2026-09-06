@@ -107,6 +107,21 @@ TOP100_NORMALIZATIONS = (
             "locally polymorphic helper into its theorem and tactic instances"
         ),
     ),
+    SourceNormalization(
+        targets=("100/heron",),
+        source="100/heron.ml",
+        expected_sha256=(
+            "de7cd4bd92e9d6fa19076ae2195d58fe6c68901307a15da05c366bc0b2b40763"
+        ),
+        replacements=((
+            b'''    let stms = setify(find_terms is_sqrt w) in''',
+            b'''    let stms = setify Term.(<) (find_terms is_sqrt w) in''',
+        ),),
+        rationale=(
+            "supply the explicit term comparator required by the CakeML "
+            "finite-set helper"
+        ),
+    ),
 )
 
 
