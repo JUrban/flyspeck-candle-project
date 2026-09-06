@@ -66,6 +66,49 @@ class SourceNormalization:
 
 TOP100_NORMALIZATIONS = (
     SourceNormalization(
+        targets=("100/birthday",),
+        source="100/birthday.ml",
+        expected_sha256=(
+            "f2298f7d1b411d0b6341eedc6bcff6348e2537cec39bb00b7c61414c0602c591"
+        ),
+        replacements=((
+            b'''  CONV_TAC NUM_REDUCE_CONV);;''',
+            b'''  CONV_TAC NUM_REDUCE_CONV);;
+
+(* Preserve the reference run's names for the two invented type variables. *)
+let BIRTHDAY_THM_EXPLICIT =
+  INST_TYPE
+    [(mk_vartype "?143993",mk_vartype "?154493");
+     (mk_vartype "?143989",mk_vartype "?154489")]
+    BIRTHDAY_THM_EXPLICIT;;''',
+        ),),
+        rationale=(
+            "alpha-rename two deterministic invented type variables to the "
+            "names recorded by the approved reference theorem"
+        ),
+    ),
+    SourceNormalization(
+        targets=("100/derangements",),
+        source="100/derangements.ml",
+        expected_sha256=(
+            "37c460acbc2863cdcd154bc3d4620080b3da23116c353d4bb77d89d99534a322"
+        ),
+        replacements=((
+            b'''  ASM_SIMP_TAC[HAS_SIZE; DERANGEMENTS_EXP]);;''',
+            b'''  ASM_SIMP_TAC[HAS_SIZE; DERANGEMENTS_EXP]);;
+
+(* Preserve the reference run's name for the invented type variable. *)
+let THE_DERANGEMENTS_FORMULA =
+  INST_TYPE
+    [(mk_vartype "?211488",mk_vartype "?221988")]
+    THE_DERANGEMENTS_FORMULA;;''',
+        ),),
+        rationale=(
+            "alpha-rename one deterministic invented type variable to the "
+            "name recorded by the approved reference theorem"
+        ),
+    ),
+    SourceNormalization(
         targets=("100/ramsey",),
         source="100/ramsey.ml",
         expected_sha256=(
