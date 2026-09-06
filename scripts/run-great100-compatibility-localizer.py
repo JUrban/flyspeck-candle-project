@@ -108,6 +108,25 @@ TOP100_NORMALIZATIONS = (
                 b'''  let input_file = Filename.concat (!temp_path) "sos.dat-s" in''',
             ),
             (
+                b'''let csdp_params = csdp_default_parameters;;''',
+                b'''let csdp_params = csdp_default_parameters;;
+
+(* Read one controller acknowledgement without relying on OCaml's read_line,
+   which is absent from Candle, or on whether the REPL left its newline. *)
+let rec candle_great100_csdp_read_status () =
+  match (!Cakeml.input1) () with
+  | Some '0' -> 0
+  | Some '1' -> 1
+  | Some '2' -> 2
+  | Some '3' -> 3
+  | Some ' ' -> candle_great100_csdp_read_status ()
+  | Some '\\t' -> candle_great100_csdp_read_status ()
+  | Some '\\r' -> candle_great100_csdp_read_status ()
+  | Some '\\n' -> candle_great100_csdp_read_status ()
+  | Some _ -> failwith "invalid diagnostic CSDP acknowledgement"
+  | None -> failwith "missing diagnostic CSDP acknowledgement";;''',
+            ),
+            (
                 b'''  file_of_string input_file (sdpa_of_problem "" obj mats);\n'''
                 b'''  file_of_string params_file csdp_params;\n'''
                 b'''  let rv = Sys.command("cd "^(!temp_path)^"; csdp "^input_file ^\n'''
@@ -117,7 +136,7 @@ TOP100_NORMALIZATIONS = (
                 b'''  file_of_string params_file csdp_params;\n'''
                 b'''  print_endline ("CANDLE_GREAT100_CSDP_REQUEST_V1\\t" ^\n'''
                 b'''                 input_file ^ "\\t" ^ output_file);\n'''
-                b'''  let rv = int_of_string(read_line ()) in''',
+                b'''  let rv = candle_great100_csdp_read_status () in''',
             ),
             (
                 b'''  file_of_string input_file\n'''
@@ -131,7 +150,7 @@ TOP100_NORMALIZATIONS = (
                 b'''  file_of_string params_file csdp_params;\n'''
                 b'''  print_endline ("CANDLE_GREAT100_CSDP_REQUEST_V1\\t" ^\n'''
                 b'''                 input_file ^ "\\t" ^ output_file);\n'''
-                b'''  let rv = int_of_string(read_line ()) in''',
+                b'''  let rv = candle_great100_csdp_read_status () in''',
             ),
             (
                 b'''  file_of_string input_file (sdpa_of_problem "" obj mats);\n'''
@@ -143,7 +162,7 @@ TOP100_NORMALIZATIONS = (
                 b'''  file_of_string params_file csdp_params;\n'''
                 b'''  print_endline ("CANDLE_GREAT100_CSDP_REQUEST_V1\\t" ^\n'''
                 b'''                 input_file ^ "\\t" ^ output_file);\n'''
-                b'''  let rv = int_of_string(read_line ()) in''',
+                b'''  let rv = candle_great100_csdp_read_status () in''',
             ),
         ),
         rationale=(
