@@ -3196,14 +3196,35 @@ def _checkpoint_projection_child(
         os._exit(125)
 
 
-def run_checkpoint_mount_projection_diagnostic(
+@dataclass
+class _ProjectionPreflightState:
+    """Pinned inputs shared by projection controller implementations."""
+
+    recheck: _Observation
+    root: Path
+    source: Path
+    root_fd: int
+    executable_fd: int
+    executable: dict[str, Any]
+    parent_namespaces: dict[str, dict[str, Any]]
+
+    def close(self) -> None:
+        if self.root_fd >= 0:
+            os.close(self.root_fd)
+            self.root_fd = -1
+        if self.executable_fd >= 0:
+            os.close(self.executable_fd)
+            self.executable_fd = -1
+
+
+def _checkpoint_projection_preflight(
     publication: PublicationPin, staged_seal: _Observation, *,
     projection_root: str | os.PathLike[str], argv_prefix: list[str],
-    executable_authority: dict[str, Any],
-    environment: dict[str, str], timeout_seconds: float = 30.0,
-    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None = None,
-) -> _Observation:
-    """Run a command on exact held images projected into a private mount view."""
+    executable_authority: dict[str, Any], environment: dict[str, str],
+    timeout_seconds: float,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None,
+) -> _ProjectionPreflightState:
+    """Validate and pin common projection inputs without creating a child."""
     recheck = recheck_checkpoint_publication_fsverity(
         publication, staged_seal, ioctl_runner=ioctl_runner,
     )
@@ -3238,9 +3259,8 @@ def run_checkpoint_mount_projection_diagnostic(
             isinstance(executable_authority.get("md5"), str) and
             HEX32.fullmatch(executable_authority["md5"]) is not None and
             isinstance(executable_authority.get("mode"), str) and
-            re.fullmatch(
-                r"0[0-7]{3}", executable_authority["mode"],
-            ) is not None and
+            re.fullmatch(r"0[0-7]{3}", executable_authority["mode"])
+                is not None and
             type(executable_authority.get("uid")) is int and
             executable_authority["uid"] >= 0 and
             type(executable_authority.get("gid")) is int and
@@ -3254,7 +3274,6 @@ def run_checkpoint_mount_projection_diagnostic(
     parent_namespaces = {
         name: _projection_namespace_identity(name) for name in ("mnt", "user")
     }
-
     open_nofollow = os.O_RDONLY | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         open_nofollow |= os.O_NOFOLLOW
@@ -3305,6 +3324,34 @@ def run_checkpoint_mount_projection_diagnostic(
     except BaseException:
         os.close(root_fd)
         raise
+    return _ProjectionPreflightState(
+        recheck=recheck, root=root, source=source, root_fd=root_fd,
+        executable_fd=executable_fd, executable=executable,
+        parent_namespaces=parent_namespaces,
+    )
+
+
+def run_checkpoint_mount_projection_diagnostic(
+    publication: PublicationPin, staged_seal: _Observation, *,
+    projection_root: str | os.PathLike[str], argv_prefix: list[str],
+    executable_authority: dict[str, Any],
+    environment: dict[str, str], timeout_seconds: float = 30.0,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None = None,
+) -> _Observation:
+    """Run a command on exact held images projected into a private mount view."""
+    preflight = _checkpoint_projection_preflight(
+        publication, staged_seal, projection_root=projection_root,
+        argv_prefix=argv_prefix, executable_authority=executable_authority,
+        environment=environment, timeout_seconds=timeout_seconds,
+        ioctl_runner=ioctl_runner,
+    )
+    recheck = preflight.recheck
+    root = preflight.root
+    source = preflight.source
+    root_fd = preflight.root_fd
+    executable_fd = preflight.executable_fd
+    executable = preflight.executable
+    parent_namespaces = preflight.parent_namespaces
 
     socket_type = socket.SOCK_SEQPACKET | getattr(socket, "SOCK_CLOEXEC", 0)
     observer: socket.socket | None = None
@@ -3318,8 +3365,7 @@ def run_checkpoint_mount_projection_diagnostic(
             observer.close()
         if child_channel is not None:
             child_channel.close()
-        os.close(root_fd)
-        os.close(executable_fd)
+        preflight.close()
         raise
     if pid == 0:
         observer.close()
@@ -3330,8 +3376,7 @@ def run_checkpoint_mount_projection_diagnostic(
         )
         os._exit(126)
     child_channel.close()
-    os.close(root_fd)
-    os.close(executable_fd)
+    preflight.close()
     pidfd = -1
     status: int | None = None
     started = time.monotonic()
