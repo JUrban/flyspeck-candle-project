@@ -26,6 +26,7 @@ from pathlib import Path, PurePosixPath
 import platform
 import re
 import signal
+import socket
 import stat
 import struct
 import subprocess
@@ -104,6 +105,52 @@ FS_VERITY_STAGED_SEAL_POLICY = (
 )
 FS_VERITY_PUBLICATION_RECHECK_KIND = (
     "candle-flyspeck-fs-verity-publication-recheck-v1"
+)
+CHECKPOINT_PROJECTION_KIND = (
+    "candle-flyspeck-checkpoint-mount-projection-diagnostic-v1"
+)
+CHECKPOINT_PROJECTION_PACKET_KIND = (
+    "candle-flyspeck-checkpoint-mount-projection-ready-v1"
+)
+CHECKPOINT_PROJECTION_ACK_KIND = (
+    "candle-flyspeck-checkpoint-mount-projection-ack-v1"
+)
+CHECKPOINT_PROJECTION_POLICY = (
+    "same-uid-private-user-mount-namespace-readonly-held-inode-"
+    "single-process-projection-v1"
+)
+CHECKPOINT_PROJECTION_MAX_PACKET_BYTES = 64 * 1024
+
+CLONE_NEWNS = 0x00020000
+CLONE_NEWUSER = 0x10000000
+CLONE_UNTRACED = 0x00800000
+CLONE_THREAD = 0x00010000
+MS_RDONLY = 1
+MS_NOSUID = 2
+MS_NODEV = 4
+MS_NOEXEC = 8
+MS_REMOUNT = 32
+MS_BIND = 4096
+MS_REC = 16384
+MS_PRIVATE = 1 << 18
+PR_SET_SECUREBITS = 28
+PR_CAPBSET_DROP = 24
+PR_SET_NO_NEW_PRIVS = 38
+PR_SET_SECCOMP = 22
+PR_CAP_AMBIENT = 47
+PR_CAP_AMBIENT_CLEAR_ALL = 4
+SECBIT_NOROOT = 1 << 0
+SECBIT_NOROOT_LOCKED = 1 << 1
+SECBIT_NO_SETUID_FIXUP = 1 << 2
+SECBIT_NO_SETUID_FIXUP_LOCKED = 1 << 3
+SECCOMP_MODE_FILTER = 2
+SECCOMP_RET_KILL_PROCESS = 0x80000000
+SECCOMP_RET_ALLOW = 0x7FFF0000
+AUDIT_ARCH_X86_64 = 0xC000003E
+X32_SYSCALL_BIT = 0x40000000
+CHECKPOINT_PROJECTION_FORBIDDEN_SYSCALLS_X86_64 = (
+    57, 58, 155, 161, 165, 166, 272, 308, 428, 429, 430, 431, 432, 433, 435,
+    442,
 )
 
 DMTCP_VERSION = "4.1.0"
@@ -2583,6 +2630,879 @@ def recheck_checkpoint_publication_fsverity(
         "approval_included": False,
         "pft_used": False,
     }, all_nonfixture)
+
+
+class _ProjectionSockFilter(ctypes.Structure):
+    _fields_ = [
+        ("code", ctypes.c_ushort),
+        ("jt", ctypes.c_ubyte),
+        ("jf", ctypes.c_ubyte),
+        ("value", ctypes.c_uint),
+    ]
+
+
+class _ProjectionSockFprog(ctypes.Structure):
+    _fields_ = [
+        ("length", ctypes.c_ushort),
+        ("filters", ctypes.POINTER(_ProjectionSockFilter)),
+    ]
+
+
+class _ProjectionCapHeader(ctypes.Structure):
+    _fields_ = [("version", ctypes.c_uint32), ("pid", ctypes.c_int)]
+
+
+class _ProjectionCapData(ctypes.Structure):
+    _fields_ = [
+        ("effective", ctypes.c_uint32),
+        ("permitted", ctypes.c_uint32),
+        ("inheritable", ctypes.c_uint32),
+    ]
+
+
+def _projection_libc() -> ctypes.CDLL:
+    library = ctypes.CDLL(None, use_errno=True)
+    library.mount.argtypes = [
+        ctypes.c_char_p, ctypes.c_char_p, ctypes.c_char_p,
+        ctypes.c_ulong, ctypes.c_char_p,
+    ]
+    library.mount.restype = ctypes.c_int
+    library.prctl.argtypes = [
+        ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong,
+        ctypes.c_ulong, ctypes.c_ulong,
+    ]
+    library.prctl.restype = ctypes.c_int
+    library.capset.argtypes = [
+        ctypes.POINTER(_ProjectionCapHeader),
+        ctypes.POINTER(_ProjectionCapData),
+    ]
+    library.capset.restype = ctypes.c_int
+    return library
+
+
+def _projection_mount(
+    source: str | None, target: str, filesystem_type: str | None,
+    flags: int, data: str | None = None,
+) -> None:
+    def encoded(value: str | None) -> bytes | None:
+        return None if value is None else os.fsencode(value)
+
+    if _projection_libc().mount(
+        encoded(source), encoded(target), encoded(filesystem_type), flags,
+        encoded(data),
+    ) != 0:
+        error_number = ctypes.get_errno()
+        error_name = errno.errorcode.get(error_number, "UNKNOWN")
+        raise AuthenticationError(
+            f"checkpoint projection mount failed: errno {error_number} "
+            f"({error_name})"
+        )
+
+
+def _projection_prctl(option: int, argument: int, label: str) -> int:
+    result = _projection_libc().prctl(option, argument, 0, 0, 0)
+    if result < 0:
+        error_number = ctypes.get_errno()
+        error_name = errno.errorcode.get(error_number, "UNKNOWN")
+        raise AuthenticationError(
+            f"checkpoint projection {label} failed: errno {error_number} "
+            f"({error_name})"
+        )
+    return result
+
+
+def _projection_namespace_identity(
+    namespace: str, process: str | int = "self",
+) -> dict[str, Any]:
+    require(namespace in {"mnt", "user"},
+            "unknown checkpoint projection namespace")
+    require(process == "self" or
+            (type(process) is int and process > 0),
+            "malformed checkpoint projection namespace process")
+    path = f"/proc/{process}/ns/{namespace}"
+    try:
+        link = os.readlink(path)
+        descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC)
+        try:
+            observed = os.fstat(descriptor)
+        finally:
+            os.close(descriptor)
+    except OSError as error:
+        raise AuthenticationError(
+            f"cannot inspect checkpoint projection {namespace} namespace"
+        ) from error
+    match = re.fullmatch(rf"{namespace}:\[([0-9]+)\]", link)
+    require(match is not None and stat.S_ISREG(observed.st_mode) and
+            observed.st_nlink == 1 and observed.st_ino == int(match.group(1)),
+            f"checkpoint projection {namespace} namespace identity differs")
+    return {
+        "name": namespace,
+        "link": link,
+        "device": observed.st_dev,
+        "inode": observed.st_ino,
+    }
+
+
+def _kill_projection_child(pidfd: int, pid: int) -> None:
+    try:
+        if pidfd >= 0 and hasattr(signal, "pidfd_send_signal"):
+            signal.pidfd_send_signal(pidfd, signal.SIGKILL, None, 0)
+        else:
+            # The PID remains owned and unreaped by this process, so it cannot
+            # have been reused between fork and this fallback.
+            os.kill(pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def _close_projection_exec_descriptors() -> None:
+    require(platform.machine() == "x86_64",
+            "checkpoint projection close_range supports only x86_64")
+    library = ctypes.CDLL(None, use_errno=True)
+    library.syscall.restype = ctypes.c_long
+    result = library.syscall(
+        ctypes.c_long(436), ctypes.c_uint(3), ctypes.c_uint(0xFFFFFFFF),
+        # CLOSE_RANGE_CLOEXEC preserves the held executable fd for fexecve
+        # while guaranteeing that every inherited descriptor closes on exec.
+        ctypes.c_uint(4),
+    )
+    if result != 0:
+        error_number = ctypes.get_errno()
+        error_name = errno.errorcode.get(error_number, "UNKNOWN")
+        raise AuthenticationError(
+            f"checkpoint projection close_range failed: errno {error_number} "
+            f"({error_name})"
+        )
+
+
+def _install_projection_namespace_filter() -> None:
+    require(platform.machine() == "x86_64" and
+            struct.pack("=I", 1) == struct.pack("<I", 1),
+            "checkpoint projection seccomp supports only little-endian x86_64")
+    instructions: list[_ProjectionSockFilter] = [
+        _ProjectionSockFilter(0x20, 0, 0, 4),
+        _ProjectionSockFilter(0x15, 1, 0, AUDIT_ARCH_X86_64),
+        _ProjectionSockFilter(0x06, 0, 0, SECCOMP_RET_KILL_PROCESS),
+        _ProjectionSockFilter(0x20, 0, 0, 0),
+        # Reject the x32 ABI instead of letting its syscall-number bit bypass
+        # the exact x86-64 deny list below.
+        _ProjectionSockFilter(0x45, 0, 1, X32_SYSCALL_BIT),
+        _ProjectionSockFilter(0x06, 0, 0, SECCOMP_RET_KILL_PROCESS),
+    ]
+    for syscall_number in CHECKPOINT_PROJECTION_FORBIDDEN_SYSCALLS_X86_64:
+        instructions.extend([
+            _ProjectionSockFilter(0x15, 0, 1, syscall_number),
+            _ProjectionSockFilter(0x06, 0, 0, SECCOMP_RET_KILL_PROCESS),
+        ])
+    # Only threads may use legacy clone.  A separate child could outlive the
+    # directly waited command and retain this mount namespace, so fork/vfork,
+    # clone3, and process-form clone are all rejected.
+    instructions.extend([
+        _ProjectionSockFilter(0x15, 0, 5, 56),
+        _ProjectionSockFilter(0x20, 0, 0, 16),
+        _ProjectionSockFilter(
+            0x45, 0, 1, CLONE_NEWUSER | CLONE_NEWNS | CLONE_UNTRACED,
+        ),
+        _ProjectionSockFilter(0x06, 0, 0, SECCOMP_RET_KILL_PROCESS),
+        _ProjectionSockFilter(0x45, 1, 0, CLONE_THREAD),
+        _ProjectionSockFilter(0x06, 0, 0, SECCOMP_RET_KILL_PROCESS),
+        _ProjectionSockFilter(0x06, 0, 0, SECCOMP_RET_ALLOW),
+    ])
+    filters = (_ProjectionSockFilter * len(instructions))(*instructions)
+    program = _ProjectionSockFprog(len(filters), filters)
+    _projection_prctl(PR_SET_NO_NEW_PRIVS, 1, "no_new_privs")
+    library = _projection_libc()
+    if library.prctl(
+        PR_SET_SECCOMP, SECCOMP_MODE_FILTER, ctypes.addressof(program), 0, 0,
+    ) != 0:
+        error_number = ctypes.get_errno()
+        error_name = errno.errorcode.get(error_number, "UNKNOWN")
+        raise AuthenticationError(
+            f"checkpoint projection seccomp failed: errno {error_number} "
+            f"({error_name})"
+        )
+
+
+def _drop_projection_capabilities() -> dict[str, str | int]:
+    securebits = (
+        SECBIT_NOROOT | SECBIT_NOROOT_LOCKED |
+        SECBIT_NO_SETUID_FIXUP | SECBIT_NO_SETUID_FIXUP_LOCKED
+    )
+    _projection_prctl(PR_SET_SECUREBITS, securebits, "securebits")
+    _projection_prctl(
+        PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, "ambient capability clear",
+    )
+    try:
+        cap_last_cap = int(
+            Path("/proc/sys/kernel/cap_last_cap").read_text(encoding="ascii").strip()
+        )
+    except (OSError, ValueError) as error:
+        raise AuthenticationError(
+            "cannot read the kernel capability bound"
+        ) from error
+    require(0 <= cap_last_cap <= 63,
+            "kernel capability bound is outside the audited range")
+    for capability in range(cap_last_cap + 1):
+        _projection_prctl(
+            PR_CAPBSET_DROP, capability,
+            f"capability bounding-set drop {capability}",
+        )
+    header = _ProjectionCapHeader(0x20080522, 0)
+    data = (_ProjectionCapData * 2)()
+    if _projection_libc().capset(ctypes.byref(header), data) != 0:
+        error_number = ctypes.get_errno()
+        error_name = errno.errorcode.get(error_number, "UNKNOWN")
+        raise AuthenticationError(
+            f"checkpoint projection capset failed: errno {error_number} "
+            f"({error_name})"
+        )
+    status: dict[str, str] = {}
+    try:
+        for line in Path("/proc/self/status").read_text(encoding="ascii").splitlines():
+            if line.startswith((
+                "CapInh:", "CapPrm:", "CapEff:", "CapBnd:", "CapAmb:",
+                "NoNewPrivs:", "Seccomp:", "Seccomp_filters:",
+            )):
+                name, value = line.split(":", 1)
+                status[name] = value.strip()
+    except OSError as error:
+        raise AuthenticationError(
+            "cannot verify dropped checkpoint projection capabilities"
+        ) from error
+    require(all(status.get(name) == "0000000000000000" for name in (
+                "CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb",
+            )) and status.get("NoNewPrivs") == "1" and
+            status.get("Seccomp") == "2" and
+            int(status.get("Seccomp_filters", "0")) >= 1,
+            "checkpoint projection retained authority after setup")
+    return {**status, "securebits": securebits, "cap_last_cap": cap_last_cap}
+
+
+def _write_projection_user_map(outer_uid: int, outer_gid: int) -> None:
+    try:
+        setgroups = Path("/proc/self/setgroups")
+        if setgroups.exists():
+            setgroups.write_text("deny\n", encoding="ascii")
+        Path("/proc/self/uid_map").write_text(
+            f"0 {outer_uid} 1\n", encoding="ascii",
+        )
+        Path("/proc/self/gid_map").write_text(
+            f"0 {outer_gid} 1\n", encoding="ascii",
+        )
+    except OSError as error:
+        raise AuthenticationError(
+            "cannot install private checkpoint projection user mapping"
+        ) from error
+    require(os.getuid() == 0 and os.getgid() == 0,
+            "checkpoint projection user mapping did not select namespace root")
+
+
+def _checkpoint_projection_child(
+    channel: socket.socket, publication: PublicationPin,
+    staged_seal: _Observation, projection_root: Path,
+    argv_prefix: list[str], environment: dict[str, str],
+    parent_pid: int, timeout_seconds: float, root_fd: int, executable_fd: int,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None,
+) -> None:
+    try:
+        channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        channel.settimeout(timeout_seconds)
+        outer_uid = os.getuid()
+        outer_gid = os.getgid()
+        os.unshare(CLONE_NEWUSER)
+        _write_projection_user_map(outer_uid, outer_gid)
+        os.unshare(CLONE_NEWNS)
+        _projection_mount(None, "/", None, MS_REC | MS_PRIVATE)
+        held_root = os.fstat(root_fd)
+        current_root_fd = os.open(
+            projection_root,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        )
+        try:
+            current_root = os.fstat(current_root_fd)
+            require(
+                current_root.st_dev == held_root.st_dev and
+                current_root.st_ino == held_root.st_ino and
+                current_root.st_uid == held_root.st_uid and
+                current_root.st_gid == held_root.st_gid and
+                stat.S_IMODE(current_root.st_mode) ==
+                stat.S_IMODE(held_root.st_mode) == 0o700,
+                "checkpoint projection root changed before private mount",
+            )
+            _projection_mount(
+                "tmpfs", f"/proc/self/fd/{current_root_fd}", "tmpfs",
+                MS_NOSUID | MS_NODEV | MS_NOEXEC,
+                "mode=0700,size=1048576",
+            )
+        finally:
+            os.close(current_root_fd)
+        mounted_root = projection_root.stat()
+        require(stat.S_ISDIR(mounted_root.st_mode) and
+                stat.S_IMODE(mounted_root.st_mode) == 0o700 and
+                mounted_root.st_uid == 0 and mounted_root.st_gid == 0 and
+                not any(projection_root.iterdir()),
+                "checkpoint projection tmpfs root differs")
+        mounted_root_fd = os.open(
+            projection_root,
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        )
+        mounted_root_held = os.fstat(mounted_root_fd)
+        require(mounted_root_held.st_dev == mounted_root.st_dev and
+                mounted_root_held.st_ino == mounted_root.st_ino and
+                stat.S_IMODE(mounted_root_held.st_mode) == 0o700,
+                "checkpoint projection mounted-root fd differs")
+
+        source_directory = Path(publication.evidence["published_directory"])
+        expected_seals = staged_seal.evidence["images"]
+        projected: list[dict[str, Any]] = []
+        target_paths: list[str] = []
+        for item, expected, inherited_fd in zip(
+            publication.evidence["ordered_images"], expected_seals,
+            publication.image_fds, strict=True,
+        ):
+            source_path = source_directory / item["path"]
+            flags = os.O_RDONLY | os.O_CLOEXEC
+            if hasattr(os, "O_NOFOLLOW"):
+                flags |= os.O_NOFOLLOW
+            current_fd = os.open(source_path, flags)
+            try:
+                inherited = os.fstat(inherited_fd)
+                current = os.fstat(current_fd)
+                require(
+                    inherited.st_dev == current.st_dev == item["identity"]["device"] and
+                    inherited.st_ino == current.st_ino == item["identity"]["inode"] and
+                    inherited.st_nlink == current.st_nlink == 1 and
+                    stat.S_IMODE(inherited.st_mode) ==
+                    stat.S_IMODE(current.st_mode) == 0o444,
+                    "same-namespace checkpoint reopen differs from held inode",
+                )
+                inherited_measurement = measure_fsverity_fd(
+                    inherited_fd, ioctl_runner=ioctl_runner,
+                )
+                current_measurement = measure_fsverity_fd(
+                    current_fd, ioctl_runner=ioctl_runner,
+                )
+                stable_measurement_fields = (
+                    "schema", "kind", "policy", "ioctl_abi",
+                    "hash_algorithm", "digest", "bytes", "device", "inode",
+                    "mode", "link_count", "claim", "approval_included",
+                    "pft_used",
+                )
+                require(
+                    all(
+                        inherited_measurement.evidence[field] ==
+                        expected["measurement"][field] ==
+                        current_measurement.evidence[field]
+                        for field in stable_measurement_fields
+                    ) and
+                    expected["measurement"]["uid"] == outer_uid and
+                    expected["measurement"]["gid"] == outer_gid and
+                    inherited_measurement.evidence["uid"] ==
+                        current_measurement.evidence["uid"] == 0 and
+                    inherited_measurement.evidence["gid"] ==
+                        current_measurement.evidence["gid"] == 0,
+                    "same-namespace checkpoint measurement differs",
+                )
+                target = f"./{item['path']}"
+                target_fd = os.open(
+                    item["path"],
+                    os.O_RDONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC,
+                    0o400, dir_fd=mounted_root_fd,
+                )
+                os.close(target_fd)
+                # An fd inherited across CLONE_NEWNS names a mount in the old
+                # namespace and cannot be cloned on Linux 6.8.  Bind from the
+                # exact-identity fd reopened in this namespace instead.
+                _projection_mount(
+                    f"/proc/self/fd/{current_fd}",
+                    f"/proc/self/fd/{mounted_root_fd}/{item['path']}",
+                    None, MS_BIND,
+                )
+                _projection_mount(
+                    None, f"/proc/self/fd/{mounted_root_fd}/{item['path']}", None,
+                    MS_BIND | MS_REMOUNT | MS_RDONLY |
+                    MS_NOSUID | MS_NODEV | MS_NOEXEC,
+                )
+                projected_fd = os.open(
+                    item["path"], os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+                    dir_fd=mounted_root_fd,
+                )
+                try:
+                    mounted = os.fstat(projected_fd)
+                    readonly = bool(
+                        os.statvfs(projected_fd).f_flag & os.ST_RDONLY
+                    )
+                finally:
+                    os.close(projected_fd)
+                require(mounted.st_dev == inherited.st_dev and
+                        mounted.st_ino == inherited.st_ino and readonly,
+                        "checkpoint projection is not the held read-only inode")
+                target_paths.append(target)
+                projected.append({
+                    "path": item["path"],
+                    "source": str(source_path),
+                    "target": target,
+                    "device": mounted.st_dev,
+                    "inode": mounted.st_ino,
+                    "fsverity_digest":
+                        current_measurement.evidence["digest"],
+                    "read_only_mount": True,
+                })
+            finally:
+                os.close(current_fd)
+        require(sorted(os.listdir(mounted_root_fd)) ==
+                sorted(item["path"] for item in projected),
+                "checkpoint projection root has omitted or extra names")
+        os.fchdir(mounted_root_fd)
+
+        _install_projection_namespace_filter()
+        capability_status = _drop_projection_capabilities()
+        packet = {
+            "schema": 1,
+            "kind": CHECKPOINT_PROJECTION_PACKET_KIND,
+            "policy": CHECKPOINT_PROJECTION_POLICY,
+            "controller_pid": os.getpid(),
+            "outer_uid": outer_uid,
+            "outer_gid": outer_gid,
+            "namespace_uid": os.getuid(),
+            "namespace_gid": os.getgid(),
+            "supplementary_groups": os.getgroups(),
+            "mount_namespace": _projection_namespace_identity("mnt"),
+            "user_namespace": _projection_namespace_identity("user"),
+            "projection_root": str(projection_root),
+            "working_directory": {
+                "device": mounted_root_held.st_dev,
+                "inode": mounted_root_held.st_ino,
+                "mode": "0700",
+            },
+            "projected": projected,
+            "target_paths": target_paths,
+            "capabilities": capability_status,
+            "namespace_syscall_filter": (
+                "kill-mount-api-namespace-and-process-creation-syscalls-v1"
+            ),
+            "pft_exclusion_enforced": False,
+            "host_filesystem_hidden": False,
+            "host_pid_namespace_hidden": False,
+            "network_namespace_private": False,
+            "approval_included": False,
+            "pft_used": False,
+        }
+        raw = canonical_json_bytes(packet)
+        require(len(raw) <= CHECKPOINT_PROJECTION_MAX_PACKET_BYTES,
+                "checkpoint projection packet is too large")
+        require(channel.send(raw) == len(raw),
+                "short checkpoint projection packet send")
+        credentials_size = struct.calcsize("3i")
+        ack_raw, ancillary, flags, _ = channel.recvmsg(
+            CHECKPOINT_PROJECTION_MAX_PACKET_BYTES + 1,
+            socket.CMSG_SPACE(credentials_size),
+        )
+        credentials = [
+            struct.unpack("3i", item[:credentials_size])
+            for level, kind, item in ancillary
+            if level == socket.SOL_SOCKET and kind == socket.SCM_CREDENTIALS and
+            len(item) >= credentials_size
+        ]
+        require(ack_raw and
+                len(ack_raw) <= CHECKPOINT_PROJECTION_MAX_PACKET_BYTES and
+                flags == 0 and credentials == [(parent_pid, 0, 0)],
+                "checkpoint projection ACK lacks exact kernel credentials")
+        ack = _decode_exact_json(ack_raw, "checkpoint projection ACK")
+        require(set(ack) == {
+                    "schema", "kind", "policy", "controller_pid",
+                    "ready_sha256", "approval_included", "pft_used",
+                } and type(ack.get("schema")) is int and ack["schema"] == 1 and
+                ack.get("kind") == CHECKPOINT_PROJECTION_ACK_KIND and
+                ack.get("policy") == CHECKPOINT_PROJECTION_POLICY and
+                ack.get("controller_pid") == os.getpid() and
+                ack.get("ready_sha256") == hashlib.sha256(raw).hexdigest() and
+                ack.get("approval_included") is False and
+                ack.get("pft_used") is False,
+                "checkpoint projection ACK differs from ready packet")
+        channel.close()
+        os.close(mounted_root_fd)
+        devnull = os.open("/dev/null", os.O_RDWR | os.O_CLOEXEC)
+        try:
+            for descriptor in (0, 1, 2):
+                os.dup2(devnull, descriptor)
+        finally:
+            if devnull > 2:
+                os.close(devnull)
+        _close_projection_exec_descriptors()
+        os.execve(executable_fd, argv_prefix + target_paths, environment)
+    except BaseException as error:
+        try:
+            raw = canonical_json_bytes({
+                "schema": 1,
+                "kind": CHECKPOINT_PROJECTION_PACKET_KIND,
+                "policy": CHECKPOINT_PROJECTION_POLICY,
+                "controller_pid": os.getpid(),
+                "error_type": type(error).__name__,
+                "error": str(error),
+                "approval_included": False,
+                "pft_used": False,
+            })
+            channel.send(raw)
+        except BaseException:
+            pass
+        os._exit(125)
+
+
+def run_checkpoint_mount_projection_diagnostic(
+    publication: PublicationPin, staged_seal: _Observation, *,
+    projection_root: str | os.PathLike[str], argv_prefix: list[str],
+    executable_authority: dict[str, Any],
+    environment: dict[str, str], timeout_seconds: float = 30.0,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None = None,
+) -> _Observation:
+    """Run a command on exact held images projected into a private mount view."""
+    recheck = recheck_checkpoint_publication_fsverity(
+        publication, staged_seal, ioctl_runner=ioctl_runner,
+    )
+    root = Path(os.fspath(projection_root))
+    source = Path(publication.evidence["published_directory"])
+    require(root.is_absolute() and not root.is_symlink() and
+            root.resolve(strict=True) == root and root.is_dir() and
+            not any(root.iterdir()) and PFT_NAMESPACE.search(str(root)) is None and
+            not root.is_relative_to(source) and not source.is_relative_to(root),
+            "checkpoint projection root is not fresh, canonical, and disjoint")
+    root_stat = root.stat()
+    require(root_stat.st_uid == os.getuid() and root_stat.st_gid == os.getgid() and
+            stat.S_IMODE(root_stat.st_mode) == 0o700,
+            "checkpoint projection root is not privately owned mode 0700")
+    require(isinstance(argv_prefix, list) and argv_prefix and
+            all(isinstance(item, str) and item and "\0" not in item
+                for item in argv_prefix) and
+            argv_prefix[0].startswith("/") and
+            Path(argv_prefix[0]).resolve(strict=True) == Path(argv_prefix[0]) and
+            Path(argv_prefix[0]).is_file() and
+            PFT_NAMESPACE.search("\n".join(argv_prefix)) is None,
+            "checkpoint projection command is not exact and canonical")
+    require(environment == {"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+            "checkpoint projection environment is not exact and minimal")
+    require(isinstance(executable_authority, dict) and
+            set(executable_authority) == {
+                "bytes", "sha256", "md5", "mode", "uid", "gid",
+            } and type(executable_authority.get("bytes")) is int and
+            executable_authority["bytes"] > 0 and
+            isinstance(executable_authority.get("sha256"), str) and
+            HEX64.fullmatch(executable_authority["sha256"]) is not None and
+            isinstance(executable_authority.get("md5"), str) and
+            HEX32.fullmatch(executable_authority["md5"]) is not None and
+            isinstance(executable_authority.get("mode"), str) and
+            re.fullmatch(
+                r"0[0-7]{3}", executable_authority["mode"],
+            ) is not None and
+            type(executable_authority.get("uid")) is int and
+            executable_authority["uid"] >= 0 and
+            type(executable_authority.get("gid")) is int and
+            executable_authority["gid"] >= 0,
+            "checkpoint projection executable authority is malformed")
+    require(isinstance(timeout_seconds, (int, float)) and
+            not isinstance(timeout_seconds, bool) and
+            0 < timeout_seconds <= 300,
+            "checkpoint projection timeout is outside (0,300]")
+
+    parent_namespaces = {
+        name: _projection_namespace_identity(name) for name in ("mnt", "user")
+    }
+
+    open_nofollow = os.O_RDONLY | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        open_nofollow |= os.O_NOFOLLOW
+    root_fd = os.open(root, open_nofollow | os.O_DIRECTORY)
+    try:
+        executable_fd = os.open(argv_prefix[0], open_nofollow)
+        try:
+            root_held = os.fstat(root_fd)
+            executable = _hash_open_fd(executable_fd)
+            executable_mode = int(executable["mode"], 8)
+            executable_header = os.pread(executable_fd, 20, 0)
+            executable_class = (
+                executable_header[4] if len(executable_header) >= 5 else -1
+            )
+            executable_endian = (
+                executable_header[5] if len(executable_header) >= 6 else -1
+            )
+            executable_type = (
+                struct.unpack_from("<H", executable_header, 16)[0]
+                if len(executable_header) >= 20 else -1
+            )
+            executable_machine = (
+                struct.unpack_from("<H", executable_header, 18)[0]
+                if len(executable_header) >= 20 else -1
+            )
+            require(root_held.st_dev == root_stat.st_dev and
+                    root_held.st_ino == root_stat.st_ino and
+                    stat.S_IMODE(root_held.st_mode) == 0o700 and
+                    all(executable[field] == executable_authority[field]
+                        for field in executable_authority) and
+                    executable["uid"] != os.getuid() and
+                    executable["nlink"] == 1 and
+                    executable_mode & 0o111 != 0 and
+                    executable_mode & 0o022 == 0 and
+                    executable_header[:4] == b"\x7fELF" and
+                    executable_class == 2 and executable_endian == 1 and
+                    executable_type in {2, 3} and executable_machine == 62,
+                    "checkpoint projection root or executable identity differs")
+            executable["elf"] = {
+                "class": "ELF64",
+                "encoding": "little-endian",
+                "type": executable_type,
+                "machine": "x86-64",
+            }
+        except BaseException:
+            os.close(executable_fd)
+            raise
+    except BaseException:
+        os.close(root_fd)
+        raise
+
+    socket_type = socket.SOCK_SEQPACKET | getattr(socket, "SOCK_CLOEXEC", 0)
+    observer: socket.socket | None = None
+    child_channel: socket.socket | None = None
+    try:
+        observer, child_channel = socket.socketpair(socket.AF_UNIX, socket_type)
+        observer.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        pid = os.fork()
+    except BaseException:
+        if observer is not None:
+            observer.close()
+        if child_channel is not None:
+            child_channel.close()
+        os.close(root_fd)
+        os.close(executable_fd)
+        raise
+    if pid == 0:
+        observer.close()
+        _checkpoint_projection_child(
+            child_channel, publication, staged_seal, root,
+            list(argv_prefix), dict(environment), os.getppid(),
+            float(timeout_seconds), root_fd, executable_fd, ioctl_runner,
+        )
+        os._exit(126)
+    child_channel.close()
+    os.close(root_fd)
+    os.close(executable_fd)
+    pidfd = -1
+    status: int | None = None
+    started = time.monotonic()
+    try:
+        pidfd = os.pidfd_open(pid, 0)
+        observer.settimeout(float(timeout_seconds))
+        credentials_size = struct.calcsize("3i")
+        try:
+            raw, ancillary, flags, _ = observer.recvmsg(
+                CHECKPOINT_PROJECTION_MAX_PACKET_BYTES + 1,
+                socket.CMSG_SPACE(credentials_size),
+            )
+        except TimeoutError as error:
+            raise AuthenticationError(
+                "checkpoint projection setup timed out"
+            ) from error
+        credentials = [
+            struct.unpack("3i", item[:credentials_size])
+            for level, kind, item in ancillary
+            if level == socket.SOL_SOCKET and kind == socket.SCM_CREDENTIALS and
+            len(item) >= credentials_size
+        ]
+        require(raw and len(raw) <= CHECKPOINT_PROJECTION_MAX_PACKET_BYTES and
+                flags == 0 and credentials == [(pid, os.getuid(), os.getgid())],
+                "checkpoint projection packet lacks exact kernel credentials")
+        packet = _decode_exact_json(raw, "checkpoint projection packet")
+        require(packet.get("kind") == CHECKPOINT_PROJECTION_PACKET_KIND and
+                packet.get("policy") == CHECKPOINT_PROJECTION_POLICY and
+                packet.get("controller_pid") == pid and
+                packet.get("approval_included") is False and
+                packet.get("pft_used") is False,
+                "checkpoint projection packet identity differs")
+        require("error" not in packet,
+                f"checkpoint projection setup rejected: {packet.get('error')}")
+        require(set(packet) == {
+                    "schema", "kind", "policy", "controller_pid",
+                    "outer_uid", "outer_gid", "namespace_uid",
+                    "namespace_gid", "supplementary_groups",
+                    "mount_namespace", "user_namespace", "projection_root",
+                    "working_directory", "projected", "target_paths",
+                    "capabilities",
+                    "namespace_syscall_filter", "pft_exclusion_enforced",
+                    "host_filesystem_hidden", "host_pid_namespace_hidden",
+                    "network_namespace_private", "approval_included", "pft_used",
+                } and type(packet.get("schema")) is int and
+                packet["schema"] == 1 and
+                isinstance(packet.get("supplementary_groups"), list) and
+                all(type(item) is int and item >= 0
+                    for item in packet["supplementary_groups"]) and
+                packet.get("namespace_syscall_filter") ==
+                    "kill-mount-api-namespace-and-process-creation-syscalls-v1" and
+                packet.get("pft_exclusion_enforced") is False and
+                packet.get("host_filesystem_hidden") is False and
+                packet.get("host_pid_namespace_hidden") is False and
+                packet.get("network_namespace_private") is False,
+                "checkpoint projection ready packet schema differs")
+        child_namespaces = {
+            name: _projection_namespace_identity(name, pid)
+            for name in ("mnt", "user")
+        }
+        expected_targets = [
+            f"./{item['path']}"
+            for item in publication.evidence["ordered_images"]
+        ]
+        expected_projected = [{
+            "path": item["path"],
+            "source": str(source / item["path"]),
+            "target": f"./{item['path']}",
+            "device": item["identity"]["device"],
+            "inode": item["identity"]["inode"],
+            "fsverity_digest": expected["measurement"]["digest"],
+            "read_only_mount": True,
+        } for item, expected in zip(
+            publication.evidence["ordered_images"],
+            staged_seal.evidence["images"], strict=True,
+        )]
+        capabilities = packet.get("capabilities")
+        try:
+            child_cwd_fd = os.open(
+                f"/proc/{pid}/cwd",
+                os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC,
+            )
+            try:
+                child_cwd = os.fstat(child_cwd_fd)
+            finally:
+                os.close(child_cwd_fd)
+            child_status: dict[str, str] = {}
+            for line in Path(f"/proc/{pid}/status").read_text(
+                encoding="ascii",
+            ).splitlines():
+                if line.startswith((
+                    "CapInh:", "CapPrm:", "CapEff:", "CapBnd:", "CapAmb:",
+                    "NoNewPrivs:", "Seccomp:", "Seccomp_filters:",
+                )):
+                    name, value = line.split(":", 1)
+                    child_status[name] = value.strip()
+        except OSError as error:
+            raise AuthenticationError(
+                "cannot independently inspect checkpoint projection child"
+            ) from error
+        require(packet.get("target_paths") == expected_targets and
+                packet.get("projected") == expected_projected and
+                packet.get("projection_root") == str(root) and
+                isinstance(packet.get("working_directory"), dict) and
+                set(packet["working_directory"]) == {
+                    "device", "inode", "mode",
+                } and packet["working_directory"]["mode"] == "0700" and
+                type(packet["working_directory"]["device"]) is int and
+                type(packet["working_directory"]["inode"]) is int and
+                packet["working_directory"]["device"] == child_cwd.st_dev and
+                packet["working_directory"]["inode"] == child_cwd.st_ino and
+                stat.S_IMODE(child_cwd.st_mode) == 0o700 and
+                packet.get("namespace_uid") == 0 and
+                packet.get("namespace_gid") == 0 and
+                packet.get("outer_uid") == os.getuid() and
+                packet.get("outer_gid") == os.getgid() and
+                packet.get("mount_namespace") == child_namespaces["mnt"] and
+                packet.get("user_namespace") == child_namespaces["user"] and
+                child_namespaces["mnt"]["inode"] !=
+                    parent_namespaces["mnt"]["inode"] and
+                child_namespaces["user"]["inode"] !=
+                    parent_namespaces["user"]["inode"] and
+                isinstance(capabilities, dict) and set(capabilities) == {
+                    "CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb",
+                    "NoNewPrivs", "Seccomp", "Seccomp_filters",
+                    "securebits", "cap_last_cap",
+                } and all(capabilities[name] == "0000000000000000"
+                          for name in (
+                              "CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb",
+                          )) and capabilities["NoNewPrivs"] == "1" and
+                capabilities["Seccomp"] == "2" and
+                int(capabilities["Seccomp_filters"]) >= 1 and
+                all(child_status.get(name) == capabilities[name]
+                    for name in (
+                        "CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb",
+                        "NoNewPrivs", "Seccomp", "Seccomp_filters",
+                    )) and
+                capabilities["securebits"] == 15 and
+                type(capabilities["cap_last_cap"]) is int and
+                0 <= capabilities["cap_last_cap"] <= 63,
+                "checkpoint projection ready packet differs from request")
+        ack = {
+            "schema": 1,
+            "kind": CHECKPOINT_PROJECTION_ACK_KIND,
+            "policy": CHECKPOINT_PROJECTION_POLICY,
+            "controller_pid": pid,
+            "ready_sha256": hashlib.sha256(raw).hexdigest(),
+            "approval_included": False,
+            "pft_used": False,
+        }
+        ack_raw = canonical_json_bytes(ack)
+        require(observer.send(ack_raw) == len(ack_raw),
+                "short checkpoint projection ACK send")
+        deadline = started + float(timeout_seconds)
+        while time.monotonic() < deadline:
+            waited, wait_status = os.waitpid(pid, os.WNOHANG)
+            if waited == pid:
+                status = wait_status
+                break
+            time.sleep(0.005)
+        require(status is not None, "checkpoint projection command timed out")
+        exit_description = (
+            f"exit={os.WEXITSTATUS(status)}" if os.WIFEXITED(status) else
+            f"signal={os.WTERMSIG(status)}" if os.WIFSIGNALED(status) else
+            f"wait-status={status}"
+        )
+        require(os.WIFEXITED(status) and os.WEXITSTATUS(status) == 0,
+                "checkpoint projection command did not exit zero "
+                f"({exit_description})")
+    except BaseException:
+        if pidfd >= 0:
+            _kill_projection_child(pidfd, pid)
+        elif status is None:
+            _kill_projection_child(-1, pid)
+        if status is None:
+            try:
+                os.waitpid(pid, 0)
+            except ChildProcessError:
+                pass
+        raise
+    finally:
+        observer.close()
+        if pidfd >= 0:
+            os.close(pidfd)
+    return _make_observation("checkpoint-mount-projection", {
+        "schema": 1,
+        "kind": CHECKPOINT_PROJECTION_KIND,
+        "policy": CHECKPOINT_PROJECTION_POLICY,
+        "publication_manifest_sha256":
+            publication.evidence["ordered_manifest_sha256"],
+        "staged_seal_sha256":
+            staged_seal.evidence["ordered_image_seal_sha256"],
+        "prelaunch_recheck": copy.deepcopy(recheck.evidence),
+        "parent_namespaces": parent_namespaces,
+        "action_gate_ack": ack,
+        "setup_packet": packet,
+        "argv": argv_prefix + packet["target_paths"],
+        "environment": copy.deepcopy(environment),
+        "executable": executable,
+        "elapsed_seconds": time.monotonic() - started,
+        "exit_code": 0,
+        "claim": (
+            "same-uid local mount projection diagnostic with controller-asserted "
+            "no-PFT input only; PFT exclusion, protected process-history, "
+            "restart, and release approval are not established"
+        ),
+        "os_evidence_authenticated": False,
+        "runtime_qualified": False,
+        "promotion_allowed": False,
+        "s2_evidence": False,
+        "s3_evidence": False,
+        "pft_exclusion_enforced": False,
+        "host_filesystem_hidden": False,
+        "host_pid_namespace_hidden": False,
+        "network_namespace_private": False,
+        "approval_included": False,
+        "pft_used": False,
+    }, False)
 
 
 def authenticate_killed_process_tree(

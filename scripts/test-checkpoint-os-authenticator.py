@@ -948,6 +948,229 @@ class PublicationTests(unittest.TestCase):
         stage.chmod(0o700)
         return images
 
+    def make_sealed_publication(
+        self, root: Path, names: list[str],
+    ) -> tuple[object, AUTH.PublicationPin, object, object]:
+        (root / "checkpoints").mkdir()
+        images = self.make_staging(root, names, 0o600)
+
+        def ioctl_runner(fd, request, argument, _mutate):
+            if request == AUTH.FS_IOC_MEASURE_VERITY:
+                size = os.fstat(fd).st_size
+                digest = hashlib.sha256(os.pread(fd, size, 0)).digest()
+                struct.pack_into(
+                    "=HH", argument, 0,
+                    AUTH.FS_VERITY_HASH_ALGORITHM_SHA256,
+                    AUTH.FS_VERITY_SHA256_DIGEST_BYTES,
+                )
+                argument[4:36] = digest
+            elif request != AUTH.FS_IOC_ENABLE_VERITY:
+                self.fail(f"unexpected ioctl request {request}")
+            return 0
+
+        filesystem = AUTH.AnchoredFilesystem(root)
+        seal = AUTH.seal_staged_checkpoint_images_fsverity(
+            filesystem=filesystem,
+            staging_directory="staging/checkpoint-e",
+            images=images, block_size=4096,
+            confirm_irreversible=True, ioctl_runner=ioctl_runner,
+        )
+        publication = AUTH.publish_checkpoint_no_replace(
+            filesystem=filesystem,
+            staging_directory="staging/checkpoint-e",
+            publication_parent="checkpoints", images=images,
+            challenges=challenges(), resource_limits=fixture_limits(),
+        )
+        return filesystem, publication, seal, ioctl_runner
+
+    def test_private_checkpoint_mount_projection_is_exact_and_read_only(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            filesystem, publication, seal, ioctl_runner = (
+                self.make_sealed_publication(
+                    root, ["first-image.dmtcp", "second-image.dmtcp"],
+                )
+            )
+            projection = root / "projection"
+            projection.mkdir(mode=0o700)
+            marker = root / "projection-result.json"
+            sentinel = os.open("/dev/null", os.O_RDONLY)
+            os.set_inheritable(sentinel, True)
+            expected = [
+                f"image-{index}-{name}\n"
+                for index, name in enumerate((
+                    "first-image.dmtcp", "second-image.dmtcp",
+                ))
+            ]
+            code_body = f"""
+import errno, json, os, pathlib, sys
+paths = sys.argv[1:]
+if [pathlib.Path(path).read_text() for path in paths] != {expected!r}:
+    raise SystemExit(10)
+for path in paths:
+    try:
+        os.open(path, os.O_WRONLY)
+    except OSError as error:
+        if error.errno not in (errno.EACCES, errno.EROFS):
+            raise
+    else:
+        raise SystemExit(11)
+try:
+    os.fstat({sentinel})
+except OSError as error:
+    if error.errno != errno.EBADF:
+        raise
+else:
+    raise SystemExit(12)
+status = {{}}
+for line in pathlib.Path('/proc/self/status').read_text().splitlines():
+    if ':' in line:
+        name, value = line.split(':', 1)
+        status[name] = value.strip()
+if any(status.get(name) != '0000000000000000'
+       for name in ('CapInh', 'CapPrm', 'CapEff', 'CapBnd', 'CapAmb')):
+    raise SystemExit(13)
+if status.get('NoNewPrivs') != '1' or status.get('Seccomp') != '2':
+    raise SystemExit(14)
+pathlib.Path({str(marker)!r}).write_text(json.dumps(paths), encoding='ascii')
+"""
+            code = (
+                "import pathlib,traceback\n"
+                "try:\n"
+                f"    exec({code_body!r})\n"
+                "except BaseException:\n"
+                f"    pathlib.Path({str(marker)!r}).write_text("
+                "traceback.format_exc(), encoding='ascii')\n"
+                "    raise\n"
+            )
+            python = str(Path(sys.executable).resolve(strict=True))
+            try:
+                try:
+                    observed = AUTH.run_checkpoint_mount_projection_diagnostic(
+                        publication, seal, projection_root=projection,
+                        argv_prefix=[python, "-I", "-S", "-c", code],
+                        executable_authority=AUTH.file_expectation(python),
+                        environment={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+                        timeout_seconds=10, ioctl_runner=ioctl_runner,
+                    )
+                except AUTH.AuthenticationError as error:
+                    detail = (
+                        marker.read_text(encoding="ascii")
+                        if marker.exists() else "no workload diagnostic"
+                    )
+                    self.fail(f"{error}: {detail}")
+            finally:
+                os.close(sentinel)
+                publication.close()
+                filesystem.close()
+            self.assertFalse(observed.nonfixture)
+            self.assertEqual(observed.evidence["exit_code"], 0)
+            self.assertFalse(observed.evidence["runtime_qualified"])
+            self.assertFalse(observed.evidence["promotion_allowed"])
+            self.assertFalse(observed.evidence["s2_evidence"])
+            self.assertFalse(observed.evidence["s3_evidence"])
+            self.assertFalse(observed.evidence["approval_included"])
+            self.assertFalse(observed.evidence["pft_used"])
+            self.assertFalse(observed.evidence["pft_exclusion_enforced"])
+            self.assertEqual(
+                json.loads(marker.read_text(encoding="ascii")),
+                observed.evidence["setup_packet"]["target_paths"],
+            )
+            self.assertEqual(list(projection.iterdir()), [])
+            self.assertNotEqual(
+                observed.evidence["parent_namespaces"]["mnt"]["inode"],
+                observed.evidence["setup_packet"]["mount_namespace"]["inode"],
+            )
+
+    def test_checkpoint_projection_kills_fork_and_times_out_without_success(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            filesystem, publication, seal, ioctl_runner = (
+                self.make_sealed_publication(root, ["only-image.dmtcp"])
+            )
+            projection = root / "projection"
+            projection.mkdir(mode=0o700)
+            python = str(Path(sys.executable).resolve(strict=True))
+            exact_environment = {"PATH": "/usr/bin:/bin", "LC_ALL": "C"}
+            try:
+                forbidden = (
+                    "import os; os.fork()",
+                    f"import os; os.unshare({AUTH.CLONE_NEWNS})",
+                    "import ctypes; ctypes.CDLL(None).syscall(0x40000027)",
+                )
+                for code in forbidden:
+                    with self.subTest(code=code), self.assertRaisesRegex(
+                        AUTH.AuthenticationError, "did not exit zero",
+                    ):
+                        AUTH.run_checkpoint_mount_projection_diagnostic(
+                            publication, seal, projection_root=projection,
+                            argv_prefix=[python, "-I", "-S", "-c", code],
+                            executable_authority=AUTH.file_expectation(python),
+                            environment=exact_environment, timeout_seconds=10,
+                            ioctl_runner=ioctl_runner,
+                        )
+                    self.assertEqual(list(projection.iterdir()), [])
+
+                rejected_marker = root / "rejected-ready-ran"
+                rejected_code = (
+                    "import pathlib; "
+                    f"pathlib.Path({str(rejected_marker)!r}).write_text('ran')"
+                )
+                exact_decoder = AUTH._decode_exact_json
+
+                def reject_ready(data, label):
+                    if label == "checkpoint projection packet":
+                        raise AUTH.AuthenticationError("fixture READY rejection")
+                    return exact_decoder(data, label)
+
+                AUTH._decode_exact_json = reject_ready
+                try:
+                    with self.assertRaisesRegex(
+                        AUTH.AuthenticationError, "fixture READY rejection",
+                    ):
+                        AUTH.run_checkpoint_mount_projection_diagnostic(
+                            publication, seal, projection_root=projection,
+                            argv_prefix=[
+                                python, "-I", "-S", "-c", rejected_code,
+                            ],
+                            executable_authority=AUTH.file_expectation(python),
+                            environment=exact_environment, timeout_seconds=10,
+                            ioctl_runner=ioctl_runner,
+                        )
+                finally:
+                    AUTH._decode_exact_json = exact_decoder
+                self.assertFalse(rejected_marker.exists())
+                self.assertEqual(list(projection.iterdir()), [])
+
+                marker = root / "timeout-pid"
+                timeout_code = (
+                    "import os,pathlib,time; "
+                    f"pathlib.Path({str(marker)!r}).write_text(str(os.getpid())); "
+                    "time.sleep(60)"
+                )
+                started = time.monotonic()
+                with self.assertRaisesRegex(
+                    AUTH.AuthenticationError, "command timed out",
+                ):
+                    AUTH.run_checkpoint_mount_projection_diagnostic(
+                        publication, seal, projection_root=projection,
+                        argv_prefix=[python, "-I", "-S", "-c", timeout_code],
+                        executable_authority=AUTH.file_expectation(python),
+                        environment=exact_environment, timeout_seconds=1.5,
+                        ioctl_runner=ioctl_runner,
+                    )
+                self.assertLess(time.monotonic() - started, 5)
+                timed_out_pid = int(marker.read_text(encoding="ascii"))
+                self.assertFalse(Path(f"/proc/{timed_out_pid}").exists())
+                self.assertEqual(list(projection.iterdir()), [])
+            finally:
+                publication.close()
+                filesystem.close()
+
     def test_no_replace_publish_ordered_restart_rehash(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
