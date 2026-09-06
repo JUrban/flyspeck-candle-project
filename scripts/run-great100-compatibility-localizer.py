@@ -81,7 +81,7 @@ TOP100_NORMALIZATIONS = (
         targets=("100/ceva", "100/thales"),
         source="Examples/sos.ml",
         expected_sha256=(
-            "fd419e934ca92af9f9ec9dafd890aba68098520e73c070f03a0e07af8bcd0530"
+            "137f9c7f8a4d9cfb7ed840bc8257345137b4ce447db582675b825bafc3590d83"
         ),
         replacements=(
             (
