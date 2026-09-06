@@ -2897,55 +2897,66 @@ def _write_projection_user_map(outer_uid: int, outer_gid: int) -> None:
             "checkpoint projection user mapping did not select namespace root")
 
 
-def _checkpoint_projection_child(
-    channel: socket.socket, publication: PublicationPin,
-    staged_seal: _Observation, projection_root: Path,
-    argv_prefix: list[str], environment: dict[str, str],
-    parent_pid: int, timeout_seconds: float, root_fd: int, executable_fd: int,
+@dataclass
+class _ProjectionMountState:
+    """Live mount-namespace state retained through the projected exec gate."""
+
+    mounted_root_fd: int
+    working_directory: dict[str, Any]
+    projected: list[dict[str, Any]]
+    target_paths: list[str]
+
+    def close(self) -> None:
+        if self.mounted_root_fd >= 0:
+            os.close(self.mounted_root_fd)
+            self.mounted_root_fd = -1
+
+
+def _prepare_checkpoint_projection_mounts(
+    publication: PublicationPin, staged_seal: _Observation,
+    projection_root: Path, *, root_fd: int, outer_uid: int, outer_gid: int,
     ioctl_runner: Callable[[int, int, bytearray, bool], object] | None,
-) -> None:
+) -> _ProjectionMountState:
+    """Create the exact read-only image view in the caller's mount namespace.
+
+    The caller must already be namespace root in a private mount namespace.
+    This no-fork primitive deliberately installs neither seccomp nor a command;
+    its returned directory fd keeps the mounted cwd pinned until ``close``.
+    """
+    held_root = os.fstat(root_fd)
+    current_root_fd = os.open(
+        projection_root,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+    )
     try:
-        channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
-        channel.settimeout(timeout_seconds)
-        outer_uid = os.getuid()
-        outer_gid = os.getgid()
-        os.unshare(CLONE_NEWUSER)
-        _write_projection_user_map(outer_uid, outer_gid)
-        os.unshare(CLONE_NEWNS)
-        _projection_mount(None, "/", None, MS_REC | MS_PRIVATE)
-        held_root = os.fstat(root_fd)
-        current_root_fd = os.open(
-            projection_root,
-            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        current_root = os.fstat(current_root_fd)
+        require(
+            current_root.st_dev == held_root.st_dev and
+            current_root.st_ino == held_root.st_ino and
+            current_root.st_uid == held_root.st_uid and
+            current_root.st_gid == held_root.st_gid and
+            stat.S_IMODE(current_root.st_mode) ==
+            stat.S_IMODE(held_root.st_mode) == 0o700,
+            "checkpoint projection root changed before private mount",
         )
-        try:
-            current_root = os.fstat(current_root_fd)
-            require(
-                current_root.st_dev == held_root.st_dev and
-                current_root.st_ino == held_root.st_ino and
-                current_root.st_uid == held_root.st_uid and
-                current_root.st_gid == held_root.st_gid and
-                stat.S_IMODE(current_root.st_mode) ==
-                stat.S_IMODE(held_root.st_mode) == 0o700,
-                "checkpoint projection root changed before private mount",
-            )
-            _projection_mount(
-                "tmpfs", f"/proc/self/fd/{current_root_fd}", "tmpfs",
-                MS_NOSUID | MS_NODEV | MS_NOEXEC,
-                "mode=0700,size=1048576",
-            )
-        finally:
-            os.close(current_root_fd)
-        mounted_root = projection_root.stat()
-        require(stat.S_ISDIR(mounted_root.st_mode) and
-                stat.S_IMODE(mounted_root.st_mode) == 0o700 and
-                mounted_root.st_uid == 0 and mounted_root.st_gid == 0 and
-                not any(projection_root.iterdir()),
-                "checkpoint projection tmpfs root differs")
-        mounted_root_fd = os.open(
-            projection_root,
-            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        _projection_mount(
+            "tmpfs", f"/proc/self/fd/{current_root_fd}", "tmpfs",
+            MS_NOSUID | MS_NODEV | MS_NOEXEC,
+            "mode=0700,size=1048576",
         )
+    finally:
+        os.close(current_root_fd)
+    mounted_root = projection_root.stat()
+    require(stat.S_ISDIR(mounted_root.st_mode) and
+            stat.S_IMODE(mounted_root.st_mode) == 0o700 and
+            mounted_root.st_uid == 0 and mounted_root.st_gid == 0 and
+            not any(projection_root.iterdir()),
+            "checkpoint projection tmpfs root differs")
+    mounted_root_fd = os.open(
+        projection_root,
+        os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+    )
+    try:
         mounted_root_held = os.fstat(mounted_root_fd)
         require(mounted_root_held.st_dev == mounted_root.st_dev and
                 mounted_root_held.st_ino == mounted_root.st_ino and
@@ -2969,8 +2980,10 @@ def _checkpoint_projection_child(
                 inherited = os.fstat(inherited_fd)
                 current = os.fstat(current_fd)
                 require(
-                    inherited.st_dev == current.st_dev == item["identity"]["device"] and
-                    inherited.st_ino == current.st_ino == item["identity"]["inode"] and
+                    inherited.st_dev == current.st_dev ==
+                        item["identity"]["device"] and
+                    inherited.st_ino == current.st_ino ==
+                        item["identity"]["inode"] and
                     inherited.st_nlink == current.st_nlink == 1 and
                     stat.S_IMODE(inherited.st_mode) ==
                     stat.S_IMODE(current.st_mode) == 0o444,
@@ -3019,8 +3032,8 @@ def _checkpoint_projection_child(
                     None, MS_BIND,
                 )
                 _projection_mount(
-                    None, f"/proc/self/fd/{mounted_root_fd}/{item['path']}", None,
-                    MS_BIND | MS_REMOUNT | MS_RDONLY |
+                    None, f"/proc/self/fd/{mounted_root_fd}/{item['path']}",
+                    None, MS_BIND | MS_REMOUNT | MS_RDONLY |
                     MS_NOSUID | MS_NODEV | MS_NOEXEC,
                 )
                 projected_fd = os.open(
@@ -3054,6 +3067,42 @@ def _checkpoint_projection_child(
                 sorted(item["path"] for item in projected),
                 "checkpoint projection root has omitted or extra names")
         os.fchdir(mounted_root_fd)
+        return _ProjectionMountState(
+            mounted_root_fd=mounted_root_fd,
+            working_directory={
+                "device": mounted_root_held.st_dev,
+                "inode": mounted_root_held.st_ino,
+                "mode": "0700",
+            },
+            projected=projected,
+            target_paths=target_paths,
+        )
+    except BaseException:
+        os.close(mounted_root_fd)
+        raise
+
+
+def _checkpoint_projection_child(
+    channel: socket.socket, publication: PublicationPin,
+    staged_seal: _Observation, projection_root: Path,
+    argv_prefix: list[str], environment: dict[str, str],
+    parent_pid: int, timeout_seconds: float, root_fd: int, executable_fd: int,
+    ioctl_runner: Callable[[int, int, bytearray, bool], object] | None,
+) -> None:
+    try:
+        channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        channel.settimeout(timeout_seconds)
+        outer_uid = os.getuid()
+        outer_gid = os.getgid()
+        os.unshare(CLONE_NEWUSER)
+        _write_projection_user_map(outer_uid, outer_gid)
+        os.unshare(CLONE_NEWNS)
+        _projection_mount(None, "/", None, MS_REC | MS_PRIVATE)
+        mount_state = _prepare_checkpoint_projection_mounts(
+            publication, staged_seal, projection_root, root_fd=root_fd,
+            outer_uid=outer_uid, outer_gid=outer_gid,
+            ioctl_runner=ioctl_runner,
+        )
 
         _install_projection_namespace_filter()
         capability_status = _drop_projection_capabilities()
@@ -3070,13 +3119,9 @@ def _checkpoint_projection_child(
             "mount_namespace": _projection_namespace_identity("mnt"),
             "user_namespace": _projection_namespace_identity("user"),
             "projection_root": str(projection_root),
-            "working_directory": {
-                "device": mounted_root_held.st_dev,
-                "inode": mounted_root_held.st_ino,
-                "mode": "0700",
-            },
-            "projected": projected,
-            "target_paths": target_paths,
+            "working_directory": mount_state.working_directory,
+            "projected": mount_state.projected,
+            "target_paths": mount_state.target_paths,
             "capabilities": capability_status,
             "namespace_syscall_filter": (
                 "kill-mount-api-namespace-and-process-creation-syscalls-v1"
@@ -3121,7 +3166,7 @@ def _checkpoint_projection_child(
                 ack.get("pft_used") is False,
                 "checkpoint projection ACK differs from ready packet")
         channel.close()
-        os.close(mounted_root_fd)
+        mount_state.close()
         devnull = os.open("/dev/null", os.O_RDWR | os.O_CLOEXEC)
         try:
             for descriptor in (0, 1, 2):
@@ -3130,7 +3175,9 @@ def _checkpoint_projection_child(
             if devnull > 2:
                 os.close(devnull)
         _close_projection_exec_descriptors()
-        os.execve(executable_fd, argv_prefix + target_paths, environment)
+        os.execve(
+            executable_fd, argv_prefix + mount_state.target_paths, environment,
+        )
     except BaseException as error:
         try:
             raw = canonical_json_bytes({
