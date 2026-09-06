@@ -40,6 +40,11 @@ frozen branch rather than repaired on the current critical path.
 
 The supplied audit and the response are committed together in the main
 project checkout at `7df06fa` (`Record audit2 redirect discussion`).
+A repeat review approved that direction and requested a concrete cheap-probe
+limit plus a stricter waiting-time side-work rule.  Both are adopted here:
+d0/d1 are bounded to one hour each and cannot start a pre-Great-100 repair
+loop; side work must directly reduce the next parser/direct/Great-100 failure
+set.
 
 ## Canonical and parser handoff
 
@@ -101,21 +106,26 @@ Both use plan
 `v13-stratum-plan-419a96e-attempt-002`, whose exact `plan.json` SHA-256 is
 `310cb1961a4dd2a5e902f1c87baa7f54f51093fa5624139cd62221cbcf573c98`.
 The producer uses direct evidence schema 5, a 4,096-MiB CakeML heap, a 48-GiB
-address-space limit, an 86,400-second CPU/wall limit, and an 8-GiB output-file
+address-space limit, a 3,600-second CPU/wall limit, and an 8-GiB output-file
 limit.  The clean independent consumer remains pinned at
 `9a7922443a8bcfd01d1df657884ad2227cf422fd` and must return
 `published-direct-result-pass` with `scheduling_authority=false`.  These two
 cutpoints are reconnaissance only; neither authorizes an ordinary stratum.
 
 Every result, producer stream, and consumer stream destination was absent
-before the waiter was launched.  A parser failure, producer failure, consumer
-rejection, dirty authority, stale link, or existing destination stops the
-chain closed.
+before the waiter was launched.  A parser failure, dirty authority, stale link,
+or existing destination stops the chain closed.  A d0 producer/consumer
+failure is preserved and skips d1; a d1 failure is likewise preserved.  Either
+direct diagnostic outcome ends this bounded handoff without starting a repair
+loop, but does not prevent the separately gated Great-100 diagnostic.
 
 ## Queued Great-100 transition diagnostic
 
-A second zero-load waiter is queued behind an exact d1 consumer result.  The
-read-only launch audit found no implementation P0 or P1.  It confirmed:
+A second zero-load waiter is queued behind completion of the bounded direct
+handoff.  It independently rechecks parser 400/400 and the source schema-6
+link, so it may proceed after a preserved d0/d1 nonpass but cannot proceed
+after a parser or authority failure.  The read-only launch audit found no
+implementation P0 or P1.  It confirmed:
 
 - clean diagnostic Candle head
   `32fcb81e0735896f290de88f394ef8f9a3356bcd`;
@@ -126,9 +136,9 @@ read-only launch audit found no implementation P0 or P1.  It confirmed:
 - exact closure of 65 targets, 66 distinct load files, and 97 requests; and
 - fresh transition-record, build, report, and log destinations.
 
-After the d1 gate, the waiter records and checks the authenticated transition,
-uses the five-argument transition build to install a schema-7 diagnostic link,
-checks that link, and runs:
+After those independent prerequisite checks, the waiter records and checks the
+authenticated transition, uses the five-argument transition build to install
+a schema-7 diagnostic link, checks that link, and runs:
 
 ```text
 regression.py --top100-transition-diagnostic -j 1
