@@ -102,9 +102,11 @@ mode 0444: FS_IOC_ENABLE_VERITY EACCES
 ```
 
 The corrected path seals while the owner-write bit is still present but all
-producer writers are closed; the kernel rejects a remaining writable open.
-Only after successful enablement does it transition to the manifest's mode
-0444 and call the existing atomic publisher.
+producer writers are closed.  A separate disposable writer-closure pilot
+returned `ETXTBSY` while an `O_WRONLY` descriptor remained open and passed on
+the same inode immediately after that descriptor was closed.  Only after
+successful enablement does the implementation transition to the manifest's
+mode 0444 and call the existing atomic publisher.
 
 A fresh real-kernel two-image pilot passed this complete sequence.  The exact
 published manifest SHA-256 was
