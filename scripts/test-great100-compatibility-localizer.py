@@ -109,6 +109,25 @@ class CompatibilityLocalizerTest(unittest.TestCase):
             "candle/fingerprint.ml",
         ])
 
+    def test_normalization_accepts_selected_load_and_canonical_finish(self):
+        repl = SimpleNamespace()
+
+        def selected_then_canonical(_repl):
+            raise AssertionError(
+                "Expected to finish loading /derived/sample.ml. "
+                "Actual: 100/sample.ml")
+
+        wrapped = SUBJECT._check_output_with_normalizations(
+            selected_then_canonical,
+            {"/derived/sample.ml": "100/sample.ml"})
+        self.assertIsNone(wrapped(repl))
+
+        unexpected = SUBJECT._check_output_with_normalizations(
+            selected_then_canonical,
+            {"/derived/other.ml": "100/other.ml"})
+        with self.assertRaisesRegex(AssertionError, "sample.ml"):
+            unexpected(repl)
+
     def test_completed_session_uses_clean_eof_not_missing_exit_binding(self):
         class Process:
             exitstatus = 0

@@ -814,6 +814,24 @@ def _load_after_normalization_setup(original_load, setup_path):
     return load
 
 
+def _check_output_with_normalizations(original_check_output, mappings):
+    """Accept the loader's selected-load/canonical-finish path pairing."""
+    expected_messages = {
+        f"Expected to finish loading {normalized}. Actual: {original}"
+        for normalized, original in mappings.items()
+    }
+
+    def check_output(repl):
+        try:
+            return original_check_output(repl)
+        except AssertionError as error:
+            if str(error) in expected_messages:
+                return None
+            raise
+
+    return check_output
+
+
 def _result_record(regression, result, test):
     fingerprints = result.fingerprints
     return {
@@ -906,6 +924,7 @@ def main(argv=None):
     original_reader = regression._read_fingerprint_records
     original_finish = regression.CandleREPL.finish
     original_load = regression.CandleREPL.load
+    original_check_output = regression.CandleREPL._check_output
     regression._fingerprint_request_source = (
         lambda names, suite_nonce=None, process_nonce=None:
         _compact_request_source(
@@ -917,6 +936,13 @@ def main(argv=None):
     if normalization_setup is not None:
         regression.CandleREPL.load = _load_after_normalization_setup(
             original_load, normalization_setup)
+        normalization_mappings = {
+            source["normalized"]["path"]: source["runtime_original"]
+            for source in normalization_contract["sources"]
+        }
+        regression.CandleREPL._check_output = (
+            _check_output_with_normalizations(
+                original_check_output, normalization_mappings))
 
     requested_jobs = args.jobs
     jobs = regression.cap_jobs_for_heap(requested_jobs, args.heap_mb)
@@ -931,6 +957,7 @@ def main(argv=None):
         regression._read_fingerprint_records = original_reader
         regression.CandleREPL.finish = original_finish
         regression.CandleREPL.load = original_load
+        regression.CandleREPL._check_output = original_check_output
 
     end_head, end_status = regression._git_state()
     if (end_head, end_status) != (head, status):
