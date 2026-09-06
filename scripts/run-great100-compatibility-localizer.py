@@ -741,10 +741,10 @@ def _materialize_normalizations(candle_root, log_dir, tests,
         normalized_md5 = hashlib.md5(
             normalized, usedforsecurity=False).hexdigest()
         # Great100 runs keep the boot loader's default manifest-root search
-        # path, whose exact resolved key is "./<relative source>".  The
-        # authenticated absolute path remains in the report; the overlay key
-        # must match the loader's actual canonicalSourcePath input.
-        runtime_original = "./" + relative.as_posix()
+        # path.  Candle's Filename.concat normalizes that root away, so the
+        # exact loader key is the manifest-relative source.  The authenticated
+        # absolute path remains in the report.
+        runtime_original = relative.as_posix()
         runtime_mappings.append(
             (runtime_original, str(output.resolve()),
              original_md5, normalized_md5))
