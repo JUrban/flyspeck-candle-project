@@ -9,6 +9,7 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest import mock
 
 
 SCRIPT = Path(__file__).with_name(
@@ -108,6 +109,66 @@ class CompatibilityLocalizerTest(unittest.TestCase):
             "hol.ml", "/tmp/normalization-setup.ml", "100/sample.ml",
             "candle/fingerprint.ml",
         ])
+
+    def test_csdp_target_setup_precedes_target_load(self):
+        calls = []
+
+        def original_load(repl, file):
+            calls.append(str(file))
+
+        bridge = {
+            "target": "100/ceva",
+            "directory": Path("/tmp/ceva-csdp"),
+            "setup": Path("/tmp/ceva-csdp/setup.ml"),
+        }
+        handler = object()
+        repl = SimpleNamespace()
+        wrapped = SUBJECT._load_after_normalization_setup(
+            original_load, "/tmp/normalization-setup.ml",
+            {"100/ceva.ml": bridge}, handler)
+        wrapped(repl, "hol.ml")
+        wrapped(repl, "100/ceva.ml")
+        self.assertEqual(calls, [
+            "hol.ml", "/tmp/normalization-setup.ml",
+            "/tmp/ceva-csdp/setup.ml", "100/ceva.ml",
+        ])
+        self.assertIs(repl._great100_csdp_bridge, bridge)
+        self.assertIs(repl._progress_line_handler, handler)
+
+    def test_csdp_request_runs_fixed_argv_and_returns_status(self):
+        with tempfile.TemporaryDirectory() as directory_name:
+            directory = Path(directory_name).resolve()
+            input_path = directory / "sos.dat-s"
+            output_path = directory / "sos.out"
+            input_path.write_text("problem", encoding="ascii")
+            (directory / "param.csdp").write_text(
+                "printlevel=1\n", encoding="ascii")
+            sent = []
+            repl = SimpleNamespace(
+                _great100_csdp_bridge={
+                    "target": "100/ceva", "directory": directory},
+                process=SimpleNamespace(sendline=sent.append))
+            requests = []
+
+            def fake_run(argv, **kwargs):
+                self.assertEqual(argv[0], "/fixed/csdp")
+                self.assertEqual(argv[1:], [str(input_path), str(output_path)])
+                self.assertEqual(kwargs["cwd"], directory)
+                output_path.write_text("solution", encoding="ascii")
+                return SimpleNamespace(returncode=3)
+
+            handler = SUBJECT._csdp_progress_handler(
+                Path("/fixed/csdp"), requests, LocalFailure)
+            with mock.patch.object(SUBJECT.subprocess, "run", fake_run):
+                handler(
+                    repl,
+                    f"{SUBJECT.CSDP_REQUEST_MARKER}\t"
+                    f"{input_path}\t{output_path}")
+
+            self.assertEqual(sent, ["3"])
+            self.assertEqual(len(requests), 1)
+            self.assertEqual(requests[0]["returncode"], 3)
+            self.assertEqual(requests[0]["target"], "100/ceva")
 
     def test_normalization_accepts_selected_load_and_canonical_finish(self):
         repl = SimpleNamespace()

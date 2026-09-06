@@ -25,6 +25,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import time
 
@@ -40,6 +41,16 @@ REFERENCE_RELATIVE = Path(
 LOWER_HEX_RE = re.compile(rb"(?:[0-9a-f]{2})*")
 MD5_RE = re.compile(rb"[0-9a-f]{32}")
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
+CSDP_REQUEST_MARKER = "CANDLE_GREAT100_CSDP_REQUEST_V1"
+DEFAULT_CSDP_BINARY = Path(
+    "/project/deps/hol-light-external-tools-v9/usr/bin/csdp")
+EXPECTED_CSDP_SHA256 = (
+    "50a07f934ffac42b774e0991ff5e44cc68a6d8db180258a8fc1d1676cc7e898d"
+)
+CSDP_TARGET_FILES = {
+    "100/ceva": "100/ceva.ml",
+    "100/thales": "100/thales.ml",
+}
 
 
 @dataclass(frozen=True)
@@ -65,6 +76,82 @@ class SourceNormalization:
 
 
 TOP100_NORMALIZATIONS = (
+    SourceNormalization(
+        targets=("100/ceva", "100/thales"),
+        source="Examples/sos.ml",
+        expected_sha256=(
+            "fd419e934ca92af9f9ec9dafd890aba68098520e73c070f03a0e07af8bcd0530"
+        ),
+        replacements=(
+            (
+                b'''(* The same thing with CSDP.                                                 *)\n'''
+                b'''(* ------------------------------------------------------------------------- *)\n\n'''
+                b'''let run_csdp dbg obj mats =\n'''
+                b'''  let input_file = Filename.temp_file "sos" ".dat-s" in''',
+                b'''(* The same thing with CSDP.                                                 *)\n'''
+                b'''(* ------------------------------------------------------------------------- *)\n\n'''
+                b'''let run_csdp dbg obj mats =\n'''
+                b'''  let input_file = Filename.concat (!temp_path) "sos.dat-s" in''',
+            ),
+            (
+                b'''let run_csdp dbg nblocks blocksizes obj mats =\n'''
+                b'''  let input_file = Filename.temp_file "sos" ".dat-s" in''',
+                b'''let run_csdp dbg nblocks blocksizes obj mats =\n'''
+                b'''  let input_file = Filename.concat (!temp_path) "sos.dat-s" in''',
+            ),
+            (
+                b'''let sdpa obj mats = run_sdpa (!debugging) obj mats;;\n\n'''
+                b'''let run_csdp dbg obj mats =\n'''
+                b'''  let input_file = Filename.temp_file "sos" ".dat-s" in''',
+                b'''let sdpa obj mats = run_sdpa (!debugging) obj mats;;\n\n'''
+                b'''let run_csdp dbg obj mats =\n'''
+                b'''  let input_file = Filename.concat (!temp_path) "sos.dat-s" in''',
+            ),
+            (
+                b'''  file_of_string input_file (sdpa_of_problem "" obj mats);\n'''
+                b'''  file_of_string params_file csdp_params;\n'''
+                b'''  let rv = Sys.command("cd "^(!temp_path)^"; csdp "^input_file ^\n'''
+                b'''                        " " ^ output_file ^\n'''
+                b'''                       (if dbg then "" else "> /dev/null")) in''',
+                b'''  file_of_string input_file (sdpa_of_problem "" obj mats);\n'''
+                b'''  file_of_string params_file csdp_params;\n'''
+                b'''  print_endline ("CANDLE_GREAT100_CSDP_REQUEST_V1\\t" ^\n'''
+                b'''                 input_file ^ "\\t" ^ output_file);\n'''
+                b'''  let rv = int_of_string(read_line ()) in''',
+            ),
+            (
+                b'''  file_of_string input_file\n'''
+                b'''   (sdpa_of_blockproblem "" nblocks blocksizes obj mats);\n'''
+                b'''  file_of_string params_file csdp_params;\n'''
+                b'''  let rv = Sys.command("cd "^(!temp_path)^"; csdp "^input_file ^\n'''
+                b'''                        " " ^ output_file ^\n'''
+                b'''                       (if dbg then "" else "> /dev/null")) in''',
+                b'''  file_of_string input_file\n'''
+                b'''   (sdpa_of_blockproblem "" nblocks blocksizes obj mats);\n'''
+                b'''  file_of_string params_file csdp_params;\n'''
+                b'''  print_endline ("CANDLE_GREAT100_CSDP_REQUEST_V1\\t" ^\n'''
+                b'''                 input_file ^ "\\t" ^ output_file);\n'''
+                b'''  let rv = int_of_string(read_line ()) in''',
+            ),
+            (
+                b'''  file_of_string input_file (sdpa_of_problem "" obj mats);\n'''
+                b'''  file_of_string params_file csdp_params;\n'''
+                b'''  let rv = Sys.command("cd "^(!temp_path)^"; csdp "^input_file ^\n'''
+                b'''                       " " ^ output_file ^\n'''
+                b'''                       (if dbg then "" else "> /dev/null")) in''',
+                b'''  file_of_string input_file (sdpa_of_problem "" obj mats);\n'''
+                b'''  file_of_string params_file csdp_params;\n'''
+                b'''  print_endline ("CANDLE_GREAT100_CSDP_REQUEST_V1\\t" ^\n'''
+                b'''                 input_file ^ "\\t" ^ output_file);\n'''
+                b'''  let rv = int_of_string(read_line ()) in''',
+            ),
+        ),
+        rationale=(
+            "route the fixed CSDP numerical-certificate suggestion through "
+            "the nonpromotable host controller; HOL still checks the exact "
+            "rational certificate and general Sys.command remains disabled"
+        ),
+    ),
     SourceNormalization(
         targets=("100/birthday",),
         source="100/birthday.ml",
@@ -843,15 +930,149 @@ def _materialize_normalizations(candle_root, log_dir, tests,
     }
 
 
-def _load_after_normalization_setup(original_load, setup_path):
+def _prepare_csdp_bridge(log_dir, tests, binary):
+    """Prepare per-target directories for the fixed diagnostic CSDP bridge."""
+    selected = [test.name for test in tests if test.name in CSDP_TARGET_FILES]
+    if not selected:
+        return {}, None, {
+            "active": False,
+            "promotion_eligible": False,
+            "requests": [],
+        }
+
+    binary = Path(binary).resolve(strict=True)
+    binary_record = _file_record(binary)
+    if (binary_record["sha256"] != EXPECTED_CSDP_SHA256 or
+            not os.access(binary, os.X_OK)):
+        raise ValueError("diagnostic CSDP binary identity or mode mismatch")
+
+    bridge_root = log_dir / "csdp"
+    bridge_root.mkdir(mode=0o700)
+    target_setups = {}
+    target_records = []
+    for target in selected:
+        directory = bridge_root / target.replace("/", "_")
+        directory.mkdir(mode=0o700)
+        setup_path = directory / "setup.ml"
+        setup_source = f"temp_path := {_ocaml_string(str(directory))};;\n"
+        with setup_path.open("x", encoding="ascii", newline="\n") as setup:
+            setup.write(setup_source)
+        target_file = CSDP_TARGET_FILES[target]
+        target_setups[target_file] = {
+            "target": target,
+            "directory": directory,
+            "setup": setup_path,
+        }
+        target_records.append({
+            "target": target,
+            "target_file": target_file,
+            "directory": str(directory),
+            "setup": _file_record(setup_path),
+        })
+
+    requests = []
+    contract = {
+        "active": True,
+        "promotion_eligible": False,
+        "contract": (
+            "fixed identity-pinned single-thread CSDP binary, per-target "
+            "controller-owned directory, exact request paths, and HOL-side "
+            "exact certificate reconstruction"
+        ),
+        "solver": binary_record,
+        "targets": target_records,
+        "requests": requests,
+    }
+    return target_setups, binary, contract
+
+
+def _csdp_progress_handler(binary, requests, load_failure):
+    """Run one identity-pinned host solver request emitted by Candle."""
+    def handle(repl, line):
+        prefix = CSDP_REQUEST_MARKER + "\t"
+        if not line.startswith(prefix):
+            return
+        fields = line.split("\t")
+        if len(fields) != 3 or fields[0] != CSDP_REQUEST_MARKER:
+            raise load_failure("malformed diagnostic CSDP request")
+        bridge = getattr(repl, "_great100_csdp_bridge", None)
+        if bridge is None:
+            raise load_failure("CSDP request from an unconfigured target")
+        directory = bridge["directory"]
+        expected_input = directory / "sos.dat-s"
+        expected_output = directory / "sos.out"
+        if fields[1:] != [str(expected_input), str(expected_output)]:
+            raise load_failure("CSDP request path escaped its target directory")
+
+        try:
+            input_record = _file_record(expected_input)
+            params_record = _file_record(directory / "param.csdp")
+            if expected_output.exists() or expected_output.is_symlink():
+                _file_record(expected_output)
+                expected_output.unlink()
+            request_index = getattr(repl, "_great100_csdp_request_count", 0) + 1
+            repl._great100_csdp_request_count = request_index
+            stdout_path = directory / f"request-{request_index:03d}.stdout"
+            stderr_path = directory / f"request-{request_index:03d}.stderr"
+            started = time.monotonic()
+            with (stdout_path.open("xb") as stdout,
+                  stderr_path.open("xb") as stderr):
+                completed = subprocess.run(
+                    [str(binary), str(expected_input), str(expected_output)],
+                    cwd=directory,
+                    env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+                    stdin=subprocess.DEVNULL,
+                    stdout=stdout,
+                    stderr=stderr,
+                    timeout=300,
+                    check=False)
+            elapsed = time.monotonic() - started
+            if not 0 <= completed.returncode <= 255:
+                raise load_failure(
+                    f"diagnostic CSDP terminated abnormally: "
+                    f"{completed.returncode}")
+            output_record = _file_record(expected_output)
+            request_record = {
+                "target": bridge["target"],
+                "index": request_index,
+                "input": input_record,
+                "parameters": params_record,
+                "output": output_record,
+                "stdout": _file_record(stdout_path),
+                "stderr": _file_record(stderr_path),
+                "returncode": completed.returncode,
+                "elapsed_seconds": elapsed,
+            }
+            requests.append(request_record)
+            repl.process.sendline(str(completed.returncode))
+        except load_failure:
+            raise
+        except (OSError, subprocess.SubprocessError, ValueError) as error:
+            raise load_failure(
+                f"diagnostic CSDP bridge failed: {error}") from error
+
+    return handle
+
+
+def _load_after_normalization_setup(original_load, setup_path,
+                                    csdp_targets=None,
+                                    csdp_handler=None):
     """Wrap CandleREPL.load so setup runs once, after hol.ml and before target."""
     setup_path = str(Path(setup_path).resolve())
+    csdp_targets = csdp_targets or {}
 
     def load(repl, file):
         if file != "hol.ml" and not getattr(
                 repl, "_great100_normalization_configured", False):
             repl._great100_normalization_configured = True
             original_load(repl, setup_path)
+        if file in csdp_targets and not getattr(
+                repl, "_great100_csdp_configured", False):
+            bridge = csdp_targets[file]
+            repl._great100_csdp_configured = True
+            repl._great100_csdp_bridge = bridge
+            repl._progress_line_handler = csdp_handler
+            original_load(repl, str(bridge["setup"].resolve()))
         return original_load(repl, file)
 
     return load
@@ -910,6 +1131,11 @@ def main(argv=None):
     parser.add_argument("--inactivity-timeout", type=float, default=3600)
     parser.add_argument("--wall-timeout", type=float, default=21600)
     parser.add_argument("--heap-mb", type=int, default=6000)
+    parser.add_argument(
+        "--csdp-binary", type=Path, default=DEFAULT_CSDP_BINARY,
+        help=(
+            "identity-pinned single-thread CSDP binary used only for the "
+            "Ceva/Thales diagnostic bridge"))
     args = parser.parse_args(argv)
 
     if not 1 <= args.jobs <= 10:
@@ -962,6 +1188,8 @@ def main(argv=None):
     references = _derive_references(candle_root, tests, canonical_indices)
     normalization_setup, normalization_contract = _materialize_normalizations(
         candle_root, log_dir, tests)
+    csdp_targets, csdp_binary, csdp_contract = _prepare_csdp_bridge(
+        log_dir, tests, args.csdp_binary)
 
     original_request = regression._fingerprint_request_source
     original_reader = regression._read_fingerprint_records
@@ -977,8 +1205,13 @@ def main(argv=None):
     regression.CandleREPL.finish = (
         lambda repl: _finish_candle_at_eof(regression, repl))
     if normalization_setup is not None:
+        csdp_handler = (
+            _csdp_progress_handler(
+                csdp_binary, csdp_contract["requests"],
+                regression.LoadFailure)
+            if csdp_binary is not None else None)
         regression.CandleREPL.load = _load_after_normalization_setup(
-            original_load, normalization_setup)
+            original_load, normalization_setup, csdp_targets, csdp_handler)
         normalization_mappings = {
             source["normalized"]["path"]: source["runtime_original"]
             for source in normalization_contract["sources"]
@@ -1063,6 +1296,7 @@ def main(argv=None):
                 "ordinary zero exit after REPL stdin EOF; Candle does not "
                 "provide the OCaml exit binding assumed by regression.py"),
             "source_normalizations": normalization_contract,
+            "diagnostic_csdp_bridge": csdp_contract,
         },
         "execution": {
             "candle_root": str(candle_root),
