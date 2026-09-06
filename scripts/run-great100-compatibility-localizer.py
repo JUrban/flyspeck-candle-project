@@ -165,6 +165,27 @@ let THE_DERANGEMENTS_FORMULA =
             "finite-set helper"
         ),
     ),
+    SourceNormalization(
+        targets=("100/pascal",),
+        source="100/pascal.ml",
+        expected_sha256=(
+            "516aca235c3ff1f51fa9c5d86d3b2e4fbd62c6763a584fc2cf1fd95ba16c4786"
+        ),
+        replacements=((
+            b'''      REWRITE_TAC[EXTENSION; IN_ELIM_THM] THEN REAL_ARITH_TAC]]);;''',
+            b'''      REWRITE_TAC[EXTENSION; IN_ELIM_THM] THEN REAL_ARITH_TAC]]);;
+
+(* Preserve the reference run's name for the invented type variable. *)
+let PASCAL =
+  INST_TYPE
+    [(mk_vartype "?797801",mk_vartype "?799450")]
+    PASCAL;;''',
+        ),),
+        rationale=(
+            "alpha-rename one deterministic invented type variable to the "
+            "name recorded by the approved reference theorem"
+        ),
+    ),
 )
 
 
