@@ -66,12 +66,12 @@ class CompatibilityLocalizerTest(unittest.TestCase):
             self.assertFalse(contract["promotion_eligible"])
             self.assertEqual(contract["sources"][0]["replacement_count"], 1)
             setup_source = setup.read_text(encoding="ascii")
-            self.assertIn('"./100/sample.ml"', setup_source)
+            self.assertIn('"100/sample.ml"', setup_source)
             self.assertIn(str(normalized), setup_source)
             self.assertIn("configureNormalizationOverlay", setup_source)
             self.assertEqual(
                 contract["sources"][0]["runtime_original"],
-                "./100/sample.ml")
+                "100/sample.ml")
 
     def test_normalization_rejects_wrong_source_identity(self):
         with tempfile.TemporaryDirectory() as directory:
