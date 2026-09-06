@@ -186,6 +186,25 @@ class CompatibilityLocalizerTest(unittest.TestCase):
             self.assertEqual(
                 requests[0]["requested_output_path"], str(output_path))
 
+            input_path.write_text("second problem", encoding="ascii")
+            with mock.patch.object(SUBJECT.subprocess, "run", fake_run):
+                handler(
+                    repl,
+                    f"{SUBJECT.CSDP_REQUEST_MARKER}\t"
+                    f"{input_path}\t{output_path}")
+            self.assertEqual(sent, ["3", "3"])
+            self.assertEqual(len(requests), 2)
+            self.assertNotEqual(
+                requests[0]["input"]["path"], requests[1]["input"]["path"])
+            self.assertEqual(
+                Path(requests[0]["input"]["path"]).read_text(
+                    encoding="ascii"),
+                "problem")
+            self.assertEqual(
+                Path(requests[1]["input"]["path"]).read_text(
+                    encoding="ascii"),
+                "second problem")
+
     def test_csdp_request_preserves_missing_output_for_target_search(self):
         with tempfile.TemporaryDirectory() as directory_name:
             directory = Path(directory_name).resolve()
