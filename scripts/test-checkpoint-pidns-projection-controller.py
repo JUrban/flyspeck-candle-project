@@ -135,7 +135,7 @@ class PidnsProjectionControllerTests(unittest.TestCase):
             timeout_seconds=timeout, ioctl_runner=self.ioctl_runner,
         )
 
-    def test_exact_projection_and_true_process_trace_close(self) -> None:
+    def test_exact_projection_and_true_task_trace_close(self) -> None:
         marker = self.root / "read-result"
         sentinel = os.open("/dev/null", os.O_RDONLY)
         os.set_inheritable(sentinel, True)
@@ -154,8 +154,9 @@ class PidnsProjectionControllerTests(unittest.TestCase):
             os.close(sentinel)
         self.assertFalse(observed.nonfixture)
         evidence = observed.evidence
-        self.assertEqual(evidence["outcome"], "local-process-trace-closed")
+        self.assertEqual(evidence["outcome"], "local-task-trace-closed")
         self.assertTrue(evidence["local_process_trace_closed"])
+        self.assertTrue(evidence["local_task_trace_closed"])
         self.assertEqual(
             [packet["event"] for packet in evidence["packets"]],
             ["manager", "ready", "exec", "exit-stop", "terminal",
@@ -166,6 +167,11 @@ class PidnsProjectionControllerTests(unittest.TestCase):
         ready = evidence["packets"][1]["payload"]
         self.assertEqual(ready["manager"]["inner_pid"], 1)
         self.assertEqual(ready["root_process"]["inner_pid"], 2)
+        self.assertEqual(ready["root_process"]["inner_tgid"], 2)
+        self.assertEqual(ready["root_task"]["inner_tid"], 2)
+        self.assertEqual(ready["root_task"]["inner_tgid"], 2)
+        self.assertTrue(ready["root_task"]["task_directory_held"])
+        self.assertEqual(ready["root_task"]["birth"]["kind"], "root")
         self.assertEqual(ready["procfs"]["magic"], subject.PROC_SUPER_MAGIC)
         self.assertNotEqual(
             evidence["parent_namespaces"]["pid"]["inode"],
@@ -181,10 +187,15 @@ class PidnsProjectionControllerTests(unittest.TestCase):
             "promotion_allowed", "s2_evidence", "s3_evidence",
             "pft_exclusion_enforced", "host_filesystem_hidden",
             "network_namespace_private", "dmtcp_compatibility_tested",
-            "threads_supported", "approval_included",
-            "controller_supplied_pft_input",
+            "approval_included", "controller_supplied_pft_input",
         ):
             self.assertIs(evidence[field], False)
+        self.assertTrue(evidence["threads_supported"])
+        self.assertTrue(evidence["leader_pidfds_only"])
+        self.assertEqual(
+            evidence["thread_identity_scope"],
+            "held-exact-inner-proc-task-directories",
+        )
 
     def test_double_fork_setsid_and_exec_are_closed_without_proc_scan(self) -> None:
         code = """
@@ -249,7 +260,7 @@ raise SystemExit(os.waitstatus_to_exitcode(status))
         self.assertFalse(marker.exists())
         self.assertEqual(list(self.projection.iterdir()), [])
 
-    def test_clone3_fallback_and_process_escape_rejections(self) -> None:
+    def test_clone3_fallback_and_escape_rejections(self) -> None:
         clone3_code = f"""
 import ctypes, errno
 library = ctypes.CDLL(None, use_errno=True)
@@ -265,7 +276,6 @@ if result != -1 or ctypes.get_errno() != errno.ENOSYS:
         )
         forbidden = (
             f"import os;os.unshare({subject.CLONE_NEWNS})",
-            "import threading;threading.Thread(target=lambda:None).start()",
             """
 import ctypes, os, signal
 library=ctypes.CDLL(None,use_errno=True);library.syscall.restype=ctypes.c_long
@@ -278,6 +288,122 @@ library.syscall(56, 0x00800000 | signal.SIGCHLD, 0, 0, 0, 0)
             ):
                 self.run_workload(code)
             self.assertEqual(list(self.projection.iterdir()), [])
+
+    def test_threads_have_held_task_identity_without_task_pidfds(self) -> None:
+        code = """
+import threading
+barrier = threading.Barrier(3)
+def worker():
+    barrier.wait()
+threads = [threading.Thread(target=worker) for _ in range(2)]
+for thread in threads: thread.start()
+barrier.wait()
+for thread in threads: thread.join()
+"""
+        observed = self.run_workload(code)
+        result = next(
+            packet["payload"] for packet in observed.evidence["packets"]
+            if packet["event"] == "result"
+        )
+        self.assertEqual(result["event_counts"]["thread-birth"], 2)
+        self.assertEqual(result["event_counts"]["process-birth"], 0)
+        self.assertEqual(result["event_counts"]["terminal"], 3)
+        self.assertEqual(result["active_tasks"], 0)
+        thread_births = [
+            packet for packet in observed.evidence["packets"]
+            if packet["event"] == "clone" and
+            packet["payload"]["birth"]["kind"] == "clone-thread"
+        ]
+        self.assertEqual(len(thread_births), 2)
+        for packet in thread_births:
+            task = packet["payload"]["task"]
+            self.assertNotEqual(task["inner_tid"], task["inner_tgid"])
+            self.assertTrue(task["task_directory_held"])
+            self.assertFalse(packet["payload"]["transferred_pidfd"])
+        # READY transfers the root process pidfd; no thread gets one.
+        self.assertEqual(len(observed.evidence["transferred_processes"]), 1)
+
+    def test_mixed_thread_and_fork_births_keep_separate_identity(self) -> None:
+        code = """
+import os, threading
+result = []
+def worker():
+    child = os.fork()
+    if child == 0:
+        os._exit(0)
+    _, status = os.waitpid(child, 0)
+    result.append(os.waitstatus_to_exitcode(status))
+thread = threading.Thread(target=worker)
+thread.start(); thread.join()
+raise SystemExit(result[0])
+"""
+        observed = self.run_workload(code)
+        result = next(
+            packet["payload"] for packet in observed.evidence["packets"]
+            if packet["event"] == "result"
+        )
+        self.assertEqual(result["event_counts"]["thread-birth"], 1)
+        self.assertEqual(result["event_counts"]["process-birth"], 1)
+        self.assertEqual(result["event_counts"]["fork"], 1)
+        self.assertEqual(result["event_counts"]["terminal"], 3)
+        fork = next(
+            packet for packet in observed.evidence["packets"]
+            if packet["event"] == "fork"
+        )
+        self.assertNotEqual(
+            fork["payload"]["parent_inner_tid"],
+            fork["payload"]["parent_inner_pid"],
+        )
+        self.assertEqual(
+            fork["payload"]["task"]["inner_tid"],
+            fork["payload"]["task"]["inner_tgid"],
+        )
+        for packet in observed.evidence["packets"]:
+            if (
+                packet["payload"]["transferred_pidfd"] and
+                packet["event"] != "ready"
+            ):
+                task = packet["payload"]["task"]
+                self.assertEqual(task["inner_tid"], task["inner_tgid"])
+        self.assertEqual(len(observed.evidence["transferred_processes"]), 2)
+
+    def test_nonleader_exec_rekeys_tid_and_records_exec_collapse(self) -> None:
+        code = """
+import os, threading, time
+def worker():
+    os.execve('/usr/bin/true', ['/usr/bin/true'],
+              {'PATH':'/usr/bin:/bin','LC_ALL':'C'})
+threading.Thread(target=worker).start()
+while True:
+    time.sleep(1)
+"""
+        observed = self.run_workload(code)
+        result = next(
+            packet["payload"] for packet in observed.evidence["packets"]
+            if packet["event"] == "result"
+        )
+        self.assertEqual(result["event_counts"]["thread-birth"], 1)
+        self.assertEqual(result["event_counts"]["exec-rekey"], 1)
+        self.assertGreaterEqual(
+            result["event_counts"]["exec-collapse-task"], 1,
+        )
+        exec_packet = [
+            packet for packet in observed.evidence["packets"]
+            if packet["event"] == "exec"
+        ][-1]
+        transition = exec_packet["payload"]["exec_transition"]
+        self.assertTrue(transition["nonleader_tid_rekey"])
+        self.assertNotEqual(
+            transition["former_inner_tid"], transition["event_inner_tid"],
+        )
+        self.assertIn(
+            transition["event_inner_tid"], transition["collapsed_inner_tids"],
+        )
+        self.assertEqual(
+            exec_packet["payload"]["task"]["inner_tid"],
+            exec_packet["payload"]["process"]["inner_tgid"],
+        )
+        self.assertEqual(len(observed.evidence["transferred_processes"]), 1)
 
     def test_manager_death_tears_down_stopped_namespace(self) -> None:
         session = self.start("import time;time.sleep(30)", timeout=20)

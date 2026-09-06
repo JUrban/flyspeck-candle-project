@@ -1,10 +1,10 @@
 #!/usr/bin/python3
-"""Private-PID-namespace checkpoint projection trace diagnostic.
+"""Private-PID-namespace checkpoint projection task trace diagnostic.
 
 This experimental controller combines the exact read-only mount projection
-with kernel ptrace birth events.  It is deliberately process-only and
-non-promotable: threads and clone3 are rejected, host files and the host network
-remain visible, and no result is S2/S3 or release evidence.
+with kernel ptrace birth events.  It is deliberately non-promotable: traced
+legacy-clone threads are supported while clone3 returns ENOSYS, host files and
+the host network remain visible, and no result is S2/S3 or release evidence.
 
 The controller never enumerates host ``/proc``.  It inspects only ``self``, PID
 1, and exact PIDs/TIDs learned from fork or ptrace events.
@@ -33,7 +33,7 @@ import checkpoint_os_authenticator as auth
 
 
 class PidnsProjectionError(auth.AuthenticationError):
-    """The process-only PID-namespace diagnostic failed closed."""
+    """The task-aware PID-namespace diagnostic failed closed."""
 
 
 def require(condition: bool, message: str) -> None:
@@ -41,13 +41,13 @@ def require(condition: bool, message: str) -> None:
         raise PidnsProjectionError(message)
 
 
-SCHEMA = 1
-PACKET_KIND = "candle-checkpoint-pidns-projection-event-v1"
-ACK_KIND = "candle-checkpoint-pidns-projection-ack-v1"
-REPORT_KIND = "candle-checkpoint-pidns-projection-diagnostic-v1"
+SCHEMA = 2
+PACKET_KIND = "candle-checkpoint-pidns-projection-event-v2"
+ACK_KIND = "candle-checkpoint-pidns-projection-ack-v2"
+REPORT_KIND = "candle-checkpoint-pidns-projection-diagnostic-v2"
 POLICY = (
-    "same-uid-private-user-pid-mount-namespace-process-only-"
-    "ptrace-projection-v1"
+    "same-uid-private-user-pid-mount-namespace-task-aware-"
+    "ptrace-projection-v2"
 )
 MAX_PACKET_BYTES = 128 * 1024
 WALL = getattr(os, "__WALL", 0x40000000)
@@ -102,11 +102,11 @@ EVENT_NAMES = {
     PTRACE_EVENT_EXIT: "exit-stop",
 }
 
-# The tracee may create ordinary processes but cannot create tasks, escape the
-# ptrace relationship, or alter namespaces/mounts.  clone3 is ENOSYS so libc
-# can take its audited legacy-clone fallback.
+# The tracee may create ordinary processes and legacy-clone threads but cannot
+# escape the ptrace relationship or alter namespaces/mounts.  clone3 is ENOSYS
+# so libc can take the audited legacy-clone fallback.
 WORKLOAD_CLONE_FORBIDDEN = (
-    CLONE_THREAD | CLONE_UNTRACED | CLONE_PTRACE | CLONE_PARENT |
+    CLONE_UNTRACED | CLONE_PTRACE | CLONE_PARENT |
     CLONE_NEWNS | CLONE_NEWCGROUP | CLONE_NEWUTS | CLONE_NEWIPC |
     CLONE_NEWUSER | CLONE_NEWPID | CLONE_NEWNET
 )
@@ -171,13 +171,19 @@ def _set_parent_death_signal(*, allow_invisible_parent: bool = False) -> None:
             "parent changed while parent-death signal was installed")
 
 
-def _ptrace(request: int, pid: int, data: int = 0) -> None:
+def _ptrace(
+    request: int, pid: int, data: int = 0, *, context: str = "",
+    allow_esrch: bool = False,
+) -> bool:
     if _libc().ptrace(request, pid, None, ctypes.c_void_p(data)) != 0:
         number = ctypes.get_errno()
+        if allow_esrch and number == errno.ESRCH:
+            return False
         raise PidnsProjectionError(
             f"ptrace request {request} failed for inner pid {pid}: "
-            f"errno {number}"
+            f"errno {number}" + (f" during {context}" if context else "")
         )
+    return True
 
 
 def _ptrace_event_message(pid: int) -> int:
@@ -257,21 +263,48 @@ def _decode_proc_stat(data: bytes) -> dict[str, int | str]:
         raise PidnsProjectionError("malformed exact /proc stat record") from error
 
 
-def _proc_status(pid: str | int) -> dict[str, str]:
+def _decode_proc_status(data: bytes, label: str) -> dict[str, str]:
     try:
-        lines = Path(f"/proc/{pid}/status").read_text(
-            encoding="ascii",
-        ).splitlines()
-    except OSError as error:
-        raise PidnsProjectionError(
-            f"cannot read exact /proc/{pid}/status"
-        ) from error
+        lines = data.decode("ascii").splitlines()
+    except UnicodeError as error:
+        raise PidnsProjectionError(f"malformed {label} status") from error
     result: dict[str, str] = {}
     for line in lines:
         if ":" in line:
             name, value = line.split(":", 1)
             result[name] = value.strip()
     return result
+
+
+def _proc_status(pid: str | int) -> dict[str, str]:
+    try:
+        data = Path(f"/proc/{pid}/status").read_bytes()
+    except OSError as error:
+        raise PidnsProjectionError(
+            f"cannot read exact /proc/{pid}/status"
+        ) from error
+    return _decode_proc_status(data, f"/proc/{pid}")
+
+
+def _read_proc_task_file(directory_fd: int, name: str) -> bytes:
+    require(name in {"stat", "status"}, "unexpected proc task file request")
+    descriptor = os.open(
+        name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        dir_fd=directory_fd,
+    )
+    try:
+        pieces: list[bytes] = []
+        total = 0
+        while True:
+            piece = os.read(descriptor, 16 * 1024)
+            if not piece:
+                break
+            total += len(piece)
+            require(total <= 1024 * 1024, "oversize exact proc task record")
+            pieces.append(piece)
+        return b"".join(pieces)
+    finally:
+        os.close(descriptor)
 
 
 def _integer_vector(value: str, label: str) -> list[int]:
@@ -343,25 +376,32 @@ def _pidfd_outer_identity(descriptor: int) -> dict[str, Any]:
     }
 
 
-def _process_identity(inner_pid: int, pidfd: int) -> dict[str, Any]:
-    proc = Path(f"/proc/{inner_pid}")
+def _process_identity(inner_tgid: int, pidfd: int) -> dict[str, Any]:
+    proc = Path(f"/proc/{inner_tgid}")
     before = _decode_proc_stat((proc / "stat").read_bytes())
-    status = _proc_status(inner_pid)
+    status = _proc_status(inner_tgid)
     nspid = _integer_vector(status.get("NSpid", ""), "process NSpid")
-    require(nspid[-1] == inner_pid and int(status.get("Tgid", "0")) == inner_pid,
-            "process-only tracee is not a process leader")
+    nstgid = _integer_vector(status.get("NStgid", ""), "process NStgid")
+    require(nspid[-1] == inner_tgid and nstgid[-1] == inner_tgid and
+            int(status.get("Pid", "0")) == inner_tgid and
+            int(status.get("Tgid", "0")) == inner_tgid,
+            "process identity path is not the thread-group leader")
     try:
         executable_path = os.readlink(proc / "exe")
         executable = (proc / "exe").stat()
     except OSError as error:
         raise PidnsProjectionError(
-            f"cannot inspect exact executable for inner pid {inner_pid}"
+            f"cannot inspect exact executable for inner tgid {inner_tgid}"
         ) from error
     after = _decode_proc_stat((proc / "stat").read_bytes())
     require(before == after, "process identity changed during exact capture")
     return {
-        "inner_pid": inner_pid,
+        # inner_pid is retained for compatibility with the process-only
+        # diagnostic packet readers; inner_tgid is the unambiguous v2 name.
+        "inner_pid": inner_tgid,
+        "inner_tgid": inner_tgid,
         "nspid_visible_from_inner_proc": nspid,
+        "nstgid_visible_from_inner_proc": nstgid,
         **before,
         "executable": {
             "path": executable_path,
@@ -369,24 +409,126 @@ def _process_identity(inner_pid: int, pidfd: int) -> dict[str, Any]:
             "inode": executable.st_ino,
             "mode": f"{stat.S_IMODE(executable.st_mode):04o}",
         },
-        "pid_namespace": _namespace_identity("pid", inner_pid),
+        "pid_namespace": _namespace_identity("pid", inner_tgid),
         "pidfd": _pidfd_identity(pidfd),
     }
 
 
-def _open_process_identity(inner_pid: int) -> tuple[int, dict[str, Any]]:
+def _open_process_identity(inner_tgid: int) -> tuple[int, dict[str, Any]]:
     require(hasattr(os, "pidfd_open"), "kernel lacks pidfd_open")
     try:
-        descriptor = os.pidfd_open(inner_pid, 0)
+        descriptor = os.pidfd_open(inner_tgid, 0)
     except OSError as error:
         raise PidnsProjectionError(
-            f"cannot pin process leader {inner_pid}"
+            f"cannot pin process leader {inner_tgid}"
         ) from error
     try:
-        return descriptor, _process_identity(inner_pid, descriptor)
+        return descriptor, _process_identity(inner_tgid, descriptor)
     except BaseException:
         os.close(descriptor)
         raise
+
+
+def _task_directory_identity(descriptor: int) -> dict[str, Any]:
+    value = os.fstat(descriptor)
+    require(stat.S_ISDIR(value.st_mode), "held proc task object is not a directory")
+    return {
+        "device": value.st_dev,
+        "inode": value.st_ino,
+        "mode": f"{stat.S_IMODE(value.st_mode):04o}",
+        "link_count": value.st_nlink,
+    }
+
+
+def _open_task_identity(
+    inner_tid: int, *, expected_tgid: int | None = None,
+) -> tuple[int, dict[str, Any]]:
+    """Pin and authenticate exact ``/proc/<tgid>/task/<tid>`` identity.
+
+    The direct ``/proc/<tid>`` alias is used only to learn the tgid for a
+    kernel-reported stopped TID.  All identity evidence comes from, and the
+    retained descriptor names, the exact task-directory path.
+    """
+    require(type(inner_tid) is int and inner_tid > 1,
+            "invalid kernel-reported inner tid")
+    alias_fd = -1
+    task_fd = -1
+    try:
+        alias_fd = os.open(
+            f"/proc/{inner_tid}",
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        )
+        alias_status = _decode_proc_status(
+            _read_proc_task_file(alias_fd, "status"),
+            f"/proc/{inner_tid}",
+        )
+        inner_tgid = int(alias_status.get("Tgid", "0"))
+        require(inner_tgid > 1 and
+                (expected_tgid is None or inner_tgid == expected_tgid),
+                "kernel-reported task has an unexpected thread group")
+        task_fd = os.open(
+            f"/proc/{inner_tgid}/task/{inner_tid}",
+            os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        )
+        directory_before = _task_directory_identity(task_fd)
+        stat_before = _decode_proc_stat(
+            _read_proc_task_file(task_fd, "stat"),
+        )
+        status = _decode_proc_status(
+            _read_proc_task_file(task_fd, "status"),
+            f"/proc/{inner_tgid}/task/{inner_tid}",
+        )
+        stat_after = _decode_proc_stat(
+            _read_proc_task_file(task_fd, "stat"),
+        )
+        directory_after = _task_directory_identity(task_fd)
+        nspid = _integer_vector(status.get("NSpid", ""), "task NSpid")
+        nstgid = _integer_vector(status.get("NStgid", ""), "task NStgid")
+        require(directory_before == directory_after and
+                stat_before == stat_after and
+                stat_before["pid"] == inner_tid and
+                int(status.get("Pid", "0")) == inner_tid and
+                int(status.get("Tgid", "0")) == inner_tgid and
+                nspid[-1] == inner_tid and nstgid[-1] == inner_tgid,
+                "exact held proc task identity changed or mismatched")
+        alias_nspid = _integer_vector(
+            alias_status.get("NSpid", ""), "task-alias NSpid",
+        )
+        alias_nstgid = _integer_vector(
+            alias_status.get("NStgid", ""), "task-alias NStgid",
+        )
+        require(alias_nspid == nspid and alias_nstgid == nstgid and
+                int(alias_status.get("Pid", "0")) == inner_tid,
+                "direct task alias and exact task directory differ")
+        identity = {
+            "inner_tid": inner_tid,
+            "inner_tgid": inner_tgid,
+            "nspid_visible_from_inner_proc": nspid,
+            "nstgid_visible_from_inner_proc": nstgid,
+            "start_ticks": stat_before["start_ticks"],
+            "observed_parent_process_inner_pid_untrusted":
+                stat_before["parent_pid"],
+            "process_group_id": stat_before["process_group_id"],
+            "session_id": stat_before["session_id"],
+            "state": stat_before["state"],
+            "task_directory": directory_before,
+            "task_directory_held": True,
+        }
+        os.close(alias_fd)
+        alias_fd = -1
+        result_fd = task_fd
+        task_fd = -1
+        return result_fd, identity
+    except (OSError, ValueError) as error:
+        if isinstance(error, PidnsProjectionError):
+            raise
+        raise PidnsProjectionError(
+            f"cannot pin exact proc task identity for inner tid {inner_tid}"
+        ) from error
+    finally:
+        for descriptor in (alias_fd, task_fd):
+            if descriptor >= 0:
+                os.close(descriptor)
 
 
 def _proc_mount_records() -> list[dict[str, Any]]:
@@ -481,11 +623,82 @@ def _lifelines_alive(descriptors: tuple[int, int]) -> None:
 
 
 @dataclass
-class _Tracee:
+class _ProcessIdentity:
+    """Thread-group identity; only this record owns a leader pidfd."""
+
     pidfd: int
+    identity: dict[str, Any]
+    tasks: set[int] = field(default_factory=set)
+    executable_epoch: int = 0
+
+
+@dataclass
+class _TaskIdentity:
+    """Per-task identity pinned by its exact proc task-directory FD."""
+
+    directory_fd: int
     identity: dict[str, Any]
     options_set: bool
     birth_registered: bool
+    birth: dict[str, Any] | None
+
+
+def _task_evidence(task: _TaskIdentity) -> dict[str, Any]:
+    result = copy.deepcopy(task.identity)
+    result["birth"] = copy.deepcopy(task.birth)
+    return result
+
+
+def _capture_task(
+    inner_tid: int, processes: dict[int, _ProcessIdentity],
+    *, expected_tgid: int | None = None,
+) -> tuple[_TaskIdentity, _ProcessIdentity, bool]:
+    task_fd, task_identity = _open_task_identity(
+        inner_tid, expected_tgid=expected_tgid,
+    )
+    inner_tgid = int(task_identity["inner_tgid"])
+    process = processes.get(inner_tgid)
+    created_process = False
+    try:
+        if process is None:
+            require(inner_tid == inner_tgid,
+                    "new thread group was first observed through a nonleader")
+            pidfd, process_identity = _open_process_identity(inner_tgid)
+            process = _ProcessIdentity(pidfd, process_identity)
+            processes[inner_tgid] = process
+            created_process = True
+        require(inner_tid not in process.tasks,
+                "duplicate exact task identity capture")
+        task = _TaskIdentity(task_fd, task_identity, False, False, None)
+        process.tasks.add(inner_tid)
+        task_fd = -1
+        return task, process, created_process
+    except BaseException:
+        if created_process:
+            processes.pop(inner_tgid, None)
+            os.close(process.pidfd)
+        raise
+    finally:
+        if task_fd >= 0:
+            os.close(task_fd)
+
+
+def _close_task(
+    inner_tid: int, tasks: dict[int, _TaskIdentity],
+    processes: dict[int, _ProcessIdentity],
+) -> tuple[_TaskIdentity, bool]:
+    task = tasks.pop(inner_tid)
+    inner_tgid = int(task.identity["inner_tgid"])
+    process = processes[inner_tgid]
+    require(inner_tid in process.tasks,
+            "task/process membership differs at close")
+    process.tasks.remove(inner_tid)
+    os.close(task.directory_fd)
+    process_closed = not process.tasks
+    if process_closed:
+        os.close(process.pidfd)
+        del processes[inner_tgid]
+    return task, process_closed
 
 
 class _Emitter:
@@ -576,11 +789,14 @@ def _kill_pidfd(descriptor: int, pid: int) -> None:
         pass
 
 
-def _cleanup_tracees(tracees: dict[int, _Tracee]) -> None:
-    for pid, tracee in list(tracees.items()):
-        _kill_pidfd(tracee.pidfd, pid)
+def _cleanup_tracees(
+    tasks: dict[int, _TaskIdentity],
+    processes: dict[int, _ProcessIdentity],
+) -> None:
+    for tgid, process in list(processes.items()):
+        _kill_pidfd(process.pidfd, tgid)
     deadline = time.monotonic() + 3.0
-    while tracees and time.monotonic() < deadline:
+    while tasks and time.monotonic() < deadline:
         try:
             pid, _ = os.waitpid(-1, WALL | os.WNOHANG)
         except ChildProcessError:
@@ -588,33 +804,105 @@ def _cleanup_tracees(tracees: dict[int, _Tracee]) -> None:
         if pid == 0:
             time.sleep(0.002)
             continue
-        tracee = tracees.pop(pid, None)
-        if tracee is not None:
-            os.close(tracee.pidfd)
-    for tracee in tracees.values():
-        os.close(tracee.pidfd)
-    tracees.clear()
+        task = tasks.pop(pid, None)
+        if task is not None:
+            os.close(task.directory_fd)
+            process = processes.get(int(task.identity["inner_tgid"]))
+            if process is not None:
+                process.tasks.discard(pid)
+    for task in tasks.values():
+        os.close(task.directory_fd)
+    tasks.clear()
+    for process in processes.values():
+        os.close(process.pidfd)
+    processes.clear()
+
+
+def _refresh_after_exec(
+    event_tid: int, former_tid: int,
+    tasks: dict[int, _TaskIdentity],
+    processes: dict[int, _ProcessIdentity],
+) -> tuple[_TaskIdentity, _ProcessIdentity, dict[str, Any]]:
+    """Apply Linux exec TID rekey and the thread-group exec collapse."""
+    require(former_tid in tasks,
+            "exec event names an unregistered former task")
+    former_task = tasks[former_tid]
+    tgid = int(former_task.identity["inner_tgid"])
+    require(event_tid == tgid and tgid in processes,
+            "exec event did not rekey to the process leader tgid")
+    process = processes[tgid]
+    require(former_tid in process.tasks,
+            "exec former task is absent from its process")
+
+    previous_process = copy.deepcopy(process.identity)
+    previous_task = _task_evidence(former_task)
+    collapsed: list[dict[str, Any]] = []
+    for tid in sorted(process.tasks):
+        old_task = tasks.pop(tid)
+        if tid != former_tid:
+            collapsed.append(_task_evidence(old_task))
+        os.close(old_task.directory_fd)
+    process.tasks.clear()
+
+    task_fd, task_identity = _open_task_identity(
+        event_tid, expected_tgid=tgid,
+    )
+    refreshed = _TaskIdentity(
+        task_fd, task_identity, True, former_task.birth_registered,
+        copy.deepcopy(former_task.birth),
+    )
+    tasks[event_tid] = refreshed
+    process.tasks.add(event_tid)
+    current_process = _process_identity(tgid, process.pidfd)
+    require(current_process["pidfd"] == previous_process["pidfd"],
+            "leader pidfd identity changed across exec")
+    nonleader_rekey = former_tid != event_tid
+    if not nonleader_rekey:
+        require(current_process["start_ticks"] ==
+                previous_process["start_ticks"],
+                "leader process start identity changed across exec")
+    process.executable_epoch += 1
+    process.identity = current_process
+    transition = {
+        "event_inner_tid": event_tid,
+        "former_inner_tid": former_tid,
+        "nonleader_tid_rekey": nonleader_rekey,
+        "collapsed_inner_tids": [
+            int(item["inner_tid"]) for item in collapsed
+        ],
+        "collapsed_tasks": collapsed,
+        "previous_task": previous_task,
+        "previous_process_start_ticks": previous_process["start_ticks"],
+        "current_process_start_ticks": current_process["start_ticks"],
+        "executable_epoch": process.executable_epoch,
+    }
+    return refreshed, process, transition
 
 
 def _trace_until_closed(
-    emitter: _Emitter, root_pid: int, root: _Tracee,
+    emitter: _Emitter, root_tgid: int,
+    root_process: _ProcessIdentity, root_task: _TaskIdentity,
     timeout_seconds: float, lifelines: tuple[int, int],
 ) -> dict[str, Any]:
-    tracees = {root_pid: root}
+    processes = {root_tgid: root_process}
+    tasks = {root_tgid: root_task}
+    next_birth_sequence = 1
     counts = {
         name: 0 for name in (
             "fork", "vfork", "clone", "exec", "exit-stop", "terminal",
-            "signal-stop", "provisional-child-stop",
+            "signal-stop", "provisional-child-stop", "process-birth",
+            "thread-birth", "exec-rekey", "exec-collapse-task",
+            "exit-resume-esrch",
         )
     }
     terminals: list[dict[str, Any]] = []
     closed = False
     try:
-        _ptrace(PTRACE_CONT, root_pid, 0)
+        _ptrace(PTRACE_CONT, root_tgid, 0)
         deadline = time.monotonic() + timeout_seconds
-        while tracees:
+        while tasks:
             require(time.monotonic() < deadline,
-                    "projected process tree timed out")
+                    "projected task tree timed out")
             _lifelines_alive(lifelines)
             try:
                 pid, wait_status = os.waitpid(
@@ -627,38 +915,40 @@ def _trace_until_closed(
             if pid == 0:
                 time.sleep(0.001)
                 continue
-            tracee = tracees.get(pid)
-            if (tracee is None and os.WIFSTOPPED(wait_status) and
+            task = tasks.get(pid)
+            if (task is None and os.WIFSTOPPED(wait_status) and
                     os.WSTOPSIG(wait_status) == signal.SIGSTOP):
-                child_pidfd, child_identity = _open_process_identity(pid)
-                parent_pid = int(child_identity["parent_pid"])
-                if parent_pid not in tracees:
-                    os.close(child_pidfd)
-                    raise PidnsProjectionError(
-                        f"unregistered provisional child {pid}"
-                    )
-                tracee = _Tracee(
-                    child_pidfd, child_identity, False, False,
-                )
-                tracees[pid] = tracee
+                task, process, created_process = _capture_task(pid, processes)
+                tasks[pid] = task
+                tgid = int(task.identity["inner_tgid"])
+                if not created_process:
+                    require(tgid in processes,
+                            f"unregistered provisional thread {pid}")
                 counts["provisional-child-stop"] += 1
                 emitter.send(
                     "provisional-child-stop",
-                    {"parent_inner_pid": parent_pid,
-                     "process": child_identity},
-                    transfer_pidfd=child_pidfd,
+                    {
+                        "process": process.identity,
+                        "task": _task_evidence(task),
+                        "provisional_process": created_process,
+                    },
+                    transfer_pidfd=(process.pidfd if created_process else -1),
                 )
                 # Do not release a provisional child until the parent's
                 # kernel birth event registers the exact edge.
                 continue
-            require(tracee is not None,
-                    f"unregistered exact child status for {pid}")
+            require(task is not None,
+                    f"unregistered exact task status for {pid}")
+            task_tgid = int(task.identity["inner_tgid"])
+            process = processes[task_tgid]
             if os.WIFEXITED(wait_status) or os.WIFSIGNALED(wait_status):
-                require(tracee.birth_registered,
-                        f"process {pid} terminated before birth event")
+                require(task.birth_registered,
+                        f"task {pid} terminated before birth event")
                 terminal = {
-                    "inner_pid": pid,
-                    "process": tracee.identity,
+                    "inner_pid": task_tgid,
+                    "inner_tid": pid,
+                    "process": process.identity,
+                    "task": _task_evidence(task),
                     "exit_code": (
                         os.WEXITSTATUS(wait_status)
                         if os.WIFEXITED(wait_status) else None
@@ -670,83 +960,143 @@ def _trace_until_closed(
                 }
                 terminals.append(terminal)
                 counts["terminal"] += 1
+                _, process_closed = _close_task(pid, tasks, processes)
+                terminal["process_closed"] = process_closed
                 emitter.send("terminal", terminal)
-                os.close(tracee.pidfd)
-                del tracees[pid]
                 continue
             require(os.WIFSTOPPED(wait_status),
-                    f"unexpected wait status for process {pid}")
+                    f"unexpected wait status for task {pid}")
             stop_signal = os.WSTOPSIG(wait_status)
             ptrace_event = wait_status >> 16
             delivery_signal = stop_signal
+            registered_child_to_release: int | None = None
             if ptrace_event in {
                 PTRACE_EVENT_FORK, PTRACE_EVENT_VFORK, PTRACE_EVENT_CLONE,
             }:
-                child_pid = _ptrace_event_message(pid)
-                require(child_pid > 1, "malformed ptrace process birth event")
-                child = tracees.get(child_pid)
+                child_tid = _ptrace_event_message(pid)
+                require(child_tid > 1, "malformed ptrace task birth event")
+                child = tasks.get(child_tid)
                 transfer_pidfd = -1
                 if child is None:
-                    child_pidfd, child_identity = _open_process_identity(child_pid)
-                    child = _Tracee(
-                        child_pidfd, child_identity, False, True,
+                    child, child_process, created_process = _capture_task(
+                        child_tid, processes,
                     )
-                    tracees[child_pid] = child
-                    transfer_pidfd = child_pidfd
+                    tasks[child_tid] = child
+                    if created_process:
+                        transfer_pidfd = child_process.pidfd
                 else:
-                    require(not child.birth_registered and
-                            int(child.identity["parent_pid"]) == pid,
-                            "duplicate or mismatched process birth event")
-                    child.birth_registered = True
-                    child_pidfd = child.pidfd
-                    child_identity = child.identity
-                    _ptrace(PTRACE_SETOPTIONS, child_pid, PTRACE_OPTIONS)
+                    require(not child.birth_registered,
+                            "duplicate task birth event")
+                    child_process = processes[int(child.identity["inner_tgid"])]
+                    created_process = child_tid == int(child.identity["inner_tgid"])
+                    _ptrace(PTRACE_SETOPTIONS, child_tid, PTRACE_OPTIONS)
                     child.options_set = True
-                    _ptrace(PTRACE_CONT, child_pid, 0)
+                    registered_child_to_release = child_tid
                 event = EVENT_NAMES[ptrace_event]
+                child_tgid = int(child.identity["inner_tgid"])
+                if ptrace_event in {PTRACE_EVENT_FORK, PTRACE_EVENT_VFORK}:
+                    require(created_process,
+                            f"{event} event produced a nonleader task")
+                if created_process:
+                    require(child_tgid == child_tid,
+                            "process birth leader identity differs")
+                    birth_kind = event
+                    counts["process-birth"] += 1
+                else:
+                    require(ptrace_event == PTRACE_EVENT_CLONE and
+                            child_tgid == task_tgid,
+                            "thread birth process identity differs")
+                    birth_kind = "clone-thread"
+                    counts["thread-birth"] += 1
+                birth = {
+                    "sequence": next_birth_sequence,
+                    "kind": birth_kind,
+                    "parent_inner_tid": pid,
+                    "parent_inner_tgid": task_tgid,
+                }
+                next_birth_sequence += 1
+                child.birth = birth
+                child.birth_registered = True
                 counts[event] += 1
                 emitter.send(
                     event,
-                    {"parent_inner_pid": pid, "process": child_identity},
+                    {
+                        "parent_inner_pid": task_tgid,
+                        "parent_inner_tid": pid,
+                        "process": child_process.identity,
+                        "task": _task_evidence(child),
+                        "birth": birth,
+                    },
                     transfer_pidfd=transfer_pidfd,
                 )
                 delivery_signal = 0
             elif ptrace_event == PTRACE_EVENT_EXEC:
-                current = _process_identity(pid, tracee.pidfd)
-                require(current["start_ticks"] == tracee.identity["start_ticks"] and
-                        current["pidfd"] == tracee.identity["pidfd"],
-                        "process identity changed across process-only exec")
-                tracee.identity = current
+                former_tid = _ptrace_event_message(pid)
+                current_task, current_process, transition = _refresh_after_exec(
+                    pid, former_tid, tasks, processes,
+                )
+                task = current_task
+                process = current_process
                 counts["exec"] += 1
-                emitter.send("exec", {"process": current})
+                counts["exec-rekey"] += int(
+                    transition["nonleader_tid_rekey"]
+                )
+                counts["exec-collapse-task"] += len(
+                    transition["collapsed_inner_tids"]
+                )
+                emitter.send("exec", {
+                    "process": process.identity,
+                    "task": _task_evidence(task),
+                    "exec_transition": transition,
+                })
                 delivery_signal = 0
             elif ptrace_event == PTRACE_EVENT_EXIT:
                 counts["exit-stop"] += 1
                 emitter.send("exit-stop", {
-                    "process": tracee.identity,
+                    "process": process.identity,
+                    "task": _task_evidence(task),
                     "kernel_exit_status": _ptrace_event_message(pid),
                 })
                 delivery_signal = 0
-            elif stop_signal == signal.SIGSTOP and not tracee.options_set:
+            elif stop_signal == signal.SIGSTOP and not task.options_set:
                 _ptrace(PTRACE_SETOPTIONS, pid, PTRACE_OPTIONS)
-                tracee.options_set = True
+                task.options_set = True
                 delivery_signal = 0
             else:
                 counts["signal-stop"] += 1
                 emitter.send("signal-stop", {
-                    "process": tracee.identity,
+                    "process": process.identity,
+                    "task": _task_evidence(task),
                     "signal": stop_signal,
                 })
-            _ptrace(PTRACE_CONT, pid, delivery_signal)
+            resumed = _ptrace(
+                PTRACE_CONT, pid, delivery_signal,
+                context=(
+                    f"task resume after ptrace event {ptrace_event} "
+                    f"and stop signal {stop_signal}"
+                ),
+                allow_esrch=ptrace_event == PTRACE_EVENT_EXIT,
+            )
+            if not resumed:
+                counts["exit-resume-esrch"] += 1
+            # A provisional child's initial stop can precede its parent's
+            # birth-event stop.  Register the kernel edge while both remain
+            # stopped, then release the parent before the newly bound child.
+            if registered_child_to_release is not None:
+                _ptrace(
+                    PTRACE_CONT, registered_child_to_release, 0,
+                    context="registered provisional child release",
+                )
 
         try:
             unknown, _ = os.waitpid(-1, WALL | os.WNOHANG)
         except ChildProcessError:
             unknown = 0
         require(unknown == 0,
-                f"unregistered terminal child status for {unknown}")
+            f"unregistered terminal task status for {unknown}")
         root_terminal = next(
-            (item for item in terminals if item["inner_pid"] == root_pid), None,
+            (item for item in terminals
+             if item["inner_tid"] == root_tgid), None,
         )
         require(root_terminal is not None and
                 root_terminal["exit_code"] == 0 and
@@ -754,15 +1104,17 @@ def _trace_until_closed(
                 "projected root process did not exit zero")
         closed = True
         return {
-            "root_inner_pid": root_pid,
+            "root_inner_pid": root_tgid,
             "event_counts": counts,
             "terminal_count": len(terminals),
             "active_processes": 0,
+            "active_tasks": 0,
             "local_process_trace_closed": True,
+            "local_task_trace_closed": True,
         }
     finally:
         if not closed:
-            _cleanup_tracees(tracees)
+            _cleanup_tracees(tasks, processes)
 
 
 def _close_publication_copy(publication: auth.PublicationPin) -> None:
@@ -806,7 +1158,8 @@ def _manager_main(
 ) -> int:
     emitter: _Emitter | None = None
     mount_state: Any | None = None
-    tracees: dict[int, _Tracee] = {}
+    processes: dict[int, _ProcessIdentity] = {}
+    tasks: dict[int, _TaskIdentity] = {}
     try:
         require(os.getpid() == 1, "manager is not PID 1 in the new namespace")
         _set_parent_death_signal(allow_invisible_parent=True)
@@ -872,8 +1225,23 @@ def _manager_main(
                 os.WSTOPSIG(wait_status) == signal.SIGSTOP,
                 "projected root did not reach its exact pre-exec stop")
         root_pidfd, root_identity = _open_process_identity(root_pid)
-        root_tracee = _Tracee(root_pidfd, root_identity, True, True)
-        tracees[root_pid] = root_tracee
+        root_task_fd, root_task_identity = _open_task_identity(
+            root_pid, expected_tgid=root_pid,
+        )
+        root_process = _ProcessIdentity(
+            root_pidfd, root_identity, {root_pid}, 0,
+        )
+        root_task = _TaskIdentity(
+            root_task_fd, root_task_identity, True, True,
+            {
+                "sequence": 0,
+                "kind": "root",
+                "parent_inner_tid": 1,
+                "parent_inner_tgid": 1,
+            },
+        )
+        processes[root_pid] = root_process
+        tasks[root_pid] = root_task
         _ptrace(PTRACE_SETOPTIONS, root_pid, PTRACE_OPTIONS)
 
         _install_filter(
@@ -911,6 +1279,7 @@ def _manager_main(
             "target_paths": mount_state.target_paths,
             "manager_security": manager_security,
             "root_process": root_identity,
+            "root_task": _task_evidence(root_task),
             "root_security": _status_security(root_pid),
             "ptrace_options": [
                 "TRACEFORK", "TRACEVFORK", "TRACECLONE", "TRACEEXEC",
@@ -919,9 +1288,9 @@ def _manager_main(
             "clone_policy": {
                 "fork": "allowed-traced-process",
                 "vfork": "allowed-traced-process",
-                "legacy_clone": "process-only-with-forbidden-flag-mask",
+                "legacy_clone": "allowed-traced-process-or-thread",
                 "clone3": "errno-ENOSYS",
-                "threads": "killed",
+                "threads": "allowed-traced-legacy-clone",
                 "CLONE_UNTRACED": "killed",
             },
             "host_filesystem_hidden": False,
@@ -964,20 +1333,21 @@ def _manager_main(
                 auth.canonical_json_bytes(ack) == ack_raw,
                 "READY ACK differs from exact stopped-root challenge")
         _lifelines_alive((outer_lifeline, bootstrap_lifeline))
-        del tracees[root_pid]
+        processes.clear()
+        tasks.clear()
         summary = _trace_until_closed(
-            emitter, root_pid, root_tracee, timeout_seconds,
+            emitter, root_pid, root_process, root_task, timeout_seconds,
             (outer_lifeline, bootstrap_lifeline),
         )
         mount_state.close()
         mount_state = None
         emitter.send("result", summary)
-        emitter.send("done", {"outcome": "local-process-trace-closed"})
+        emitter.send("done", {"outcome": "local-task-trace-closed"})
         channel.close()
         return 0
     except BaseException as error:
-        if tracees:
-            _cleanup_tracees(tracees)
+        if tasks or processes:
+            _cleanup_tracees(tasks, processes)
         if mount_state is not None:
             mount_state.close()
         if emitter is not None:
@@ -985,7 +1355,7 @@ def _manager_main(
                 emitter.send("error", {
                     "type": type(error).__name__, "message": str(error),
                 })
-                emitter.send("done", {"outcome": "local-process-trace-rejected"})
+                emitter.send("done", {"outcome": "local-task-trace-rejected"})
             except BaseException:
                 pass
         channel.close()
@@ -1222,6 +1592,44 @@ def _decode_packet(raw: bytes) -> dict[str, Any]:
     return packet
 
 
+def _validate_task_evidence(task: Any, *, require_birth: bool) -> None:
+    required = {
+        "inner_tid", "inner_tgid", "nspid_visible_from_inner_proc",
+        "nstgid_visible_from_inner_proc", "start_ticks",
+        "observed_parent_process_inner_pid_untrusted", "process_group_id",
+        "session_id",
+        "state", "task_directory", "task_directory_held", "birth",
+    }
+    require(isinstance(task, dict) and set(task) == required and
+            type(task.get("inner_tid")) is int and task["inner_tid"] > 1 and
+            type(task.get("inner_tgid")) is int and task["inner_tgid"] > 1 and
+            task.get("nspid_visible_from_inner_proc", [])[-1:] ==
+                [task["inner_tid"]] and
+            task.get("nstgid_visible_from_inner_proc", [])[-1:] ==
+                [task["inner_tgid"]] and
+            type(task.get("start_ticks")) is int and task["start_ticks"] > 0 and
+            task.get("task_directory_held") is True and
+            isinstance(task.get("task_directory"), dict) and
+            set(task["task_directory"]) == {
+                "device", "inode", "mode", "link_count",
+            }, "task evidence schema or exact identity differs")
+    birth = task["birth"]
+    if require_birth:
+        require(isinstance(birth, dict) and set(birth) == {
+                    "sequence", "kind", "parent_inner_tid",
+                    "parent_inner_tgid",
+                } and type(birth.get("sequence")) is int and
+                birth["sequence"] >= 0 and
+                isinstance(birth.get("kind"), str) and birth["kind"] and
+                type(birth.get("parent_inner_tid")) is int and
+                birth["parent_inner_tid"] > 0 and
+                type(birth.get("parent_inner_tgid")) is int and
+                birth["parent_inner_tgid"] > 0,
+                "registered task birth evidence differs")
+    else:
+        require(birth is None, "provisional task unexpectedly has birth evidence")
+
+
 def receive_pidns_projection_packet(
     session: PidnsProjectionSession,
 ) -> dict[str, Any] | None:
@@ -1318,6 +1726,12 @@ def receive_pidns_projection_packet(
                 "identity": outer_identity,
             })
             received_fds.pop()
+        task = packet["payload"].get("task")
+        if task is not None:
+            _validate_task_evidence(
+                task,
+                require_birth=packet["event"] != "provisional-child-stop",
+            )
         session.next_sequence += 1
         session.packets.append(packet)
         session.raw_packets.append(raw)
@@ -1338,7 +1752,8 @@ def _validate_ready(
         "transferred_pidfd", "manager", "procfs", "projection_root",
         "publication_manifest_sha256", "staged_seal_sha256",
         "working_directory", "projected", "target_paths", "manager_security",
-        "root_process", "root_security", "ptrace_options", "clone_policy",
+        "root_process", "root_task", "root_security", "ptrace_options",
+        "clone_policy",
         "host_filesystem_hidden", "host_pid_namespace_hidden",
         "primary_procfs_rooted_in_private_pid_namespace",
         "network_namespace_private", "pft_exclusion_enforced",
@@ -1361,9 +1776,9 @@ def _validate_ready(
             ] and payload["clone_policy"] == {
                 "fork": "allowed-traced-process",
                 "vfork": "allowed-traced-process",
-                "legacy_clone": "process-only-with-forbidden-flag-mask",
+                "legacy_clone": "allowed-traced-process-or-thread",
                 "clone3": "errno-ENOSYS",
-                "threads": "killed",
+                "threads": "allowed-traced-legacy-clone",
                 "CLONE_UNTRACED": "killed",
             }, "READY policy fields differ")
     manager = payload["manager"]
@@ -1383,6 +1798,15 @@ def _validate_ready(
     require(root_pidfd["sequence"] == packet["sequence"] and
             root_pidfd["identity"]["nspid"][-1] == 2,
             "READY root pidfd transfer differs")
+    root_task = payload["root_task"]
+    _validate_task_evidence(root_task, require_birth=True)
+    require(root_task["inner_tid"] == root_task["inner_tgid"] == 2 and
+            root_task["birth"] == {
+                "sequence": 0,
+                "kind": "root",
+                "parent_inner_tid": 1,
+                "parent_inner_tgid": 1,
+            }, "READY root task identity differs")
     outer_root_pid = root_pidfd["identity"]["outer_pid"]
     root_status = _proc_status(outer_root_pid)
     root_security = payload["root_security"]
@@ -1538,9 +1962,11 @@ def finish_pidns_projection_trace(
         events.count("result") == events.count("done") == 1 and
         events[-2:] == ["result", "done"] and len(results) == len(done) == 1 and
         results[0].get("local_process_trace_closed") is True and
+        results[0].get("local_task_trace_closed") is True and
         results[0].get("active_processes") == 0 and
+        results[0].get("active_tasks") == 0 and
         done[0] == {
-            "outcome": "local-process-trace-closed",
+            "outcome": "local-task-trace-closed",
             "transferred_pidfd": False,
         } and
         not any(session.projection_root.iterdir())
@@ -1551,10 +1977,11 @@ def finish_pidns_projection_trace(
         "policy": POLICY,
         "challenge": session.challenge,
         "outcome": (
-            "local-process-trace-closed" if succeeded
-            else "local-process-trace-rejected"
+            "local-task-trace-closed" if succeeded
+            else "local-task-trace-rejected"
         ),
         "local_process_trace_closed": succeeded,
+        "local_task_trace_closed": succeeded,
         "bootstrap": {
             "outer_pid": session.bootstrap_pid,
             "exit_code": bootstrap_exit,
@@ -1584,7 +2011,7 @@ def finish_pidns_projection_trace(
         ),
         "elapsed_seconds": time.monotonic() - session.started_monotonic,
         "claim": (
-            "same-uid process-only PID/mount projection diagnostic; host-file, "
+            "same-uid task-aware PID/mount projection diagnostic; host-file, "
             "network, protected-history, DMTCP, release, S2, and S3 boundaries "
             "remain open"
         ),
@@ -1599,7 +2026,11 @@ def finish_pidns_projection_trace(
         "primary_procfs_rooted_in_private_pid_namespace": succeeded,
         "network_namespace_private": False,
         "dmtcp_compatibility_tested": False,
-        "threads_supported": False,
+        "threads_supported": succeeded,
+        "thread_identity_scope": (
+            "held-exact-inner-proc-task-directories" if succeeded else None
+        ),
+        "leader_pidfds_only": succeeded,
         "approval_included": False,
         "controller_supplied_pft_input": False,
         "pft_use_status": "not-observed-or-excluded",
