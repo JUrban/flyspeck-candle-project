@@ -31,7 +31,10 @@ GIT_PATH = Path("/usr/bin/git")
 COLLECTOR_RELATIVE = "candle/reference_fingerprints.py"
 PROTOCOL_RELATIVE = "candle/reference_protocol.py"
 MANIFEST_RELATIVE = "candle/top100_manifest.json"
-SERIALIZER_RELATIVE = "candle/fingerprint.ml"
+SERIALIZER_RELATIVES = frozenset({
+    "candle/fingerprint.ml",
+    "candle/fingerprint_v3.ml",
+})
 SOURCE_CONTRACT_RELATIVE = "candle/reference_source_contracts.json"
 CONTROLLER_RELATIVE = "scripts/run-top100-reference-sweeps.py"
 LOCK_FD_ENV = "CANDLE_REFERENCE_CONTROLLER_LOCK_FD"
@@ -952,7 +955,12 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
     collector = validate_committed_file(candle_root, COLLECTOR_RELATIVE, "100644")
     protocol = validate_committed_file(candle_root, PROTOCOL_RELATIVE, "100644")
     manifest_record = validate_committed_file(candle_root, MANIFEST_RELATIVE, "100644")
-    serializer = validate_committed_file(candle_root, SERIALIZER_RELATIVE, "100644")
+    serializer_relative = safe_relative(
+        arguments.serializer_relative, "serializer path")
+    require(serializer_relative in SERIALIZER_RELATIVES,
+            "serializer path is not an allowed fingerprint contract")
+    serializer = validate_committed_file(
+        candle_root, serializer_relative, "100644")
     source_contract = validate_committed_file(
         candle_root, SOURCE_CONTRACT_RELATIVE, "100644",
     )
@@ -1177,7 +1185,7 @@ def validate_environment(contract: dict[str, Any]) -> None:
     for relative, key in (
         (COLLECTOR_RELATIVE, "collector"), (PROTOCOL_RELATIVE, "protocol"),
         (MANIFEST_RELATIVE, "manifest"),
-        (SERIALIZER_RELATIVE, "serializer"),
+        (candle["serializer"]["path"], "serializer"),
         (SOURCE_CONTRACT_RELATIVE, "source_contract"),
     ):
         observed = file_record(candle_root / relative, f"current {relative}")
@@ -2349,6 +2357,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--manifest-sha256", required=True)
     result.add_argument("--collector-sha256", required=True)
     result.add_argument("--protocol-sha256", required=True)
+    result.add_argument("--serializer-relative", required=True)
     result.add_argument("--reference-root", type=Path, required=True)
     result.add_argument("--reference-head", required=True)
     result.add_argument("--runtime", type=Path, required=True)
