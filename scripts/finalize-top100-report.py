@@ -7,8 +7,10 @@ complete source closure, or an independent approval artifact. It is therefore
 unconditionally non-promotable here. This program accepts exactly two schema-4
 reports and an out-of-band receipt whose SHA-256 is supplied separately.
 
-Every file used for acceptance is copied once through an O_NOFOLLOW descriptor
-into a private archive staging directory. Validation and helper execution use
+The reference authority must come from the separately authenticated schema-5
+two-sweep collection contract. Every file used for acceptance is copied once
+through an O_NOFOLLOW descriptor into a private archive staging directory.
+Validation and helper execution use
 those staged bytes; the named source is never reread to populate the archive.
 """
 
@@ -96,14 +98,19 @@ TIMEOUT_KEYS = {
 EXECUTION_CONTRACT_PATHS = {
     "candle/cakeml_artifact_provenance.py": "100644",
     "candle/regression.py": "100644",
+    "candle/reference_protocol.py": "100644",
+    "candle/runtime_fingerprint_protocol.py": "100644",
     "candle/top100_manifest.json": "100644",
     "candle/fingerprint.ml": "100644",
+    "candle/fingerprint_v3_state_stream.ml": "100644",
     "candle.sh": "100755",
 }
 REFERENCE_VALIDATOR_PATH = "candle/reference_fingerprints.py"
 REFERENCE_PROTOCOL_PATH = "candle/reference_protocol.py"
 FINGERPRINT_CONTRACT = {
-    "serializer": "candle/fingerprint.ml structural v2",
+    "serializer": (
+        "candle/fingerprint.ml structural v3 with exact chunked state transport"
+    ),
     "load_pass_is_fingerprint_match": False,
     "expected_identity_source": (
         "separate independently reviewed approval artifact, "
@@ -149,22 +156,22 @@ APPROVAL_REVIEW_KEYS = {"reviewer", "approved_utc", "review_commit", "decision"}
 APPROVAL_TARGET_KEYS = {"name", "reference_runs", "expected_identity"}
 COLLECTION_EVIDENCE_KEYS = {"contract", "receipt"}
 COLLECTION_CONTROLLER_PATH = "scripts/run-top100-reference-sweeps.py"
-COLLECTION_PROJECT_HEAD = "95bb84fffade845406af92305baea0a9686ef21f"
-COLLECTION_CONTROLLER_BYTES = 109742
+COLLECTION_PROJECT_HEAD = "c00408aaae1ce85ce41502dbe5977ed9fb445f5c"
+COLLECTION_CONTROLLER_BYTES = 111672
 COLLECTION_CONTROLLER_SHA256 = \
-    "a703c01f1153bd8774f2f1ab4342950469011cbfee6d7f605485cc71d87f6301"
-COLLECTION_CANDLE_HEAD = "652a18a6735be8969462bf25f3233d23b5a4ed6d"
-REVIEWER_VALIDATOR_BYTES = 100912
+    "5674d58c5aec527227f4342823e586f30a99211355f4e6805ab40aa81ee38246"
+COLLECTION_CANDLE_HEAD = "afc95fbadd91141d86161af97c63c769858102d7"
+REVIEWER_VALIDATOR_BYTES = 102534
 REVIEWER_VALIDATOR_SHA256 = \
-    "22af940154068ee89808396c2c17bb333ebc12822f0f4628665e1e8ce2702373"
-REVIEWER_PROTOCOL_BYTES = 8885
+    "9a3316f5cc498f492151c96a298d21ce2bd71618c53705f650ffd91f59790232"
+REVIEWER_PROTOCOL_BYTES = 8892
 REVIEWER_PROTOCOL_SHA256 = \
-    "e44ed73330e65058f759e30e90ede0bca0bfdedc7920534d632ecb6806299f68"
+    "5365462cdafc38efff436c77cb8fe36225cdbf400ae5320a073282ded5f551a1"
 COLLECTION_CANDLE_PATHS = {
     "collector": ("candle/reference_fingerprints.py", "100644"),
     "protocol": ("candle/reference_protocol.py", "100644"),
     "manifest": ("candle/top100_manifest.json", "100644"),
-    "serializer": ("candle/fingerprint.ml", "100644"),
+    "serializer": ("candle/fingerprint_v3.ml", "100644"),
     "source_contract": ("candle/reference_source_contracts.json", "100644"),
 }
 APPROVAL_IDENTITY_KEYS = {"serializer_sha256", "theorems", "post_state"}
@@ -175,8 +182,17 @@ AUTHORIZATION_KEYS = {
 }
 MARKER_CONTRACT = "candle-great100-process-markers-v1"
 LINKED_PASS_WITNESS = "linked CakeML provenance PASS"
-FINGERPRINT_MARKER = "CANDLE_FINGERPRINT_V2"
-STATE_FINGERPRINT_MARKER = "CANDLE_STATE_FINGERPRINT_V2"
+FINGERPRINT_MARKER = "CANDLE_FINGERPRINT_V3"
+STATE_FINGERPRINT_MARKER = "CANDLE_STATE_FINGERPRINT_V3_STREAM_BEGIN"
+STATE_STREAM_COMPONENT_BEGIN = \
+    "CANDLE_STATE_FINGERPRINT_V3_STREAM_COMPONENT_BEGIN"
+STATE_STREAM_CHUNK = "CANDLE_STATE_FINGERPRINT_V3_STREAM_CHUNK"
+STATE_STREAM_COMPONENT_END = \
+    "CANDLE_STATE_FINGERPRINT_V3_STREAM_COMPONENT_END"
+STATE_STREAM_END = "CANDLE_STATE_FINGERPRINT_V3_STREAM_END"
+STATE_STREAM_COMPONENTS = (
+    "type_constants", "term_constants", "definitions", "global_axioms",
+)
 SHA256_RE = re.compile(r"[0-9a-f]{64}")
 COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 NONCE_RE = re.compile(r"[0-9a-f]{64}")
@@ -269,7 +285,7 @@ if (reference.PLAN_SCHEMA != "candle-s1-reference-plan-v9" or
 runtime_root = stage / instructions["runtime_root"]
 reference.ROOT = runtime_root
 reference.MANIFEST = runtime_root / "candle/top100_manifest.json"
-reference.SERIALIZER = runtime_root / "candle/fingerprint.ml"
+reference.SERIALIZER = runtime_root / "candle/fingerprint_v3.ml"
 reference.SOURCE_CONTRACT = \
     runtime_root / "candle/reference_source_contracts.json"
 
@@ -1321,32 +1337,95 @@ def parse_wire_record(line: str, label: str) -> dict[str, Any]:
     }
 
 
-def parse_state_wire_record(line: str, label: str) -> dict[str, Any]:
-    fields = line.split("\t")
-    require(len(fields) == 10 and fields[0] == STATE_FINGERPRINT_MARKER,
-            f"malformed 10-field state fingerprint wire record for {label}")
-    serialized = [
-        decode_wire_hex(fields[index], f"{label}.{field}")
-        for index, field in enumerate((
-            "kernel_state", "type_constants", "term_constants", "definitions",
-            "global_axioms",
-        ), 1)
-    ]
-    require(all(DECIMAL_RE.fullmatch(fields[index]) is not None
-                for index in (6, 7, 8, 9)),
-            f"non-canonical state fingerprint count in {label}")
-    result = {
-        "kernel_state_sha256": hashlib.sha256(serialized[0]).hexdigest(),
-        "type_constants_sha256": hashlib.sha256(serialized[1]).hexdigest(),
-        "term_constants_sha256": hashlib.sha256(serialized[2]).hexdigest(),
-        "definitions_sha256": hashlib.sha256(serialized[3]).hexdigest(),
-        "global_axioms_sha256": hashlib.sha256(serialized[4]).hexdigest(),
-        "type_constant_count": int(fields[6]),
-        "term_constant_count": int(fields[7]),
-        "definition_count": int(fields[8]),
-        "global_axiom_count": int(fields[9]),
-    }
-    return validate_post_state(result, label)
+def field_wire(value: bytes) -> bytes:
+    return str(len(value)).encode("ascii") + b":" + value
+
+
+def parse_state_wire_stream(
+    records: list[tuple[int, str]], label: str,
+) -> dict[str, Any]:
+    """Reconstruct the exact canonical V3 state wire from bounded chunks."""
+    require(records, f"missing state fingerprint stream for {label}")
+    offset = 0
+
+    def take(marker: str, field_count: int, item_label: str) -> list[str]:
+        nonlocal offset
+        require(offset < len(records), f"incomplete state stream for {label}")
+        fields = records[offset][1].split("\t")
+        require(len(fields) == field_count and fields[0] == marker,
+                f"malformed {item_label} for {label}")
+        offset += 1
+        return fields
+
+    begin = take(STATE_FINGERPRINT_MARKER, 10, "state stream begin")
+    require(all(DECIMAL_RE.fullmatch(value) is not None for value in begin[1:]),
+            f"non-canonical state stream length/count for {label}")
+    values = [int(value) for value in begin[1:]]
+    kernel_length, *rest = values
+    lengths = dict(zip(STATE_STREAM_COMPONENTS, rest[:4]))
+    counts = dict(zip((
+        "type_constant_count", "term_constant_count", "definition_count",
+        "global_axiom_count",
+    ), rest[4:]))
+    kernel_header = field_wire(b"kernel-state") + field_wire(b"4")
+    kernel_digest = hashlib.sha256()
+    kernel_digest.update(kernel_header)
+    kernel_bytes = len(kernel_header)
+    component_digests: dict[str, str] = {}
+
+    for component in STATE_STREAM_COMPONENTS:
+        fields = take(
+            STATE_STREAM_COMPONENT_BEGIN, 3,
+            f"{component} state component begin",
+        )
+        require(fields[1] == component and
+                DECIMAL_RE.fullmatch(fields[2]) is not None and
+                int(fields[2]) == lengths[component],
+                f"state component begin mismatch for {label}:{component}")
+        prefix = str(lengths[component]).encode("ascii") + b":"
+        kernel_digest.update(prefix)
+        kernel_bytes += len(prefix)
+        component_digest = hashlib.sha256()
+        received = 0
+        sequence = 0
+        while offset < len(records) and records[offset][1].startswith(
+                STATE_STREAM_CHUNK + "\t"):
+            chunk = take(STATE_STREAM_CHUNK, 4, f"{component} state chunk")
+            require(chunk[1] == component and
+                    DECIMAL_RE.fullmatch(chunk[2]) is not None and
+                    int(chunk[2]) == sequence and
+                    re.fullmatch(r"(?:[0-9a-f]{2})+", chunk[3]) is not None,
+                    f"malformed state chunk for {label}:{component}")
+            raw = bytes.fromhex(chunk[3])
+            received += len(raw)
+            require(received <= lengths[component],
+                    f"state component exceeds length for {label}:{component}")
+            component_digest.update(raw)
+            kernel_digest.update(raw)
+            kernel_bytes += len(raw)
+            sequence += 1
+        end = take(
+            STATE_STREAM_COMPONENT_END, 4,
+            f"{component} state component end",
+        )
+        require(end[1] == component and
+                DECIMAL_RE.fullmatch(end[2]) is not None and
+                DECIMAL_RE.fullmatch(end[3]) is not None and
+                int(end[2]) == lengths[component] == received and
+                int(end[3]) == sequence and sequence > 0,
+                f"state component end mismatch for {label}:{component}")
+        component_digests[component + "_sha256"] = \
+            component_digest.hexdigest()
+
+    take(STATE_STREAM_END, 1, "state stream end")
+    require(offset == len(records), f"extra state stream record for {label}")
+    require(kernel_bytes == kernel_length,
+            f"reconstructed state wire length mismatch for {label}")
+    return validate_post_state({
+        "kernel_state_sha256": kernel_digest.hexdigest(),
+        **component_digests,
+        **counts,
+    }, label)
 
 
 def validate_runtime_state(
@@ -1435,27 +1514,29 @@ def validate_transcript(
     ]
     require(parsed == expected_theorems,
             f"parsed fingerprint wire records differ from report for {name}")
-    state_indices = [
-        index for index, line in enumerate(lines)
-        if line.startswith(STATE_FINGERPRINT_MARKER)
-    ]
-    require(len(state_indices) == 1,
-            f"state fingerprint wire-record count mismatch for {name}")
-    require(linked < state_indices[0] < complete and
-            all(linked < index < complete for index in wire_indices),
-            f"fingerprint wire record precedes linked marker for {name}")
-    parsed_state = parse_state_wire_record(
-        lines[state_indices[0]], f"{name} post-state",
-    )
-    require(parsed_state == expected_post_state,
-            f"parsed state fingerprint differs from report for {name}")
     require(not any(
         (line.startswith("CANDLE_FINGERPRINT_V") and
          not line.startswith(FINGERPRINT_MARKER + "\t")) or
-        (line.startswith("CANDLE_STATE_FINGERPRINT_V") and
-         not line.startswith(STATE_FINGERPRINT_MARKER + "\t"))
+        (line.startswith("CANDLE_STATE_FINGERPRINT_V") and not (
+            line.startswith(STATE_FINGERPRINT_MARKER + "\t") or
+            line.startswith(STATE_STREAM_COMPONENT_BEGIN + "\t") or
+            line.startswith(STATE_STREAM_CHUNK + "\t") or
+            line.startswith(STATE_STREAM_COMPONENT_END + "\t") or
+            line == STATE_STREAM_END
+        ))
         for line in lines
     ), f"unexpected fingerprint wire version in transcript for {name}")
+    state_records = [
+        (index, line) for index, line in enumerate(lines)
+        if line.startswith("CANDLE_STATE_FINGERPRINT_V")
+    ]
+    require(state_records and
+            all(linked < index < complete for index, _ in state_records) and
+            all(linked < index < complete for index in wire_indices),
+            f"fingerprint wire record precedes linked marker for {name}")
+    parsed_state = parse_state_wire_stream(state_records, f"{name} post-state")
+    require(parsed_state == expected_post_state,
+            f"parsed state fingerprint differs from report for {name}")
 
 
 def safe_name(name: str) -> str:
@@ -1783,8 +1864,9 @@ def snapshot_utf8(stage: Path, snapshot: Snapshot, label: str) -> str:
 
 def prepare_reference_replay_root(
     stage: Path, stager: Stager, role: str, validator: Snapshot,
-    protocol: Snapshot, regression: Snapshot, serializer: Snapshot,
-    manifest: Snapshot, source_contract: Snapshot, closure: dict[str, Any],
+    protocol: Snapshot, regression: Snapshot, runtime_protocol: Snapshot,
+    serializer: Snapshot, manifest: Snapshot, source_contract: Snapshot,
+    closure: dict[str, Any],
 ) -> dict[str, str]:
     require(role in {"producer", "reviewer"}, "invalid replay role")
     runtime_root = f"approval/replay/{role}/runtime-root"
@@ -1792,7 +1874,8 @@ def prepare_reference_replay_root(
         REFERENCE_VALIDATOR_PATH: validator,
         REFERENCE_PROTOCOL_PATH: protocol,
         "candle/regression.py": regression,
-        "candle/fingerprint.ml": serializer,
+        "candle/runtime_fingerprint_protocol.py": runtime_protocol,
+        "candle/fingerprint_v3.ml": serializer,
         "candle/top100_manifest.json": manifest,
         "candle/reference_source_contracts.json": source_contract,
     }
@@ -2345,7 +2428,7 @@ def validate_reference_plan_bindings(
             isinstance(serializer["path"], str) and
             Path(serializer["path"]).is_absolute() and
             serializer["path"] == str(
-                Path(repository["root"]) / "candle/fingerprint.ml"),
+                Path(repository["root"]) / "candle/fingerprint_v3.ml"),
             f"reference plan serializer binding mismatch for {name}")
     manifest_pin = inputs["manifest"]
     require(isinstance(manifest_pin, dict) and
@@ -2950,7 +3033,8 @@ def validate_candidate_identity_projection(
             identities["expected_identities_present"] is False and
             identities["approval_sha256"] is None and
             identities["serializer"] == {
-                "path": "candle/fingerprint.ml", "sha256": serializer_sha256,
+                "path": "candle/fingerprint_v3.ml",
+                "sha256": serializer_sha256,
             }, f"malformed replayable candidate identities for {name}")
     theorem_names = [
         theorem["name"] for theorem in target["fingerprint_request"]["theorems"]
@@ -3545,11 +3629,11 @@ def capture_collection_evidence(
         "schema", "kind", "approval_status", "promotion_allowed",
         "sweep_count", "target_count", "total_target_runs", "source_mode",
             "project", "candle", "reference", "runtime", "external_runtime",
-            "elf_oracle",
+            "elf_oracle", "execution",
             "deadlines", "inventory", "controller",
     } and all(is_int(contract[field]) for field in (
         "schema", "sweep_count", "target_count", "total_target_runs",
-    )) and contract["schema"] == 4 and
+    )) and contract["schema"] == 5 and
             contract["kind"] ==
             "candle-great100-two-sweep-reference-collection" and
             contract["approval_status"] ==
@@ -3559,6 +3643,16 @@ def capture_collection_evidence(
             contract["total_target_runs"] == 130 and
             contract["source_mode"] == "manifest-exact",
             "malformed reference collection contract")
+    execution = contract["execution"]
+    require(isinstance(execution, dict) and set(execution) == {
+        "scheduler", "max_parallel_targets", "sweep_overlap_allowed",
+        "stop_scheduling_after_failure",
+    } and execution["scheduler"] == "bounded-independent-targets-v1" and
+            is_int(execution["max_parallel_targets"]) and
+            1 <= execution["max_parallel_targets"] <= 9 and
+            execution["sweep_overlap_allowed"] is False and
+            execution["stop_scheduling_after_failure"] is True,
+            "malformed reference collection execution contract")
     inventory = contract["inventory"]
     targets = manifest["targets"]
     inventory_targets = []
@@ -3735,7 +3829,8 @@ def validate_approval_and_capture(
     closure: dict[str, Any], expected_semantics: list[dict[str, Any]],
     serializer: Snapshot, reviewer_validator: Snapshot,
     reviewer_protocol: Snapshot, source_contract: Snapshot,
-    regression: Snapshot, reviewer_runtime: dict[str, str], trusted_project_root: Path,
+    regression: Snapshot, runtime_protocol: Snapshot,
+    reviewer_runtime: dict[str, str], trusted_project_root: Path,
     trusted_project_head: str, stage: Path, stager: Stager,
 ) -> dict[str, Any]:
     require(set(approval) == APPROVAL_KEYS and
@@ -4167,7 +4262,7 @@ def validate_approval_and_capture(
             "reference approval has no HOL/OCaml runtime closure")
     producer_runtime = prepare_reference_replay_root(
         stage, stager, "producer", producer_validator, producer_protocol,
-        regression, producer_snapshots["serializer"],
+        regression, runtime_protocol, producer_snapshots["serializer"],
         producer_snapshots["manifest"], producer_snapshots["source_contract"],
         closure,
     )
@@ -4359,14 +4454,7 @@ def archive(
         validate_committed_snapshot(
             root, REFERENCE_VALIDATOR_PATH, reference_validator, stage, "100644",
         )
-        reference_protocol = stager.capture(
-            root / REFERENCE_PROTOCOL_PATH,
-            f"execution-contract/{REFERENCE_PROTOCOL_PATH}",
-            "reference fingerprint protocol",
-        )
-        validate_committed_snapshot(
-            root, REFERENCE_PROTOCOL_PATH, reference_protocol, stage, "100644",
-        )
+        reference_protocol = contract_snapshots[REFERENCE_PROTOCOL_PATH]
         require(reference_validator.identity == FileIdentity(
             REVIEWER_VALIDATOR_BYTES, REVIEWER_VALIDATOR_SHA256,
         ) and reference_protocol.identity == FileIdentity(
@@ -4399,6 +4487,7 @@ def archive(
         reviewer_runtime = prepare_reference_replay_root(
             stage, stager, "reviewer", reference_validator, reference_protocol,
             contract_snapshots["candle/regression.py"],
+            contract_snapshots["candle/runtime_fingerprint_protocol.py"],
             contract_snapshots["candle/fingerprint.ml"],
             contract_snapshots["candle/top100_manifest.json"],
             reference_source_contract, closure,
@@ -4437,6 +4526,7 @@ def archive(
             reference_validator, reference_protocol,
             reference_source_contract,
             contract_snapshots["candle/regression.py"],
+            contract_snapshots["candle/runtime_fingerprint_protocol.py"],
             reviewer_runtime, finalizer["project_root"],
             finalizer["project_head"], stage, stager,
         )

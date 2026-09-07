@@ -179,9 +179,14 @@ class Fixture:
         self.serializer_path = self._write(
             self.candle_root, "candle/fingerprint.ml", b"serializer fixture\n",
         )
+        self._write(
+            self.candle_root, "candle/fingerprint_v3.ml",
+            self.serializer_path.read_bytes(),
+        )
         self.serializer_sha256 = digest(self.serializer_path.read_bytes())
         self.raw_records: dict[str, list[str]] = {}
         self.raw_states: dict[str, str] = {}
+        self.raw_state_streams: dict[str, list[str]] = {}
         self.manifest = self._create_manifest_and_sources()
         self._create_execution_sources()
         self.closure = self._source_closure()
@@ -292,31 +297,54 @@ class Fixture:
         return line, identity
 
     @staticmethod
-    def _state_wire_record(index: int) -> tuple[str, dict]:
-        values = [
-            f"kernel-state-{index}".encode(),
+    def _state_wire_record(index: int) -> tuple[str, list[str], dict]:
+        components = [
             f"type-constants-{index}".encode(),
             f"term-constants-{index}".encode(),
             f"definitions-{index}".encode(),
             b"three-global-axioms",
         ]
-        line = "\t".join([
-            MODULE.STATE_FINGERPRINT_MARKER,
-            *(value.hex() for value in values),
-            str(100 + index), str(200 + index), str(300 + index), "3",
+        kernel = (
+            MODULE.field_wire(b"kernel-state") + MODULE.field_wire(b"4") +
+            b"".join(MODULE.field_wire(value) for value in components)
+        )
+        counts = [100 + index, 200 + index, 300 + index, 3]
+        aggregate = "\t".join([
+            "CANDLE_STATE_FINGERPRINT_V3", kernel.hex(),
+            *(value.hex() for value in components),
+            *(str(value) for value in counts),
         ])
+        stream = ["\t".join([
+            MODULE.STATE_FINGERPRINT_MARKER, str(len(kernel)),
+            *(str(len(value)) for value in components),
+            *(str(value) for value in counts),
+        ])]
+        for name, value in zip(MODULE.STATE_STREAM_COMPONENTS, components):
+            stream.extend([
+                "\t".join([
+                    MODULE.STATE_STREAM_COMPONENT_BEGIN, name, str(len(value)),
+                ]),
+                "\t".join([
+                    MODULE.STATE_STREAM_CHUNK, name, "0", value.hex(),
+                ]),
+                "\t".join([
+                    MODULE.STATE_STREAM_COMPONENT_END, name, str(len(value)),
+                    "1",
+                ]),
+            ])
+        stream.append(MODULE.STATE_STREAM_END)
         identity = {
-            "kernel_state_sha256": digest(values[0]),
-            "type_constants_sha256": digest(values[1]),
+            "kernel_state_sha256": digest(kernel),
+            "type_constants_sha256": digest(components[0]),
             "type_constant_count": 100 + index,
-            "term_constants_sha256": digest(values[2]),
+            "term_constants_sha256": digest(components[1]),
             "term_constant_count": 200 + index,
-            "definitions_sha256": digest(values[3]),
+            "definitions_sha256": digest(components[2]),
             "definition_count": 300 + index,
-            "global_axioms_sha256": digest(values[4]),
+            "global_axioms_sha256": digest(components[3]),
             "global_axiom_count": 3,
         }
-        return line, identity
+        return aggregate, stream, identity
 
     def _create_manifest_and_sources(self) -> dict:
         targets = []
@@ -346,8 +374,9 @@ class Fixture:
                 wires.append(wire)
                 identities.append(identity)
             self.raw_records[name] = wires
-            state_wire, post_state = self._state_wire_record(index)
+            state_wire, state_stream, post_state = self._state_wire_record(index)
             self.raw_states[name] = state_wire
+            self.raw_state_streams[name] = state_stream
             targets.append({
                 "name": name,
                 "load_files": files,
@@ -397,10 +426,10 @@ class Fixture:
 import json
 from pathlib import Path
 
-FINGERPRINT_MARKER = "CANDLE_FINGERPRINT_V2"
-STATE_FINGERPRINT_MARKER = "CANDLE_STATE_FINGERPRINT_V2"
+FINGERPRINT_MARKER = "CANDLE_FINGERPRINT_V3"
+STATE_FINGERPRINT_MARKER = "CANDLE_STATE_FINGERPRINT_V3"
 CANDLE_ROOT = Path(__file__).resolve().parent.parent
-FINGERPRINT_HELPER = CANDLE_ROOT / "candle/fingerprint.ml"
+FINGERPRINT_HELPER = CANDLE_ROOT / "candle/fingerprint_v3.ml"
 
 _manifest = json.loads(
     (CANDLE_ROOT / "candle/top100_manifest.json").read_text(encoding="utf-8"))
@@ -479,7 +508,7 @@ def _read_fingerprint_records(path, theorem_names, mapping_status,
         "mapping_status": mapping_status,
         "expected_identities_present": False,
         "serializer": {
-            "path": "candle/fingerprint.ml",
+            "path": "candle/fingerprint_v3.ml",
             "sha256": hashlib.sha256(FINGERPRINT_HELPER.read_bytes()).hexdigest(),
         },
         "theorems": ordered,
@@ -757,6 +786,14 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             self.candle_root, "candle/reference_protocol.py",
             b'"""Pinned reference protocol fixture."""\n',
         )
+        self._write(
+            self.candle_root, "candle/runtime_fingerprint_protocol.py",
+            b'"""Pinned chunked runtime protocol fixture."""\n',
+        )
+        self._write(
+            self.candle_root, "candle/fingerprint_v3_state_stream.ml",
+            b"(* pinned chunked state transport fixture *)\n",
+        )
         launcher = self._write(
             self.candle_root, "candle.sh", b"#!/bin/sh\nexit 0\n",
         )
@@ -915,7 +952,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         protocol = collection_candle / "reference_protocol.py"
         protocol_sha256 = digest(protocol.read_bytes())
         manifest_pin = collection_candle / "top100_manifest.json"
-        producer_serializer = collection_candle / "fingerprint.ml"
+        producer_serializer = collection_candle / "fingerprint_v3.ml"
         producer_source_contract = collection_candle / \
             "reference_source_contracts.json"
         runtime = self._write(
@@ -1309,7 +1346,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "mapping_status": "audited",
                     "expected_identities_present": False,
                     "serializer": {
-                        "path": "candle/fingerprint.ml",
+                        "path": "candle/fingerprint_v3.ml",
                         "sha256": self.serializer_sha256,
                     },
                     "theorems": deepcopy(expected_identity["theorems"]),
@@ -1482,7 +1519,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "expected_identity": expected_identity,
             })
         collection_contract = {
-            "schema": 4,
+            "schema": 5,
             "kind": "candle-great100-two-sweep-reference-collection",
             "approval_status": "candidate_collection_only_unapproved",
             "promotion_allowed": False,
@@ -1506,8 +1543,8 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                              **record(protocol)},
                 "manifest": {"path": "candle/top100_manifest.json",
                              **record(manifest_pin)},
-                "serializer": {"path": "candle/fingerprint.ml",
-                               **record(collection_candle / "fingerprint.ml")},
+                "serializer": {"path": "candle/fingerprint_v3.ml",
+                               **record(collection_candle / "fingerprint_v3.ml")},
                 "source_contract": {
                     "path": "candle/reference_source_contracts.json",
                     **record(collection_candle /
@@ -1563,6 +1600,12 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             "elf_oracle": MODULE.elf_oracle_projection(
                 external_elf_runtime,
             ),
+            "execution": {
+                "scheduler": "bounded-independent-targets-v1",
+                "max_parallel_targets": 7,
+                "sweep_overlap_allowed": False,
+                "stop_scheduling_after_failure": True,
+            },
             "deadlines": collection_deadlines,
             "inventory": {
                 "target_count": 65, "source_count": 66, "request_count": 97,
@@ -1869,7 +1912,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             MODULE.LINKED_PASS_WITNESS,
             f"CANDLE_LINKED_PROVENANCE_V1\t{self.linked_sha256}",
             *self.raw_records[target["name"]],
-            self.raw_states[target["name"]],
+            *self.raw_state_streams[target["name"]],
             (f"CANDLE_GREAT100_PROCESS_V1\t{suite_nonce}\t{process_nonce}"
              "\tCOMPLETE"),
             "",
@@ -1890,7 +1933,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "suite_line": 0,
                 "start_line": 1,
                 "linked_line": 3,
-                "complete_line": 5 + len(self.raw_records[target["name"]]),
+                "complete_line": (
+                    4 + len(self.raw_records[target["name"]]) +
+                    len(self.raw_state_streams[target["name"]])
+                ),
             }
             executable_identity = record(self.build / "cake")
             runtime_state = {
@@ -2319,9 +2365,9 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         log = Path(result["log_path"])
         lines = log.read_text().splitlines()
         state_index = next(index for index, line in enumerate(lines)
-                           if line.startswith(MODULE.STATE_FINGERPRINT_MARKER))
+                           if line.startswith(MODULE.STATE_STREAM_CHUNK))
         fields = lines[state_index].split("\t")
-        fields[1] = b"forged kernel state".hex()
+        fields[3] = b"forged component".hex()
         lines[state_index] = "\t".join(fields)
         log.write_text("\n".join(lines) + "\n")
         self.fixture.refresh_transcript_identity(0, 0)
@@ -2340,6 +2386,58 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         ] += 1
         self.fixture.write_reports()
         self.assert_rejected("marker offsets differ")
+
+    def test_chunked_state_transport_fails_closed(self) -> None:
+        target = self.fixture.manifest["targets"][0]
+        result = self.fixture.reports[0]["results"][0]
+        process = result["process_evidence"]
+        original = Path(result["log_path"]).read_text().splitlines()
+        chunk_index = next(
+            index for index, line in enumerate(original)
+            if line.startswith(MODULE.STATE_STREAM_CHUNK + "\t")
+        )
+        begin_index = next(
+            index for index, line in enumerate(original)
+            if line.startswith(MODULE.STATE_FINGERPRINT_MARKER + "\t")
+        )
+        cases = {}
+        sequence = list(original)
+        fields = sequence[chunk_index].split("\t")
+        fields[2] = "1"
+        sequence[chunk_index] = "\t".join(fields)
+        cases["sequence"] = (sequence, 0)
+        cases["missing chunk"] = ([
+            line for index, line in enumerate(original) if index != chunk_index
+        ], -1)
+        cases["duplicate begin"] = ((
+            original[:begin_index] + [original[begin_index]] +
+            original[begin_index:]
+        ), 1)
+        reordered = list(original)
+        component_index = next(
+            index for index, line in enumerate(reordered)
+            if line.startswith(MODULE.STATE_STREAM_COMPONENT_BEGIN + "\t")
+        )
+        fields = reordered[component_index].split("\t")
+        fields[1] = "term_constants"
+        reordered[component_index] = "\t".join(fields)
+        cases["component order"] = (reordered, 0)
+        for label, (lines, marker_delta) in cases.items():
+            markers = deepcopy(process["markers"])
+            markers["complete_line"] += marker_delta
+            with self.subTest(label=label), self.assertRaisesRegex(
+                    MODULE.ValidationError,
+                    "state stream|state component|state chunk"):
+                MODULE.validate_transcript(
+                    ("\n".join(lines) + "\n").encode(), result["name"],
+                    process["suite_nonce"], process["process_nonce"],
+                    self.fixture.linked_sha256,
+                    target["fingerprint_request"]["expected_identities"][
+                        "theorems"],
+                    target["fingerprint_request"]["expected_identities"][
+                        "post_state"],
+                    markers,
+                )
 
     def test_process_runtime_and_resource_contracts_fail_closed(self) -> None:
         process = self.fixture.reports[0]["results"][0]["process_evidence"]
@@ -2393,8 +2491,8 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         result = self.fixture.reports[0]["results"][0]
         log = Path(result["log_path"])
         log.write_bytes(log.read_bytes() + (
-            b"CANDLE_FINGERPRINT_V3\tunsupported\n"
-            b"CANDLE_STATE_FINGERPRINT_V3\tunsupported\n"
+            b"CANDLE_FINGERPRINT_V4\tunsupported\n"
+            b"CANDLE_STATE_FINGERPRINT_V4\tunsupported\n"
         ))
         self.fixture.refresh_transcript_identity(0, 0)
         self.fixture.write_reports()
@@ -2410,8 +2508,8 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             (b"CANDLE_GREAT100_PROCESS_V2\tunsupported\n", "process protocol"),
             (b"CANDLE_LINKED_PROVENANCE_V2\tunsupported\n", "linked protocol"),
             ((MODULE.LINKED_PASS_WITNESS + "\n").encode(), "linked PASS witness"),
-            (b"CANDLE_FINGERPRINT_V3\tunsupported\n", "wire version"),
-            (b"CANDLE_STATE_FINGERPRINT_V3\tunsupported\n", "wire version"),
+            (b"CANDLE_FINGERPRINT_V4\tunsupported\n", "wire version"),
+            (b"CANDLE_STATE_FINGERPRINT_V4\tunsupported\n", "wire version"),
         )
         for suffix, error_pattern in cases:
             with self.subTest(suffix=suffix):
@@ -2752,6 +2850,14 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             contract[field] = float(contract[field])
         self.fixture.replace_collection_documents(contract, receipt)
         self.assert_rejected("malformed reference collection contract")
+
+    def test_collection_execution_contract_type_confusion_rejects(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        contract["execution"]["max_parallel_targets"] = True
+        contract["execution"]["sweep_overlap_allowed"] = 0
+        contract["execution"]["stop_scheduling_after_failure"] = 1
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("collection execution contract")
 
     def test_collection_inventory_integer_type_confusion_rejects(self) -> None:
         contract, receipt = self.fixture.collection_documents()
