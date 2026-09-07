@@ -626,6 +626,7 @@ class Fixture:
             collection_wall_seconds=10,
             target_wall_seconds=40,
             validation_wall_seconds=10,
+            jobs=1,
         )
 
     def command(self) -> list[str]:
@@ -679,6 +680,7 @@ class Fixture:
             ("collection-wall-seconds", arguments.collection_wall_seconds),
             ("target-wall-seconds", arguments.target_wall_seconds),
             ("validation-wall-seconds", arguments.validation_wall_seconds),
+            ("jobs", arguments.jobs),
         )
         command = [
             "/usr/bin/env", "-i", "PATH=/usr/bin:/bin", "LC_ALL=C", "LANG=C",
@@ -739,6 +741,58 @@ class ReferenceSweepControllerTests(unittest.TestCase):
         self.assertEqual(
             receipt_path.read_bytes(), MODULE.canonical_json(receipt),
         )
+
+    def test_bounded_parallel_collection_is_bound_and_complete(self) -> None:
+        fixture = self.fixture()
+        arguments = fixture.arguments()
+        arguments.jobs = 3
+        self.assertEqual(MODULE.run(arguments), 0)
+        contract = json.loads(
+            (fixture.artifacts / "collection-contract.json").read_text())
+        receipt = json.loads((fixture.artifacts / "receipt.json").read_text())
+        self.assertEqual(contract["schema"], 5)
+        self.assertEqual(contract["execution"], {
+            "scheduler": "bounded-independent-targets-v1",
+            "max_parallel_targets": 3,
+            "sweep_overlap_allowed": False,
+            "stop_scheduling_after_failure": True,
+        })
+        self.assertTrue(receipt["closed"])
+        self.assertEqual(receipt["completed_target_runs"], 130)
+
+    def test_parallel_failure_stops_feeding_new_targets(self) -> None:
+        fixture = self.fixture("100/test-01")
+        arguments = fixture.arguments()
+        arguments.jobs = 3
+        self.assertEqual(MODULE.run(arguments), 1)
+        status = json.loads((fixture.artifacts / "status.json").read_text())
+        self.assertGreaterEqual(status["completed_target_runs"], 1)
+        self.assertLessEqual(status["completed_target_runs"], 2)
+        self.assertEqual(status["failure_attempt_count"], 1)
+        self.assertFalse((fixture.artifacts / "sweep-1/target-004").exists())
+
+    def test_signal_is_forwarded_to_every_active_worker_group(self) -> None:
+        first = mock.Mock()
+        second = mock.Mock()
+        MODULE.ACTIVE_PROCESSES.update((first, second))
+        MODULE.PENDING_SIGNAL = None
+        try:
+            with mock.patch.object(MODULE, "signal_process_group") as forward:
+                with self.assertRaises(MODULE.ControllerInterrupted):
+                    MODULE.controller_signal_handler(signal.SIGTERM, None)
+                self.assertEqual(
+                    {call.args for call in forward.call_args_list},
+                    {(first, signal.SIGTERM), (second, signal.SIGTERM)},
+                )
+                forward.reset_mock()
+                MODULE.controller_signal_handler(signal.SIGHUP, None)
+                self.assertEqual(
+                    {call.args for call in forward.call_args_list},
+                    {(first, signal.SIGKILL), (second, signal.SIGKILL)},
+                )
+        finally:
+            MODULE.ACTIVE_PROCESSES.clear()
+            MODULE.PENDING_SIGNAL = None
 
     def test_failure_is_retained_and_resume_uses_a_new_attempt(self) -> None:
         fixture = self.fixture("100/test-01")
@@ -1470,7 +1524,7 @@ class ReferenceSweepControllerTests(unittest.TestCase):
                     for item in MODULE.HANDLED_SIGNALS:
                         signal.signal(item, MODULE.controller_signal_handler)
                     MODULE.PENDING_SIGNAL = None
-                    MODULE.ACTIVE_PROCESS = None
+                    MODULE.ACTIVE_PROCESSES.clear()
 
                     def signal_then_link(*args, **kwargs):
                         os.kill(os.getpid(), signum)
@@ -1491,7 +1545,7 @@ class ReferenceSweepControllerTests(unittest.TestCase):
                         for item, handler in old_handlers.items():
                             signal.signal(item, handler)
                         MODULE.PENDING_SIGNAL = None
-                        MODULE.ACTIVE_PROCESS = None
+                        MODULE.ACTIVE_PROCESSES.clear()
                         signal.pthread_sigmask(
                             signal.SIG_SETMASK, previous_mask,
                         )

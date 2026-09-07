@@ -9,6 +9,7 @@ Candle collector, and rewrites only deterministic aggregate status/receipt files
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import fcntl
 import hashlib
 import json
@@ -62,7 +63,7 @@ CONTRACT_PENDING_RE = re.compile(
     r"\.collection-contract\.json\.pending\.([0-9a-f]{64})",
 )
 HANDLED_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
-ACTIVE_PROCESS: subprocess.Popen[bytes] | None = None
+ACTIVE_PROCESSES: set[subprocess.Popen[bytes]] = set()
 PENDING_SIGNAL: int | None = None
 STARTUP_ENVIRONMENT = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"}
 EXTERNAL_RUNTIME_POLICY = "single_private_path_gp_csdp_with_pinned_shell_v3"
@@ -1122,6 +1123,8 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
             is_int(arguments.validation_wall_seconds) and
             arguments.validation_wall_seconds > 0,
             "deadlines must be positive and target deadline needs 30 seconds grace")
+    require(is_int(arguments.jobs) and 1 <= arguments.jobs <= 9,
+            "parallel target jobs must be between 1 and 9")
     python = runtime_file_record(PYTHON_ARGUMENT_PATH, "Python executable")
     git_tool = file_record(GIT_PATH, "Git executable")
     require(python["sha256"] == require_sha256(
@@ -1131,7 +1134,7 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         arguments.git_sha256, "pinned Git"),
         "Git executable differs from command-line pin")
     contract = {
-        "schema": 4,
+        "schema": 5,
         "kind": "candle-great100-two-sweep-reference-collection",
         "approval_status": "candidate_collection_only_unapproved",
         "promotion_allowed": False,
@@ -1139,6 +1142,12 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         "target_count": EXPECTED_TARGETS,
         "total_target_runs": SWEEP_COUNT * EXPECTED_TARGETS,
         "source_mode": "manifest-exact",
+        "execution": {
+            "scheduler": "bounded-independent-targets-v1",
+            "max_parallel_targets": arguments.jobs,
+            "sweep_overlap_allowed": False,
+            "stop_scheduling_after_failure": True,
+        },
         "project": {
             "root": str(project_root), "git_head": project_head,
             "controller": controller,
@@ -1302,44 +1311,36 @@ def terminate_and_wait(
 
 def controller_signal_handler(signum: int, _frame: object) -> None:
     global PENDING_SIGNAL
-    process = ACTIVE_PROCESS
+    processes = tuple(ACTIVE_PROCESSES)
     if PENDING_SIGNAL is None:
         PENDING_SIGNAL = signum
-        if process is not None:
+        for process in processes:
             signal_process_group(process, signum)
         raise ControllerInterrupted(signum)
-    if process is not None:
+    for process in processes:
         signal_process_group(process, signal.SIGKILL)
 
 
 def run_process(
     command: list[str], timeout: int, lock_fd: int,
 ) -> tuple[int | None, bytes, bytes, bool]:
-    global ACTIVE_PROCESS
     process: subprocess.Popen[bytes] | None = None
-    previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
+    if PENDING_SIGNAL is not None:
+        raise ControllerInterrupted(PENDING_SIGNAL)
     try:
-        try:
-            def restore_child_signal_mask() -> None:
-                signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
-
-            process = subprocess.Popen(
-                command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                env=subprocess_environment(lock_fd), start_new_session=True,
-                pass_fds=(lock_fd,), preexec_fn=restore_child_signal_mask,
-            )
-            ACTIVE_PROCESS = process
-        except OSError as error:
-            raise CollectionFailure(f"could not start process: {command[0]}") from error
-        finally:
-            signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
-    except ControllerInterrupted:
-        if process is not None:
-            terminate_and_wait(process, PENDING_SIGNAL or signal.SIGTERM)
-        ACTIVE_PROCESS = None
-        raise
+        process = subprocess.Popen(
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            env=subprocess_environment(lock_fd), start_new_session=True,
+            pass_fds=(lock_fd,),
+        )
+        ACTIVE_PROCESSES.add(process)
+    except OSError as error:
+        raise CollectionFailure(f"could not start process: {command[0]}") from error
     try:
         require(process is not None, "child process was not created")
+        if PENDING_SIGNAL is not None:
+            terminate_and_wait(process, PENDING_SIGNAL)
+            raise ControllerInterrupted(PENDING_SIGNAL)
         stdout, stderr = process.communicate(timeout=timeout)
         return process.returncode, stdout, stderr, False
     except subprocess.TimeoutExpired:
@@ -1352,7 +1353,8 @@ def run_process(
         terminate_and_wait(process, signal.SIGKILL)
         raise
     finally:
-        ACTIVE_PROCESS = None
+        if process is not None:
+            ACTIVE_PROCESSES.discard(process)
 
 
 def artifact_relative(root: Path, path: Path) -> str:
@@ -2129,7 +2131,6 @@ def scan_all(
     completed = 0
     failures = []
     nonces: set[str] = set()
-    open_seen = False
     for sweep in range(1, SWEEP_COUNT + 1):
         rows = []
         sweep_complete = 0
@@ -2139,11 +2140,8 @@ def scan_all(
             )
             success = state["success"]
             if success is None:
-                open_seen = True
                 row_state = "pending"
             else:
-                require(not open_seen,
-                        f"completed target appears after an unresolved gap: {target['name']}")
                 require(success["session_nonce"] not in nonces,
                         f"reference session nonce reused: {target['name']}")
                 nonces.add(success["session_nonce"])
@@ -2251,18 +2249,82 @@ def ensure_sweep_directories(root: Path) -> None:
             private_directory(entry, "target directory")
 
 
-def next_pending(
+def next_pending_sweep(
     receipt: dict[str, Any], contract: dict[str, Any], root: Path,
-) -> tuple[int, dict[str, Any], int] | None:
+) -> list[tuple[int, dict[str, Any], int]]:
     target_by_index = {
         target["index"]: target for target in contract["inventory"]["targets"]
     }
     for sweep in receipt["sweeps"]:
+        pending = []
         for row in sweep["targets"]:
             if row["state"] == "pending":
-                return sweep["sweep"], target_by_index[row["index"]], \
-                    row["attempt_count"] + 1
-    return None
+                pending.append((
+                    sweep["sweep"], target_by_index[row["index"]],
+                    row["attempt_count"] + 1,
+                ))
+        if pending:
+            return pending
+    return []
+
+
+def prepare_attempt(
+    artifact_root: Path, sweep: int, target: dict[str, Any], attempt_number: int,
+) -> Path:
+    directory = target_directory(artifact_root, sweep, target["index"])
+    if not os.path.lexists(directory):
+        ensure_new_directory(directory, f"target directory {target['name']}")
+    return ensure_new_directory(
+        directory / f"attempt-{attempt_number:04d}",
+        f"attempt for {target['name']}",
+    )
+
+
+def collect_pending_sweep(
+    artifact_root: Path, pending: list[tuple[int, dict[str, Any], int]],
+    contract: dict[str, Any], lock_fd: int, validation_cache: set[str],
+) -> bool:
+    """Collect one sweep with bounded workers and stop feeding on failure."""
+    iterator = iter(pending)
+    active: dict[Future[tuple[dict[str, dict[str, object]], str]], Path] = {}
+    failed = False
+
+    def submit_next(executor: ThreadPoolExecutor) -> bool:
+        try:
+            sweep, target, attempt_number = next(iterator)
+        except StopIteration:
+            return False
+        attempt = prepare_attempt(
+            artifact_root, sweep, target, attempt_number)
+        future = executor.submit(
+            collect_target, artifact_root, attempt, sweep, target, contract,
+            lock_fd,
+        )
+        active[future] = attempt
+        return True
+
+    with ThreadPoolExecutor(
+            max_workers=contract["execution"]["max_parallel_targets"],
+            thread_name_prefix="reference-target") as executor:
+        for _index in range(contract["execution"]["max_parallel_targets"]):
+            if not submit_next(executor):
+                break
+        while active:
+            completed, _waiting = wait(active, return_when=FIRST_COMPLETED)
+            for future in completed:
+                attempt = active.pop(future)
+                try:
+                    future.result()
+                except CollectionFailure:
+                    failed = True
+                else:
+                    validation_cache.add(artifact_relative(
+                        artifact_root, attempt / "success.json"))
+            if not failed:
+                for _future in completed:
+                    if not submit_next(executor):
+                        break
+    return not failed
 
 
 def run(arguments: argparse.Namespace) -> int:
@@ -2309,35 +2371,17 @@ def run(arguments: argparse.Namespace) -> int:
         )
         write_aggregate(artifact_root, receipt, status)
         while not receipt["closed"]:
-            pending = next_pending(receipt, contract, artifact_root)
-            require(pending is not None, "open receipt has no pending target")
-            sweep, target, attempt_number = pending
-            directory = target_directory(
-                artifact_root, sweep, target["index"],
+            pending = next_pending_sweep(receipt, contract, artifact_root)
+            require(pending, "open receipt has no pending target")
+            batch_passed = collect_pending_sweep(
+                artifact_root, pending, contract, lock_fd, validation_cache,
             )
-            if not os.path.lexists(directory):
-                ensure_new_directory(directory, f"target directory {target['name']}")
-            attempt = ensure_new_directory(
-                directory / f"attempt-{attempt_number:04d}",
-                f"attempt for {target['name']}",
-            )
-            try:
-                collect_target(
-                    artifact_root, attempt, sweep, target, contract, lock_fd,
-                )
-                validation_cache.add(artifact_relative(
-                    artifact_root, attempt / "success.json",
-                ))
-            except CollectionFailure:
-                receipt, status = scan_all(
-                    artifact_root, contract, validation_cache, lock_fd,
-                )
-                write_aggregate(artifact_root, receipt, status)
-                return 1
             receipt, status = scan_all(
                 artifact_root, contract, validation_cache, lock_fd,
             )
             write_aggregate(artifact_root, receipt, status)
+            if not batch_passed:
+                return 1
         validate_environment(contract)
         return 0
     finally:
@@ -2391,6 +2435,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--collection-wall-seconds", type=int, required=True)
     result.add_argument("--target-wall-seconds", type=int, required=True)
     result.add_argument("--validation-wall-seconds", type=int, required=True)
+    result.add_argument("--jobs", type=int, required=True)
     return result
 
 
@@ -2430,7 +2475,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def main() -> int:
-    global ACTIVE_PROCESS, PENDING_SIGNAL
+    global PENDING_SIGNAL
     old_umask = os.umask(0o077)
     previous_mask = signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
     previous_handlers = {
@@ -2456,7 +2501,7 @@ def main() -> int:
         signal.pthread_sigmask(signal.SIG_BLOCK, HANDLED_SIGNALS)
         for signum, handler in previous_handlers.items():
             signal.signal(signum, handler)
-        ACTIVE_PROCESS = None
+        ACTIVE_PROCESSES.clear()
         PENDING_SIGNAL = None
         signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
         os.umask(old_umask)
