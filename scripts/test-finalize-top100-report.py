@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -25,7 +26,6 @@ SPEC.loader.exec_module(MODULE)
 
 CAKEML = "2" * 40
 HOL4 = "3" * 40
-REFERENCE = "4" * 40
 
 
 def digest(value: bytes) -> str:
@@ -47,6 +47,111 @@ def git(root: Path, *arguments: str) -> str:
         check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
     return completed.stdout.strip()
+
+
+def elf_evidence(roots: list[Path]) -> dict:
+    """Build real host-backed v8 ELF evidence for finalizer fixtures."""
+    bash = MODULE.executable_route_record(Path("/bin/bash"), "fixture ELF bash")
+    ldd = MODULE.executable_route_record(Path("/usr/bin/ldd"), "fixture ELF ldd")
+    loaders = []
+    for path in (
+        Path("/lib/ld-linux.so.2"),
+        Path("/lib64/ld-linux-x86-64.so.2"),
+        Path("/libx32/ld-linux-x32.so.2"),
+    ):
+        if not os.path.lexists(path):
+            loaders.append({"argument_path": str(path), "status": "absent"})
+        else:
+            loaders.append({
+                "argument_path": str(path), "status": "present",
+                "route": MODULE.executable_route_record(
+                    path, f"fixture ELF loader {path}",
+                ),
+            })
+    root_paths = sorted({str(path.resolve()) for path in roots})
+    observations = []
+    closure = {}
+    mapped = re.compile(
+        r"(?P<role>[^\s]+)\s+=>\s+(?P<path>/[^\s(]+)\s+"
+        r"\(0x[0-9a-fA-F]+\)",
+    )
+    direct = re.compile(r"(?P<path>/[^\s(]+)\s+\(0x[0-9a-fA-F]+\)")
+    virtual = re.compile(
+        r"(?P<role>linux-(?:vdso|gate)\.so\.1)\s+"
+        r"\(0x[0-9a-fA-F]+\)",
+    )
+    observation_roots = sorted(set(root_paths) | {
+        bash["resolved_executable"]["path"],
+    })
+    for root in observation_roots:
+        completed = subprocess.run(
+            ["/bin/bash", "/usr/bin/ldd", root],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+        )
+        resolved_files = []
+        virtual_objects = []
+        for raw in completed.stdout.splitlines():
+            line = raw.strip()
+            match = mapped.fullmatch(line)
+            if match is not None:
+                role = match.group("role")
+                reported = match.group("path")
+            else:
+                match = direct.fullmatch(line)
+                if match is not None:
+                    reported = match.group("path")
+                    role = Path(reported).name
+                else:
+                    match = virtual.fullmatch(line)
+                    if match is None:
+                        raise RuntimeError(f"unexpected fixture ldd line: {line}")
+                    virtual_objects.append(match.group("role"))
+                    continue
+            resolved = Path(reported).resolve()
+            pin = {"path": str(resolved), "sha256": digest(resolved.read_bytes())}
+            resolved_files.append({
+                "role": role, "reported_path": reported, **pin,
+            })
+            closure[str(resolved)] = pin
+        resolved_files.sort(
+            key=lambda item: (item["role"], item["reported_path"], item["path"]),
+        )
+        normalized = re.sub(
+            r"\(0x[0-9a-fA-F]+\)", "(0xADDRESS)", completed.stdout,
+        )
+        root_path = Path(root)
+        observations.append({
+            "root": {"path": root, "sha256": digest(root_path.read_bytes())},
+            "argv": ["/bin/bash", "/usr/bin/ldd", root],
+            "environment": {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+            "return_code": 0,
+            "stdout": completed.stdout,
+            "stdout_sha256": digest(completed.stdout.encode()),
+            "normalized_stdout": normalized,
+            "normalized_stdout_sha256": digest(normalized.encode()),
+            "stderr": completed.stderr,
+            "stderr_sha256": digest(completed.stderr.encode()),
+            "resolved_files": resolved_files,
+            "virtual_objects": sorted(virtual_objects),
+        })
+    cache = Path("/etc/ld.so.cache")
+    return {
+        "policy": "authenticated_explicit_bash_ldd_closure_v1",
+        "output_normalization":
+            "strict_recognized_lines_replace_only_aslr_addresses_v1",
+        "tools": {"bash": bash, "ldd": ldd},
+        "hardcoded_loader_routes": loaders,
+        "ld_so_cache": {"path": str(cache), "sha256": digest(cache.read_bytes())},
+        "ld_so_preload": {"path": "/etc/ld.so.preload", "status": "absent"},
+        "environment": {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+        "requested_roots": [
+            {"path": path, "sha256": digest(Path(path).read_bytes())}
+            for path in root_paths
+        ],
+        "observations": observations,
+        "closure": [closure[path] for path in sorted(closure)],
+    }
 
 
 class Fixture:
@@ -82,6 +187,8 @@ class Fixture:
         self.closure = self._source_closure()
         self.semantics = [MODULE.manifest_semantics(target)
                           for target in self.manifest["targets"]]
+        self._commit_candle_repository()
+        self.collection_candle_head = self.candle_head
         self._create_approval()
         for target in self.manifest["targets"]:
             target["fingerprint_request"]["expected_identities"][
@@ -90,14 +197,16 @@ class Fixture:
         self.manifest["identity_approval"] = {
             "path": "candle/top100_identity_approval.json",
             "sha256": self.approval_identity["sha256"],
-            "schema": "candle-s1-identity-approval-v1",
+            "schema": "candle-s1-identity-approval-v2",
             "approval_status": "approved",
             "promotion_allowed": True,
         }
         (self.candle / "top100_manifest.json").write_bytes(
             MODULE.canonical_json_bytes(self.manifest),
         )
-        self._commit_candle_repository()
+        git(self.candle_root, "add", ".")
+        git(self.candle_root, "commit", "-qm", "fixture approved Candle")
+        self.candle_head = git(self.candle_root, "rev-parse", "HEAD")
         self._create_linked_runtime()
         self.execution_contract = {
             relative: record(self.candle_root / relative)
@@ -116,6 +225,13 @@ class Fixture:
     def _create_finalizer_project(self) -> None:
         self.program_path.write_bytes(SCRIPT.read_bytes())
         self.program_path.chmod(0o755)
+        controller_path = (
+            self.project_root / "scripts/run-top100-reference-sweeps.py"
+        )
+        controller_path.write_bytes(
+            b"#!/usr/bin/python3\n# fixture collection controller\n"
+        )
+        controller_path.chmod(0o755)
         git(self.project_root, "init", "-q")
         git(self.project_root, "config", "user.email", "fixture@example.invalid")
         git(self.project_root, "config", "user.name", "fixture")
@@ -174,10 +290,14 @@ class Fixture:
     def _create_manifest_and_sources(self) -> dict:
         targets = []
         extra = "100/shared-extra.ml"
+        reviewed_delta_sources = (
+            "100/e_is_transcendental.ml", "100/euler.ml", "100/lagrange.ml",
+        )
         self._write(self.candle_root, extra, b"extra first-target source\n")
         for index in range(65):
             name = f"100/test-{index:02d}"
-            source = f"{name}.ml"
+            source = (reviewed_delta_sources[index] if index < 3
+                      else f"{name}.ml")
             self._write(
                 self.candle_root, source,
                 f"(* canonical source {index} *)\n".encode(),
@@ -341,18 +461,156 @@ def _read_fingerprint_records(path, theorem_names, mapping_status,
 import json
 from pathlib import Path
 import re
+import subprocess
 import tempfile
 
 import regression
 
 SESSION_MARKER = "CANDLE_REFERENCE_SESSION_V1"
 COMPLETE_MARKER = "CANDLE_REFERENCE_COMPLETE_V1"
-PLAN_SCHEMA = "candle-s1-reference-plan-v6"
-CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v6"
+PLAN_SCHEMA = "candle-s1-reference-plan-v8"
+CANDIDATE_SCHEMA = "candle-s1-reference-candidate-v8"
 
 
 class CollectionError(Exception):
     pass
+
+
+def _stable_elf_evidence(evidence):
+    stable = json.loads(json.dumps(evidence))
+    for observation in stable["observations"]:
+        observation.pop("stdout")
+        observation.pop("stdout_sha256")
+    return stable
+
+
+def validate_elf_closure_evidence_live(evidence, expected_roots):
+    expected_roots = sorted(set(expected_roots))
+    if sorted(item["path"] for item in evidence["requested_roots"]) != \
+            expected_roots:
+        raise CollectionError("fixture ELF root mismatch")
+    mapped = re.compile(
+        r"(?P<role>[^\s]+)\s+=>\s+(?P<path>/[^\s(]+)\s+"
+        r"\(0x[0-9a-fA-F]+\)")
+    direct = re.compile(r"(?P<path>/[^\s(]+)\s+\(0x[0-9a-fA-F]+\)")
+    virtual = re.compile(
+        r"(?P<role>linux-(?:vdso|gate)\.so\.1)\s+"
+        r"\(0x[0-9a-fA-F]+\)")
+    observations = []
+    closure = {}
+    observation_roots = sorted(set(expected_roots) | {
+        evidence["tools"]["bash"]["resolved_executable"]["path"],
+    })
+    for root in observation_roots:
+        completed = subprocess.run(
+            ["/bin/bash", "/usr/bin/ldd", root], check=True,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            env={"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"},
+        )
+        if completed.stderr != "":
+            raise CollectionError("fixture ldd stderr is not empty")
+        resolved_files = []
+        virtual_objects = []
+        for raw in completed.stdout.splitlines():
+            line = raw.strip()
+            match = mapped.fullmatch(line)
+            if match is not None:
+                role, reported = match.group("role"), match.group("path")
+            else:
+                match = direct.fullmatch(line)
+                if match is not None:
+                    reported = match.group("path")
+                    role = Path(reported).name
+                else:
+                    match = virtual.fullmatch(line)
+                    if match is None:
+                        raise CollectionError("fixture ldd output is malformed")
+                    virtual_objects.append(match.group("role"))
+                    continue
+            resolved = Path(reported).resolve(strict=True)
+            pin = {
+                "path": str(resolved),
+                "sha256": hashlib.sha256(resolved.read_bytes()).hexdigest(),
+            }
+            resolved_files.append({
+                "role": role, "reported_path": reported, **pin,
+            })
+            closure[str(resolved)] = pin
+        resolved_files.sort(key=lambda item: (
+            item["role"], item["reported_path"], item["path"]))
+        normalized = re.sub(
+            r"\(0x[0-9a-fA-F]+\)", "(0xADDRESS)", completed.stdout)
+        root_path = Path(root)
+        observations.append({
+            "root": {
+                "path": root,
+                "sha256": hashlib.sha256(root_path.read_bytes()).hexdigest(),
+            },
+            "argv": ["/bin/bash", "/usr/bin/ldd", root],
+            "environment": {
+                "PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C",
+            },
+            "return_code": 0,
+            "normalized_stdout": normalized,
+            "normalized_stdout_sha256": hashlib.sha256(
+                normalized.encode()).hexdigest(),
+            "stderr": "", "stderr_sha256": hashlib.sha256(b"").hexdigest(),
+            "resolved_files": resolved_files,
+            "virtual_objects": sorted(virtual_objects),
+        })
+    stable = _stable_elf_evidence(evidence)
+    expected_stable = json.loads(json.dumps(stable))
+    expected_stable["observations"] = observations
+    expected_stable["closure"] = [closure[path] for path in sorted(closure)]
+    if stable != expected_stable:
+        raise CollectionError("fixture live ELF evidence differs from plan")
+    return evidence
+
+
+def _require_current_plan_pins(plan):
+    reference = plan["reference"]
+    runtime = Path(reference["runtime_executable"]["path"])
+    first_line = runtime.read_bytes().split(b"\n", 1)[0]
+    match = re.fullmatch(br"#!(/[^\x00-\x20]+)(?:[ \t]+.*)?", first_line)
+    if match is None:
+        raise CollectionError("fixture runtime shebang is malformed")
+    interpreter = Path(match.group(1).decode()).resolve(strict=True)
+    expected_interpreter = {
+        "path": str(interpreter),
+        "sha256": hashlib.sha256(interpreter.read_bytes()).hexdigest(),
+    }
+    if reference["runtime_interpreter"] != expected_interpreter:
+        raise CollectionError("fixture runtime interpreter differs from live plan")
+    hol_ml = Path(reference["root"]) / "hol.ml"
+    expected_hol_ml = {
+        "path": str(hol_ml.resolve(strict=True)),
+        "sha256": hashlib.sha256(hol_ml.read_bytes()).hexdigest(),
+    }
+    if reference["hol_ml"] != expected_hol_ml:
+        raise CollectionError("fixture hol.ml differs from live plan")
+    roots = {
+        Path(reference["runtime_stublib"]["path"]).parent,
+        Path(reference["ocamlc"]["stdlib_directory"]) / "stublibs",
+        *(Path(item["root"]) / "stublibs"
+          for item in reference["findlib"]["package_roots"]),
+    }
+    observed = {}
+    for root in roots:
+        if root.is_dir():
+            for path in root.glob("*.so"):
+                resolved = path.resolve(strict=True)
+                observed[str(resolved)] = {
+                    "path": str(resolved),
+                    "sha256": hashlib.sha256(resolved.read_bytes()).hexdigest(),
+                }
+    expected = [observed[path] for path in sorted(observed)]
+    if reference["runtime_stub_files"] != expected:
+        raise CollectionError("fixture runtime stubs differ from live plan")
+
+
+def _rebuild_plan(plan):
+    _require_current_plan_pins(plan)
+    return json.loads(json.dumps(plan))
 
 
 def _json_sha256(value):
@@ -464,6 +722,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             self.candle_root, "candle/reference_fingerprints.py",
             reference_validator,
         )
+        self._write(
+            self.candle_root, "candle/reference_protocol.py",
+            b'"""Pinned reference protocol fixture."""\n',
+        )
         launcher = self._write(
             self.candle_root, "candle.sh", b"#!/bin/sh\nexit 0\n",
         )
@@ -540,19 +802,57 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         return {**projection, "sha256": MODULE.compact_json_sha256(projection)}
 
     def _create_approval(self) -> None:
-        deltas = []
-        for index, path in enumerate((
+        tools_root = self.root / "reference-tools"
+        reference_root = tools_root / "reference"
+        reference_root.mkdir(parents=True)
+        self.reference_root = reference_root
+        for relative in sorted({
+            relative
+            for target in self.manifest["targets"]
+            for relative in target["load_files"]
+        }):
+            self._write(
+                reference_root, relative,
+                (self.candle_root / relative).read_bytes(),
+            )
+        delta_paths = (
             "100/e_is_transcendental.ml", "100/euler.ml", "100/lagrange.ml",
-        )):
+        )
+        historical_values = {}
+        for index, relative in enumerate(delta_paths):
+            value = f"(* historical fixture delta {index} *)\n".encode()
+            historical_values[relative] = value
+            self._write(reference_root, relative, value)
+        self._write(
+            reference_root, ".gitignore",
+            (b"/ocaml-hol\n/hol.ml\n/stublibs/\n/bin/\n/ocamlfind.conf\n"
+             b"/ocaml/\n/hol_loader.cmo\n/pa_j.cmo\n"
+             b"/load_camlp5_topfind.ml\n"),
+        )
+        git(reference_root, "init", "-q")
+        git(reference_root, "config", "user.email", "fixture@example.invalid")
+        git(reference_root, "config", "user.name", "fixture")
+        git(reference_root, "add", ".")
+        git(reference_root, "commit", "-qm", "historical fixture reference")
+        self.historical_reference_head = git(
+            reference_root, "rev-parse", "HEAD",
+        )
+        deltas = []
+        for index, path in enumerate(delta_paths):
+            selected = (self.candle_root / path).read_bytes()
+            self._write(reference_root, path, selected)
             deltas.append({
                 "path": path,
-                "historical_sha256": f"{7000 + index:064x}",
-                "selected_sha256": f"{8000 + index:064x}",
+                "historical_sha256": digest(historical_values[path]),
+                "selected_sha256": digest(selected),
                 "reason": f"reviewed fixture delta {index}",
             })
+        git(reference_root, "add", *delta_paths)
+        git(reference_root, "commit", "-qm", "exact fixture reference")
+        self.reference_head = git(reference_root, "rev-parse", "HEAD")
         reference_policy = {
-            "historical_upstream_commit": "6" * 40,
-            "exact_source_reference_commit": REFERENCE,
+            "historical_upstream_commit": self.historical_reference_head,
+            "exact_source_reference_commit": self.reference_head,
             "compatibility_deltas": deltas,
         }
         shared_source_contract = self.approval_root / "source-contract.json"
@@ -567,9 +867,126 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             self.candle_root, "candle/reference_source_contracts.json",
             shared_source_contract.read_bytes(),
         )
+        git(self.candle_root, "add", "candle/reference_source_contracts.json")
+        git(self.candle_root, "commit", "-qm", "fixture collection source contract")
+        self.collection_candle_head = git(
+            self.candle_root, "rev-parse", "HEAD",
+        )
         collector = self.candle / "reference_fingerprints.py"
         collector_sha256 = digest(collector.read_bytes())
+        protocol = self.candle / "reference_protocol.py"
+        protocol_sha256 = digest(protocol.read_bytes())
         manifest_pin = self.candle / "top100_manifest.json"
+        runtime = self._write(
+            reference_root, "ocaml-hol", b"#!/bin/sh\nexit 0\n")
+        runtime.chmod(0o755)
+        hol_ml = self._write(reference_root, "hol.ml", b"(* fixture hol *)\n")
+        runtime_stublib = self._write(
+            reference_root, "stublibs/dllzarith.so",
+            Path("/lib/x86_64-linux-gnu/libdl.so.2").read_bytes())
+        runtime_stub = self._write(
+            reference_root, "stublibs/dllunix.so",
+            Path("/lib/x86_64-linux-gnu/libpthread.so.0").read_bytes())
+        ocamlc_path = self._write(
+            reference_root, "bin/ocamlc", b"#!/bin/sh\nexit 0\n")
+        ocamlc_path.chmod(0o755)
+        ocamlfind_path = self._write(
+            reference_root, "bin/ocamlfind", b"#!/bin/sh\nexit 0\n")
+        ocamlfind_path.chmod(0o755)
+        findlib_config = self._write(
+            reference_root, "ocamlfind.conf", b"path=ocaml\n")
+        self._write(reference_root, "ocaml/stdlib.cma", b"fixture stdlib\n")
+        boot_files = [
+            self._write(reference_root, "hol_loader.cmo", b"fixture loader\n"),
+            self._write(reference_root, "pa_j.cmo", b"fixture parser\n"),
+            self._write(
+                reference_root, "load_camlp5_topfind.ml", b"fixture topfind\n"),
+        ]
+        gp_root = tools_root / "pari"
+        gp_bin = gp_root / "usr/bin"
+        gp_bin.mkdir(parents=True)
+        gp_source = self._write(
+            gp_root, "usr/bin/gp-fixture.c",
+            (b"#include <stdio.h>\n#include <string.h>\n"
+             b"int main(int argc, char **argv) {\n"
+             b"  if (argc > 1 && strcmp(argv[1], \"--version-short\") == 0) "
+             b"{ puts(\"2.15.4\"); return 0; }\n"
+             b"  while (getchar() != EOF) {}\n"
+             b"  puts(\"1\"); puts(\"[3, 1; 5, 1]\"); return 0;\n}\n"),
+        )
+        gp_executable = gp_root / "usr/bin/gp-2.15"
+        subprocess.run(
+            ["/usr/bin/cc", "-O0", "-o", str(gp_executable), str(gp_source)],
+            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        (gp_bin / "gp").symlink_to("gp-2.15")
+        gprc = self._write(
+            gp_root, "candle-gprc", b"\\\\ pinned fixture configuration\n",
+        )
+        gprc.chmod(0o444)
+        data_root = gp_root / "candle-data"
+        data_root.mkdir()
+        data_root.chmod(0o555)
+        package_archive = self._write(
+            tools_root, "pari.deb", b"pinned package archive\n",
+        )
+        package_archive.chmod(0o444)
+        shell = Path("/bin/sh")
+        runtime_tree, _ = MODULE.tree_inventory(
+            runtime_stublib.parent, "fixture runtime-library tree")
+        ocaml_tree, _ = MODULE.tree_inventory(
+            reference_root / "ocaml", "fixture OCaml-library tree")
+        package_tree, _ = MODULE.tree_inventory(gp_root, "fixture GP tree")
+        data_tree, _ = MODULE.tree_inventory(data_root, "fixture GP data tree")
+        gp_stdout = "1\n[3, 1; 5, 1]\n"
+        external_environment = {
+            "HOME": str(reference_root),
+            "PATH": str(gp_bin),
+            "LC_ALL": "C",
+            "GPRC": str(gprc),
+            "GP_DATA_DIR": str(data_root),
+        }
+        probe_source = (
+            "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp")
+        core_elf_runtime = elf_evidence([
+            shell.resolve(), runtime_stub, runtime_stublib,
+        ])
+        external_elf_runtime = elf_evidence([
+            shell.resolve(), gp_executable.resolve(),
+        ])
+        external_runtime = {
+            "policy": "single_private_path_gp_with_pinned_shell_v2",
+            "command_shell": MODULE.executable_route_record(shell, "fixture shell"),
+            "pari_gp": MODULE.executable_route_record(
+                gp_bin / "gp", "fixture PARI/GP",
+            ),
+            "pari_gp_version": {
+                "stdout": "2.15.4\n", "sha256": digest(b"2.15.4\n"),
+            },
+            "package_archive": {
+                "path": str(package_archive),
+                "sha256": digest(package_archive.read_bytes()),
+            },
+            "package_tree": package_tree,
+            "configuration": {
+                "path": str(gprc), "sha256": digest(gprc.read_bytes()),
+            },
+            "data_tree": data_tree,
+            "elf_runtime": external_elf_runtime,
+            "probe": {
+                "shell_argv": [str(shell), "-c", probe_source],
+                "environment": external_environment,
+                "return_code": 0, "stdout": gp_stdout,
+                "stdout_sha256": digest(gp_stdout.encode()),
+                "stderr": "", "stderr_sha256": digest(b""),
+            },
+        }
+        collection_deadlines = {
+            "collection_wall_seconds": 21600,
+            "target_wall_seconds": 21660,
+            "validation_wall_seconds": 900,
+        }
+        collection_rows = {1: [], 2: []}
         targets = []
         for target_index, semantic in enumerate(self.semantics):
             target = self.manifest["targets"][target_index]
@@ -578,7 +995,6 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             runs = []
             for run_index in range(2):
                 nonce = f"{5000 + target_index * 2 + run_index:064x}"
-                reference_root = Path("/reference") / f"run-{run_index + 1}"
                 request_source = "\n".join([
                     f"CANDLE_REFERENCE_SESSION_V1\t{nonce}",
                     f"SERIALIZER {self.serializer_path.resolve()}",
@@ -591,7 +1007,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "",
                 ])
                 plan = {
-                    "schema": "candle-s1-reference-plan-v6",
+                    "schema": "candle-s1-reference-plan-v8",
                     "status": "planned_not_executed",
                     "session_nonce": nonce,
                     "fresh_process_contract": {
@@ -600,26 +1016,61 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                         "working_directory": str(reference_root),
                         "environment_policy":
                             "sanitized_allowlist_no_inherited_overrides",
-                        "runtime_argv": ["/reference/ocaml", "-noprompt"],
+                        "runtime_argv": [
+                            str(runtime), "-init", str(hol_ml), "-I",
+                            str(reference_root), "-noprompt",
+                        ],
                         "runtime_environment": {
-                            "PATH": "/usr/bin:/bin", "LC_ALL": "C",
+                            **external_environment,
+                            "HOLLIGHT_DIR": str(reference_root),
+                            "HOLLIGHT_USE_MODULE": "0",
+                            "OCAMLRUNPARAM": "l=2000000000",
+                            "CAML_LD_LIBRARY_PATH": str(runtime_stublib.parent),
+                            "OCAML_TOPLEVEL_PATH": str(reference_root / "ocaml"),
+                            "OCAMLFIND_CONF": str(findlib_config),
                         },
                     },
                     "reference": {
                         "root": str(reference_root),
-                        "git_head": REFERENCE,
+                        "git_head": self.reference_head,
                         "git_status": [],
-                        "runtime_executable": {"fixture": True},
-                        "runtime_interpreter": {"fixture": True},
-                        "runtime_stublib": {"fixture": True},
-                        "runtime_library_tree": {"fixture": True},
-                        "runtime_stub_files": [],
-                        "dynamic_libraries": [],
-                        "ocamlc": {"fixture": True},
-                        "findlib": {"fixture": True},
-                        "hol_ml": {"fixture": True},
-                        "generated_boot_files": [],
-                        "ocaml_library_tree": {"fixture": True},
+                        "runtime_executable": {
+                            "path": str(runtime), "sha256": digest(runtime.read_bytes())},
+                        "runtime_interpreter": {
+                            "path": str(Path("/bin/sh").resolve()),
+                            "sha256": digest(Path("/bin/sh").resolve().read_bytes())},
+                        "runtime_stublib": {
+                            "path": str(runtime_stublib),
+                            "sha256": digest(runtime_stublib.read_bytes())},
+                        "runtime_library_tree": runtime_tree,
+                        "runtime_stub_files": sorted([
+                            {"path": str(runtime_stub),
+                             "sha256": digest(runtime_stub.read_bytes())},
+                            {"path": str(runtime_stublib),
+                             "sha256": digest(runtime_stublib.read_bytes())},
+                        ], key=lambda value: value["path"]),
+                        "elf_runtime": core_elf_runtime,
+                        "ocamlc": {
+                            "path": str(ocamlc_path),
+                            "sha256": digest(ocamlc_path.read_bytes()),
+                            "version": "4.14.1",
+                            "stdlib_directory": str(reference_root / "ocaml")},
+                        "findlib": {
+                            "executable": {
+                                "path": str(ocamlfind_path),
+                                "sha256": digest(ocamlfind_path.read_bytes())},
+                            "version": "1.9.6",
+                            "configuration": {
+                                "path": str(findlib_config),
+                                "sha256": digest(findlib_config.read_bytes())},
+                            "package_roots": [ocaml_tree]},
+                        "hol_ml": {
+                            "path": str(hol_ml), "sha256": digest(hol_ml.read_bytes())},
+                        "generated_boot_files": [{
+                            "path": str(path), "sha256": digest(path.read_bytes())}
+                            for path in boot_files],
+                        "ocaml_library_tree": ocaml_tree,
+                        "external_runtime": external_runtime,
                     },
                     "input": {
                         "collector": {
@@ -627,12 +1078,16 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                         },
                         "collector_repository": {
                             "root": str(self.candle_root),
-                            "git_head": "8" * 40,
+                            "git_head": self.collection_candle_head,
                             "git_status": [],
                             "collector_relative_path":
                                 "candle/reference_fingerprints.py",
                             "collector_at_head_sha256": collector_sha256,
                             "collector_matches_head": True,
+                            "support_relative_path":
+                                "candle/reference_protocol.py",
+                            "support_at_head_sha256": protocol_sha256,
+                            "support_matches_head": True,
                         },
                         "manifest": {
                             "path": str(manifest_pin),
@@ -690,7 +1145,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     "approval_sha256": None,
                 }
                 candidate = {
-                    "schema": "candle-s1-reference-candidate-v6",
+                    "schema": "candle-s1-reference-candidate-v8",
                     "artifact_kind": "reference_identity_candidate",
                     "approval_status": "candidate_unapproved",
                     "promotion_allowed": False,
@@ -716,8 +1171,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     },
                     "candidate_identities": candidate_identities,
                 }
-                directory = (self.approval_root / f"target-{target_index:02d}" /
-                             f"run-{run_index + 1}")
+                sweep = run_index + 1
+                directory = (
+                    self.approval_root / f"sweep-{sweep}" /
+                    f"target-{target_index + 1:03d}" / "attempt-0001")
                 directory.mkdir(parents=True, exist_ok=True)
                 values = {
                     "candidate": (json.dumps(candidate, indent=2) + "\n").encode(),
@@ -739,19 +1196,209 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                         self.candle_root).as_posix(),
                     **record(shared_source_contract),
                 }
+                output_records = {}
+                candidate_absolute = directory / "candidate.json"
+                for field, filename, value in (
+                    ("collector_stdout", "collect.stdout", (
+                        f"unapproved reference candidate: "
+                        f"{candidate_absolute}\n"
+                    ).encode()),
+                    ("collector_stderr", "collect.stderr", b""),
+                    ("validator_stdout", "validate.stdout", (
+                        "candidate and linked artifacts valid but unapproved: "
+                        f"{candidate_absolute}\n"
+                    ).encode()),
+                    ("validator_stderr", "validate.stderr", b""),
+                ):
+                    output_path = directory / filename
+                    output_path.write_bytes(value)
+                    output_records[field] = {
+                        "path": output_path.relative_to(
+                            self.approval_root).as_posix(),
+                        **record(output_path),
+                    }
+                    artifacts[field] = {
+                        "path": output_path.relative_to(
+                            self.candle_root).as_posix(),
+                        **record(output_path),
+                    }
+                collected_artifacts = {
+                    artifact_name: {
+                        "path": (self.candle_root / artifact["path"]).relative_to(
+                            self.approval_root).as_posix(),
+                        "bytes": artifact["bytes"],
+                        "sha256": artifact["sha256"],
+                    }
+                    for artifact_name, artifact in artifacts.items()
+                    if artifact_name in {
+                        "candidate", "plan", "request", "transcript"}
+                }
+                success = {
+                    "schema": 1,
+                    "kind": "candle-reference-attempt-success",
+                    "sweep": sweep, "target_index": target_index + 1,
+                    "target": target["name"], "session_nonce": nonce,
+                    "artifacts": collected_artifacts,
+                    **output_records,
+                    "deadlines": collection_deadlines,
+                    "approval_status": "candidate_unapproved",
+                    "promotion_allowed": False,
+                }
+                success_path = directory / "success.json"
+                success_path.write_bytes(MODULE.canonical_json_bytes(success))
+                artifacts["controller_success"] = {
+                    "path": success_path.relative_to(
+                        self.candle_root).as_posix(),
+                    **record(success_path),
+                }
                 runs.append({
                     "artifacts": artifacts,
-                    "reference_git_head": REFERENCE,
+                    "reference_git_head": self.reference_head,
                     "session_nonce": nonce,
                     "identity_sha256": identity_sha256,
+                    "sweep": sweep,
+                })
+                relative_success = success_path.relative_to(
+                    self.approval_root).as_posix()
+                collection_rows[sweep].append({
+                    "index": target_index + 1, "name": target["name"],
+                    "state": "complete", "attempt_count": 1,
+                    "success": {
+                        "attempt": "attempt-0001",
+                        "receipt_path": relative_success,
+                        "receipt": {"path": relative_success,
+                                    **record(success_path)},
+                        "session_nonce": nonce,
+                        "artifacts": collected_artifacts,
+                    },
+                    "attempts": [{"attempt": "attempt-0001",
+                                  "state": "complete"}],
                 })
             targets.append({
                 "name": semantic["name"],
                 "reference_runs": runs,
                 "expected_identity": expected_identity,
             })
+        collection_contract = {
+            "schema": 3,
+            "kind": "candle-great100-two-sweep-reference-collection",
+            "approval_status": "candidate_collection_only_unapproved",
+            "promotion_allowed": False,
+            "sweep_count": 2, "target_count": 65,
+            "total_target_runs": 130, "source_mode": "manifest-exact",
+            "project": {
+                "root": str(self.project_root),
+                "git_head": self.project_head,
+                "controller": {
+                    "path": "scripts/run-top100-reference-sweeps.py",
+                    **record(self.project_root /
+                              "scripts/run-top100-reference-sweeps.py"),
+                },
+            },
+            "candle": {
+                "root": str(self.candle_root),
+                "git_head": self.collection_candle_head,
+                "collector": {"path": "candle/reference_fingerprints.py",
+                              **record(collector)},
+                "protocol": {"path": "candle/reference_protocol.py",
+                             **record(protocol)},
+                "manifest": {"path": "candle/top100_manifest.json",
+                             **record(manifest_pin)},
+                "serializer": {"path": "candle/fingerprint.ml",
+                               **record(self.serializer_path)},
+                "source_contract": {
+                    "path": "candle/reference_source_contracts.json",
+                    **record(self.candle /
+                              "reference_source_contracts.json")},
+            },
+            "reference": {"root": str(reference_root),
+                          "git_head": self.reference_head,
+                          "source_policy": reference_policy},
+            "runtime": {
+                "runtime": MODULE.runtime_file_record(
+                    runtime, "fixture collection runtime"),
+                "runtime_stublib": MODULE.runtime_file_record(
+                    runtime_stublib, "fixture collection runtime stublib"),
+                "ocamlc": MODULE.runtime_file_record(
+                    ocamlc_path, "fixture collection ocamlc"),
+                "ocamlfind": MODULE.runtime_file_record(
+                    ocamlfind_path, "fixture collection ocamlfind"),
+            },
+            "external_runtime": {
+                "policy": external_runtime["policy"],
+                "command_shell": MODULE.runtime_file_record(
+                    shell, "fixture contract shell"),
+                "pari_gp": MODULE.runtime_file_record(
+                    gp_bin / "gp", "fixture contract PARI/GP"),
+                "package_archive": MODULE.runtime_file_record(
+                    package_archive, "fixture contract package archive"),
+                "package_tree": external_runtime["package_tree"],
+                "configuration": MODULE.runtime_file_record(
+                    gprc, "fixture contract configuration"),
+                "data_tree": external_runtime["data_tree"],
+                "runtime_environment": {
+                    key: external_environment[key]
+                    for key in ("PATH", "GPRC", "GP_DATA_DIR")},
+            },
+            "elf_oracle": MODULE.elf_oracle_projection(
+                external_elf_runtime,
+            ),
+            "deadlines": collection_deadlines,
+            "inventory": {
+                "target_count": 65, "source_count": 66, "request_count": 97,
+                "targets": [{
+                    "index": index,
+                    "name": target["name"],
+                    "load_files": target["load_files"],
+                    "load_file_sha256": {
+                        relative: target["load_file_sha256"][relative]
+                        for relative in target["load_files"]
+                    },
+                    "theorem_names": [
+                        theorem["name"] for theorem in
+                        target["fingerprint_request"]["theorems"]
+                    ],
+                } for index, target in enumerate(
+                    self.manifest["targets"], 1,
+                )],
+            },
+            "controller": {
+                "path": str(self.project_root /
+                            "scripts/run-top100-reference-sweeps.py"),
+                **record(self.project_root /
+                          "scripts/run-top100-reference-sweeps.py"),
+                "python": MODULE.runtime_file_record(
+                    Path("/usr/bin/python3"), "fixture collection Python"),
+                "git": {
+                    "path": "/usr/bin/git", **record(Path("/usr/bin/git")),
+                },
+            },
+        }
+        contract_path = self.approval_root / "collection-contract.json"
+        contract_path.write_bytes(MODULE.canonical_json_bytes(collection_contract))
+        collection_receipt = {
+            "schema": 1,
+            "kind": "candle-great100-two-sweep-reference-receipt",
+            "contract_sha256": MODULE.compact_json_sha256(collection_contract),
+            "contract": {"path": "collection-contract.json",
+                         **record(contract_path)},
+            "sweep_count": 2, "target_count": 65,
+            "total_target_runs": 130, "completed_target_runs": 130,
+            "pending_target_runs": 0, "failure_attempt_count": 0,
+            "failures": [], "publication_interruptions": [],
+            "outcome": "complete", "closed": True,
+            "approval_status": "candidates_unapproved",
+            "promotion_allowed": False,
+            "sweeps": [{
+                "sweep": sweep, "target_count": 65,
+                "completed_count": 65, "pending_count": 0,
+                "targets": collection_rows[sweep],
+            } for sweep in (1, 2)],
+        }
+        receipt_path = self.approval_root / "receipt.json"
+        receipt_path.write_bytes(MODULE.canonical_json_bytes(collection_receipt))
         self.approval = {
-            "schema": "candle-s1-identity-approval-v1",
+            "schema": "candle-s1-identity-approval-v2",
             "artifact_kind": "independently-reviewed-ocaml-reference-identities",
             "approval_status": "approved",
             "promotion_allowed": True,
@@ -767,6 +1414,14 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "decision": (
                     "two-reference-runs-identical-and-source-deltas-reviewed"
                 ),
+            },
+            "collection_evidence": {
+                "contract": {
+                    "path": contract_path.relative_to(
+                        self.candle_root).as_posix(), **record(contract_path)},
+                "receipt": {
+                    "path": receipt_path.relative_to(
+                        self.candle_root).as_posix(), **record(receipt_path)},
             },
             "targets": targets,
         }
@@ -806,6 +1461,114 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
         manifest_path.write_bytes(MODULE.canonical_json_bytes(self.manifest))
         git(self.candle_root, "add", "-A")
         git(self.candle_root, "commit", "-qm", "mutated approval fixture")
+        new_head = git(self.candle_root, "rev-parse", "HEAD")
+        new_contract = {
+            relative: record(self.candle_root / relative)
+            for relative in sorted(MODULE.EXECUTION_CONTRACT_PATHS)
+        }
+        for report_value in self.reports:
+            report_value["candle_git_head"] = new_head
+            report_value["execution_contract"] = deepcopy(new_contract)
+            report_value["independent_approval"] = {
+                "path": "candle/top100_identity_approval.json",
+                **self.approval_identity,
+            }
+            report_value["run_evidence"]["independent_approval_sha256"] = \
+                self.approval_identity["sha256"]
+        self.write_reports()
+
+    def rewrite_all_reference_plans(self, mutate) -> None:
+        """Rebind every causal layer after the same adversarial plan rewrite."""
+        receipt_artifact = self.approval["collection_evidence"]["receipt"]
+        receipt_path = self.candle_root / receipt_artifact["path"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        for target_index, approved in enumerate(self.approval["targets"]):
+            for run_index, run in enumerate(approved["reference_runs"]):
+                artifacts = run["artifacts"]
+                plan_path = self.candle_root / artifacts["plan"]["path"]
+                candidate_path = self.candle_root / artifacts["candidate"]["path"]
+                plan = json.loads(plan_path.read_text(encoding="utf-8"))
+                mutate(plan)
+                plan_bytes = (json.dumps(plan, indent=2) + "\n").encode()
+                plan_path.write_bytes(plan_bytes)
+                artifacts["plan"].update(record(plan_path))
+
+                candidate = json.loads(candidate_path.read_text(encoding="utf-8"))
+                candidate["plan_pins"] = {
+                    "reference": deepcopy(plan["reference"]),
+                    "input": deepcopy(plan["input"]),
+                    "request_sha256": plan["request"]["sha256"],
+                    "fresh_process_contract": deepcopy(
+                        plan["fresh_process_contract"]),
+                }
+                candidate["artifact_hashes"]["plan_sha256"] = digest(plan_bytes)
+                candidate_bytes = (json.dumps(candidate, indent=2) + "\n").encode()
+                candidate_path.write_bytes(candidate_bytes)
+                artifacts["candidate"].update(record(candidate_path))
+
+                success_path = self.candle_root / artifacts[
+                    "controller_success"]["path"]
+                success = json.loads(success_path.read_text(encoding="utf-8"))
+                for name, path in (("plan", plan_path),
+                                   ("candidate", candidate_path)):
+                    success["artifacts"][name] = {
+                        "path": path.relative_to(self.approval_root).as_posix(),
+                        **record(path),
+                    }
+                success_path.write_bytes(MODULE.canonical_json_bytes(success))
+                artifacts["controller_success"].update(record(success_path))
+
+                aggregate = receipt["sweeps"][run_index]["targets"][target_index][
+                    "success"]
+                aggregate["receipt"] = {
+                    "path": success_path.relative_to(
+                        self.approval_root).as_posix(),
+                    **record(success_path),
+                }
+                for name in ("plan", "candidate"):
+                    aggregate["artifacts"][name] = deepcopy(
+                        success["artifacts"][name])
+        receipt_path.write_bytes(MODULE.canonical_json_bytes(receipt))
+        receipt_artifact.update(record(receipt_path))
+        self._refresh_approval_bindings("adversarial all-plan rewrite fixture")
+
+    def replace_collection_artifact(self, name: str, value: bytes) -> None:
+        artifact = self.approval["collection_evidence"][name]
+        path = self.candle_root / artifact["path"]
+        path.write_bytes(value)
+        artifact.update(record(path))
+        self._refresh_approval_bindings("mutated collection fixture")
+
+    def replace_collection_documents(
+        self, contract: dict, receipt: dict,
+    ) -> None:
+        contract_artifact = self.approval["collection_evidence"]["contract"]
+        receipt_artifact = self.approval["collection_evidence"]["receipt"]
+        contract_path = self.candle_root / contract_artifact["path"]
+        receipt_path = self.candle_root / receipt_artifact["path"]
+        contract_path.write_bytes(MODULE.canonical_json_bytes(contract))
+        contract_artifact.update(record(contract_path))
+        receipt["contract_sha256"] = MODULE.compact_json_sha256(contract)
+        receipt["contract"] = {
+            "path": "collection-contract.json", **record(contract_path),
+        }
+        receipt_path.write_bytes(MODULE.canonical_json_bytes(receipt))
+        receipt_artifact.update(record(receipt_path))
+        self._refresh_approval_bindings("mutated collection documents fixture")
+
+    def _refresh_approval_bindings(self, commit_message: str) -> None:
+        self.write_approval(update_reports=False)
+        for target in self.manifest["targets"]:
+            target["fingerprint_request"]["expected_identities"][
+                "approval_sha256"] = self.approval_identity["sha256"]
+        self.manifest["identity_approval"].update({
+            "sha256": self.approval_identity["sha256"],
+            "approval_status": "approved", "promotion_allowed": True,
+        })
+        manifest_path = self.candle / "top100_manifest.json"
+        manifest_path.write_bytes(MODULE.canonical_json_bytes(self.manifest))
+        git(self.candle_root, "add", "-A")
+        git(self.candle_root, "commit", "-qm", commit_message)
         new_head = git(self.candle_root, "rev-parse", "HEAD")
         new_contract = {
             relative: record(self.candle_root / relative)
@@ -1054,6 +1817,17 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         with context:
             self.fixture.finalize()
 
+    def test_git_checkout_accepts_clean_linked_worktree(self) -> None:
+        linked = self.fixture.root / "linked-finalizer-project"
+        git(
+            self.fixture.project_root, "worktree", "add", "--detach",
+            str(linked), self.fixture.project_head,
+        )
+        self.assertTrue((linked / ".git").is_file())
+        MODULE.validate_git_checkout(
+            linked, self.fixture.project_head, "linked finalizer fixture",
+        )
+
     def test_positive_hypothesis_theorem_and_wire_are_rejected(self):
         _, theorem = self.fixture._wire_record("EGCD", 0, 0)
         theorem["hypothesis_count"] = 1
@@ -1084,7 +1858,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.assertEqual(bundle["source_closure"]["closure_sha256"],
                          self.fixture.closure["sha256"])
         self.assertEqual(bundle["approval_replay"]["candidate_count"], 130)
-        for component in ("validator", "regression"):
+        for component in ("validator", "protocol", "regression"):
             replay = bundle["approval_replay"][component]
             self.assertEqual(
                 (self.fixture.destination /
@@ -1092,6 +1866,16 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
                 (self.fixture.destination /
                  replay["executed_archive_path"]).read_bytes(),
             )
+        external = bundle["approval_replay"]["external_runtime"]
+        self.assertEqual(external["policy"],
+                         "single_private_path_gp_with_pinned_shell_v2")
+        self.assertEqual(
+            (self.fixture.destination /
+             external["package_archive"]["archive_path"]).read_bytes(),
+            (self.fixture.root / "reference-tools/pari.deb").read_bytes(),
+        )
+        self.assertTrue(external["package_tree"]["pin"]["entry_count"] > 0)
+        self.assertEqual(external["data_tree"]["entry_count"], 0)
         executable = self.fixture.destination / \
             bundle["candle"]["executable"]["archive_path"]
         self.assertEqual(executable.read_bytes(), (self.fixture.build / "cake").read_bytes())
@@ -1295,9 +2079,10 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
             )
 
     def test_source_closure_is_live_hashed_and_committed(self) -> None:
-        source = self.fixture.candle_root / "100/test-00.ml"
+        relative = self.fixture.manifest["targets"][0]["load_files"][0]
+        source = self.fixture.candle_root / relative
         source.write_bytes(source.read_bytes() + b"tamper\n")
-        git(self.fixture.candle_root, "add", "100/test-00.ml")
+        git(self.fixture.candle_root, "add", relative)
         git(self.fixture.candle_root, "commit", "-qm", "changed source fixture")
         new_head = git(self.fixture.candle_root, "rev-parse", "HEAD")
         for report_value in self.fixture.reports:
@@ -1384,7 +2169,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "candidate", MODULE.canonical_json_bytes(candidate),
         )
-        self.assert_rejected("legacy or unsupported reference candidate")
+        self.assert_rejected("controller receipt does not bind")
 
     def test_reference_transcript_must_replay_to_candidate(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -1399,7 +2184,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "transcript", ("\n".join(lines) + "\n").encode(),
         )
-        self.assert_rejected("captured v6 reference candidate replay failed")
+        self.assert_rejected("controller receipt does not bind")
 
     def test_reference_request_must_regenerate_from_target_and_nonce(self) -> None:
         run = self.fixture.approval["targets"][0]["reference_runs"][0]
@@ -1416,7 +2201,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
-        self.assert_rejected("captured v6 reference candidate replay failed")
+        self.assert_rejected("controller receipt does not bind")
 
     def test_reference_plan_target_is_bound(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -1427,7 +2212,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
-        self.assert_rejected("reference plan target/mode mismatch")
+        self.assert_rejected("controller receipt does not bind")
 
     def test_reference_plan_head_is_bound(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -1438,7 +2223,229 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
-        self.assert_rejected("reference plan head/status mismatch")
+        self.assert_rejected("controller receipt does not bind")
+
+    def test_reference_plan_protocol_support_is_bound(self) -> None:
+        artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
+            "artifacts"]["plan"]
+        plan_path = self.fixture.candle_root / artifact["path"]
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        plan["input"]["collector_repository"][
+            "support_at_head_sha256"] = "a" * 64
+        self.fixture.replace_reference_artifact(
+            0, 0, "plan", MODULE.canonical_json_bytes(plan),
+        )
+        self.assert_rejected("controller receipt does not bind")
+
+    def test_reference_external_runtime_must_be_identical_across_runs(self) -> None:
+        artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
+            "artifacts"]["plan"]
+        plan_path = self.fixture.candle_root / artifact["path"]
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+        version = "2.15.5\n"
+        plan["reference"]["external_runtime"]["pari_gp_version"] = {
+            "stdout": version, "sha256": digest(version.encode()),
+        }
+        self.fixture.replace_reference_artifact(
+            0, 0, "plan", MODULE.canonical_json_bytes(plan),
+        )
+        self.assert_rejected("controller receipt does not bind")
+
+    def test_omitted_elf_dependency_is_rejected_after_complete_rehash(self) -> None:
+        def omit_dependency(plan: dict) -> None:
+            closure = plan["reference"]["external_runtime"]["elf_runtime"][
+                "closure"]
+            self.assertGreater(len(closure), 1)
+            closure.pop(0)
+
+        self.fixture.rewrite_all_reference_plans(omit_dependency)
+        self.assert_rejected("captured v8 reference candidate replay failed")
+
+    def test_omitted_runtime_stub_is_rejected_after_complete_rehash(self) -> None:
+        def omit_stub_and_rebuild_elf(plan: dict) -> None:
+            reference = plan["reference"]
+            stubs = reference["runtime_stub_files"]
+            self.assertGreater(len(stubs), 1)
+            stubs.pop(0)
+            reference["elf_runtime"] = elf_evidence([
+                Path(reference["runtime_interpreter"]["path"]),
+                *(Path(item["path"]) for item in stubs),
+            ])
+
+        self.fixture.rewrite_all_reference_plans(omit_stub_and_rebuild_elf)
+        self.assert_rejected("captured v8 reference candidate replay failed")
+
+    def test_rebound_runtime_interpreter_is_rejected_after_rehash(self) -> None:
+        def rebind_interpreter(plan: dict) -> None:
+            reference = plan["reference"]
+            interpreter = Path("/bin/bash").resolve()
+            reference["runtime_interpreter"] = {
+                "path": str(interpreter),
+                "sha256": digest(interpreter.read_bytes()),
+            }
+            reference["elf_runtime"] = elf_evidence([
+                interpreter,
+                *(Path(item["path"])
+                  for item in reference["runtime_stub_files"]),
+            ])
+
+        self.fixture.rewrite_all_reference_plans(rebind_interpreter)
+        self.assert_rejected("captured v8 reference candidate replay failed")
+
+    def test_rebound_hol_init_script_is_rejected_after_rehash(self) -> None:
+        alternate = self.fixture.root / "alternate-hol.ml"
+        alternate.write_bytes(b"(* forged HOL initialization *)\n")
+
+        def rebind_hol_ml(plan: dict) -> None:
+            reference = plan["reference"]
+            reference["hol_ml"] = {
+                "path": str(alternate), "sha256": digest(alternate.read_bytes()),
+            }
+            plan["fresh_process_contract"]["runtime_argv"][2] = str(alternate)
+
+        self.fixture.rewrite_all_reference_plans(rebind_hol_ml)
+        self.assert_rejected("captured v8 reference candidate replay failed")
+
+    def test_reference_external_package_is_live_rechecked(self) -> None:
+        package = self.fixture.root / "reference-tools/pari.deb"
+        package.chmod(0o644)
+        package.write_bytes(b"mutated package archive\n")
+        package.chmod(0o444)
+        self.assert_rejected("package_archive changed|package archive differs")
+
+    def test_reference_collection_receipt_must_be_closed(self) -> None:
+        artifact = self.fixture.approval["collection_evidence"]["receipt"]
+        path = self.fixture.candle_root / artifact["path"]
+        receipt = json.loads(path.read_text())
+        receipt["closed"] = False
+        self.fixture.replace_collection_artifact(
+            "receipt", MODULE.canonical_json_bytes(receipt))
+        self.assert_rejected("not closed and exact")
+
+    def test_fabricated_collection_contract_is_rejected_after_rehash(self) -> None:
+        contract_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["contract"]["path"]
+        receipt_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["receipt"]["path"]
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        contract["project"] = {
+            "root": str(self.fixture.project_root),
+            "git_head": self.fixture.project_head,
+            "controller": {"fixture": True},
+        }
+        contract["runtime"] = {"fabricated": True}
+        contract["controller"] = {"fabricated": True}
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("committed project")
+
+    def test_alternate_committed_controller_is_rejected_after_rehash(self) -> None:
+        alternate = self.fixture.root / "alternate-controller-project"
+        controller_path = alternate / "scripts/run-top100-reference-sweeps.py"
+        controller_path.parent.mkdir(parents=True)
+        controller_path.write_bytes(
+            (self.fixture.project_root /
+             "scripts/run-top100-reference-sweeps.py").read_bytes(),
+        )
+        controller_path.chmod(0o755)
+        git(alternate, "init", "-q")
+        git(alternate, "config", "user.email", "fixture@example.invalid")
+        git(alternate, "config", "user.name", "fixture")
+        git(alternate, "add", ".")
+        git(alternate, "commit", "-qm", "alternate controller authority")
+        alternate_head = git(alternate, "rev-parse", "HEAD")
+
+        contract_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["contract"]["path"]
+        receipt_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["receipt"]["path"]
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        controller_record = {
+            "path": "scripts/run-top100-reference-sweeps.py",
+            **record(controller_path),
+        }
+        contract["project"] = {
+            "root": str(alternate), "git_head": alternate_head,
+            "controller": controller_record,
+        }
+        contract["controller"].update({
+            "path": str(controller_path), **record(controller_path),
+        })
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("authorized finalizer project")
+
+    def test_reference_checkout_and_sources_are_live_authenticated(self) -> None:
+        source = self.fixture.reference_root / self.fixture.manifest[
+            "targets"][0]["load_files"][0]
+        source.write_bytes(b"forged selected reference source\n")
+        self.assert_rejected("reference checkout.*not clean|source differs")
+
+    def test_fabricated_aggregate_attempt_is_rejected_after_rehash(self) -> None:
+        contract_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["contract"]["path"]
+        receipt_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["receipt"]["path"]
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["sweeps"][0]["targets"][0]["attempts"] = [
+            {"fabricated": True},
+        ]
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("target success")
+
+    def test_rebound_collection_core_runtime_is_rejected(self) -> None:
+        contract_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["contract"]["path"]
+        receipt_path = self.fixture.candle_root / self.fixture.approval[
+            "collection_evidence"]["receipt"]["path"]
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        alternate = self.fixture.root / "reference-tools/alternate-runtime"
+        original = Path(contract["runtime"]["runtime"]["path"])
+        alternate.write_bytes(original.read_bytes())
+        alternate.chmod(0o755)
+        contract["runtime"]["runtime"] = MODULE.runtime_file_record(
+            alternate, "rebound fixture runtime",
+        )
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("core runtime")
+
+    def test_fabricated_controller_output_is_rejected_after_rehash(self) -> None:
+        run = self.fixture.approval["targets"][0]["reference_runs"][0]
+        output_artifact = run["artifacts"]["collector_stdout"]
+        output_path = self.fixture.candle_root / output_artifact["path"]
+        output_path.write_bytes(b"fabricated collector output\n")
+        output_artifact.update(record(output_path))
+
+        success_artifact = run["artifacts"]["controller_success"]
+        success_path = self.fixture.candle_root / success_artifact["path"]
+        success = json.loads(success_path.read_text(encoding="utf-8"))
+        success["collector_stdout"] = {
+            "path": output_path.relative_to(
+                self.fixture.approval_root,
+            ).as_posix(),
+            **record(output_path),
+        }
+        success_path.write_bytes(MODULE.canonical_json_bytes(success))
+        success_artifact.update(record(success_path))
+
+        receipt_artifact = self.fixture.approval[
+            "collection_evidence"]["receipt"]
+        receipt_path = self.fixture.candle_root / receipt_artifact["path"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        receipt["sweeps"][0]["targets"][0]["success"]["receipt"] = {
+            "path": success_path.relative_to(
+                self.fixture.approval_root,
+            ).as_posix(),
+            **record(success_path),
+        }
+        receipt_path.write_bytes(MODULE.canonical_json_bytes(receipt))
+        receipt_artifact.update(record(receipt_path))
+        self.fixture._refresh_approval_bindings(
+            "fabricated controller output fixture",
+        )
+        self.assert_rejected("unexpected controller output")
 
     def test_reference_plan_nonce_is_bound(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -1449,7 +2456,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
-        self.assert_rejected("plan/candidate nonce mismatch")
+        self.assert_rejected("controller receipt does not bind")
 
     def test_reference_plan_source_contract_is_bound(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -1460,7 +2467,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
-        self.assert_rejected("reference source-contract binding mismatch")
+        self.assert_rejected("controller receipt does not bind")
 
     def test_reference_plan_selected_sources_are_bound(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -1471,7 +2478,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "plan", MODULE.canonical_json_bytes(plan),
         )
-        self.assert_rejected("reference selected-source binding mismatch")
+        self.assert_rejected("controller receipt does not bind")
 
     def test_reference_candidate_projection_must_equal_approval(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -1483,7 +2490,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_reference_artifact(
             0, 0, "candidate", MODULE.canonical_json_bytes(candidate),
         )
-        self.assert_rejected("candidate identity projection differs")
+        self.assert_rejected("controller receipt does not bind")
 
     def test_symlink_log_and_duplicate_process_nonce_fail_closed(self) -> None:
         log = Path(self.fixture.reports[0]["results"][0]["log_path"])

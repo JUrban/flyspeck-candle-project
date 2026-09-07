@@ -97,14 +97,16 @@ binds the two exact report bytes and nonces, semantic/source/approval/link
 identities, finalizer project commit and bytes, and tool identities.
 
 The independent approval must be the committed
-`candle-s1-identity-approval-v1` artifact: 65 manifest-ordered targets, two
+`candle-s1-identity-approval-v2` artifact: 65 manifest-ordered targets, two
 distinct reference-session nonces per target, one identical canonical
 `{serializer_sha256,theorems,post_state}` identity, the reviewed three-file
 reference-source delta policy, and exact candidate/plan/request/transcript/
-source-contract attachment records. The finalizer resolves every attachment as
+source-contract attachment records, plus the exact collection contract, closed
+130/130 aggregate receipt, per-attempt success receipts, and collector/
+validator output records. The finalizer resolves every attachment as
 an ordinary Candle-root-relative file, rehashes it, enforces distinct run
 artifacts, and retains its exact bytes. It also captures the committed
-`candle/reference_fingerprints.py` validator and replays every staged schema-v6
+`candle/reference_fingerprints.py` validator and replays every staged schema-v8
 candidate from its exact staged plan, generated request, and transcript under
 the captured compatible regression/serializer semantics. The replay must bind
 the target, selected source hashes, reference head, session nonce, and source

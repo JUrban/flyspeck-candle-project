@@ -20,6 +20,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
 
@@ -61,6 +62,68 @@ HANDLED_SIGNALS = (signal.SIGTERM, signal.SIGHUP)
 ACTIVE_PROCESS: subprocess.Popen[bytes] | None = None
 PENDING_SIGNAL: int | None = None
 STARTUP_ENVIRONMENT = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "LANG": "C"}
+EXTERNAL_RUNTIME_POLICY = "single_private_path_gp_csdp_with_pinned_shell_v3"
+THREAD_CAP_ENVIRONMENT = {
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+}
+CSDP_BUILD_KIND = "candle-hol-light-csdp-single-thread-build"
+CSDP_STATIC_LIBSDP_SHA256 = (
+    "ede58dd5bf3620aa08045aa767fd1280fefe1e76d6ece276e8a674d6156bca25"
+)
+CSDP_TOOLCHAIN = {
+    "archiver_argument": "/usr/bin/ar",
+    "archiver_resolved": "/usr/bin/x86_64-linux-gnu-ar",
+    "archiver_sha256":
+        "534681ac11c18868cfc4fdf98770aa0ba8973eedc90c231e94e6ba96e1a04f27",
+    "binutils_version_first_line": "GNU ld (GNU Binutils for Ubuntu) 2.42",
+    "compiler_argument": "/usr/bin/gcc",
+    "compiler_resolved": "/usr/bin/x86_64-linux-gnu-gcc-13",
+    "compiler_sha256":
+        "1b99826121ae6682a634e5efe09bd3e3df58ce58e0b28f849114ab5b89139c26",
+    "compiler_version_first_line":
+        "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+}
+CSDP_RECIPE = {
+    "cflags": (
+        "-m64 -O2 -fno-ident -ansi -Wall -DBIT64 -DUSESIGTERM "
+        "-DUSEGETTIME -I../include"
+    ),
+    "commands": [
+        "make -C lib clean libsdp.a CC=/usr/bin/gcc CFLAGS=<cflags>",
+        (
+            "make -C solver clean csdp CC=/usr/bin/gcc CFLAGS=<cflags> "
+            "LIBS=<library_flags>"
+        ),
+    ],
+    "library_flags": (
+        "-L../lib -Wl,-Bstatic -lsdp -Wl,-Bdynamic -llapack -lblas "
+        "-lm -lgfortran"
+    ),
+    "native_cpu_flags": False,
+    "openmp_enabled": False,
+}
+CSDP_PROBE_SUCCESS = "Success: SDP solved"
+CSDP_PROBE_PRIMAL = "2.3000000e+01"
+CSDP_PROBE_DUAL = "2.3000000e+01"
+CSDP_FORBIDDEN_ELF_FRAGMENTS = (
+    "libgomp", "libomp", "libiomp", "libopenblas", "libpthread",
+)
+ELF_EVIDENCE_POLICY = "authenticated_explicit_bash_ldd_closure_v1"
+ELF_OUTPUT_NORMALIZATION_POLICY = \
+    "strict_recognized_lines_replace_only_aslr_addresses_v1"
+ELF_BASH_PATH = Path("/bin/bash")
+ELF_LDD_PATH = Path("/usr/bin/ldd")
+ELF_CACHE_PATH = Path("/etc/ld.so.cache")
+ELF_PRELOAD_PATH = Path("/etc/ld.so.preload")
+ELF_LOADER_PATHS = (
+    Path("/lib/ld-linux.so.2"),
+    Path("/lib64/ld-linux-x86-64.so.2"),
+    Path("/libx32/ld-linux-x32.so.2"),
+)
 
 
 class CollectionFailure(RuntimeError):
@@ -208,6 +271,155 @@ def runtime_file_record(path: Path, label: str) -> dict[str, object]:
     }
 
 
+def executable_route_record(path: Path, label: str) -> dict[str, object]:
+    """Match the collector's lexical route and resolved executable pin."""
+    argument = lexical_absolute(path)
+    try:
+        metadata = argument.lstat()
+        parent_metadata = argument.parent.lstat()
+        resolved = argument.resolve(strict=True)
+        resolved_metadata = resolved.lstat()
+    except (FileNotFoundError, RuntimeError, OSError) as error:
+        raise CollectionFailure(f"could not resolve {label}: {argument}") from error
+    require(stat.S_ISREG(resolved_metadata.st_mode) and
+            stat.S_IMODE(resolved_metadata.st_mode) & 0o111 != 0,
+            f"resolved {label} is not executable")
+
+    def component(route: Path, route_metadata: os.stat_result) -> dict[str, object]:
+        if stat.S_ISLNK(route_metadata.st_mode):
+            kind = "symlink"
+            extra = {"target": os.readlink(route)}
+        elif stat.S_ISDIR(route_metadata.st_mode):
+            kind = "directory"
+            extra = {}
+        elif stat.S_ISREG(route_metadata.st_mode):
+            kind = "file"
+            extra = {}
+        else:
+            raise CollectionFailure(f"unsupported {label} route component")
+        return {
+            "path": str(route), "kind": kind,
+            "mode": stat.S_IMODE(route_metadata.st_mode),
+            **extra, "resolved_path": str(route.resolve(strict=True)),
+        }
+
+    return {
+        "argument_path": str(argument),
+        "argument_parent": component(argument.parent, parent_metadata),
+        "argument": component(argument, metadata),
+        "resolved_executable": {
+            "path": str(resolved),
+            "sha256": file_record(resolved, label)["sha256"],
+            "mode": stat.S_IMODE(resolved_metadata.st_mode),
+        },
+    }
+
+
+def elf_oracle_contract(arguments: argparse.Namespace) -> dict[str, object]:
+    """Pin the plan-independent schema-v8 ELF observer inputs."""
+    require(not os.path.lexists(ELF_PRELOAD_PATH),
+            "/etc/ld.so.preload must be absent")
+    cache = ordinary_file(ELF_CACHE_PATH, "dynamic-loader cache")
+    require(not cache.is_symlink() and cache.resolve(strict=True) == cache,
+            "dynamic-loader cache must be a canonical regular file")
+    bash = executable_route_record(ELF_BASH_PATH, "ELF observer bash")
+    ldd = executable_route_record(ELF_LDD_PATH, "ELF observer ldd")
+    require(bash["resolved_executable"]["sha256"] == require_sha256(
+        arguments.elf_bash_sha256, "pinned ELF observer bash"),
+        "ELF observer bash differs from command-line pin")
+    require(ldd["resolved_executable"]["sha256"] == require_sha256(
+        arguments.elf_ldd_sha256, "pinned ELF observer ldd"),
+        "ELF observer ldd differs from command-line pin")
+    cache_pin = {"path": str(cache), **file_record(cache, "dynamic-loader cache")}
+    cache_pin.pop("bytes")
+    require(cache_pin["sha256"] == require_sha256(
+        arguments.elf_cache_sha256, "pinned dynamic-loader cache"),
+        "dynamic-loader cache differs from command-line pin")
+    loaders = []
+    present = []
+    for path in ELF_LOADER_PATHS:
+        if not os.path.lexists(path):
+            loaders.append({"argument_path": str(path), "status": "absent"})
+            continue
+        route = executable_route_record(path, f"ELF loader {path}")
+        loaders.append({
+            "argument_path": str(path), "status": "present", "route": route,
+        })
+        present.append(route["resolved_executable"])
+    require(len(present) == 1,
+            "exactly one reviewed ELF loader route must be present")
+    require(present[0]["sha256"] == require_sha256(
+        arguments.elf_loader_sha256, "pinned ELF loader"),
+        "ELF loader differs from command-line pin")
+    return {
+        "policy": ELF_EVIDENCE_POLICY,
+        "output_normalization": ELF_OUTPUT_NORMALIZATION_POLICY,
+        "tools": {"bash": bash, "ldd": ldd},
+        "hardcoded_loader_routes": loaders,
+        "ld_so_cache": cache_pin,
+        "ld_so_preload": {
+            "path": str(ELF_PRELOAD_PATH), "status": "absent",
+        },
+        "environment": dict(STARTUP_ENVIRONMENT),
+    }
+
+
+def tree_record(path: Path, label: str) -> dict[str, object]:
+    """Match the collector's versioned path/kind/mode/link/content digest."""
+    root = ordinary_directory(path, label)
+    records: list[dict[str, object]] = []
+    for entry in sorted(root.rglob("*"), key=lambda item: item.as_posix()):
+        relative = entry.relative_to(root).as_posix()
+        metadata = entry.lstat()
+        mode = stat.S_IMODE(metadata.st_mode)
+        if stat.S_ISLNK(metadata.st_mode):
+            try:
+                resolved = entry.resolve(strict=True)
+            except (FileNotFoundError, RuntimeError, OSError) as error:
+                raise CollectionFailure(
+                    f"broken symlink in {label}: {entry}",
+                ) from error
+            value: dict[str, object] = {
+                "path": relative, "kind": "symlink", "mode": mode,
+                "target": os.readlink(entry), "resolved_path": str(resolved),
+            }
+            if resolved.is_file():
+                value["resolved_sha256"] = hashlib.sha256(
+                    stable_bytes(resolved, f"{label} resolved symlink"),
+                ).hexdigest()
+            else:
+                require(resolved.is_dir(),
+                        f"unsupported symlink target in {label}: {entry}")
+            records.append(value)
+        elif stat.S_ISREG(metadata.st_mode):
+            records.append({
+                "path": relative, "kind": "file", "mode": mode,
+                "sha256": hashlib.sha256(
+                    stable_bytes(entry, f"{label} file"),
+                ).hexdigest(),
+            })
+        elif stat.S_ISDIR(metadata.st_mode):
+            records.append({
+                "path": relative, "kind": "directory", "mode": mode,
+            })
+        else:
+            raise CollectionFailure(
+                f"unsupported filesystem entry in {label}: {entry}",
+            )
+    digest = hashlib.sha256()
+    for value in records:
+        digest.update(json.dumps(
+            value, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8"))
+        digest.update(b"\n")
+    return {
+        "root": str(root), "root_mode": stat.S_IMODE(root.lstat().st_mode),
+        "entry_count": len(records), "inventory_sha256": digest.hexdigest(),
+        "inventory_policy":
+            "relative_path_kind_mode_link_target_and_content_v1",
+    }
+
+
 def parse_json_bytes(value: bytes, label: str) -> dict[str, Any]:
     try:
         decoded = value.decode("utf-8", errors="strict")
@@ -222,6 +434,105 @@ def load_json(path: Path, label: str, *, single_link: bool = False) -> dict[str,
     return parse_json_bytes(
         stable_bytes(path, label, single_link=single_link), label,
     )
+
+
+def normalize_csdp_probe_stdout(stdout: str) -> str:
+    timing = re.compile(
+        r"^(Elements|Factor|Other|Total) time: [0-9]+\.[0-9]+ \n$")
+    normalized: list[str] = []
+    seen: list[str] = []
+    for line in stdout.splitlines(keepends=True):
+        match = timing.fullmatch(line)
+        if match is None:
+            normalized.append(line)
+        else:
+            seen.append(match.group(1))
+            normalized.append(f"{match.group(1)} time: <measured>\n")
+    require(seen == ["Elements", "Factor", "Other", "Total"],
+            "CSDP probe has malformed timing records")
+    return "".join(normalized)
+
+
+def validate_csdp_build_statement(
+    statement: object, source: dict[str, object], csdp: dict[str, object],
+    probe_input: dict[str, object],
+) -> dict[str, Any]:
+    expected = {
+        "schema": 1,
+        "kind": CSDP_BUILD_KIND,
+        "source": {
+            "archive": Path(str(source["path"])).name,
+            "bytes": source["bytes"],
+            "sha256": source["sha256"],
+            "ubuntu_source_package": "coinor-csdp 6.2.0-5build1 (Noble)",
+            "upstream_tree": "Csdp-6.2.0",
+        },
+        "toolchain": CSDP_TOOLCHAIN,
+        "recipe": CSDP_RECIPE,
+        "outputs": {
+            "csdp_path": "usr/bin/csdp",
+            "csdp_bytes": csdp["bytes"],
+            "csdp_sha256": csdp["sha256"],
+            "static_libsdp_sha256": CSDP_STATIC_LIBSDP_SHA256,
+        },
+        "unit_probe": {
+            "input_path": Path(str(probe_input["path"])).name,
+            "input_bytes": probe_input["bytes"],
+            "input_sha256": probe_input["sha256"],
+            "exit_code": 0,
+            "success_line": CSDP_PROBE_SUCCESS,
+            "primal_objective": CSDP_PROBE_PRIMAL,
+            "dual_objective": CSDP_PROBE_DUAL,
+            "maximum_allowed_dimacs_error": "1.0e-6",
+        },
+        "runtime_policy": {
+            "single_process_solver": True,
+            "single_thread_build": True,
+            "external_shared_libraries_closed_separately": True,
+        },
+    }
+    require(isinstance(statement, dict) and
+            canonical_json(statement) == canonical_json(expected),
+            "CSDP build statement differs from exact source/toolchain/recipe/output/probe contract")
+    return statement
+
+
+def csdp_probe_record(
+    csdp: dict[str, object], probe_input: dict[str, object],
+    environment: dict[str, str],
+) -> dict[str, object]:
+    with tempfile.TemporaryDirectory(prefix="candle-controller-csdp-") as directory:
+        solution = Path(directory) / "theta1.sol"
+        completed = subprocess.run(
+            [str(csdp["argument_path"]), str(probe_input["argument_path"]),
+             str(solution)],
+            env=environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, timeout=30, check=False,
+        )
+        try:
+            solution_record = file_record(solution, "CSDP probe solution")
+        except (CollectionFailure, OSError) as error:
+            raise CollectionFailure(
+                "CSDP probe did not produce a solution") from error
+    normalized = normalize_csdp_probe_stdout(completed.stdout)
+    require(completed.returncode == 0 and completed.stderr == "" and
+            f"{CSDP_PROBE_SUCCESS}\n" in normalized and
+            f"Primal objective value: {CSDP_PROBE_PRIMAL} \n" in normalized and
+            f"Dual objective value: {CSDP_PROBE_DUAL} \n" in normalized,
+            "CSDP single-thread theta1 probe failed")
+    return {
+        "argv_template": [
+            str(csdp["argument_path"]), str(probe_input["argument_path"]),
+            "<private-temporary-output>"],
+        "environment": environment,
+        "return_code": completed.returncode,
+        "normalized_stdout": normalized,
+        "normalized_stdout_sha256": hashlib.sha256(
+            normalized.encode()).hexdigest(),
+        "stderr": completed.stderr,
+        "stderr_sha256": hashlib.sha256(completed.stderr.encode()).hexdigest(),
+        "solution": solution_record,
+    }
 
 
 def safe_relative(value: object, label: str) -> str:
@@ -672,6 +983,130 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         require(identity["sha256"] == require_sha256(
             supplied_sha256, f"pinned {name}"), f"{name} differs from command-line pin")
         runtime[name] = identity
+    pari_gp_root = ordinary_directory(
+        arguments.pari_gp_root, "PARI/GP package root",
+    )
+    pari_gp = runtime_file_record(
+        pari_gp_root / "usr/bin/gp", "PARI/GP executable",
+    )
+    require(pari_gp["sha256"] == require_sha256(
+        arguments.pari_gp_sha256, "pinned PARI/GP executable"),
+        "PARI/GP executable differs from command-line pin")
+    csdp = runtime_file_record(
+        pari_gp_root / "usr/bin/csdp", "CSDP executable",
+    )
+    require(csdp["argument_path"] == csdp["path"] and
+            stat.S_IMODE(Path(csdp["path"]).lstat().st_mode) == 0o555,
+            "CSDP executable must be a direct 0555 regular file")
+    require(csdp["sha256"] == require_sha256(
+        arguments.csdp_sha256, "pinned CSDP executable"),
+        "CSDP executable differs from command-line pin")
+    command_shell = runtime_file_record(
+        arguments.command_shell, "Sys.command shell",
+    )
+    require(command_shell["argument_path"] == "/bin/sh",
+            "Sys.command shell argument must be exactly /bin/sh")
+    require(command_shell["sha256"] == require_sha256(
+        arguments.command_shell_sha256, "pinned Sys.command shell"),
+        "Sys.command shell differs from command-line pin")
+    package_archive = runtime_file_record(
+        arguments.pari_gp_package, "PARI/GP package archive",
+    )
+    require(package_archive["argument_path"] == package_archive["path"] and
+            stat.S_IMODE(Path(package_archive["path"]).lstat().st_mode) == 0o444,
+            "PARI/GP package archive must be a canonical 0444 regular file")
+    require(package_archive["sha256"] == require_sha256(
+        arguments.pari_gp_package_sha256, "pinned PARI/GP package archive"),
+        "PARI/GP package archive differs from command-line pin")
+    csdp_source = runtime_file_record(
+        arguments.csdp_source, "CSDP source archive")
+    csdp_build_receipt = runtime_file_record(
+        arguments.csdp_build_receipt, "CSDP build receipt")
+    csdp_probe_input = runtime_file_record(
+        arguments.csdp_probe_input, "CSDP probe input")
+    for value, expected_path, expected_sha256, label in (
+            (csdp_source, pari_gp_root / "candle-csdp-source.tar.gz",
+             arguments.csdp_source_sha256, "CSDP source archive"),
+            (csdp_build_receipt, pari_gp_root / "candle-csdp-build.json",
+             arguments.csdp_build_receipt_sha256, "CSDP build receipt"),
+            (csdp_probe_input, pari_gp_root / "candle-csdp-theta1.dat-s",
+             arguments.csdp_probe_input_sha256, "CSDP probe input")):
+        require(value["argument_path"] == value["path"] == str(expected_path) and
+                stat.S_IMODE(Path(value["path"]).lstat().st_mode) == 0o444,
+                f"{label} must be its direct 0444 package file")
+        require(value["sha256"] == require_sha256(expected_sha256, label),
+                f"{label} differs from command-line pin")
+    csdp_build_statement = validate_csdp_build_statement(
+        load_json(Path(csdp_build_receipt["path"]), "CSDP build receipt"),
+        csdp_source, csdp, csdp_probe_input,
+    )
+    configuration = runtime_file_record(
+        pari_gp_root / "candle-gprc", "PARI/GP configuration",
+    )
+    require(configuration["argument_path"] == configuration["path"] and
+            stat.S_IMODE(Path(configuration["path"]).lstat().st_mode) == 0o444,
+            "PARI/GP configuration must be a canonical 0444 regular file")
+    require(configuration["sha256"] == require_sha256(
+        arguments.pari_gp_gprc_sha256, "pinned PARI/GP configuration"),
+        "PARI/GP configuration differs from command-line pin")
+    package_tree = tree_record(pari_gp_root, "PARI/GP package tree")
+    require(package_tree["inventory_sha256"] == require_sha256(
+        arguments.pari_gp_tree_sha256, "pinned PARI/GP package tree"),
+        "PARI/GP package tree differs from command-line pin")
+    data_tree = tree_record(
+        pari_gp_root / "candle-data", "PARI/GP optional-data tree",
+    )
+    require(data_tree["root_mode"] == 0o555,
+            "PARI/GP optional-data root mode must be exactly 0555")
+    require(data_tree["entry_count"] == 0,
+            "PARI/GP optional-data tree must be empty")
+    require(data_tree["inventory_sha256"] == require_sha256(
+        arguments.pari_gp_data_tree_sha256,
+        "pinned PARI/GP optional-data tree"),
+        "PARI/GP optional-data tree differs from command-line pin")
+    csdp_environment = {
+        "HOME": str(reference_root),
+        "PATH": str(pari_gp_root / "usr/bin"),
+        "LC_ALL": "C",
+        "GPRC": configuration["path"],
+        "GP_DATA_DIR": data_tree["root"],
+        **THREAD_CAP_ENVIRONMENT,
+    }
+    csdp_probe = csdp_probe_record(
+        csdp, csdp_probe_input, csdp_environment)
+    external_runtime = {
+        "policy": EXTERNAL_RUNTIME_POLICY,
+        "command_shell": command_shell,
+        "pari_gp": pari_gp,
+        "csdp": csdp,
+        "package_archive": package_archive,
+        "package_tree": package_tree,
+        "configuration": configuration,
+        "data_tree": data_tree,
+        "csdp_source_archive": csdp_source,
+        "csdp_build": {
+            "receipt": csdp_build_receipt,
+            "statement": csdp_build_statement,
+        },
+        "csdp_probe_input": csdp_probe_input,
+        "thread_policy": {
+            "single_process_solver": True,
+            "single_thread_build": True,
+            "openmp_enabled": False,
+            "native_cpu_flags": False,
+            "environment": dict(THREAD_CAP_ENVIRONMENT),
+            "forbidden_elf_dependency_name_fragments":
+                list(CSDP_FORBIDDEN_ELF_FRAGMENTS),
+        },
+        "csdp_probe": csdp_probe,
+        "runtime_environment": {
+            "PATH": str(pari_gp_root / "usr/bin"),
+            "GPRC": configuration["path"],
+            "GP_DATA_DIR": data_tree["root"],
+            **THREAD_CAP_ENVIRONMENT,
+        },
+    }
+    elf_oracle = elf_oracle_contract(arguments)
     require(is_int(arguments.collection_wall_seconds) and
             arguments.collection_wall_seconds > 0 and
             is_int(arguments.target_wall_seconds) and
@@ -688,7 +1123,7 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
         arguments.git_sha256, "pinned Git"),
         "Git executable differs from command-line pin")
     contract = {
-        "schema": 1,
+        "schema": 4,
         "kind": "candle-great100-two-sweep-reference-collection",
         "approval_status": "candidate_collection_only_unapproved",
         "promotion_allowed": False,
@@ -711,6 +1146,8 @@ def build_contract(arguments: argparse.Namespace) -> tuple[dict[str, Any], list[
             "source_policy": source_policy,
         },
         "runtime": runtime,
+        "external_runtime": external_runtime,
+        "elf_oracle": elf_oracle,
         "deadlines": {
             "collection_wall_seconds": arguments.collection_wall_seconds,
             "target_wall_seconds": arguments.target_wall_seconds,
@@ -751,6 +1188,65 @@ def validate_environment(contract: dict[str, Any]) -> None:
         require(runtime_file_record(
             Path(expected["argument_path"]), f"current {name}",
         ) == expected, f"pinned runtime input changed: {name}")
+    external = contract["external_runtime"]
+    require(runtime_file_record(
+        Path(external["command_shell"]["argument_path"]),
+        "current Sys.command shell",
+    ) == external["command_shell"], "pinned Sys.command shell changed")
+    require(runtime_file_record(
+        Path(external["pari_gp"]["argument_path"]),
+        "current PARI/GP executable",
+    ) == external["pari_gp"], "pinned PARI/GP executable changed")
+    require(runtime_file_record(
+        Path(external["csdp"]["argument_path"]),
+        "current CSDP executable",
+    ) == external["csdp"], "pinned CSDP executable changed")
+    require(runtime_file_record(
+        Path(external["package_archive"]["argument_path"]),
+        "current PARI/GP package archive",
+    ) == external["package_archive"], "pinned PARI/GP package archive changed")
+    require(runtime_file_record(
+        Path(external["configuration"]["argument_path"]),
+        "current PARI/GP configuration",
+    ) == external["configuration"], "pinned PARI/GP configuration changed")
+    for key, label in (
+            ("csdp_source_archive", "CSDP source archive"),
+            ("csdp_probe_input", "CSDP probe input")):
+        require(runtime_file_record(
+            Path(external[key]["argument_path"]), f"current {label}",
+        ) == external[key], f"pinned {label} changed")
+    receipt = external["csdp_build"]["receipt"]
+    require(runtime_file_record(
+        Path(receipt["argument_path"]), "current CSDP build receipt",
+    ) == receipt, "pinned CSDP build receipt changed")
+    require(validate_csdp_build_statement(
+        load_json(Path(receipt["path"]), "current CSDP build receipt"),
+        external["csdp_source_archive"], external["csdp"],
+        external["csdp_probe_input"],
+    ) == external["csdp_build"]["statement"],
+            "CSDP build statement changed")
+    require(tree_record(
+        Path(external["package_tree"]["root"]),
+        "current PARI/GP package tree",
+    ) == external["package_tree"], "pinned PARI/GP package tree changed")
+    require(tree_record(
+        Path(external["data_tree"]["root"]),
+        "current PARI/GP optional-data tree",
+    ) == external["data_tree"], "pinned PARI/GP optional-data tree changed")
+    oracle_arguments = argparse.Namespace(
+        elf_bash_sha256=contract["elf_oracle"]["tools"]["bash"][
+            "resolved_executable"]["sha256"],
+        elf_ldd_sha256=contract["elf_oracle"]["tools"]["ldd"][
+            "resolved_executable"]["sha256"],
+        elf_cache_sha256=contract["elf_oracle"]["ld_so_cache"]["sha256"],
+        elf_loader_sha256=next(
+            item["route"]["resolved_executable"]["sha256"]
+            for item in contract["elf_oracle"]["hardcoded_loader_routes"]
+            if item["status"] == "present"
+        ),
+    )
+    require(elf_oracle_contract(oracle_arguments) == contract["elf_oracle"],
+            "pinned ELF observer inputs changed")
     observed_controller = validate_committed_file(
         project_root, CONTROLLER_RELATIVE, "100755",
     )
@@ -912,6 +1408,7 @@ def collector_command(
 ) -> list[str]:
     candle = contract["candle"]
     runtime = contract["runtime"]
+    external = contract["external_runtime"]
     return [
         str(PYTHON_ARGUMENT_PATH), "-I", "-S",
         str(Path(candle["root"]) / COLLECTOR_RELATIVE),
@@ -921,6 +1418,14 @@ def collector_command(
         "--runtime-stublib", runtime["runtime_stublib"]["argument_path"],
         "--ocamlc", runtime["ocamlc"]["argument_path"],
         "--ocamlfind", runtime["ocamlfind"]["argument_path"],
+        "--pari-gp-root", external["package_tree"]["root"],
+        "--pari-gp-package", external["package_archive"]["argument_path"],
+        "--command-shell", external["command_shell"]["argument_path"],
+        "--csdp-source", external["csdp_source_archive"]["argument_path"],
+        "--csdp-build-receipt",
+        external["csdp_build"]["receipt"]["argument_path"],
+        "--csdp-probe-input",
+        external["csdp_probe_input"]["argument_path"],
         "--plan", str(attempt / ARTIFACT_NAMES["plan"]),
         "--request", str(attempt / ARTIFACT_NAMES["request"]),
         "--source-mode", "manifest-exact",
@@ -965,7 +1470,7 @@ def validate_artifact_semantics(
     )
     plan = parse_json_bytes(plan_bytes, "reference plan")
     candidate = parse_json_bytes(candidate_bytes, "reference candidate")
-    require(plan.get("schema") == "candle-s1-reference-plan-v6" and
+    require(plan.get("schema") == "candle-s1-reference-plan-v9" and
             plan.get("status") == "planned_not_executed" and
             plan.get("session_nonce") and
             NONCE_RE.fullmatch(plan["session_nonce"]) is not None,
@@ -1012,6 +1517,133 @@ def validate_artifact_semantics(
             reference.get("git_head") == contract["reference"]["git_head"] and
             reference.get("git_status") == [],
             f"reference plan repository mismatch for {target['name']}")
+    external_contract = contract["external_runtime"]
+    external_plan = reference.get("external_runtime")
+    require(isinstance(external_plan, dict) and set(external_plan) == {
+        "policy", "command_shell", "pari_gp", "pari_gp_version",
+        "package_archive", "package_tree", "configuration", "data_tree",
+        "csdp", "csdp_bytes", "csdp_source_archive", "csdp_build",
+        "csdp_probe_input", "thread_policy", "elf_runtime", "probe",
+        "csdp_probe",
+    } and external_plan.get("policy") == external_contract["policy"],
+            f"reference external-runtime policy mismatch for {target['name']}")
+    for key in ("command_shell", "pari_gp", "csdp"):
+        observed_route = external_plan.get(key)
+        expected_route = external_contract[key]
+        resolved = observed_route.get("resolved_executable", {}) \
+            if isinstance(observed_route, dict) else {}
+        require(isinstance(observed_route, dict) and
+                observed_route.get("argument_path") ==
+                expected_route["argument_path"] and
+                resolved.get("path") == expected_route["path"] and
+                resolved.get("sha256") == expected_route["sha256"],
+                f"reference {key} route mismatch for {target['name']}")
+    require(external_plan.get("csdp_bytes") == external_contract["csdp"]["bytes"] and
+            external_plan.get("package_archive") == {
+        "path": external_contract["package_archive"]["path"],
+        "sha256": external_contract["package_archive"]["sha256"],
+    } and external_plan.get("package_tree") ==
+            external_contract["package_tree"] and
+            external_plan.get("configuration") == {
+                "path": external_contract["configuration"]["path"],
+                "sha256": external_contract["configuration"]["sha256"],
+            } and external_plan.get("data_tree") == external_contract["data_tree"] and
+            external_plan.get("csdp_source_archive") == {
+                key: external_contract["csdp_source_archive"][key]
+                for key in ("path", "sha256", "bytes")
+            } and external_plan.get("csdp_build") == {
+                "receipt": {
+                    key: external_contract["csdp_build"]["receipt"][key]
+                    for key in ("path", "sha256")
+                },
+                "statement": external_contract["csdp_build"]["statement"],
+            } and external_plan.get("csdp_probe_input") == {
+                key: external_contract["csdp_probe_input"][key]
+                for key in ("path", "sha256", "bytes")
+            } and external_plan.get("thread_policy") ==
+            external_contract["thread_policy"] and
+            external_plan.get("csdp_probe") == external_contract["csdp_probe"],
+            f"reference GP/CSDP closure mismatch for {target['name']}")
+    oracle_keys = {
+        "policy", "output_normalization", "tools",
+        "hardcoded_loader_routes", "ld_so_cache", "ld_so_preload",
+        "environment",
+    }
+    core_elf = reference.get("elf_runtime")
+    external_elf = external_plan.get("elf_runtime")
+    require(isinstance(core_elf, dict) and isinstance(external_elf, dict) and
+            oracle_keys.issubset(core_elf) and
+            oracle_keys.issubset(external_elf) and
+            {key: core_elf[key] for key in oracle_keys} ==
+            contract["elf_oracle"] and
+            {key: external_elf[key] for key in oracle_keys} ==
+            contract["elf_oracle"],
+            f"reference ELF observer contract mismatch for {target['name']}")
+    expected_external_roots = sorted(({
+        "path": external_contract[key]["path"],
+        "sha256": external_contract[key]["sha256"],
+    } for key in ("command_shell", "pari_gp", "csdp")),
+        key=lambda value: value["path"])
+    require(external_elf.get("requested_roots") == expected_external_roots and
+            isinstance(external_elf.get("closure"), list) and
+            not any(fragment in Path(item.get("path", "")).name.lower()
+                    for item in external_elf["closure"]
+                    if isinstance(item, dict)
+                    for fragment in CSDP_FORBIDDEN_ELF_FRAGMENTS),
+            f"reference CSDP ELF closure mismatch for {target['name']}")
+    fresh = plan.get("fresh_process_contract")
+    runtime_environment = fresh.get("runtime_environment", {}) \
+        if isinstance(fresh, dict) else {}
+    require(isinstance(fresh, dict) and set(fresh) == {
+        "required", "preloaded_checkpoint_allowed", "working_directory",
+        "environment_policy", "runtime_argv", "runtime_environment",
+    } and fresh["required"] is True and
+            fresh["preloaded_checkpoint_allowed"] is False and
+            fresh["working_directory"] == reference["root"] and
+            fresh["environment_policy"] ==
+            "sanitized_allowlist_no_inherited_overrides" and
+            isinstance(runtime_environment, dict) and
+            set(runtime_environment) == {
+                "HOME", "PATH", "LC_ALL", "GPRC", "GP_DATA_DIR",
+                "HOLLIGHT_DIR", "HOLLIGHT_USE_MODULE", "OCAMLRUNPARAM",
+                "CAML_LD_LIBRARY_PATH", "OCAML_TOPLEVEL_PATH",
+                "OCAMLFIND_CONF", "OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
+                "NUMEXPR_NUM_THREADS",
+            } and
+            all(runtime_environment.get(key) == value for key, value in
+                external_contract["runtime_environment"].items()) and
+            runtime_environment["HOME"] == reference["root"] and
+            runtime_environment["LC_ALL"] == "C" and
+            runtime_environment["HOLLIGHT_DIR"] == reference["root"] and
+            runtime_environment["HOLLIGHT_USE_MODULE"] == "0" and
+            runtime_environment["OCAMLRUNPARAM"] == "l=2000000000" and
+            all(isinstance(runtime_environment[key], str) and
+                Path(runtime_environment[key]).is_absolute()
+                for key in ("CAML_LD_LIBRARY_PATH", "OCAML_TOPLEVEL_PATH",
+                            "OCAMLFIND_CONF")),
+            f"reference external environment mismatch for {target['name']}")
+    probe = external_plan["probe"]
+    require(isinstance(probe, dict) and probe.get("shell_argv") == [
+        "/bin/sh", "-c",
+        "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp",
+    ] and probe.get("environment") == {
+        "HOME": reference["root"],
+        "PATH": external_contract["runtime_environment"]["PATH"],
+        "LC_ALL": "C",
+        "GPRC": external_contract["runtime_environment"]["GPRC"],
+        "GP_DATA_DIR": external_contract["runtime_environment"]["GP_DATA_DIR"],
+        **THREAD_CAP_ENVIRONMENT,
+    } and probe.get("return_code") == 0 and
+            isinstance(probe.get("stdout"), str) and
+            re.search(r"(?:^|\n)1\n", probe["stdout"]) is not None and
+            "[3, 1; 5, 1]" in probe["stdout"] and
+            hashlib.sha256(probe["stdout"].encode()).hexdigest() ==
+            probe.get("stdout_sha256") and
+            isinstance(probe.get("stderr"), str) and
+            hashlib.sha256(probe["stderr"].encode()).hexdigest() ==
+            probe.get("stderr_sha256"),
+            f"reference PARI/GP probe mismatch for {target['name']}")
     require(plan.get("request") == {
         "source": request_bytes.decode("utf-8", errors="strict"),
         "sha256": hashlib.sha256(request_bytes).hexdigest(),
@@ -1020,13 +1652,13 @@ def validate_artifact_semantics(
         "schema", "artifact_kind", "approval_status", "promotion_allowed",
         "warning", "plan_pins", "session_nonce", "process_exit_code",
         "artifact_hashes", "candidate_identities",
-    } and candidate["schema"] == "candle-s1-reference-candidate-v6" and
+    } and candidate["schema"] == "candle-s1-reference-candidate-v9" and
             candidate["artifact_kind"] == "reference_identity_candidate" and
             candidate["approval_status"] == "candidate_unapproved" and
             candidate["promotion_allowed"] is False and
             candidate["process_exit_code"] == 0 and
             candidate["session_nonce"] == plan["session_nonce"],
-            f"candidate is not exact unapproved v6 for {target['name']}")
+            f"candidate is not exact unapproved v9 for {target['name']}")
     hashes = candidate["artifact_hashes"]
     require(isinstance(hashes, dict) and hashes == {
         "plan_sha256": reference_json_sha256(plan),
@@ -1727,6 +2359,26 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--ocamlc-sha256", required=True)
     result.add_argument("--ocamlfind", type=Path, required=True)
     result.add_argument("--ocamlfind-sha256", required=True)
+    result.add_argument("--pari-gp-root", type=Path, required=True)
+    result.add_argument("--pari-gp-sha256", required=True)
+    result.add_argument("--csdp-sha256", required=True)
+    result.add_argument("--pari-gp-package", type=Path, required=True)
+    result.add_argument("--pari-gp-package-sha256", required=True)
+    result.add_argument("--pari-gp-gprc-sha256", required=True)
+    result.add_argument("--pari-gp-tree-sha256", required=True)
+    result.add_argument("--pari-gp-data-tree-sha256", required=True)
+    result.add_argument("--csdp-source", type=Path, required=True)
+    result.add_argument("--csdp-source-sha256", required=True)
+    result.add_argument("--csdp-build-receipt", type=Path, required=True)
+    result.add_argument("--csdp-build-receipt-sha256", required=True)
+    result.add_argument("--csdp-probe-input", type=Path, required=True)
+    result.add_argument("--csdp-probe-input-sha256", required=True)
+    result.add_argument("--command-shell", type=Path, required=True)
+    result.add_argument("--command-shell-sha256", required=True)
+    result.add_argument("--elf-bash-sha256", required=True)
+    result.add_argument("--elf-ldd-sha256", required=True)
+    result.add_argument("--elf-cache-sha256", required=True)
+    result.add_argument("--elf-loader-sha256", required=True)
     result.add_argument("--collection-wall-seconds", type=int, required=True)
     result.add_argument("--target-wall-seconds", type=int, required=True)
     result.add_argument("--validation-wall-seconds", type=int, required=True)

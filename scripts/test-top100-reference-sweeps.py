@@ -129,7 +129,9 @@ def main():
     sub = parser.add_subparsers(dest="command", required=True)
     collect = sub.add_parser("collect")
     for name in ("target", "reference-root", "runtime", "runtime-stublib",
-                 "ocamlc", "ocamlfind", "plan", "request", "source-mode",
+                 "ocamlc", "ocamlfind", "pari-gp-root", "pari-gp-package",
+                 "command-shell", "csdp-source", "csdp-build-receipt",
+                 "csdp-probe-input", "plan", "request", "source-mode",
                  "transcript", "candidate", "wall-timeout"):
         collect.add_argument("--" + name, required=True)
     validate = sub.add_parser("validate")
@@ -143,7 +145,7 @@ def main():
         request = Path(args.request).read_bytes()
         transcript = Path(args.transcript).read_bytes()
         hashes = candidate["artifact_hashes"]
-        if (candidate["schema"] != "candle-s1-reference-candidate-v6" or
+        if (candidate["schema"] != "candle-s1-reference-candidate-v9" or
                 hashes != {
                     "plan_sha256": json_sha(plan),
                     "request_sha256": digest(request),
@@ -160,8 +162,95 @@ def main():
     collector_sha = file_sha(__file__)
     request = f"REQUEST {args.target} {nonce}\n".encode()
     reference_root = Path(args.reference_root).resolve()
+    contract = json.loads(
+        (plan_path.parents[3] / "collection-contract.json").read_text())
+    external_contract = contract["external_runtime"]
+    elf_oracle = contract["elf_oracle"]
+    def elf_runtime(roots):
+        return {
+            **elf_oracle,
+            "requested_roots": [
+                {"path": str(Path(path).resolve()), "sha256": file_sha(path)}
+                for path in sorted(roots, key=lambda item: str(Path(item).resolve()))
+            ],
+            "observations": [],
+            "closure": [],
+        }
+    def route(value):
+        return {
+            "argument_path": value["argument_path"],
+            "argument_parent": {}, "argument": {},
+            "resolved_executable": {
+                "path": value["path"], "sha256": value["sha256"],
+                "mode": 0o755,
+            },
+        }
+    external_runtime = {
+        "policy": external_contract["policy"],
+        "command_shell": route(external_contract["command_shell"]),
+        "pari_gp": route(external_contract["pari_gp"]),
+        "csdp": route(external_contract["csdp"]),
+        "csdp_bytes": external_contract["csdp"]["bytes"],
+        "pari_gp_version": {"stdout": "2.15.4\n", "sha256": "0" * 64},
+        "package_archive": {
+            "path": external_contract["package_archive"]["path"],
+            "sha256": external_contract["package_archive"]["sha256"],
+        },
+        "package_tree": external_contract["package_tree"],
+        "configuration": {
+            "path": external_contract["configuration"]["path"],
+            "sha256": external_contract["configuration"]["sha256"],
+        },
+        "data_tree": external_contract["data_tree"],
+        "csdp_source_archive": {
+            key: external_contract["csdp_source_archive"][key]
+            for key in ("path", "sha256", "bytes")
+        },
+        "csdp_build": {
+            "receipt": {
+                key: external_contract["csdp_build"]["receipt"][key]
+                for key in ("path", "sha256")
+            },
+            "statement": external_contract["csdp_build"]["statement"],
+        },
+        "csdp_probe_input": {
+            key: external_contract["csdp_probe_input"][key]
+            for key in ("path", "sha256", "bytes")
+        },
+        "thread_policy": external_contract["thread_policy"],
+        "csdp_probe": external_contract["csdp_probe"],
+        "elf_runtime": elf_runtime([
+            external_contract["command_shell"]["path"],
+            external_contract["pari_gp"]["path"],
+            external_contract["csdp"]["path"],
+        ]),
+        "probe": {
+            "shell_argv": [
+                "/bin/sh", "-c",
+                "echo 'print(default(nbthreads)); print(factorint(15))  \n quit' | gp",
+            ],
+            "environment": {
+                "HOME": str(reference_root),
+                "PATH": external_contract["runtime_environment"]["PATH"],
+                "LC_ALL": "C",
+                "GPRC": external_contract["runtime_environment"]["GPRC"],
+                "GP_DATA_DIR":
+                    external_contract["runtime_environment"]["GP_DATA_DIR"],
+                **{
+                    key: external_contract["runtime_environment"][key]
+                    for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                                "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
+                                "NUMEXPR_NUM_THREADS")
+                },
+            },
+            "return_code": 0,
+            "stdout": "1\n[3, 1; 5, 1]\n",
+            "stdout_sha256": digest(b"1\n[3, 1; 5, 1]\n"),
+            "stderr": "", "stderr_sha256": digest(b""),
+        },
+    }
     plan = {
-        "schema": "candle-s1-reference-plan-v6",
+        "schema": "candle-s1-reference-plan-v9",
         "status": "planned_not_executed",
         "session_nonce": nonce,
         "reference": {
@@ -170,6 +259,8 @@ def main():
                 "/usr/bin/git", "-C", str(reference_root), "rev-parse", "HEAD"
             ], text=True).strip(),
             "git_status": [],
+            "elf_runtime": elf_runtime([Path(args.runtime).resolve()]),
+            "external_runtime": external_runtime,
         },
         "input": {
             "target": args.target,
@@ -199,7 +290,33 @@ def main():
             },
         },
         "request": {"source": request.decode(), "sha256": digest(request)},
-        "fresh_process_contract": {"required": True},
+        "fresh_process_contract": {
+            "required": True,
+            "preloaded_checkpoint_allowed": False,
+            "working_directory": str(reference_root),
+            "environment_policy": "sanitized_allowlist_no_inherited_overrides",
+            "runtime_argv": [str(Path(args.runtime).resolve()), "-noprompt"],
+            "runtime_environment": {
+                "HOME": str(reference_root),
+                "PATH": external_contract["runtime_environment"]["PATH"],
+                "LC_ALL": "C",
+                "GPRC": external_contract["runtime_environment"]["GPRC"],
+                "GP_DATA_DIR":
+                    external_contract["runtime_environment"]["GP_DATA_DIR"],
+                **{
+                    key: external_contract["runtime_environment"][key]
+                    for key in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
+                                "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
+                                "NUMEXPR_NUM_THREADS")
+                },
+                "HOLLIGHT_DIR": str(reference_root),
+                "HOLLIGHT_USE_MODULE": "0",
+                "OCAMLRUNPARAM": "l=2000000000",
+                "CAML_LD_LIBRARY_PATH": str(Path(args.runtime_stublib).parent),
+                "OCAML_TOPLEVEL_PATH": str(reference_root),
+                "OCAMLFIND_CONF": str(reference_root / "ocamlfind.conf"),
+            },
+        },
     }
     plan_path.write_text(json.dumps(plan, indent=2) + "\n")
     Path(args.request).write_bytes(request)
@@ -222,7 +339,7 @@ def main():
     transcript = f"TRANSCRIPT {args.target} {nonce}\n".encode()
     Path(args.transcript).write_bytes(transcript)
     candidate = {
-        "schema": "candle-s1-reference-candidate-v6",
+        "schema": "candle-s1-reference-candidate-v9",
         "artifact_kind": "reference_identity_candidate",
         "approval_status": "candidate_unapproved",
         "promotion_allowed": False,
@@ -328,6 +445,78 @@ class Fixture:
         ocamlc_real = self.tools / "ocamlc-real"
         self.runtime_paths["ocamlc"].rename(ocamlc_real)
         self.runtime_paths["ocamlc"].symlink_to(ocamlc_real.name)
+        self.pari_gp_root = self.tools / "pari-gp"
+        pari_bin = self.pari_gp_root / "usr/bin"
+        pari_bin.mkdir(parents=True)
+        pari_executable = pari_bin / "gp-2.15"
+        pari_executable.write_text("fixture PARI/GP executable\n")
+        pari_executable.chmod(0o755)
+        (pari_bin / "gp").symlink_to(pari_executable.name)
+        self.csdp = pari_bin / "csdp"
+        self.csdp.write_text(
+            "#!/bin/sh\n"
+            "test \"$#\" -eq 2 || exit 2\n"
+            "printf 'fixture-solution\\n' >\"$2\"\n"
+            "printf '%s\\n' 'CSDP 6.2.0' 'Success: SDP solved' "
+            "'Primal objective value: 2.3000000e+01 ' "
+            "'Dual objective value: 2.3000000e+01 ' "
+            "'DIMACS error measures: 0 0 0 0 0 0' "
+            "'Elements time: 0.001000 ' 'Factor time: 0.002000 ' "
+            "'Other time: 0.003000 ' 'Total time: 0.006000 '\n")
+        self.csdp.chmod(0o555)
+        self.pari_gp_gprc = self.pari_gp_root / "candle-gprc"
+        self.pari_gp_gprc.write_text("\\\\ fixture deterministic config\n")
+        self.pari_gp_gprc.chmod(0o444)
+        self.pari_gp_data = self.pari_gp_root / "candle-data"
+        self.pari_gp_data.mkdir()
+        self.pari_gp_data.chmod(0o555)
+        self.csdp_source = self.pari_gp_root / "candle-csdp-source.tar.gz"
+        self.csdp_source.write_bytes(b"fixture CSDP source archive\n")
+        self.csdp_probe_input = self.pari_gp_root / \
+            "candle-csdp-theta1.dat-s"
+        self.csdp_probe_input.write_bytes(b"fixture theta1 problem\n")
+        self.csdp_build_receipt = self.pari_gp_root / "candle-csdp-build.json"
+        self.csdp_build_receipt.write_text(json.dumps({
+            "schema": 1,
+            "kind": "candle-hol-light-csdp-single-thread-build",
+            "source": {
+                "archive": self.csdp_source.name,
+                "bytes": self.csdp_source.stat().st_size,
+                "sha256": sha256(self.csdp_source.read_bytes()),
+                "ubuntu_source_package":
+                    "coinor-csdp 6.2.0-5build1 (Noble)",
+                "upstream_tree": "Csdp-6.2.0",
+            },
+            "toolchain": MODULE.CSDP_TOOLCHAIN,
+            "recipe": MODULE.CSDP_RECIPE,
+            "outputs": {
+                "csdp_path": "usr/bin/csdp",
+                "csdp_bytes": self.csdp.stat().st_size,
+                "csdp_sha256": sha256(self.csdp.read_bytes()),
+                "static_libsdp_sha256": MODULE.CSDP_STATIC_LIBSDP_SHA256,
+            },
+            "unit_probe": {
+                "input_path": self.csdp_probe_input.name,
+                "input_bytes": self.csdp_probe_input.stat().st_size,
+                "input_sha256": sha256(self.csdp_probe_input.read_bytes()),
+                "exit_code": 0,
+                "success_line": "Success: SDP solved",
+                "primal_objective": "2.3000000e+01",
+                "dual_objective": "2.3000000e+01",
+                "maximum_allowed_dimacs_error": "1.0e-6",
+            },
+            "runtime_policy": {
+                "single_process_solver": True,
+                "single_thread_build": True,
+                "external_shared_libraries_closed_separately": True,
+            },
+        }, indent=2) + "\n")
+        for pin in (self.csdp_source, self.csdp_probe_input,
+                    self.csdp_build_receipt):
+            pin.chmod(0o444)
+        self.pari_gp_package = self.tools / "pari-gp.deb"
+        self.pari_gp_package.write_text("fixture hash-pinned package archive\n")
+        self.pari_gp_package.chmod(0o444)
 
     def _create_sources(self) -> None:
         targets = []
@@ -379,6 +568,10 @@ class Fixture:
     def arguments(self) -> argparse.Namespace:
         MODULE.PROGRAM_PATH = self.controller.resolve()
         runtime = self.runtime_paths
+        pari_tree = MODULE.tree_record(
+            self.pari_gp_root, "fixture PARI/GP package tree")
+        pari_data_tree = MODULE.tree_record(
+            self.pari_gp_data, "fixture PARI/GP data tree")
         return argparse.Namespace(
             artifact_root=self.artifacts,
             project_root=self.project,
@@ -402,6 +595,33 @@ class Fixture:
             ocamlc_sha256=sha256(runtime["ocamlc"].read_bytes()),
             ocamlfind=runtime["ocamlfind"],
             ocamlfind_sha256=sha256(runtime["ocamlfind"].read_bytes()),
+            pari_gp_root=self.pari_gp_root,
+            pari_gp_sha256=sha256(
+                (self.pari_gp_root / "usr/bin/gp-2.15").read_bytes()),
+            csdp_sha256=sha256(self.csdp.read_bytes()),
+            pari_gp_package=self.pari_gp_package,
+            pari_gp_package_sha256=sha256(self.pari_gp_package.read_bytes()),
+            pari_gp_gprc_sha256=sha256(self.pari_gp_gprc.read_bytes()),
+            pari_gp_tree_sha256=pari_tree["inventory_sha256"],
+            pari_gp_data_tree_sha256=pari_data_tree["inventory_sha256"],
+            csdp_source=self.csdp_source,
+            csdp_source_sha256=sha256(self.csdp_source.read_bytes()),
+            csdp_build_receipt=self.csdp_build_receipt,
+            csdp_build_receipt_sha256=sha256(
+                self.csdp_build_receipt.read_bytes()),
+            csdp_probe_input=self.csdp_probe_input,
+            csdp_probe_input_sha256=sha256(
+                self.csdp_probe_input.read_bytes()),
+            command_shell=Path("/bin/sh"),
+            command_shell_sha256=sha256(Path("/bin/sh").resolve().read_bytes()),
+            elf_bash_sha256=sha256(Path("/bin/bash").resolve().read_bytes()),
+            elf_ldd_sha256=sha256(Path("/usr/bin/ldd").resolve().read_bytes()),
+            elf_cache_sha256=sha256(Path("/etc/ld.so.cache").read_bytes()),
+            elf_loader_sha256=sha256(next(
+                path.resolve().read_bytes()
+                for path in MODULE.ELF_LOADER_PATHS
+                if path.exists()
+            )),
             collection_wall_seconds=10,
             target_wall_seconds=40,
             validation_wall_seconds=10,
@@ -431,6 +651,29 @@ class Fixture:
             ("ocamlc-sha256", arguments.ocamlc_sha256),
             ("ocamlfind", arguments.ocamlfind),
             ("ocamlfind-sha256", arguments.ocamlfind_sha256),
+            ("pari-gp-root", arguments.pari_gp_root),
+            ("pari-gp-sha256", arguments.pari_gp_sha256),
+            ("csdp-sha256", arguments.csdp_sha256),
+            ("pari-gp-package", arguments.pari_gp_package),
+            ("pari-gp-package-sha256", arguments.pari_gp_package_sha256),
+            ("pari-gp-gprc-sha256", arguments.pari_gp_gprc_sha256),
+            ("pari-gp-tree-sha256", arguments.pari_gp_tree_sha256),
+            ("pari-gp-data-tree-sha256",
+             arguments.pari_gp_data_tree_sha256),
+            ("csdp-source", arguments.csdp_source),
+            ("csdp-source-sha256", arguments.csdp_source_sha256),
+            ("csdp-build-receipt", arguments.csdp_build_receipt),
+            ("csdp-build-receipt-sha256",
+             arguments.csdp_build_receipt_sha256),
+            ("csdp-probe-input", arguments.csdp_probe_input),
+            ("csdp-probe-input-sha256",
+             arguments.csdp_probe_input_sha256),
+            ("command-shell", arguments.command_shell),
+            ("command-shell-sha256", arguments.command_shell_sha256),
+            ("elf-bash-sha256", arguments.elf_bash_sha256),
+            ("elf-ldd-sha256", arguments.elf_ldd_sha256),
+            ("elf-cache-sha256", arguments.elf_cache_sha256),
+            ("elf-loader-sha256", arguments.elf_loader_sha256),
             ("collection-wall-seconds", arguments.collection_wall_seconds),
             ("target-wall-seconds", arguments.target_wall_seconds),
             ("validation-wall-seconds", arguments.validation_wall_seconds),
@@ -543,6 +786,133 @@ class ReferenceSweepControllerTests(unittest.TestCase):
                                     "worktree is not clean"):
             MODULE.run(fixture.arguments())
 
+    def test_csdp_source_build_probe_and_route_fail_closed(self) -> None:
+        fixture = self.fixture()
+        arguments = fixture.arguments()
+        fixture.csdp.chmod(0o755)
+        fixture.csdp.write_bytes(fixture.csdp.read_bytes() + b"tampered\n")
+        with self.assertRaises(MODULE.CollectionFailure):
+            MODULE.build_contract(arguments)
+
+        for field, expected in (
+                ("csdp_source", "CSDP source archive"),
+                ("csdp_probe_input", "CSDP probe input")):
+            self.temporary.cleanup()
+            self.temporary = tempfile.TemporaryDirectory(
+                prefix=f"candle-reference-sweeps-{field}.")
+            fixture = self.fixture()
+            arguments = fixture.arguments()
+            path = getattr(fixture, field)
+            path.chmod(0o644)
+            path.write_bytes(path.read_bytes() + b"tampered\n")
+            path.chmod(0o444)
+            with self.assertRaisesRegex(MODULE.CollectionFailure, expected):
+                MODULE.build_contract(arguments)
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-csdp-build.")
+        fixture = self.fixture()
+        statement = json.loads(fixture.csdp_build_receipt.read_text())
+        statement["recipe"]["openmp_enabled"] = True
+        fixture.csdp_build_receipt.chmod(0o644)
+        fixture.csdp_build_receipt.write_text(json.dumps(statement) + "\n")
+        fixture.csdp_build_receipt.chmod(0o444)
+        with self.assertRaisesRegex(
+                MODULE.CollectionFailure, "exact source/toolchain/recipe"):
+            MODULE.build_contract(fixture.arguments())
+
+    def test_csdp_build_statement_rejects_every_forged_provenance_field(self) -> None:
+        fixture = self.fixture()
+        statement = json.loads(fixture.csdp_build_receipt.read_text())
+        source = {
+            "path": str(fixture.csdp_source),
+            "bytes": fixture.csdp_source.stat().st_size,
+            "sha256": sha256(fixture.csdp_source.read_bytes()),
+        }
+        csdp = {
+            "path": str(fixture.csdp),
+            "bytes": fixture.csdp.stat().st_size,
+            "sha256": sha256(fixture.csdp.read_bytes()),
+        }
+        probe = {
+            "path": str(fixture.csdp_probe_input),
+            "bytes": fixture.csdp_probe_input.stat().st_size,
+            "sha256": sha256(fixture.csdp_probe_input.read_bytes()),
+        }
+        self.assertEqual(
+            MODULE.validate_csdp_build_statement(statement, source, csdp, probe),
+            statement,
+        )
+
+        def missing_libsdp(value):
+            del value["outputs"]["static_libsdp_sha256"]
+
+        def boolean_libsdp(value):
+            value["outputs"]["static_libsdp_sha256"] = True
+
+        def empty_toolchain(value):
+            value["toolchain"] = {}
+
+        def forged_commands(value):
+            value["recipe"]["commands"] = [
+                "make -j999 CFLAGS=-fopenmp",
+            ]
+
+        def missing_library_flags(value):
+            del value["recipe"]["library_flags"]
+
+        def arbitrary_cflags(value):
+            value["recipe"]["cflags"] = "-O0"
+
+        def boolean_schema(value):
+            value["schema"] = True
+
+        for label, mutate in (
+            ("missing libsdp", missing_libsdp),
+            ("boolean libsdp", boolean_libsdp),
+            ("empty toolchain", empty_toolchain),
+            ("forged commands", forged_commands),
+            ("missing library flags", missing_library_flags),
+            ("arbitrary cflags", arbitrary_cflags),
+            ("boolean schema", boolean_schema),
+        ):
+            with self.subTest(label=label):
+                forged = json.loads(json.dumps(statement))
+                mutate(forged)
+                with self.assertRaisesRegex(
+                    MODULE.CollectionFailure,
+                    "exact source/toolchain/recipe/output/probe contract",
+                ):
+                    MODULE.validate_csdp_build_statement(
+                        forged, source, csdp, probe,
+                    )
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-csdp-route.")
+        fixture = self.fixture()
+        rebound = fixture.tools / "rebound-source.tar.gz"
+        rebound.write_bytes(fixture.csdp_source.read_bytes())
+        rebound.chmod(0o444)
+        arguments = fixture.arguments()
+        arguments.csdp_source = rebound
+        arguments.csdp_source_sha256 = sha256(rebound.read_bytes())
+        with self.assertRaisesRegex(
+                MODULE.CollectionFailure, "direct 0444 package file"):
+            MODULE.build_contract(arguments)
+
+        self.temporary.cleanup()
+        self.temporary = tempfile.TemporaryDirectory(
+            prefix="candle-reference-sweeps-gp-data.")
+        fixture = self.fixture()
+        fixture.pari_gp_data.chmod(0o755)
+        (fixture.pari_gp_data / "unreviewed-table").write_text("unexpected\n")
+        fixture.pari_gp_data.chmod(0o555)
+        with self.assertRaisesRegex(MODULE.CollectionFailure,
+                                    "optional-data tree must be empty"):
+            MODULE.run(fixture.arguments())
+
     def test_private_root_git_flags_replacements_and_grafts_reject(self) -> None:
         fixture = self.fixture()
         arguments = fixture.arguments()
@@ -647,6 +1017,16 @@ class ReferenceSweepControllerTests(unittest.TestCase):
         duplicated = command + ["--git-sha256", "0" * 64]
         completed = subprocess.run(
             duplicated, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 1)
+        self.assertIn(b"each CLI option exactly once", completed.stderr)
+
+        missing_csdp = list(command)
+        option_index = missing_csdp.index("--csdp-source")
+        del missing_csdp[option_index:option_index + 2]
+        completed = subprocess.run(
+            missing_csdp, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             timeout=10,
         )
         self.assertEqual(completed.returncode, 1)
