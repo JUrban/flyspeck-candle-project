@@ -1550,9 +1550,14 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     **record(collection_candle /
                               "reference_source_contracts.json")},
             },
-            "reference": {"root": str(reference_root),
-                          "git_head": self.reference_head,
-                          "source_policy": reference_policy},
+            "reference": {
+                "root": str(reference_root),
+                "git_head": self.reference_head,
+                "source_policy": {
+                    "schema": "candle-s1-reference-source-contract-v1",
+                    **reference_policy,
+                },
+            },
             "runtime": {
                 "runtime": MODULE.runtime_file_record(
                     runtime, "fixture collection runtime"),
@@ -2841,6 +2846,13 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_collection_artifact(
             "receipt", MODULE.canonical_json_bytes(receipt))
         self.assert_rejected("not closed and exact")
+
+    def test_collection_reference_source_policy_schema_is_bound(self) -> None:
+        contract, receipt = self.fixture.collection_documents()
+        contract["reference"]["source_policy"]["schema"] = \
+            "candle-s1-reference-source-contract-v0"
+        self.fixture.replace_collection_documents(contract, receipt)
+        self.assert_rejected("collection reference contract")
 
     def test_collection_contract_integer_type_confusion_rejects(self) -> None:
         contract, receipt = self.fixture.collection_documents()

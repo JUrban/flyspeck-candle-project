@@ -3271,12 +3271,16 @@ def authenticate_collection_contract(
         }
 
     reference = contract["reference"]
+    expected_reference_source_policy = {
+        "schema": "candle-s1-reference-source-contract-v1",
+        **reference_policy,
+    }
     require(isinstance(reference, dict) and set(reference) == {
         "root", "git_head", "source_policy",
     } and isinstance(reference["root"], str) and
             Path(reference["root"]).is_absolute() and
             COMMIT_RE.fullmatch(reference["git_head"]) is not None and
-            reference["source_policy"] == reference_policy,
+            reference["source_policy"] == expected_reference_source_policy,
             "malformed or unauthorized collection reference contract")
     reference_root = Path(reference["root"])
     reference_head = reference["git_head"]
