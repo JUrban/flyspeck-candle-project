@@ -565,6 +565,29 @@ def safe_relative(value: str, label: str) -> str:
     return value
 
 
+def relocated_artifact_observation(
+    value: bytes, prefix: str, logical_relative: str, label: str,
+) -> str:
+    """Bind an absolute run-local observation to one logical artifact path."""
+    relative = PurePosixPath(safe_relative(logical_relative, label))
+    prefix_bytes = prefix.encode("ascii")
+    require(value.startswith(prefix_bytes) and value.endswith(b"\n") and
+            value.count(b"\n") == 1,
+            f"malformed {label} output")
+    try:
+        observed = value[len(prefix_bytes):-1].decode("utf-8", errors="strict")
+    except UnicodeError as error:
+        raise ValidationError(f"malformed {label} path encoding") from error
+    path = PurePosixPath(observed)
+    require(path.is_absolute() and path.as_posix() == observed and
+            not observed.startswith("//") and
+            all(part not in {"", ".", ".."} for part in path.parts[1:]) and
+            len(path.parts) > len(relative.parts) and
+            path.parts[-len(relative.parts):] == relative.parts,
+            f"{label} does not end in its exact logical artifact path")
+    return observed
+
+
 def stable_file_identity(path: Path, label: str) -> FileIdentity:
     path = ordinary_file(path, label)
     try:
@@ -4119,25 +4142,27 @@ def validate_approval_and_capture(
                         record.get("bytes") == snapshot.identity.bytes and
                         record.get("sha256") == snapshot.identity.sha256,
                         f"controller receipt does not bind {name} {artifact_name}")
-            candidate_path = collection_root / success_receipt["artifacts"][
+            candidate_logical_path = success_receipt["artifacts"][
                 "candidate"]["path"]
-            expected_outputs = {
-                "collector_stdout": (
-                    f"unapproved reference candidate: {candidate_path}\n"
-                ).encode(),
-                "collector_stderr": b"",
-                "validator_stdout": (
-                    "candidate and linked artifacts valid but unapproved: "
-                    f"{candidate_path}\n"
-                ).encode(),
-                "validator_stderr": b"",
-            }
-            for artifact_name, expected_output in expected_outputs.items():
+            observed_candidate_paths = [
+                relocated_artifact_observation(
+                    snapshot_bytes(stage, captured_artifacts[artifact_name]),
+                    prefix, candidate_logical_path,
+                    f"{name} {artifact_name}",
+                )
+                for artifact_name, prefix in (
+                    ("collector_stdout", "unapproved reference candidate: "),
+                    ("validator_stdout",
+                     "candidate and linked artifacts valid but unapproved: "),
+                )
+            ]
+            require(observed_candidate_paths[0] == observed_candidate_paths[1],
+                    f"controller candidate path observations differ for {name}")
+            for artifact_name in ("collector_stderr", "validator_stderr"):
                 require(snapshot_bytes(
                     stage, captured_artifacts[artifact_name],
-                ) == expected_output,
-                        f"unexpected controller output for {name} "
-                        f"{artifact_name}")
+                ) == b"", f"unexpected controller output for {name} "
+                           f"{artifact_name}")
             validate_reference_plan_bindings(
                 plan, candidate, target, run, policy,
                 captured_artifacts["source_contract"], producer_root,

@@ -1410,15 +1410,19 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 }
                 output_records = {}
                 candidate_absolute = directory / "candidate.json"
+                observed_candidate_absolute = (
+                    self.root / "original-reference-collection" /
+                    candidate_absolute.relative_to(self.approval_root)
+                )
                 for field, filename, value in (
                     ("collector_stdout", "collect.stdout", (
                         f"unapproved reference candidate: "
-                        f"{candidate_absolute}\n"
+                        f"{observed_candidate_absolute}\n"
                     ).encode()),
                     ("collector_stderr", "collect.stderr", b""),
                     ("validator_stdout", "validate.stdout", (
                         "candidate and linked artifacts valid but unapproved: "
-                        f"{candidate_absolute}\n"
+                        f"{observed_candidate_absolute}\n"
                     ).encode()),
                     ("validator_stderr", "validate.stderr", b""),
                 ):
@@ -3180,7 +3184,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture._refresh_approval_bindings(
             "fabricated controller output fixture",
         )
-        self.assert_rejected("unexpected controller output")
+        self.assert_rejected("collector_stdout output")
 
     def test_reference_plan_nonce_is_bound(self) -> None:
         artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
@@ -3263,6 +3267,46 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         )
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("--external-receipt", completed.stderr)
+
+
+class RelocatedArtifactObservationTests(unittest.TestCase):
+    def test_absolute_root_is_observational(self) -> None:
+        logical = "sweep-1/target-001/attempt-0001/candidate.json"
+        prefix = "unapproved reference candidate: "
+        for root in ("/original/collection", "/authenticated/archive/copy"):
+            observed = f"{root}/{logical}"
+            self.assertEqual(
+                MODULE.relocated_artifact_observation(
+                    f"{prefix}{observed}\n".encode(), prefix, logical,
+                    "candidate",
+                ),
+                observed,
+            )
+
+    def test_unexpected_logical_path_or_role_is_rejected(self) -> None:
+        logical = "sweep-1/target-001/attempt-0001/candidate.json"
+        prefix = "unapproved reference candidate: "
+        with self.assertRaisesRegex(
+                MODULE.ValidationError, "exact logical artifact path"):
+            MODULE.relocated_artifact_observation(
+                f"{prefix}/collection/sweep-2/target-001/attempt-0001/"
+                "candidate.json\n".encode(), prefix, logical, "candidate",
+            )
+        with self.assertRaisesRegex(MODULE.ValidationError, "malformed"):
+            MODULE.relocated_artifact_observation(
+                f"validator output: /collection/{logical}\n".encode(),
+                prefix, logical, "candidate",
+            )
+
+    def test_noncanonical_absolute_observation_is_rejected(self) -> None:
+        logical = "sweep-1/target-001/attempt-0001/candidate.json"
+        prefix = "unapproved reference candidate: "
+        with self.assertRaisesRegex(
+                MODULE.ValidationError, "exact logical artifact path"):
+            MODULE.relocated_artifact_observation(
+                f"{prefix}/collection/../collection/{logical}\n".encode(),
+                prefix, logical, "candidate",
+            )
 
 
 if __name__ == "__main__":
