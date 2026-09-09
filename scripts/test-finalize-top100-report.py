@@ -1403,9 +1403,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                         **record(path),
                     }
                 artifacts["source_contract"] = {
-                    "path": shared_source_contract.relative_to(
-                        self.candle_root).as_posix(),
-                    **record(shared_source_contract),
+                    "path": (
+                        self.candle / "reference_source_contracts.json"
+                    ).relative_to(self.candle_root).as_posix(),
+                    **record(self.candle / "reference_source_contracts.json"),
                 }
                 output_records = {}
                 candidate_absolute = directory / "candidate.json"
@@ -2204,6 +2205,27 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.assertNotEqual(
             self.fixture.collection_project_root, self.fixture.project_root,
         )
+        source_contract_references = [
+            run["artifacts"]["source_contract"]
+            for target in self.fixture.approval["targets"]
+            for run in target["reference_runs"]
+        ]
+        self.assertEqual(len(source_contract_references), 130)
+        self.assertEqual(
+            {value["path"] for value in source_contract_references},
+            {"candle/reference_source_contracts.json"},
+        )
+        self.assertEqual(
+            {
+                (value["bytes"], value["sha256"])
+                for value in source_contract_references
+            },
+            {
+                tuple(record(
+                    self.fixture.candle / "reference_source_contracts.json",
+                )[key] for key in ("bytes", "sha256")),
+            },
+        )
         self.fixture.finalize()
         bundle_path = self.fixture.destination / "bundle.json"
         bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
@@ -2846,6 +2868,80 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.replace_collection_artifact(
             "receipt", MODULE.canonical_json_bytes(receipt))
         self.assert_rejected("not closed and exact")
+
+    def test_stager_rejects_unauthorized_hard_link_aliasing(self) -> None:
+        source = self.fixture.root / "hard-link-source"
+        alias = self.fixture.root / "hard-link-alias"
+        stage = self.fixture.root / "hard-link-stage"
+        source.write_bytes(b"one authenticated inode\n")
+        os.link(source, alias)
+        stage.mkdir()
+        stager = MODULE.Stager(stage)
+        stager.capture(source, "first", "first artifact")
+        with self.assertRaisesRegex(MODULE.ValidationError, "hard-link reused"):
+            stager.capture(alias, "second", "unauthorized alias")
+
+    def test_reference_source_contract_path_substitution_rejects(self) -> None:
+        source = self.fixture.candle / "reference_source_contracts.json"
+        substitute = self.fixture.candle / "reference_source_contracts-copy.json"
+        substitute.write_bytes(source.read_bytes())
+        artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
+            "artifacts"]["source_contract"]
+        artifact.update({
+            "path": substitute.relative_to(self.fixture.candle_root).as_posix(),
+            **record(substitute),
+        })
+        self.fixture._refresh_approval_bindings(
+            "substituted reference source-contract path fixture",
+        )
+        self.assert_rejected("reference source contract path differs")
+
+    def test_reference_source_contract_symlink_substitution_rejects(self) -> None:
+        substitute = self.fixture.candle / "reference-source-contract-link.json"
+        substitute.symlink_to("reference_source_contracts.json")
+        artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
+            "artifacts"]["source_contract"]
+        artifact.update({
+            "path": substitute.relative_to(self.fixture.candle_root).as_posix(),
+            **record(substitute),
+        })
+        self.fixture._refresh_approval_bindings(
+            "symlink reference source-contract path fixture",
+        )
+        self.assert_rejected("source_contract.*symlink")
+
+    def test_reference_source_contract_changed_identity_rejects(self) -> None:
+        artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
+            "artifacts"]["source_contract"]
+        artifact["sha256"] = "f" * 64
+        self.fixture._refresh_approval_bindings(
+            "changed reference source-contract identity fixture",
+        )
+        self.assert_rejected("reference artifact path is reused")
+
+    def test_reference_source_contract_changed_bytes_reject_postflight(self) -> None:
+        source = self.fixture.candle / "reference_source_contracts.json"
+
+        def mutate() -> None:
+            source.write_bytes(b"changed after authenticated capture\n")
+
+        MODULE._TEST_AFTER_CONTRACT_CAPTURE = mutate
+        self.assert_rejected("worktree is not clean")
+
+    def test_cross_artifact_inode_reuse_rejects(self) -> None:
+        source = self.fixture.candle / "reference_source_contracts.json"
+        alias = self.fixture.candle / "candidate-source-contract-hard-link.json"
+        os.link(source, alias)
+        artifact = self.fixture.approval["targets"][0]["reference_runs"][0][
+            "artifacts"]["candidate"]
+        artifact.update({
+            "path": alias.relative_to(self.fixture.candle_root).as_posix(),
+            **record(alias),
+        })
+        self.fixture._refresh_approval_bindings(
+            "cross-artifact inode reuse fixture",
+        )
+        self.assert_rejected("hard-link reused.*candidate.*source contract")
 
     def test_collection_reference_source_policy_schema_is_bound(self) -> None:
         contract, receipt = self.fixture.collection_documents()

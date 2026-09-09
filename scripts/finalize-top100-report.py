@@ -3934,7 +3934,12 @@ def validate_approval_and_capture(
     targets = approval["targets"]
     require(isinstance(targets, list) and len(targets) == 65,
             "independent approval does not cover 65 targets")
-    artifact_cache: dict[str, tuple[str, Snapshot]] = {}
+    source_contract_relative = "candle/reference_source_contracts.json"
+    require(source_contract.source_path == root / source_contract_relative,
+            "authenticated reference source contract path mismatch")
+    artifact_cache: dict[str, tuple[str, Snapshot]] = {
+        source_contract_relative: ("source_contract", source_contract),
+    }
     replays: list[dict[str, Any]] = []
     external_runtime: dict[str, Any] | None = None
     core_runtime: dict[str, Any] | None = None
@@ -3988,6 +3993,9 @@ def validate_approval_and_capture(
                 )
                 require(path != approval_snapshot.source_path,
                         f"approval artifact reused by {name} {artifact_name}")
+                if artifact_name == "source_contract":
+                    require(relative == source_contract_relative,
+                            f"reference source contract path differs for {name}")
                 if artifact_name in distinct_run_artifacts:
                     distinct_run_artifacts[artifact_name].add(
                         (relative, expected.sha256),
