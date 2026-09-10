@@ -276,12 +276,22 @@ def run_dry_finalization(
         "finalizer": {"path": str(FINALIZER), **file_record(FINALIZER)},
         "report_schema_authority": {
             "schema_version": FINALIZER_MODULE.REPORT_SCHEMA_VERSION,
-            "path": str(FINALIZER.with_name(
-                FINALIZER_MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
-            )),
-            **file_record(FINALIZER.with_name(
-                FINALIZER_MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
-            )),
+            "module": {
+                "path": str(FINALIZER.with_name(
+                    FINALIZER_MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
+                )),
+                **file_record(FINALIZER.with_name(
+                    FINALIZER_MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
+                )),
+            },
+            "definition": {
+                "path": str(FINALIZER.with_name(
+                    FINALIZER_MODULE.REPORT_SCHEMA_DEFINITION_NAME,
+                )),
+                **file_record(FINALIZER.with_name(
+                    FINALIZER_MODULE.REPORT_SCHEMA_DEFINITION_NAME,
+                )),
+            },
         },
         "reports": [
             {"path": str(path), **file_record(path)} for path in reports

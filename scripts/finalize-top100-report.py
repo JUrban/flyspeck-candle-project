@@ -47,7 +47,9 @@ _REPORT_SCHEMA = importlib.util.module_from_spec(_REPORT_SCHEMA_SPEC)
 _REPORT_SCHEMA_SPEC.loader.exec_module(_REPORT_SCHEMA)
 PROMOTABLE_TOP100_PROMOTION = _REPORT_SCHEMA.PROMOTABLE_TOP100_PROMOTION
 REPORT_SCHEMA_VERSION = _REPORT_SCHEMA.REPORT_SCHEMA_VERSION
+REPORT_SCHEMA_DEFINITION_NAME = _REPORT_SCHEMA.AUTHORITY_DEFINITION_NAME
 report_schema_shape = _REPORT_SCHEMA.shape
+validate_report_shape = _REPORT_SCHEMA.validate_report_shape
 validate_producer_source = _REPORT_SCHEMA.validate_producer_source
 
 GIT_REQUESTED_PATH = Path("/usr/bin/git")
@@ -66,6 +68,8 @@ MARKER_KEYS = report_schema_shape("markers")
 S1_KEYS = report_schema_shape("s1_evidence")
 TIMEOUT_KEYS = report_schema_shape("timeout_policy")
 PROMOTION_KEYS = report_schema_shape("promotion")
+FILE_RECORD_KEYS = report_schema_shape("file_record")
+FILE_REFERENCE_KEYS = report_schema_shape("file_reference")
 EXECUTION_CONTRACT_PATHS = {
     "candle/cakeml_artifact_provenance.py": "100644",
     "candle/regression.py": "100644",
@@ -850,7 +854,7 @@ def snapshot_json(stage: Path, snapshot: Snapshot, label: str) -> dict[str, Any]
 
 
 def validate_file_record(value: object, label: str) -> dict[str, object]:
-    require(isinstance(value, dict) and set(value) == {"bytes", "sha256"},
+    require(isinstance(value, dict) and set(value) == FILE_RECORD_KEYS,
             f"malformed file record for {label}")
     require(is_int(value["bytes"]) and value["bytes"] >= 0,
             f"malformed byte count for {label}")
@@ -859,7 +863,7 @@ def validate_file_record(value: object, label: str) -> dict[str, object]:
 
 
 def validate_file_reference(value: object, label: str) -> tuple[Path, FileIdentity]:
-    require(isinstance(value, dict) and set(value) == {"path", "bytes", "sha256"},
+    require(isinstance(value, dict) and set(value) == FILE_REFERENCE_KEYS,
             f"malformed file reference for {label}")
     record = validate_file_record(
         {"bytes": value["bytes"], "sha256": value["sha256"]}, label,
@@ -873,7 +877,7 @@ def validate_file_reference(value: object, label: str) -> tuple[Path, FileIdenti
 def validate_root_file_reference(
     value: object, root: Path, label: str,
 ) -> tuple[str, Path, FileIdentity]:
-    require(isinstance(value, dict) and set(value) == {"path", "bytes", "sha256"},
+    require(isinstance(value, dict) and set(value) == FILE_REFERENCE_KEYS,
             f"malformed file reference for {label}")
     relative = safe_relative(value["path"], f"{label} repository path")
     record = validate_file_record(
@@ -1432,6 +1436,7 @@ def validate_runtime_state(
     require(value["candle_git_head"] == head and
             value["candle_git_status"] == [] and
             value["linked_record_sha256"] == linked_sha256 and
+            is_int(value["linked_schema"]) and value["linked_schema"] == 6 and
             value["execution_contract_sha256"] == execution_contract_sha256 and
             value["source_closure_sha256"] == closure_sha256,
             f"runtime state contract mismatch for {label}")
@@ -1555,6 +1560,12 @@ def validate_report_and_capture_logs(
     execution_contract: dict[str, dict[str, object]], stage: Path,
     stager: Stager,
 ) -> ValidatedRun:
+    try:
+        validate_report_shape(report)
+    except (TypeError, ValueError) as error:
+        raise ValidationError(
+            f"qualified schema-4 report shape mismatch: {error}"
+        ) from error
     require(set(report) == REPORT_KEYS, "malformed schema-4 Great100 report")
     require(is_int(report["schema"]) and
             report["schema"] == REPORT_SCHEMA_VERSION and
@@ -4332,6 +4343,19 @@ def preflight_finalizer() -> dict[str, Any]:
     )
     require(bytes_identity(schema_committed) == schema_identity,
             "Great100 report schema authority is not exact committed project bytes")
+    schema_definition = ordinary_file(
+        program.with_name(REPORT_SCHEMA_DEFINITION_NAME),
+        "Great100 report schema definition",
+    )
+    definition_relative = schema_definition.relative_to(project).as_posix()
+    definition_identity = stable_file_identity(
+        schema_definition, "Great100 report schema definition",
+    )
+    definition_committed = git_bytes(
+        project, "cat-file", "blob", f"HEAD:{definition_relative}",
+    )
+    require(bytes_identity(definition_committed) == definition_identity,
+            "Great100 report schema definition is not exact committed project bytes")
     python = ordinary_file(PYTHON_PATH, "Python executable")
     git = ordinary_file(GIT_REQUESTED_PATH.resolve(strict=True), "Git executable")
     return {
@@ -4343,6 +4367,9 @@ def preflight_finalizer() -> dict[str, Any]:
         "schema_authority_path": schema_authority,
         "schema_authority_relative": schema_relative,
         "schema_authority_identity": schema_identity,
+        "schema_definition_path": schema_definition,
+        "schema_definition_relative": definition_relative,
+        "schema_definition_identity": definition_identity,
         "python_path": python,
         "python_identity": stable_file_identity(python, "Python executable"),
         "git_path": git,
@@ -4384,8 +4411,15 @@ def validate_authorization(
             **finalizer["program_identity"].as_json(),
         },
         "report_schema_authority": {
-            "path": finalizer["schema_authority_relative"],
-            **finalizer["schema_authority_identity"].as_json(),
+            "schema_version": REPORT_SCHEMA_VERSION,
+            "module": {
+                "path": finalizer["schema_authority_relative"],
+                **finalizer["schema_authority_identity"].as_json(),
+            },
+            "definition": {
+                "path": finalizer["schema_definition_relative"],
+                **finalizer["schema_definition_identity"].as_json(),
+            },
         },
     }), "authorization receipt does not bind finalizer project/bytes")
     require(exact_json_equal(receipt["tools"], {
@@ -4428,6 +4462,11 @@ def archive(
             "finalizer/great100_report_schema.py",
             "Great100 report schema authority",
         )
+        schema_definition_snapshot = stager.capture(
+            finalizer["schema_definition_path"],
+            "finalizer/great100_report_schema_v4.json",
+            "Great100 report schema definition",
+        )
         python_snapshot = stager.capture(
             finalizer["python_path"], "finalizer/tools/python",
             "Python executable",
@@ -4438,6 +4477,8 @@ def archive(
         require(program_snapshot.identity == finalizer["program_identity"] and
                 schema_authority_snapshot.identity ==
                 finalizer["schema_authority_identity"] and
+                schema_definition_snapshot.identity ==
+                finalizer["schema_definition_identity"] and
                 python_snapshot.identity == finalizer["python_identity"] and
                 git_snapshot.identity == finalizer["git_identity"],
                 "finalizer or tool bytes changed after preflight")
@@ -4684,8 +4725,14 @@ def archive(
                 **program_snapshot.identity.as_json(),
                 "report_schema_authority": {
                     "schema_version": REPORT_SCHEMA_VERSION,
-                    "archive_path": schema_authority_snapshot.archive_path,
-                    **schema_authority_snapshot.identity.as_json(),
+                    "module": {
+                        "archive_path": schema_authority_snapshot.archive_path,
+                        **schema_authority_snapshot.identity.as_json(),
+                    },
+                    "definition": {
+                        "archive_path": schema_definition_snapshot.archive_path,
+                        **schema_definition_snapshot.identity.as_json(),
+                    },
                 },
                 "tools": {
                     "python": {"archive_path": python_snapshot.archive_path,
@@ -4762,6 +4809,10 @@ def archive(
                     finalizer["schema_authority_path"],
                     "Great100 report schema authority postflight",
                 ) == finalizer["schema_authority_identity"] and
+                stable_file_identity(
+                    finalizer["schema_definition_path"],
+                    "Great100 report schema definition postflight",
+                ) == finalizer["schema_definition_identity"] and
                 stable_file_identity(finalizer["python_path"], "Python postflight") ==
                 finalizer["python_identity"] and
                 stable_file_identity(finalizer["git_path"], "Git postflight") ==

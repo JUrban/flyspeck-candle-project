@@ -243,11 +243,13 @@ class Fixture:
     def _create_finalizer_project(self) -> None:
         self.program_path.write_bytes(SCRIPT.read_bytes())
         self.program_path.chmod(0o755)
-        schema_source = SCRIPT.with_name(MODULE.REPORT_SCHEMA_AUTHORITY_NAME)
-        schema_path = self.program_path.with_name(
+        for schema_name in (
             MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
-        )
-        schema_path.write_bytes(schema_source.read_bytes())
+            MODULE.REPORT_SCHEMA_DEFINITION_NAME,
+        ):
+            schema_source = SCRIPT.with_name(schema_name)
+            schema_path = self.program_path.with_name(schema_name)
+            schema_path.write_bytes(schema_source.read_bytes())
         controller_path = (
             self.project_root / "scripts/run-top100-reference-sweeps.py"
         )
@@ -1985,6 +1987,9 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "candle_git_head": self.candle_head,
                 "candle_git_status": [],
                 "linked_record_sha256": self.linked_sha256,
+                "linked_schema": MODULE.PROMOTABLE_TOP100_PROMOTION[
+                    "required_linked_schema"
+                ],
                 "candle_executable": {
                     "path": str(self.build / "cake"), **executable_identity,
                 },
@@ -2054,10 +2059,10 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             "test_count": 65,
             "jobs": 1,
             "timeout_policy": {
-                "inactivity_timeout_seconds": 1800,
+                "inactivity_timeout_seconds": 1800.0,
                 "inactivity_resets_on": "each complete REPL output line",
                 "inactivity_scope": "each REPL expect wait, including initial boot",
-                "total_wall_timeout_seconds": 21600,
+                "total_wall_timeout_seconds": 21600.0,
                 "total_wall_scope": "process spawn through fingerprint capture",
                 "progress_extends_total_wall_deadline": False,
             },
@@ -2128,10 +2133,19 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                     **project_program,
                 },
                 "report_schema_authority": {
-                    "path": "scripts/great100_report_schema.py",
-                    **record(self.program_path.with_name(
-                        MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
-                    )),
+                    "schema_version": MODULE.REPORT_SCHEMA_VERSION,
+                    "module": {
+                        "path": "scripts/great100_report_schema.py",
+                        **record(self.program_path.with_name(
+                            MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
+                        )),
+                    },
+                    "definition": {
+                        "path": "scripts/great100_report_schema_v4.json",
+                        **record(self.program_path.with_name(
+                            MODULE.REPORT_SCHEMA_DEFINITION_NAME,
+                        )),
+                    },
                 },
             },
             "tools": {
@@ -2364,13 +2378,13 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         original = deepcopy(self.fixture.reports)
         mutations = (
             ("missing", lambda report: report.pop("promotion"),
-             "malformed schema-4 Great100 report"),
+             "object shape mismatch"),
             ("extra-key", lambda report: report["promotion"].update(
-                {"unreviewed": True}), "exact promotable schema-6"),
+                {"unreviewed": True}), "object shape mismatch"),
             ("ineligible", lambda report: report["promotion"].update(
-                {"eligible": False}), "exact promotable schema-6"),
+                {"eligible": False}), "discriminant mismatch"),
             ("wrong-linked-schema", lambda report: report["promotion"].update(
-                {"required_linked_schema": 7}), "exact promotable schema-6"),
+                {"required_linked_schema": 7}), "discriminant mismatch"),
         )
         for label, mutate, pattern in mutations:
             with self.subTest(label=label):
@@ -2390,14 +2404,14 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         for report in self.fixture.reports:
             report["counts"] = {"PASS": 65.0, "FAIL": False, "TIMEOUT": 0.0}
         self.fixture.write_reports()
-        self.assert_rejected("did not pass completely")
+        self.assert_rejected("scalar kind mismatch")
 
     def test_process_exit_boolean_type_confusion_rejects(self) -> None:
         for report in self.fixture.reports:
             for result in report["results"]:
                 result["process_evidence"]["exit_code"] = False
         self.fixture.write_reports()
-        self.assert_rejected("invalid process identity or exit status")
+        self.assert_rejected("scalar kind mismatch")
 
     def test_authorization_schema_float_type_confusion_rejects(self) -> None:
         self.fixture.authorization["schema"] = 1.0
@@ -2532,7 +2546,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         process = self.fixture.reports[0]["results"][0]["process_evidence"]
         process["post_runtime_state"]["candle_git_status"] = [" M candle/kernel.ml"]
         self.fixture.write_reports()
-        self.assert_rejected("runtime state contract mismatch")
+        self.assert_rejected("array shape mismatch")
 
         MODULE.PROGRAM_PATH = self.original_program
         self.temporary.cleanup()
@@ -2544,7 +2558,7 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         process = self.fixture.reports[0]["results"][0]["process_evidence"]
         process["resource_sampling"]["sampler_completed"] = False
         self.fixture.write_reports()
-        self.assert_rejected("resource sampling")
+        self.assert_rejected("discriminant mismatch")
 
     def test_per_process_linked_hash_must_match_current_record(self) -> None:
         fake = "f" * 64
@@ -3334,6 +3348,12 @@ class Great100ReportSchemaAuthorityTests(unittest.TestCase):
     QUALIFIED_PRODUCER_SHA256 = (
         "a92c4a5aa13a0710ec93402fc4792bed8f0d059390e260f95b07842cdf83fcfb"
     )
+    QUALIFIED_REPORTS = (
+        Path("/project/flyspeck-candle-runs/"
+             "great100-schema4-5e6362f-run-001/report.json"),
+        Path("/project/flyspeck-candle-runs/"
+             "great100-schema4-5e6362f-run-002/report.json"),
+    )
 
     def qualified_source(self) -> bytes:
         source = self.QUALIFIED_PRODUCER.read_bytes()
@@ -3342,6 +3362,97 @@ class Great100ReportSchemaAuthorityTests(unittest.TestCase):
 
     def test_exact_qualified_producer_conforms(self) -> None:
         MODULE.validate_producer_source(self.qualified_source())
+
+    def test_definition_is_exact_mechanical_qualified_report_derivation(self) -> None:
+        sources = [
+            (f"run-{index:03d}", path.read_bytes())
+            for index, path in enumerate(self.QUALIFIED_REPORTS, 1)
+        ]
+        self.assertEqual(
+            MODULE._REPORT_SCHEMA.derive_authority(sources),
+            MODULE._REPORT_SCHEMA.AUTHORITY,
+        )
+        completed = subprocess.run(
+            [sys.executable,
+             str(SCRIPT.with_name("generate-great100-report-schema.py")),
+             *(str(path) for path in self.QUALIFIED_REPORTS),
+             "--check", str(SCRIPT.with_name(
+                 MODULE.REPORT_SCHEMA_DEFINITION_NAME))],
+            check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        comparison = json.loads(completed.stdout)
+        self.assertEqual(comparison["state"], "matched")
+        self.assertEqual(
+            (comparison["object_paths"], comparison["array_paths"],
+             comparison["scalar_paths"], comparison["discriminant_paths"]),
+            (35, 10, 147, 25),
+        )
+        with tempfile.TemporaryDirectory(
+                prefix="great100-schema-authority-drift.") as temporary:
+            changed = deepcopy(MODULE._REPORT_SCHEMA.AUTHORITY)
+            changed["objects"]["/"]["key_variants"][0].append("unreviewed")
+            changed_path = Path(temporary) / "changed-authority.json"
+            changed_path.write_bytes(MODULE.canonical_json_bytes(changed))
+            rejected = subprocess.run(
+                [sys.executable,
+                 str(SCRIPT.with_name("generate-great100-report-schema.py")),
+                 *(str(path) for path in self.QUALIFIED_REPORTS),
+                 "--check", str(changed_path)],
+                check=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertIn("differs from qualified reports", rejected.stderr)
+
+    def test_recursive_shape_and_discriminant_variants_fail_closed(self) -> None:
+        original = json.loads(self.QUALIFIED_REPORTS[0].read_text())
+
+        def mutate_runtime_extra(report: dict) -> None:
+            report["results"][0]["process_evidence"]["pre_runtime_state"][
+                "unreviewed"
+            ] = True
+
+        def mutate_runtime_missing(report: dict) -> None:
+            report["results"][0]["process_evidence"]["pre_runtime_state"].pop(
+                "linked_schema"
+            )
+
+        def mutate_linked_schema_bool(report: dict) -> None:
+            report["results"][0]["process_evidence"]["pre_runtime_state"][
+                "linked_schema"
+            ] = True
+
+        def mutate_linked_schema_seven(report: dict) -> None:
+            report["results"][0]["process_evidence"]["pre_runtime_state"][
+                "linked_schema"
+            ] = 7
+
+        def mutate_scalar_kind(report: dict) -> None:
+            report["results"][0]["process_evidence"]["pid"] = True
+
+        def mutate_array_item(report: dict) -> None:
+            report["results"][0]["files"].append(0)
+
+        def mutate_array_length(report: dict) -> None:
+            report["results"].pop()
+
+        mutations = (
+            (mutate_runtime_extra, "object shape mismatch"),
+            (mutate_runtime_missing, "object shape mismatch"),
+            (mutate_linked_schema_bool, "scalar kind mismatch"),
+            (mutate_linked_schema_seven, "discriminant mismatch"),
+            (mutate_scalar_kind, "scalar kind mismatch"),
+            (mutate_array_item, "array item mismatch"),
+            (mutate_array_length, "array shape mismatch"),
+        )
+        for mutate, message in mutations:
+            with self.subTest(mutation=mutate.__name__):
+                report = deepcopy(original)
+                mutate(report)
+                with self.assertRaisesRegex(ValueError, message):
+                    MODULE.validate_report_shape(report)
 
     def test_qualified_producer_report_key_drift_is_rejected(self) -> None:
         source = self.qualified_source().replace(

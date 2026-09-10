@@ -1,0 +1,1718 @@
+{
+  "arrays": {
+    "/candle_git_status": {
+      "item_kinds": [],
+      "length_variants": [
+        0
+      ],
+      "occurrences": 2
+    },
+    "/results": {
+      "item_kinds": [
+        "object"
+      ],
+      "length_variants": [
+        65
+      ],
+      "occurrences": 2
+    },
+    "/results/[]/files": {
+      "item_kinds": [
+        "string"
+      ],
+      "length_variants": [
+        1,
+        2
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/theorems": {
+      "item_kinds": [
+        "object"
+      ],
+      "length_variants": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        11
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/candle_git_status": {
+      "item_kinds": [],
+      "length_variants": [
+        0
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/candle_git_status": {
+      "item_kinds": [],
+      "length_variants": [
+        0
+      ],
+      "occurrences": 130
+    },
+    "/source_closure/files": {
+      "item_kinds": [
+        "object"
+      ],
+      "length_variants": [
+        66
+      ],
+      "occurrences": 2
+    },
+    "/source_closure/ordered_targets": {
+      "item_kinds": [
+        "object"
+      ],
+      "length_variants": [
+        65
+      ],
+      "occurrences": 2
+    },
+    "/source_closure/ordered_targets/[]/load_files": {
+      "item_kinds": [
+        "string"
+      ],
+      "length_variants": [
+        1,
+        2
+      ],
+      "occurrences": 130
+    },
+    "/source_closure/ordered_targets/[]/theorem_names": {
+      "item_kinds": [
+        "string"
+      ],
+      "length_variants": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        11
+      ],
+      "occurrences": 130
+    }
+  },
+  "derived_from": [
+    {
+      "bytes": 367897,
+      "label": "run-001",
+      "sha256": "e7e840b36ac3a5901649dca97671c940c46b403510a6c72e658938760f0e9b37"
+    },
+    {
+      "bytes": 367888,
+      "label": "run-002",
+      "sha256": "402aaabdf47b528a5ab5e45c265deb91a3033e8b6920b8698e95d50793332ecc"
+    }
+  ],
+  "discriminants": {
+    "/fingerprint_contract/expected_identity_source": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "separate independently reviewed approval artifact, fail-closed through top100_manifest.json"
+        }
+      ]
+    },
+    "/fingerprint_contract/expected_mismatch_result": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "FAIL"
+        }
+      ]
+    },
+    "/fingerprint_contract/load_pass_is_fingerprint_match": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "boolean",
+          "value": false
+        }
+      ]
+    },
+    "/fingerprint_contract/serializer": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "candle/fingerprint.ml structural v3 with exact chunked state transport"
+        }
+      ]
+    },
+    "/promotion/eligible": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "boolean",
+          "value": true
+        }
+      ]
+    },
+    "/promotion/reason": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "promotable-schema-6-full-suite"
+        }
+      ]
+    },
+    "/promotion/required_linked_schema": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "integer",
+          "value": 6
+        }
+      ]
+    },
+    "/promotion/s1_evidence": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "boolean",
+          "value": true
+        }
+      ]
+    },
+    "/results/[]/fingerprints/expected_identities_present": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "boolean",
+          "value": true
+        }
+      ]
+    },
+    "/results/[]/fingerprints/mapping_status": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "audited"
+        }
+      ]
+    },
+    "/results/[]/fingerprints/status": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "matched"
+        }
+      ]
+    },
+    "/results/[]/process_evidence/post_runtime_state/linked_schema": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "integer",
+          "value": 6
+        }
+      ]
+    },
+    "/results/[]/process_evidence/pre_runtime_state/linked_schema": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "integer",
+          "value": 6
+        }
+      ]
+    },
+    "/results/[]/process_evidence/resource_sampling/root_observed": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "boolean",
+          "value": true
+        }
+      ]
+    },
+    "/results/[]/process_evidence/resource_sampling/sampler_completed": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "boolean",
+          "value": true
+        }
+      ]
+    },
+    "/results/[]/status": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "PASS"
+        }
+      ]
+    },
+    "/results/[]/timeout_kind": {
+      "occurrences": 130,
+      "variants": [
+        {
+          "kind": "null",
+          "value": null
+        }
+      ]
+    },
+    "/run_evidence/marker_contract": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "candle-great100-process-markers-v1"
+        }
+      ]
+    },
+    "/s1_evidence/suite_closed": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "boolean",
+          "value": true
+        }
+      ]
+    },
+    "/schema": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "integer",
+          "value": 4
+        }
+      ]
+    },
+    "/suite": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "top100"
+        }
+      ]
+    },
+    "/timeout_policy/inactivity_resets_on": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "each complete REPL output line"
+        }
+      ]
+    },
+    "/timeout_policy/inactivity_scope": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "each REPL expect wait, including initial boot"
+        }
+      ]
+    },
+    "/timeout_policy/progress_extends_total_wall_deadline": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "boolean",
+          "value": false
+        }
+      ]
+    },
+    "/timeout_policy/total_wall_scope": {
+      "occurrences": 2,
+      "variants": [
+        {
+          "kind": "string",
+          "value": "process spawn through fingerprint capture"
+        }
+      ]
+    }
+  },
+  "kind": "candle-great100-qualified-report-shapes-v1",
+  "named_shape_paths": {
+    "file_record": [
+      "/execution_contract/candle.sh",
+      "/execution_contract/candle~1cakeml_artifact_provenance.py",
+      "/execution_contract/candle~1fingerprint.ml",
+      "/execution_contract/candle~1fingerprint_v3_state_stream.ml",
+      "/execution_contract/candle~1reference_protocol.py",
+      "/execution_contract/candle~1regression.py",
+      "/execution_contract/candle~1runtime_fingerprint_protocol.py",
+      "/execution_contract/candle~1top100_manifest.json"
+    ],
+    "file_reference": [
+      "/candle_executable",
+      "/independent_approval",
+      "/linked_record",
+      "/results/[]/process_evidence/transcript",
+      "/results/[]/process_evidence/pre_runtime_state/candle_executable",
+      "/results/[]/process_evidence/post_runtime_state/candle_executable",
+      "/source_closure/files/[]"
+    ],
+    "fingerprints": [
+      "/results/[]/fingerprints"
+    ],
+    "markers": [
+      "/results/[]/process_evidence/markers"
+    ],
+    "post_state": [
+      "/results/[]/fingerprints/post_state"
+    ],
+    "process_evidence": [
+      "/results/[]/process_evidence"
+    ],
+    "promotion": [
+      "/promotion"
+    ],
+    "report": [
+      "/"
+    ],
+    "resource_sampling": [
+      "/results/[]/process_evidence/resource_sampling"
+    ],
+    "result": [
+      "/results/[]"
+    ],
+    "run_evidence": [
+      "/run_evidence"
+    ],
+    "runtime_state": [
+      "/results/[]/process_evidence/pre_runtime_state",
+      "/results/[]/process_evidence/post_runtime_state"
+    ],
+    "s1_evidence": [
+      "/s1_evidence"
+    ],
+    "theorem": [
+      "/results/[]/fingerprints/theorems/[]"
+    ],
+    "timeout_policy": [
+      "/timeout_policy"
+    ]
+  },
+  "objects": {
+    "/": {
+      "key_variants": [
+        [
+          "candle_executable",
+          "candle_git_head",
+          "candle_git_status",
+          "candle_root",
+          "counts",
+          "execution_contract",
+          "fingerprint_contract",
+          "generated_utc",
+          "independent_approval",
+          "jobs",
+          "linked_record",
+          "log_directory",
+          "promotion",
+          "results",
+          "run_evidence",
+          "s1_evidence",
+          "schema",
+          "source_closure",
+          "suite",
+          "suite_started_utc",
+          "sum_test_seconds",
+          "test_count",
+          "timeout_policy",
+          "wall_seconds"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/candle_executable": {
+      "key_variants": [
+        [
+          "bytes",
+          "path",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/counts": {
+      "key_variants": [
+        [
+          "FAIL",
+          "PASS",
+          "TIMEOUT"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract": {
+      "key_variants": [
+        [
+          "candle.sh",
+          "candle/cakeml_artifact_provenance.py",
+          "candle/fingerprint.ml",
+          "candle/fingerprint_v3_state_stream.ml",
+          "candle/reference_protocol.py",
+          "candle/regression.py",
+          "candle/runtime_fingerprint_protocol.py",
+          "candle/top100_manifest.json"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle.sh": {
+      "key_variants": [
+        [
+          "bytes",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1cakeml_artifact_provenance.py": {
+      "key_variants": [
+        [
+          "bytes",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1fingerprint.ml": {
+      "key_variants": [
+        [
+          "bytes",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1fingerprint_v3_state_stream.ml": {
+      "key_variants": [
+        [
+          "bytes",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1reference_protocol.py": {
+      "key_variants": [
+        [
+          "bytes",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1regression.py": {
+      "key_variants": [
+        [
+          "bytes",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1runtime_fingerprint_protocol.py": {
+      "key_variants": [
+        [
+          "bytes",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1top100_manifest.json": {
+      "key_variants": [
+        [
+          "bytes",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/fingerprint_contract": {
+      "key_variants": [
+        [
+          "expected_identity_source",
+          "expected_mismatch_result",
+          "load_pass_is_fingerprint_match",
+          "serializer"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/independent_approval": {
+      "key_variants": [
+        [
+          "bytes",
+          "path",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/linked_record": {
+      "key_variants": [
+        [
+          "bytes",
+          "path",
+          "sha256"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/promotion": {
+      "key_variants": [
+        [
+          "eligible",
+          "reason",
+          "required_linked_schema",
+          "s1_evidence"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/results/[]": {
+      "key_variants": [
+        [
+          "boot_elapsed_seconds",
+          "error_message",
+          "files",
+          "fingerprint_elapsed_seconds",
+          "fingerprints",
+          "hol_elapsed_seconds",
+          "log_path",
+          "name",
+          "peak_process_rss_kib",
+          "peak_tree_rss_kib",
+          "process_evidence",
+          "status",
+          "test_elapsed_seconds",
+          "timeout_kind",
+          "total_elapsed_seconds"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints": {
+      "key_variants": [
+        [
+          "approval_sha256",
+          "expected_identities_present",
+          "mapping_status",
+          "post_state",
+          "serializer",
+          "status",
+          "theorems"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state": {
+      "key_variants": [
+        [
+          "definition_count",
+          "definitions_sha256",
+          "global_axiom_count",
+          "global_axioms_sha256",
+          "kernel_state_sha256",
+          "term_constant_count",
+          "term_constants_sha256",
+          "type_constant_count",
+          "type_constants_sha256"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/serializer": {
+      "key_variants": [
+        [
+          "path",
+          "sha256"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/theorems/[]": {
+      "key_variants": [
+        [
+          "conclusion_sha256",
+          "global_axiom_count",
+          "global_axioms_sha256",
+          "hypotheses_sha256",
+          "hypothesis_count",
+          "name",
+          "theorem_sha256"
+        ]
+      ],
+      "occurrences": 194
+    },
+    "/results/[]/process_evidence": {
+      "key_variants": [
+        [
+          "completed_utc",
+          "exit_code",
+          "linked_record_sha256",
+          "markers",
+          "pid",
+          "post_runtime_state",
+          "pre_runtime_state",
+          "process_nonce",
+          "resource_sampling",
+          "started_utc",
+          "suite_nonce",
+          "transcript"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/markers": {
+      "key_variants": [
+        [
+          "complete_line",
+          "linked_line",
+          "start_line",
+          "suite_line"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state": {
+      "key_variants": [
+        [
+          "candle_executable",
+          "candle_git_head",
+          "candle_git_status",
+          "execution_contract_sha256",
+          "linked_record_sha256",
+          "linked_schema",
+          "source_closure_sha256"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/candle_executable": {
+      "key_variants": [
+        [
+          "bytes",
+          "path",
+          "sha256"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state": {
+      "key_variants": [
+        [
+          "candle_executable",
+          "candle_git_head",
+          "candle_git_status",
+          "execution_contract_sha256",
+          "linked_record_sha256",
+          "linked_schema",
+          "source_closure_sha256"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/candle_executable": {
+      "key_variants": [
+        [
+          "bytes",
+          "path",
+          "sha256"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/resource_sampling": {
+      "key_variants": [
+        [
+          "interval_seconds",
+          "peak_process_rss_kib",
+          "peak_tree_rss_kib",
+          "root_observed",
+          "sample_count",
+          "sampler_completed"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/transcript": {
+      "key_variants": [
+        [
+          "bytes",
+          "path",
+          "sha256"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/run_evidence": {
+      "key_variants": [
+        [
+          "independent_approval_sha256",
+          "linked_record_sha256",
+          "marker_contract",
+          "source_closure_sha256",
+          "suite_nonce"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence": {
+      "key_variants": [
+        [
+          "expected_identity_target_count",
+          "manual_review_mapping_target_count",
+          "matched_target_count",
+          "missing_or_failed_fingerprint_target_count",
+          "observed_uncompared_target_count",
+          "reported_target_count",
+          "requested_target_count",
+          "suite_closed"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/source_closure": {
+      "key_variants": [
+        [
+          "files",
+          "fingerprint_request_count",
+          "ordered_targets",
+          "sha256",
+          "source_file_count",
+          "target_count"
+        ]
+      ],
+      "occurrences": 2
+    },
+    "/source_closure/files/[]": {
+      "key_variants": [
+        [
+          "bytes",
+          "path",
+          "sha256"
+        ]
+      ],
+      "occurrences": 132
+    },
+    "/source_closure/ordered_targets/[]": {
+      "key_variants": [
+        [
+          "load_files",
+          "name",
+          "theorem_names"
+        ]
+      ],
+      "occurrences": 130
+    },
+    "/timeout_policy": {
+      "key_variants": [
+        [
+          "inactivity_resets_on",
+          "inactivity_scope",
+          "inactivity_timeout_seconds",
+          "progress_extends_total_wall_deadline",
+          "total_wall_scope",
+          "total_wall_timeout_seconds"
+        ]
+      ],
+      "occurrences": 2
+    }
+  },
+  "report_schema": 4,
+  "scalars": {
+    "/candle_executable/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/candle_executable/path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/candle_executable/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/candle_git_head": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/candle_root": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/counts/FAIL": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/counts/PASS": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/counts/TIMEOUT": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle.sh/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle.sh/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1cakeml_artifact_provenance.py/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1cakeml_artifact_provenance.py/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1fingerprint.ml/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1fingerprint.ml/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1fingerprint_v3_state_stream.ml/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1fingerprint_v3_state_stream.ml/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1reference_protocol.py/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1reference_protocol.py/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1regression.py/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1regression.py/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1runtime_fingerprint_protocol.py/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1runtime_fingerprint_protocol.py/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1top100_manifest.json/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/execution_contract/candle~1top100_manifest.json/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/fingerprint_contract/expected_identity_source": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/fingerprint_contract/expected_mismatch_result": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/fingerprint_contract/load_pass_is_fingerprint_match": {
+      "kind_variants": [
+        "boolean"
+      ],
+      "occurrences": 2
+    },
+    "/fingerprint_contract/serializer": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/generated_utc": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/independent_approval/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/independent_approval/path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/independent_approval/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/jobs": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/linked_record/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/linked_record/path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/linked_record/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/log_directory": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/promotion/eligible": {
+      "kind_variants": [
+        "boolean"
+      ],
+      "occurrences": 2
+    },
+    "/promotion/reason": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/promotion/required_linked_schema": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/promotion/s1_evidence": {
+      "kind_variants": [
+        "boolean"
+      ],
+      "occurrences": 2
+    },
+    "/results/[]/boot_elapsed_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/error_message": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/files/[]": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 132
+    },
+    "/results/[]/fingerprint_elapsed_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/approval_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/expected_identities_present": {
+      "kind_variants": [
+        "boolean"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/mapping_status": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/definition_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/definitions_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/global_axiom_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/global_axioms_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/kernel_state_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/term_constant_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/term_constants_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/type_constant_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/post_state/type_constants_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/serializer/path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/serializer/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/status": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/fingerprints/theorems/[]/conclusion_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 194
+    },
+    "/results/[]/fingerprints/theorems/[]/global_axiom_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 194
+    },
+    "/results/[]/fingerprints/theorems/[]/global_axioms_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 194
+    },
+    "/results/[]/fingerprints/theorems/[]/hypotheses_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 194
+    },
+    "/results/[]/fingerprints/theorems/[]/hypothesis_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 194
+    },
+    "/results/[]/fingerprints/theorems/[]/name": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 194
+    },
+    "/results/[]/fingerprints/theorems/[]/theorem_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 194
+    },
+    "/results/[]/hol_elapsed_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/log_path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/name": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/peak_process_rss_kib": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/peak_tree_rss_kib": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/completed_utc": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/exit_code": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/linked_record_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/markers/complete_line": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/markers/linked_line": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/markers/start_line": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/markers/suite_line": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pid": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/candle_executable/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/candle_executable/path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/candle_executable/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/candle_git_head": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/execution_contract_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/linked_record_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/linked_schema": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/post_runtime_state/source_closure_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/candle_executable/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/candle_executable/path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/candle_executable/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/candle_git_head": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/execution_contract_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/linked_record_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/linked_schema": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/pre_runtime_state/source_closure_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/process_nonce": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/resource_sampling/interval_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/resource_sampling/peak_process_rss_kib": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/resource_sampling/peak_tree_rss_kib": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/resource_sampling/root_observed": {
+      "kind_variants": [
+        "boolean"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/resource_sampling/sample_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/resource_sampling/sampler_completed": {
+      "kind_variants": [
+        "boolean"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/started_utc": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/suite_nonce": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/transcript/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/transcript/path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/process_evidence/transcript/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/status": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/test_elapsed_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/timeout_kind": {
+      "kind_variants": [
+        "null"
+      ],
+      "occurrences": 130
+    },
+    "/results/[]/total_elapsed_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 130
+    },
+    "/run_evidence/independent_approval_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/run_evidence/linked_record_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/run_evidence/marker_contract": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/run_evidence/source_closure_sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/run_evidence/suite_nonce": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence/expected_identity_target_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence/manual_review_mapping_target_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence/matched_target_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence/missing_or_failed_fingerprint_target_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence/observed_uncompared_target_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence/reported_target_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence/requested_target_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/s1_evidence/suite_closed": {
+      "kind_variants": [
+        "boolean"
+      ],
+      "occurrences": 2
+    },
+    "/schema": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/source_closure/files/[]/bytes": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 132
+    },
+    "/source_closure/files/[]/path": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 132
+    },
+    "/source_closure/files/[]/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 132
+    },
+    "/source_closure/fingerprint_request_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/source_closure/ordered_targets/[]/load_files/[]": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 132
+    },
+    "/source_closure/ordered_targets/[]/name": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 130
+    },
+    "/source_closure/ordered_targets/[]/theorem_names/[]": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 194
+    },
+    "/source_closure/sha256": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/source_closure/source_file_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/source_closure/target_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/suite": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/suite_started_utc": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/sum_test_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 2
+    },
+    "/test_count": {
+      "kind_variants": [
+        "integer"
+      ],
+      "occurrences": 2
+    },
+    "/timeout_policy/inactivity_resets_on": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/timeout_policy/inactivity_scope": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/timeout_policy/inactivity_timeout_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 2
+    },
+    "/timeout_policy/progress_extends_total_wall_deadline": {
+      "kind_variants": [
+        "boolean"
+      ],
+      "occurrences": 2
+    },
+    "/timeout_policy/total_wall_scope": {
+      "kind_variants": [
+        "string"
+      ],
+      "occurrences": 2
+    },
+    "/timeout_policy/total_wall_timeout_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 2
+    },
+    "/wall_seconds": {
+      "kind_variants": [
+        "number"
+      ],
+      "occurrences": 2
+    }
+  },
+  "schema": 1
+}
