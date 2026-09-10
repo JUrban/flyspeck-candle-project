@@ -243,6 +243,11 @@ class Fixture:
     def _create_finalizer_project(self) -> None:
         self.program_path.write_bytes(SCRIPT.read_bytes())
         self.program_path.chmod(0o755)
+        schema_source = SCRIPT.with_name(MODULE.REPORT_SCHEMA_AUTHORITY_NAME)
+        schema_path = self.program_path.with_name(
+            MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
+        )
+        schema_path.write_bytes(schema_source.read_bytes())
         controller_path = (
             self.project_root / "scripts/run-top100-reference-sweeps.py"
         )
@@ -422,7 +427,18 @@ class Fixture:
         self._write(
             self.candle_root, "candle/cakeml_artifact_provenance.py", helper,
         )
-        regression = r'''import hashlib
+        report_fields = []
+        for key in sorted(MODULE.REPORT_KEYS):
+            if key == "schema":
+                value = repr(MODULE.REPORT_SCHEMA_VERSION)
+            elif key == "promotion":
+                value = "promotion"
+            else:
+                value = "None"
+            report_fields.append(f"            {key!r}: {value},")
+        producer_schema_declaration = "\n".join(report_fields)
+        promotion_declaration = repr(dict(MODULE.PROMOTABLE_TOP100_PROMOTION))
+        regression = (r'''import hashlib
 import json
 from pathlib import Path
 
@@ -515,7 +531,23 @@ def _read_fingerprint_records(path, theorem_names, mapping_status,
         "post_state": post_state,
         "approval_sha256": None,
     }
-'''.encode()
+''' + f'''
+
+def _promotion_record(suite, linked_schema):
+    if (suite, linked_schema) == ("top100", 6):
+        return {promotion_declaration}
+    raise ValueError("fixture provenance class mismatch")
+
+
+class Reporter:
+    @staticmethod
+    def write_json(suite="top100", linked_schema=6):
+        promotion = _promotion_record(suite, linked_schema)
+        payload = {{
+{producer_schema_declaration}
+        }}
+        return payload
+''').encode()
         self._write(self.candle_root, "candle/regression.py", regression)
         reference_validator = r'''import hashlib
 import json
@@ -2015,7 +2047,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
             })
         executable = self.build / "cake"
         return {
-            "schema": 4,
+            "schema": MODULE.REPORT_SCHEMA_VERSION,
             "generated_utc": f"2026-08-29T02:00:0{run_index}+00:00",
             "suite_started_utc": f"2026-08-29T00:59:0{run_index}+00:00",
             "suite": "top100",
@@ -2056,6 +2088,7 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "path": "candle/build/cakeml-build-provenance.json",
                 **record(self.linked_path),
             },
+            "promotion": dict(MODULE.PROMOTABLE_TOP100_PROMOTION),
             "results": results,
         }
 
@@ -2093,6 +2126,12 @@ def validate_candidate(candidate, plan=None, request=None, transcript=None):
                 "finalizer": {
                     "path": "scripts/finalize-top100-report.py",
                     **project_program,
+                },
+                "report_schema_authority": {
+                    "path": "scripts/great100_report_schema.py",
+                    **record(self.program_path.with_name(
+                        MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
+                    )),
                 },
             },
             "tools": {
@@ -2320,6 +2359,25 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         self.fixture.reports[0]["schema"] = 3
         self.fixture.write_reports()
         self.assert_rejected("schema-3.*non-promotable")
+
+    def test_promotion_record_is_closed_and_exact(self) -> None:
+        original = deepcopy(self.fixture.reports)
+        mutations = (
+            ("missing", lambda report: report.pop("promotion"),
+             "malformed schema-4 Great100 report"),
+            ("extra-key", lambda report: report["promotion"].update(
+                {"unreviewed": True}), "exact promotable schema-6"),
+            ("ineligible", lambda report: report["promotion"].update(
+                {"eligible": False}), "exact promotable schema-6"),
+            ("wrong-linked-schema", lambda report: report["promotion"].update(
+                {"required_linked_schema": 7}), "exact promotable schema-6"),
+        )
+        for label, mutate, pattern in mutations:
+            with self.subTest(label=label):
+                self.fixture.reports = deepcopy(original)
+                mutate(self.fixture.reports[0])
+                self.fixture.write_reports()
+                self.assert_rejected(pattern)
 
     def test_report_envelope_numeric_type_confusion_rejects(self) -> None:
         for report in self.fixture.reports:
@@ -3267,6 +3325,37 @@ class FinalizeTop100Schema4Tests(unittest.TestCase):
         )
         self.assertNotEqual(completed.returncode, 0)
         self.assertIn("--external-receipt", completed.stderr)
+
+
+class Great100ReportSchemaAuthorityTests(unittest.TestCase):
+    QUALIFIED_PRODUCER = Path(
+        "/project/worktrees/candle-final-s1-clean-runner-v13/candle/regression.py"
+    )
+    QUALIFIED_PRODUCER_SHA256 = (
+        "a92c4a5aa13a0710ec93402fc4792bed8f0d059390e260f95b07842cdf83fcfb"
+    )
+
+    def qualified_source(self) -> bytes:
+        source = self.QUALIFIED_PRODUCER.read_bytes()
+        self.assertEqual(digest(source), self.QUALIFIED_PRODUCER_SHA256)
+        return source
+
+    def test_exact_qualified_producer_conforms(self) -> None:
+        MODULE.validate_producer_source(self.qualified_source())
+
+    def test_qualified_producer_report_key_drift_is_rejected(self) -> None:
+        source = self.qualified_source().replace(
+            b'"promotion": promotion,', b'"promotion_v2": promotion,', 1,
+        )
+        with self.assertRaisesRegex(ValueError, "report-envelope keys drift"):
+            MODULE.validate_producer_source(source)
+
+    def test_qualified_producer_promotion_semantics_drift_is_rejected(self) -> None:
+        source = self.qualified_source().replace(
+            b'"eligible": True,', b'"eligible": False,', 1,
+        )
+        with self.assertRaisesRegex(ValueError, "canonical promotable"):
+            MODULE.validate_producer_source(source)
 
 
 class RelocatedArtifactObservationTests(unittest.TestCase):

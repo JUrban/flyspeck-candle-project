@@ -274,6 +274,15 @@ def run_dry_finalization(
         "finalizer_project_root": str(project_root),
         "finalizer_project_head": git_head(project_root),
         "finalizer": {"path": str(FINALIZER), **file_record(FINALIZER)},
+        "report_schema_authority": {
+            "schema_version": FINALIZER_MODULE.REPORT_SCHEMA_VERSION,
+            "path": str(FINALIZER.with_name(
+                FINALIZER_MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
+            )),
+            **file_record(FINALIZER.with_name(
+                FINALIZER_MODULE.REPORT_SCHEMA_AUTHORITY_NAME,
+            )),
+        },
         "reports": [
             {"path": str(path), **file_record(path)} for path in reports
         ],

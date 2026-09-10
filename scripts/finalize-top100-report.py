@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -32,69 +33,39 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Iterable
 
-
 PROGRAM_PATH = Path(__file__).resolve()
+REPORT_SCHEMA_AUTHORITY_NAME = "great100_report_schema.py"
+REPORT_SCHEMA_AUTHORITY_PATH = PROGRAM_PATH.with_name(
+    REPORT_SCHEMA_AUTHORITY_NAME,
+)
+_REPORT_SCHEMA_SPEC = importlib.util.spec_from_file_location(
+    "_great100_report_schema_authority", REPORT_SCHEMA_AUTHORITY_PATH,
+)
+if _REPORT_SCHEMA_SPEC is None or _REPORT_SCHEMA_SPEC.loader is None:
+    raise RuntimeError("cannot load Great100 report schema authority")
+_REPORT_SCHEMA = importlib.util.module_from_spec(_REPORT_SCHEMA_SPEC)
+_REPORT_SCHEMA_SPEC.loader.exec_module(_REPORT_SCHEMA)
+PROMOTABLE_TOP100_PROMOTION = _REPORT_SCHEMA.PROMOTABLE_TOP100_PROMOTION
+REPORT_SCHEMA_VERSION = _REPORT_SCHEMA.REPORT_SCHEMA_VERSION
+report_schema_shape = _REPORT_SCHEMA.shape
+validate_producer_source = _REPORT_SCHEMA.validate_producer_source
+
 GIT_REQUESTED_PATH = Path("/usr/bin/git")
 PYTHON_PATH = Path(sys.executable).resolve()
 
-REPORT_KEYS = {
-    "schema", "generated_utc", "suite_started_utc", "suite", "test_count", "jobs",
-    "timeout_policy", "wall_seconds", "sum_test_seconds", "counts",
-    "candle_root", "candle_git_head", "candle_git_status",
-    "candle_executable", "log_directory",
-    "fingerprint_contract", "s1_evidence", "run_evidence",
-    "execution_contract", "source_closure", "independent_approval",
-    "linked_record", "results",
-}
-RESULT_KEYS = {
-    "name", "files", "status", "timeout_kind", "boot_elapsed_seconds",
-    "hol_elapsed_seconds", "test_elapsed_seconds",
-    "fingerprint_elapsed_seconds", "total_elapsed_seconds",
-    "peak_process_rss_kib", "peak_tree_rss_kib", "error_message",
-    "log_path", "process_evidence", "fingerprints",
-}
-PROCESS_EVIDENCE_KEYS = {
-    "suite_nonce", "process_nonce", "pid", "started_utc", "completed_utc",
-    "exit_code", "markers", "linked_record_sha256", "transcript",
-    "pre_runtime_state", "post_runtime_state", "resource_sampling",
-}
-RUN_EVIDENCE_KEYS = {
-    "suite_nonce", "marker_contract", "linked_record_sha256",
-    "source_closure_sha256", "independent_approval_sha256",
-}
-FINGERPRINT_KEYS = {
-    "status", "mapping_status", "expected_identities_present", "serializer",
-    "theorems", "post_state", "approval_sha256",
-}
-THEOREM_KEYS = {
-    "name", "theorem_sha256", "hypotheses_sha256", "conclusion_sha256",
-    "global_axioms_sha256", "hypothesis_count", "global_axiom_count",
-}
-POST_STATE_KEYS = {
-    "kernel_state_sha256", "type_constants_sha256", "type_constant_count",
-    "term_constants_sha256", "term_constant_count", "definitions_sha256",
-    "definition_count", "global_axioms_sha256", "global_axiom_count",
-}
-RUNTIME_STATE_KEYS = {
-    "candle_git_head", "candle_git_status", "linked_record_sha256",
-    "candle_executable", "execution_contract_sha256", "source_closure_sha256",
-}
-RESOURCE_SAMPLING_KEYS = {
-    "interval_seconds", "sample_count", "root_observed", "sampler_completed",
-    "peak_process_rss_kib", "peak_tree_rss_kib",
-}
-MARKER_KEYS = {"suite_line", "start_line", "linked_line", "complete_line"}
-S1_KEYS = {
-    "requested_target_count", "reported_target_count",
-    "expected_identity_target_count", "manual_review_mapping_target_count",
-    "matched_target_count", "observed_uncompared_target_count",
-    "missing_or_failed_fingerprint_target_count", "suite_closed",
-}
-TIMEOUT_KEYS = {
-    "inactivity_timeout_seconds", "inactivity_resets_on", "inactivity_scope",
-    "total_wall_timeout_seconds", "total_wall_scope",
-    "progress_extends_total_wall_deadline",
-}
+REPORT_KEYS = report_schema_shape("report")
+RESULT_KEYS = report_schema_shape("result")
+PROCESS_EVIDENCE_KEYS = report_schema_shape("process_evidence")
+RUN_EVIDENCE_KEYS = report_schema_shape("run_evidence")
+FINGERPRINT_KEYS = report_schema_shape("fingerprints")
+THEOREM_KEYS = report_schema_shape("theorem")
+POST_STATE_KEYS = report_schema_shape("post_state")
+RUNTIME_STATE_KEYS = report_schema_shape("runtime_state")
+RESOURCE_SAMPLING_KEYS = report_schema_shape("resource_sampling")
+MARKER_KEYS = report_schema_shape("markers")
+S1_KEYS = report_schema_shape("s1_evidence")
+TIMEOUT_KEYS = report_schema_shape("timeout_policy")
+PROMOTION_KEYS = report_schema_shape("promotion")
 EXECUTION_CONTRACT_PATHS = {
     "candle/cakeml_artifact_provenance.py": "100644",
     "candle/regression.py": "100644",
@@ -1585,9 +1556,16 @@ def validate_report_and_capture_logs(
     stager: Stager,
 ) -> ValidatedRun:
     require(set(report) == REPORT_KEYS, "malformed schema-4 Great100 report")
-    require(is_int(report["schema"]) and report["schema"] == 4 and
+    require(is_int(report["schema"]) and
+            report["schema"] == REPORT_SCHEMA_VERSION and
             report["suite"] == "top100",
             "only a schema-4 Great100 report is promotable")
+    promotion = report["promotion"]
+    require(isinstance(promotion, dict) and
+            set(promotion) == PROMOTION_KEYS and
+            exact_json_equal(promotion, dict(PROMOTABLE_TOP100_PROMOTION)),
+            "Great100 schema-4 report lacks the exact promotable schema-6 "
+            "linked-record classification")
     generated = validate_datetime(report["generated_utc"], "report generation time")
     suite_started = validate_datetime(
         report["suite_started_utc"], "suite start time",
@@ -4341,6 +4319,19 @@ def preflight_finalizer() -> dict[str, Any]:
     committed = git_bytes(project, "cat-file", "blob", f"HEAD:{relative}")
     require(bytes_identity(committed) == program_identity,
             "executing finalizer is not exact committed project bytes")
+    schema_authority = ordinary_file(
+        program.with_name(REPORT_SCHEMA_AUTHORITY_NAME),
+        "Great100 report schema authority",
+    )
+    schema_relative = schema_authority.relative_to(project).as_posix()
+    schema_identity = stable_file_identity(
+        schema_authority, "Great100 report schema authority",
+    )
+    schema_committed = git_bytes(
+        project, "cat-file", "blob", f"HEAD:{schema_relative}",
+    )
+    require(bytes_identity(schema_committed) == schema_identity,
+            "Great100 report schema authority is not exact committed project bytes")
     python = ordinary_file(PYTHON_PATH, "Python executable")
     git = ordinary_file(GIT_REQUESTED_PATH.resolve(strict=True), "Git executable")
     return {
@@ -4349,6 +4340,9 @@ def preflight_finalizer() -> dict[str, Any]:
         "program_path": program,
         "program_relative": relative,
         "program_identity": program_identity,
+        "schema_authority_path": schema_authority,
+        "schema_authority_relative": schema_relative,
+        "schema_authority_identity": schema_identity,
         "python_path": python,
         "python_identity": stable_file_identity(python, "Python executable"),
         "git_path": git,
@@ -4389,6 +4383,10 @@ def validate_authorization(
             "path": finalizer["program_relative"],
             **finalizer["program_identity"].as_json(),
         },
+        "report_schema_authority": {
+            "path": finalizer["schema_authority_relative"],
+            **finalizer["schema_authority_identity"].as_json(),
+        },
     }), "authorization receipt does not bind finalizer project/bytes")
     require(exact_json_equal(receipt["tools"], {
         "python": {
@@ -4425,6 +4423,11 @@ def archive(
             finalizer["program_path"], "finalizer/finalize-top100-report.py",
             "executing finalizer",
         )
+        schema_authority_snapshot = stager.capture(
+            finalizer["schema_authority_path"],
+            "finalizer/great100_report_schema.py",
+            "Great100 report schema authority",
+        )
         python_snapshot = stager.capture(
             finalizer["python_path"], "finalizer/tools/python",
             "Python executable",
@@ -4433,6 +4436,8 @@ def archive(
             finalizer["git_path"], "finalizer/tools/git", "Git executable",
         )
         require(program_snapshot.identity == finalizer["program_identity"] and
+                schema_authority_snapshot.identity ==
+                finalizer["schema_authority_identity"] and
                 python_snapshot.identity == finalizer["python_identity"] and
                 git_snapshot.identity == finalizer["git_identity"],
                 "finalizer or tool bytes changed after preflight")
@@ -4457,7 +4462,8 @@ def archive(
             for index, snapshot in enumerate(report_snapshots, 1)
         )
         for report in reports:
-            require(is_int(report.get("schema")) and report["schema"] == 4,
+            require(is_int(report.get("schema")) and
+                    report["schema"] == REPORT_SCHEMA_VERSION,
                     "schema-3 and other legacy Great100 reports are non-promotable")
         roots = []
         for index, report in enumerate(reports, 1):
@@ -4508,6 +4514,14 @@ def archive(
         )
         if _TEST_AFTER_CONTRACT_CAPTURE is not None:
             _TEST_AFTER_CONTRACT_CAPTURE()
+        try:
+            validate_producer_source(snapshot_bytes(
+                stage, contract_snapshots["candle/regression.py"],
+            ))
+        except ValueError as error:
+            raise ValidationError(
+                f"authenticated Great100 producer/schema mismatch: {error}"
+            ) from error
         execution_contract = {
             relative: snapshot.identity.as_json()
             for relative, snapshot in sorted(contract_snapshots.items())
@@ -4668,6 +4682,11 @@ def archive(
                 "project_git_head": finalizer["project_head"],
                 "archive_path": program_snapshot.archive_path,
                 **program_snapshot.identity.as_json(),
+                "report_schema_authority": {
+                    "schema_version": REPORT_SCHEMA_VERSION,
+                    "archive_path": schema_authority_snapshot.archive_path,
+                    **schema_authority_snapshot.identity.as_json(),
+                },
                 "tools": {
                     "python": {"archive_path": python_snapshot.archive_path,
                                **python_snapshot.identity.as_json()},
@@ -4739,6 +4758,10 @@ def archive(
         )
         require(stable_file_identity(finalizer["program_path"], "finalizer postflight") ==
                 finalizer["program_identity"] and
+                stable_file_identity(
+                    finalizer["schema_authority_path"],
+                    "Great100 report schema authority postflight",
+                ) == finalizer["schema_authority_identity"] and
                 stable_file_identity(finalizer["python_path"], "Python postflight") ==
                 finalizer["python_identity"] and
                 stable_file_identity(finalizer["git_path"], "Git postflight") ==
