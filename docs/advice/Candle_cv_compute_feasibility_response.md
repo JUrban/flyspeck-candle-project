@@ -792,3 +792,26 @@ lightweight representation, `Kernel.compute`, and theorem-handoff harness.
 The measurements, evidence hashes, failure boundary, commits, and checkpoint
 handoff rules are recorded in
 `docs/progress/2026-09-22-v1.40-lp-all2-negative-and-nl-grouping-fix.md`.
+
+## 2026-09-22 addendum: real `hard_7` terminal rejects the current LP design
+
+The sparse reflected/numeral-cache checker has now been compared directly
+with the legacy checker on terminal 2,128 of the real 9,080-terminal
+`hard_7.dat` certificate. Both paths produced the exact same theorem and
+hypotheses and passed the selected-row digest, theorem digest, cache/source,
+and global-axiom gates.
+
+The result is negative: the legacy proof took 21.99 seconds and the reflected
+proof took 111.67 seconds, so the candidate is 5.08 times slower. Within the
+reflected proof, row reification took 71.46 seconds, selector preparation
+15.79 seconds, `Kernel.compute` 17.11 seconds, and theorem handoff 0.05
+seconds. Thus the numerical evaluator is not the dominant cost; rebuilding
+the source-row correspondence in HOL is.
+
+This ends the current per-row reflected architecture as a production
+candidate. LP work should resume only at a coarser reusable boundary: a
+general theorem and computed check that authenticate a complete encoded
+source/master table once, followed by cheap per-terminal numerical checking.
+No further local relation/list-congruence variations are planned without new
+evidence. Full phase timings and evidence identities are in
+`docs/progress/2026-09-22-v1.41-hard7-reflected-terminal-boundary.md`.
