@@ -556,3 +556,34 @@ import assumptions from master rows unused by a terminal.
 
 Detailed timings, trust-boundary analysis, evidence hashes, and commits are in
 `docs/progress/2026-09-22-v1.31-lp-shared-preparation-batch.md`.
+
+## 2026-09-22 addendum: indexed master plans and steady-state LP wins
+
+The proposed external-plan/reusable-verification split now has a proof-producing
+prototype. A deduplicated master table is verified once against exact source
+conclusions. Untrusted terminal plans name master rows by integer index; Candle
+requires the indexed source conclusion to match the supplied terminal theorem
+exactly. Master entries carry hypothesis-free denotation theorems generalized
+over the certificate weight, while terminal assumptions and multipliers remain
+fresh.
+
+On real `hard_2.dat` terminals 8 and 10, post-preparation computed verification
+now beats the colocated legacy checker: 20.22 versus 20.93 seconds on terminal
+8 and 19.23 versus 21.54 seconds on terminal 10. Both final theorem interfaces
+match legacy exactly. Indexed row denotation fell to 1.12 and 0.76 seconds;
+the remaining recurring source-proof cost is dominated by 5.13 and 5.38
+seconds of `ALL` list construction.
+
+Cold preparation is not yet competitive. Source-plan reconstruction, the
+502-variable shared context, and verification of 1,017 master rows cost 117.28
+seconds before terminal proofs. The complete two-terminal computed batch took
+156.78 seconds versus 52.08 seconds legacy. This is therefore a genuine
+steady-state terminal speedup, not yet a total cold-run speedup.
+
+A generic-rule rewrite was also measured and rejected: despite preserving exact
+theorems, repeated generic `MATCH_MP` over the growing `ALL` tail more than
+doubled terminal time. The faster rewrite-based constructors were restored.
+
+Detailed phases, the negative result, trust boundary, evidence hashes, and
+next targets are recorded in
+`docs/progress/2026-09-22-v1.32-lp-indexed-master-steady-state.md`.
