@@ -522,3 +522,37 @@ row.
 Full measurements, evidence hashes, late-state compatibility findings, and
 the nonlinear closure status are recorded in
 `docs/progress/2026-09-22-v1.30-real-lp-sparse-verdict.md`.
+
+## 2026-09-22 addendum: structural preparation and real batch reuse
+
+The structural source-row builder, finer conversion profile, complete
+17-terminal inventory, and first real shared-preparation batch are complete.
+The main new result is that reuse is both safe and material, but is not yet
+sufficient for an overall win.
+
+On real `hard_2.dat` terminal 15, selector theorem preparation costs 11.01
+seconds and the remaining 684-row reconstruction costs 52.91 seconds. Reusing
+exact integer theorems produced 2,043 hits and only 74 misses but barely changed
+the total, so integer encoding is not the dominant surrounding cost. Checking
+and indexing the 424-variable basis once reduced row reconstruction to 45.61
+seconds and the complete sparse terminal to 72.80 seconds, versus 16.80 seconds
+legacy.
+
+The 17-terminal inventory found that every terminal has a distinct full
+variable basis, but normalized source inequalities overlap substantially.
+Terminals 8 and 10 share 469 exact source rows. A checked 502-variable union
+context reused 470 exact LHS denotation theorems on terminal 10 and reduced its
+row phase from the cold terminal's 63.44 seconds to 26.85 seconds. The complete
+two-terminal computed batch took 160.06 seconds versus 49.68 seconds legacy,
+or 3.22x slower. Both terminal theorems matched legacy exactly.
+
+This makes the next design boundary concrete. External code may construct an
+untrusted canonical basis, deduplicated sparse source-row table, and terminal
+index/multiplier plans. Candle should verify the master table once against the
+authenticated source theorems, retain the exact denotation theorems, and check
+terminal selection through a general soundness interface. Numerical plans and
+the final `Kernel.compute` verdict remain per-terminal. Care is required not to
+import assumptions from master rows unused by a terminal.
+
+Detailed timings, trust-boundary analysis, evidence hashes, and commits are in
+`docs/progress/2026-09-22-v1.31-lp-shared-preparation-batch.md`.
