@@ -587,3 +587,32 @@ doubled terminal time. The faster rewrite-based constructors were restored.
 Detailed phases, the negative result, trust boundary, evidence hashes, and
 next targets are recorded in
 `docs/progress/2026-09-22-v1.32-lp-indexed-master-steady-state.md`.
+
+## 2026-09-22 addendum: preparation trust split and lighter NL loop
+
+The external-preparation boundary has now been measured rather than only
+designed. External code may supply canonical variable indices, deduplicated
+sparse encodings, and terminal plans as untrusted data. Candle checks each
+master encoding against the exact source theorem, proves its reusable
+weight-general denotation, then checks every terminal index/source pair before
+the complete numerical verdict. On the real terminal-8/10 master,
+deduplication took only 0.31 seconds while authenticated reusable row theorems
+took 86.31 seconds. External preprocessing alone therefore does not solve cold
+cost; a proved computed table-correspondence boundary is the material next
+target.
+
+A one-shot `ALL` expansion and a two-pass master-proof schedule were both
+tested and rejected. The former made row-list construction about ten times
+slower; the latter increased cold master time by retaining too many
+intermediate proof objects. The fast interleaved schedule was restored.
+
+The nonlinear arithmetic/Taylor experiment loop now uses a fresh-copy restore
+from the existing post-Taylor checkpoint. A real certificate endpoint fixture
+reproduced its exact assumption-free theorem in 14.23 seconds end-to-end,
+versus 155.46 seconds from the shallower checkpoint, while the calculation
+remained 0.58 CPU seconds. This state is suitable for representation,
+whole-calculation, and handoff experiments; complete leaf and partition claims
+remain gated by the full nonlinear closure.
+
+Implementation, timings, evidence hashes, and limitations are in
+`docs/progress/2026-09-22-v1.33-lp-preparation-and-light-nl-harness.md`.
