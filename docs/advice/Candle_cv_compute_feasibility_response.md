@@ -616,3 +616,27 @@ remain gated by the full nonlinear closure.
 
 Implementation, timings, evidence hashes, and limitations are in
 `docs/progress/2026-09-22-v1.33-lp-preparation-and-light-nl-harness.md`.
+
+## 2026-09-22 addendum: disposable NL experiments and clean closure boundary
+
+The lightweight nonlinear separation is now the default development loop.
+Exact inputs captured from native HOL Light or an archived certificate are
+treated as untrusted fixture data and run through a fresh copy of the stable
+post-Taylor checkpoint. This supports number-representation, whole arithmetic
+plan, `Kernel.compute`, and theorem-handoff measurements without loading the
+complete verifier. A real endpoint fixture already demonstrates a 14.23-second
+end-to-end edit loop. The full closure is reserved for capturing genuine leaf
+payloads and for fresh integration confirmation of coherent candidates.
+
+The previous full closure load completed its expensive segmented prerequisites
+but exposed a frontend grouping failure in `m_taylor.hl`. A faithful minimized
+probe and four-pattern positive batch localized it to generated string names
+inside `mk_var` tuple arguments. The minimal two-file repair is now isolated on
+top of the previously authenticated Flyspeck source, and a new 90-node closure
+bundle has been generated from committed source identities. The corrected v12
+load is running; on success its checkpoint will become the clean predecessor
+for genuine leaf experiments.
+
+Detailed failure preservation, source and controller commits, receipt hashes,
+and validation scope are recorded in
+`docs/progress/2026-09-22-v1.34-light-nl-loop-and-closure-restart.md`.
