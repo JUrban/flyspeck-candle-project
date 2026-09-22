@@ -680,3 +680,41 @@ predecessor and then treated as untrusted fixtures by the existing 14.23-second
 fresh-copy arithmetic harness. Full closure restores are reserved for capture
 and coherent end-to-end confirmation. Details and evidence hashes are in
 `docs/progress/2026-09-22-v1.36-lp-reuse-break-even-and-nl-fixture-loop.md`.
+
+## 2026-09-22 correction: five-terminal LP evidence and list correspondence
+
+The preceding three-terminal break-even statement is withdrawn. It was an
+extrapolation from two terminals and did not replicate on the exact
+five-terminal family from `hard_2.dat`. With terminals 8--12, the original
+direct-congruence prototype spent 99.26 seconds in the five computed terminal
+proofs versus 103.30 seconds in the corresponding legacy terminal phases. A
+fresh controlled run spent 97.69 seconds computed versus 94.44 seconds legacy.
+The change of sign is consistent with run-scale allocation/GC variation and
+does not support a dependable steady-state terminal advantage.
+
+A new proof architecture does produce a real structural improvement. It
+proves once that a recursively decoded sparse entry list has the same `lin_f`
+denotation, then constructs only list/pair congruences for each authenticated
+source row. On the same 1,662-row master this reduces authenticated master-row
+theorem construction from 219.31 to 183.41 seconds, a 35.90-second (16.4%)
+reduction. The complete computed cold path falls from 389.20 to 350.59
+seconds, a 9.9% reduction, but remains 2.97 times the 117.91-second legacy
+batch. Exact theorem, hypothesis, source, and axiom checks pass for all five
+terminals.
+
+The measurement redirects LP work away from claims of amortizing the current
+per-row bridge. The material next boundary is a general soundness theorem
+whose computed premise checks the complete encoded master/source
+correspondence, so that Candle need not construct 1,662 individual arithmetic
+denotation proofs. External sparse/index planning remains untrusted data; the
+correspondence, hashes, selected rows, numerical verdict, and final theorem
+interface must all be checked inside Candle.
+
+The genuine nonlinear capture remains independent. The first leaf stays on
+the shortest path; only after its authenticated result exists will a fresh
+checkpoint copy capture leaves 4, 8, and 15 from the same 16-leaf certificate.
+That follow-up shares one search/plan preparation and records exact Taylor
+inputs plus native/staged timings for generalization tests.
+
+Full timings, commits, and evidence hashes are in
+`docs/progress/2026-09-22-v1.37-lp-five-terminal-correction-and-varied-nl-capture.md`.
