@@ -431,3 +431,44 @@ reconstruction interfaces.  The passing profile is preserved at
 `/project/flyspeck-candle-runs/cv-staged-reflected-phase-profile-v1`; its log
 SHA-256 is
 `7bce7cbfc464275a2d5b92fe0b9bd8214dd8e42f84d00367b3dafae319b21e3d`.
+
+### LP reuse and coarse-verdict follow-up
+
+An exact-basis reification cache has now been measured on the same real
+`hard_2.dat` terminal 15. Replacing the first association-list prototype with
+exact-key hash tables reduced the warm source/number conversion phase from
+76.29 to 60.44 CPU seconds. The warm reflected terminal took 183.30 seconds:
+60.44 conversion, 25.14 proof preparation, 85.20 `Kernel.compute`, 11.38
+theorem reconstruction, and about 0.10 publication. Relative to the original
+uncached 256.69-second reflected terminal, exact reuse saves 73.39 seconds
+(28.6%), but the result is still about 11.4x the colocated 16.08-second legacy
+terminal. Caching is therefore useful preparation, not the final LP design.
+
+The complete sparse numerical-verdict core is now proved and tested on an
+isolated Candle branch. It encodes rows as sorted `(variable-index,
+signed-integer)` maps, merges and scales all weighted rows inside
+`Kernel.compute`, checks complete coefficient cancellation and a negative rhs,
+and returns only a one-bit infeasibility verdict. Assumption-free theorems prove
+representation correctness for insert, add, scale, accumulation, fold, zero
+checking, and the complete verdict. Both a fresh `hol.ml` test and a
+checkpoint-isolated test pass. This is the intended arithmetic core for
+avoiding reconstruction of intermediate arithmetic proofs.
+
+The remaining proof-critical LP step is explicit: connect authenticated
+Flyspeck source inequalities and their sparse row encodings to one general
+real soundness theorem, then measure the complete source conversion,
+`Kernel.compute`, and theorem handoff on terminal 15. Until that bridge is
+proved, the sparse result is DEVELOPMENT / NON-RELEASE and is not substituted
+for the existing checker.
+
+Evidence:
+
+- hashed cache run:
+  `/project/flyspeck-candle-runs/cv-lp-cache-hard2-terminal15-v2`;
+- cache `profile.json` SHA-256:
+  `16029536f8eb71114bf35278077c25e45a18f8fef397d473419c13adbfb7e754`;
+- cache implementation commit: `71cd644d08571cf4406c85e8ae74551c244434e6`;
+- sparse verdict implementation commit:
+  `110a44bfda946f5fcc0260ba73b71bcefc75d608`;
+- accepted sparse checkpoint log SHA-256:
+  `5120310c23f16c146bf19d8aa958a96226cb18972c13585e42cd07218811efd1`.
