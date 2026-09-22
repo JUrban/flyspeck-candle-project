@@ -358,3 +358,76 @@ The paper's large speedups for pure logical evaluation establish plausibility,
 not a Flyspeck forecast.  The unresolved empirical question is how much of the
 observed Flyspeck wall time can be moved behind one coarse, proved logical
 checker rather than remaining in decoding and fine-grained theorem assembly.
+
+## 2026-09-22 implementation addendum
+
+The staged work has now passed the feasibility boundary and is an active
+development project.  The repaired computation wrapper passes in the late
+Flyspeck state, proof-producing exact arithmetic and staged native-float
+prototypes preserve assumption-free HOL theorem interfaces, and the first real
+LP-terminal phase split is complete.  All results in this addendum remain
+**DEVELOPMENT / NON-RELEASE**.
+
+### Real LP terminal split
+
+The profiled target was terminal 15 of the real `hard_2.dat` certificate.  It
+used 402 constraint rows, 282 selected auxiliary rows, 424 variables, and
+returned a contradiction theorem with 106 hypotheses.  The legacy complete
+terminal took 14.05 CPU seconds.  The first dense reflected implementation took
+256.69 CPU seconds, explaining the previously observed 16.48x slowdown.
+
+Within the reflected implementation:
+
+| Phase | CPU seconds | Share of reflected total |
+|---|---:|---:|
+| source normalization and variable discovery | 0.97 | 0.4% |
+| dense source-number conversion and row reification | 142.09 | 55.4% |
+| pre-compute proof preparation | 24.22 | 9.4% |
+| `Kernel.compute` | 80.28 | 31.3% |
+| theorem reconstruction | 9.03 | 3.5% |
+| publication plus final contradiction handoff | 0.10 | <0.1% |
+
+Thus approximately 69% is surrounding representation/proof work and 31% is
+verified evaluation.  This materially changes the LP plan: merely tuning the
+evaluator cannot make the current dense adapter competitive.  The next target
+is a sparse, reusable source encoding plus a complete numerical-certificate
+verdict and one general soundness theorem.  Source-to-encoding correspondence
+must still be proved, but immutable row preparation should be amortized across
+terminals and intermediate arithmetic theorems should not be reconstructed.
+The encoded fold itself also needs improvement because 80.28 seconds is not a
+negligible residual.
+
+The evidence is preserved under
+`/project/flyspeck-candle-runs/cv-lp-phase-hard2-terminal15-v3`.  Its
+`candle.log` SHA-256 is
+`3b59a533371208960c05ce9757f52b2e088add650487928def64f9ab3053cb8b`;
+its `profile.json` SHA-256 is
+`7c4a79af13e3868305230a1305cb6d6aeafc4e7abb1d8b8e917569f7ac21ffa5`.
+
+### Nonlinear one-shot checker direction
+
+Candle now has a generic one-shot soundness theorem for a complete staged
+nonnegative polynomial plan.  A separate verified validity computation checks
+the untrusted host plan, `Kernel.compute` evaluates the plan, and the generic
+theorem connects the symbolic source polynomial directly to the computed
+bound.  This is the intended coarse-verdict shape: host planning is not trusted,
+and per-factor arithmetic bounds need not be reconstructed after evaluation.
+
+The Flyspeck-side adapter has now passed exact theorem-interface comparison on
+the authenticated six-monomial Taylor fixture and on the 21-monomial/78-factor
+Hessian fixture.  In one checkpoint-isolated comparison process, the two
+legacy calls used 17.85 CPU seconds while the two coarse reflected calls used
+0.15 CPU seconds, a 119x aggregate improvement.  The reflected Hessian call
+accounted for approximately 0.11 seconds (0.02 source planning, 0.03
+representation proof, less than 0.01 measured evaluator time, and 0.06 theorem
+handoff), versus approximately 15.91 seconds in the earlier legacy phase
+profile, about a 145x improvement for that call.
+
+This validates the one-verdict architecture for the isolated numerical
+polynomial workload; it does not yet measure a complete nonlinear leaf.  The
+real nonlinear closure reload is proceeding independently, after which the
+same architecture must be exercised through the exact leaf and partition
+reconstruction interfaces.  The passing profile is preserved at
+`/project/flyspeck-candle-runs/cv-staged-reflected-phase-profile-v1`; its log
+SHA-256 is
+`7bce7cbfc464275a2d5b92fe0b9bd8214dd8e42f84d00367b3dafae319b21e3d`.
