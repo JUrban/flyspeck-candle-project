@@ -472,3 +472,53 @@ Evidence:
   `110a44bfda946f5fcc0260ba73b71bcefc75d608`;
 - accepted sparse checkpoint log SHA-256:
   `5120310c23f16c146bf19d8aa958a96226cb18972c13585e42cd07218811efd1`.
+
+### Real sparse bridge result and revised LP direction
+
+The remaining source bridge is now implemented and has passed on the unchanged
+real `hard_2.dat` terminal 15. It proves all 684 authenticated source rows
+denote their sparse encodings, calls `Kernel.compute` once for the complete
+infeasibility verdict, and invokes one generic soundness theorem to derive the
+legacy contradiction. Successful runs match the legacy conclusion, hypotheses,
+theorem digest, and axiom set exactly.
+
+The initial bridge exposed why inclusive measurement matters. Its sparse
+evaluator took only 9.27 seconds, versus 85.20 seconds for the earlier dense
+evaluator, and final theorem handoff was effectively zero. However, explicit
+construction and expansion of `ALL (MAP ...)` over 684 rows took 111.81
+seconds, making the first total 191.14 seconds or 12.21x the colocated legacy
+terminal.
+
+Replacing that expansion with direct `ALL` construction and one proved
+`ALL_MAP` equivalence reduced proof preparation to 4.46 seconds and total time
+to 84.71 seconds. A basis-scoped cache of validated `EL_CONV` theorems then
+reduced source conversion from 69.66 to 54.21 seconds. The current complete
+split is:
+
+| Phase | Wall seconds |
+|---|---:|
+| colocated legacy terminal | 16.93 |
+| source normalization / discovery | 0.81 |
+| source/number conversion | 54.21 |
+| source-row proof preparation | 5.88 |
+| complete sparse `Kernel.compute` verdict | 8.66 |
+| generic soundness handoff | 0.56 |
+| sparse complete terminal | 70.12 |
+
+This is a 2.61x improvement over the earlier 183.30-second warm dense path and
+a 3.66x improvement over the original 256.69-second dense path, but remains
+4.14x slower than legacy. The numerical checker and one-theorem handoff are no
+longer the obstacle. Repeated whole-basis traversal while proving each sparse
+row/source correspondence now consumes 77% of total sparse time.
+
+The LP plan should therefore retain the sparse complete-verdict evaluator and
+generic soundness theorem, but replace depth normalization with a structural
+row-correspondence theorem builder using once-proved basis selectors. Reusable
+immutable row preparation should then be measured across terminals and
+certificates. Additional evaluator tuning or another cache layer is lower
+priority until that source bridge is made sublinear in the full basis size per
+row.
+
+Full measurements, evidence hashes, late-state compatibility findings, and
+the nonlinear closure status are recorded in
+`docs/progress/2026-09-22-v1.30-real-lp-sparse-verdict.md`.
