@@ -640,3 +640,26 @@ for genuine leaf experiments.
 Detailed failure preservation, source and controller commits, receipt hashes,
 and validation scope are recorded in
 `docs/progress/2026-09-22-v1.34-light-nl-loop-and-closure-restart.md`.
+
+## 2026-09-22 addendum: genuine first-leaf predecessor boundary
+
+The full-closure development boundary has been moved three source nodes later.
+A closure-only snapshot cannot safely add `prove_by_refinement`, `Definitions`,
+and `Break_case` after Candle's authenticated loader tables have been sealed.
+The replacement controller therefore authenticates and loads those exact
+support modules and binds the exact real target before checkpointing, while
+still stopping before reconstruction, certificate search, Taylor construction,
+or proof. All 50 focused tests pass, and the active input is tied to committed
+Candle and Flyspeck heads with 93 authenticated source nodes.
+
+A second reusable tier is prepared for the stable reflected Taylor/split
+adapters. It will be built from one fresh predecessor restore and will stop
+immediately before experimental target work. The first genuine-leaf capture
+then separates reconstruction, search, adaptive validation, Taylor theorem,
+native leaf proof, reflected planning, `Kernel.compute`, and theorem handoff,
+and emits the exact derivative/Hessian inputs as untrusted reusable fixtures.
+This makes the expensive closure and adapter costs one-time development costs
+while preserving fresh-state end-to-end confirmation for coherent candidates.
+
+Implementation, hashes, safety boundary, and current direct-run status are in
+`docs/progress/2026-09-22-v1.35-first-leaf-predecessor-checkpoint.md`.
