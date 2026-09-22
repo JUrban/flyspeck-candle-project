@@ -718,3 +718,26 @@ inputs plus native/staged timings for generalization tests.
 
 Full timings, commits, and evidence hashes are in
 `docs/progress/2026-09-22-v1.37-lp-five-terminal-correction-and-varied-nl-capture.md`.
+
+## 2026-09-22 addendum: master structure and cached numeral proofs
+
+An exact inventory of the real 1,662-row, five-terminal master found 3,614
+entries but only 635 repeated nonempty list suffixes. A suffix-trie or shared
+tail proof structure therefore has too little reuse to explain the remaining
+master cost. In contrast, the master contains only 98 distinct coefficient
+terms.
+
+A bounded cache of successful proof-producing numeral conversions was tested
+on the exact five-terminal run. Every cache hit rechecks a hypothesis-free
+theorem for the exact requested left side. The master used 3,521 hits and 138
+misses, while all five final theorem identities, hypothesis sets, and axiom
+gates remained exact. Authenticated master-row construction fell from 183.41
+to 171.35 seconds (6.6%), and the complete computed cold path fell from 350.59
+to 336.98 seconds (3.9%).
+
+This is a safe local improvement, not an architectural solution: the computed
+path remains 2.85 times the colocated 118.34-second legacy batch. Work therefore
+continues toward one computed complete-master correspondence premise and a
+general soundness theorem rather than more per-row micro-caches. Full timings,
+structure counts, commits, and evidence identities are in
+`docs/progress/2026-09-22-v1.38-lp-numeral-cache-and-master-structure.md`.
