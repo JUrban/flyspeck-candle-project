@@ -741,3 +741,27 @@ continues toward one computed complete-master correspondence premise and a
 general soundness theorem rather than more per-row micro-caches. Full timings,
 structure counts, commits, and evidence identities are in
 `docs/progress/2026-09-22-v1.38-lp-numeral-cache-and-master-structure.md`.
+
+## 2026-09-22 addendum: exact LP master proof boundary
+
+External cumulative timing on 416 evenly spaced rows from the exact 1,662-row
+master has localized the remaining preparation cost. Cached numeral
+standardization took 0.05 seconds; construction through the concrete decoded
+entry-list proofs took 36.63 seconds; adding the generic `lin_f` denotation
+theorem left the cumulative time at 36.49 seconds within noise; and complete
+master-row construction took 43.39 seconds. The sample extrapolates to 173.3
+seconds for the full master, closely matching the independently measured
+172.31 seconds.
+
+Thus about 84% of the master cost is authenticating coefficient/selector/list
+correspondence, not proving arithmetic denotation. A same-run alternative that
+applied one rewrite over each entry theorem took 59.96 seconds versus 36.55
+seconds for the current congruence chain, 64% slower, and is rejected.
+
+This narrows the coarser reflected target: its reusable relation and soundness
+theorem must aggregate the exact source-entry correspondence itself. Merely
+wrapping the already-cheap final denotation theorem cannot materially help.
+The source-term link, empty-hypothesis property, malformed-index rejection, and
+unchanged axiom set remain mandatory. Full measurements and evidence hashes
+are in
+`docs/progress/2026-09-22-v1.39-lp-master-proof-boundary.md`.
