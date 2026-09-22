@@ -765,3 +765,30 @@ The source-term link, empty-hypothesis property, malformed-index rejection, and
 unchanged axiom set remain mandatory. Full measurements and evidence hashes
 are in
 `docs/progress/2026-09-22-v1.39-lp-master-proof-boundary.md`.
+
+## 2026-09-22 addendum: aggregate LP relation rejected; varied NL capture queued
+
+The proposed aggregate source-entry relation has now been implemented and
+measured on the same deterministic 416-row sample. It proves an `ALL2`
+decoder/source relation, converts that relation once to exact source-list
+equality, and returns the ordinary hypothesis-free `lin_f` denotation theorem
+without changing the axiom set. It is nevertheless slower: 50.58 seconds
+versus 39.56 seconds for the same-run current entry constructor, and 38.6%
+slower than the prior complete-denotation boundary. The candidate is rejected;
+the current list/pair congruence builder remains the best measured local
+method. Further LP work should use a genuinely coarser checked-source boundary
+or large-workload master reuse, not another per-entry HOL relation.
+
+The nonlinear predecessor independently exposed a grouping defect in the
+nested-array normalization: an accessor used as the argument of a composed
+function was emitted without enclosing parentheses. The normalizer now treats
+every lowered nested-array read as one grouped expression. The focused and
+integrated suites pass (21 and 48 tests), and a fresh authenticated predecessor
+load is running. On success, one reusable support checkpoint will feed the
+first genuine leaf and then leaves 4, 8, and 15 in a single varied-leaf
+session. Their exact Taylor payloads will become untrusted fixtures for the
+lightweight representation, `Kernel.compute`, and theorem-handoff harness.
+
+The measurements, evidence hashes, failure boundary, commits, and checkpoint
+handoff rules are recorded in
+`docs/progress/2026-09-22-v1.40-lp-all2-negative-and-nl-grouping-fix.md`.
