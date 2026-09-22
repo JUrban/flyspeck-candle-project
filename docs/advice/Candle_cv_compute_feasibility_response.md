@@ -663,3 +663,20 @@ while preserving fresh-state end-to-end confirmation for coherent candidates.
 
 Implementation, hashes, safety boundary, and current direct-run status are in
 `docs/progress/2026-09-22-v1.35-first-leaf-predecessor-checkpoint.md`.
+
+## 2026-09-22 addendum: measured LP reuse break-even
+
+Replacing the nested generic sparse-row implication matching with direct
+kernel congruence was repeated twice on real `hard_2.dat` terminals 8 and 10.
+It preserved exact theorem identities and all hypothesis/axiom gates. The two
+computed terminal proofs average 38.93 seconds, versus 48.70 seconds in the
+control, while the reusable master-plus-selector preparation rises by 11.83
+seconds. The measured break-even is therefore three terminals. This is a
+useful many-certificate optimization, not a cold single-terminal win.
+
+The nonlinear development split remains intentionally small: genuine first
+leaf numerical terms are captured once from the full authenticated
+predecessor and then treated as untrusted fixtures by the existing 14.23-second
+fresh-copy arithmetic harness. Full closure restores are reserved for capture
+and coherent end-to-end confirmation. Details and evidence hashes are in
+`docs/progress/2026-09-22-v1.36-lp-reuse-break-even-and-nl-fixture-loop.md`.
