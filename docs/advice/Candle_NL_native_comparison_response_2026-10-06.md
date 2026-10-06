@@ -347,9 +347,46 @@ fixed-scale `delta_x4` and `4*x1*delta_x` jet enclosures for arbitrary valid
 six-dimensional boxes, dispatch only on the exact authenticated compiled
 polynomial identities, and reuse the existing universal analytic instruction
 and source-soundness chain.  Unrecognized polynomials retain the already
-proved lazy evaluator.  Integration still requires a genuine `Kernel.compute`
-benchmark and complete certificate coverage; the native result alone is not
-proof or production authority.
+proved lazy evaluator.  The native result alone is not proof or production
+authority.
+
+### First `Kernel.compute` specialization result
+
+The bounded specialization has now also run through the intended encoded
+evaluator on the same 128 genuine boxes.  Its temporary development dispatcher
+selects the authentic 85-step polynomial by length; that dispatcher is
+deliberately non-authoritative and must be replaced by exact authenticated
+compiled-program identity before proof integration.  The numerical operation
+it selects is the centered direct `4*x1*delta_x` jet above.  The established
+39-step `delta_x4` block remains on the generic path in this first Candle test.
+
+The candidate reproduced all **128 / 128 final upper bounds exactly**, retained
+all certificate acceptance, introduced no assumptions, and caused no axiom
+growth:
+
+| Matched `Kernel.compute` lane | Time |
+|---|---:|
+| Existing fixed-scale equations | 13.2292 s |
+| Centered angle-polynomial specialization | 8.9611 s |
+
+This first matched run is a **32.26% evaluator-time reduction** or
+**1.476-times speedup**.  The timing table has SHA-256
+`a43a2281c55b4d70ed0f0055da2426cbfa75bd497424d3921cb91c7c9219c076`.
+The preserved run is
+`cv-case10173-angle-polynomials-prefix128-v2-dev-001`.  A paired repetition is
+still appropriate before treating the precise percentage as stable, but exact
+output and full 128-box coverage already clear the bounded Candle numerical
+gate.
+
+This result must not collapse the two performance questions into one.  The
+rough **15-times** gap from exact-output-matched native fixed-scale execution to
+Candle is an encoded evaluator/representation target.  The separate rough
+**340-times** gap from the historical specialized C++ verifier to native
+fixed-scale execution is an algorithm and arithmetic target.  The new Candle
+instruction improves the first layer by deleting generic work, but neither a
+faster evaluator nor this one instruction can close the second layer by
+itself.  Exact enclosure equality establishes bound quality; it does not
+establish comparable work per box.
 
 This closes the ambiguity left by the first native comparison.  Extra generic
 mathematical work explains the historical C++ subdivision explosion, but it
@@ -432,6 +469,9 @@ The isolated development sources now include:
   discriminators with a seven-pair timing driver;
 - a centered specialized `4*x1*delta_x` jet prototype with exact matched
   final bounds and a seven-pair timing driver;
+- a Candle centered-angle implementation and matched 128-box
+  `Kernel.compute` driver, exact on every final bound and 1.476 times faster in
+  its first paired run;
 - a native C++ driver evaluating specialized and generic formulations on the
   exported boxes; and
 - repeatable drivers that preserve inputs, logs, phase profiles, timings, and
@@ -446,8 +486,8 @@ drivers handle the prompt explicitly and reuse the production certified-check
 pair and equation normalization without changing any checker equation.
 
 No specialized numerical instruction should be integrated merely from the
-audit's static operation count.  The exact-native and compact-product results
-now justify a bounded specialized-dihedral prototype on matched data.  General
-proof integration should follow only if that prototype reduces complete-
-program recurring cost without losing the already strong bound quality or
-certificate coverage.
+audit's static operation count.  The exact-native, rejected compact-product,
+and exact Candle specialization results now justify the general containment
+proof and authenticated instruction dispatch.  The proof work must retain the
+generic proved path for every unrecognized polynomial and preserve the two
+performance gaps as separate architectural targets.
