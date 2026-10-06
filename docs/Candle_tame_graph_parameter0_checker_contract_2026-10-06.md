@@ -1,10 +1,11 @@
 # Reflected tame-graph parameter-0 checker contract
 
-> **Partly superseded.** The two-backend, non-final duplicate-node, and
-> scheduling provisions in this contract are replaced by
-> `docs/Candle_tame_graph_reflection_plan_v2_2026-10-06.md`. The exact theorem,
-> production-constant binding, total-decoder, and rejecting-validation
-> requirements remain in force.
+> **Revised for plan v2.** This contract now specifies the single deterministic
+> replay plus final-leaf-hint architecture selected by
+> `docs/Candle_tame_graph_reflection_plan_v2_2026-10-06.md`. The earlier
+> whole-tree witness, non-final duplicate-node, and two-backend provisions are
+> removed. The exact theorem, production-constant binding, total-decoder, and
+> rejecting-validation requirements remain in force.
 
 Date: 2026-10-06 UTC
 
@@ -82,14 +83,18 @@ The final four-part aggregation may rewrite through `PlaneGraphs`, but the
 parameter-0 proof must not weaken or replace the production reachability,
 tameness, archive, or isomorphism notions.
 
-## Backend-independent acceptance theorem
+## Deterministic replay acceptance theorem
 
-Both proposed computation backends must instantiate one theorem of this
-shape, with concrete HOL datatypes substituted during implementation:
+The checker is one typed HOL deterministic depth-first replay. It computes
+the exact successor list itself. Untrusted data supplies hints only for final
+states which are not rejected by the executable lower-bound/tameness test.
+The general theorem has this shape, with concrete HOL datatypes substituted
+during implementation:
 
 ```text
-|- !p archive_part certificate.
-     tame_partition_check p archive_part certificate = T
+|- !p archive_part fuel hints.
+     tame_partition_replay p archive_part fuel hints [Seed p]
+       = Some []
      ==> !g.
            g IN PlaneGraphsP p /\ tame g
            ==> ?a.
@@ -100,9 +105,10 @@ shape, with concrete HOL datatypes substituted during implementation:
 The production instance is then only:
 
 ```text
-|- tame_partition_check
+|- tame_partition_replay
      0 (tame_archive_partition 0 tame_archive_lists)
-     authentic_parameter0_certificate = T
+     authentic_parameter0_fuel authentic_parameter0_hints [Seed 0]
+       = Some []
 ```
 
 `Kernel.compute` may prove this Boolean equality. The general implication
@@ -111,8 +117,10 @@ certificate. Applying the theorem yields the exact closed parameter-0 result.
 
 The checker must be total. Malformed encodings, unknown tags, bad indices,
 noncanonical graphs, arithmetic overflow representations, invalid maps,
-missing nodes, or unfinished frontiers return `F`; none may raise a trusted
-host exception or be interpreted as acceptance.
+missing or surplus required hints, fuel exhaustion, or an unfinished
+frontier reject; none may raise a trusted host exception or be interpreted as
+acceptance. Hint order is only the deterministic replay order and carries no
+mathematical authority.
 
 ## Semantic decomposition
 
@@ -129,36 +137,31 @@ check_iso_map encoded1 encoded2 encoded_map = T
 iso_fgraph logical_graph1 logical_graph2
 ```
 
-The converse needed for completeness of duplicate elimination is proved for
-the canonical graph domain: if two valid canonical fgraphs are isomorphic,
-the producer can supply a map that `check_iso_map` accepts. Hashes and
-`pre_iso_test` may select candidates but may never decide isomorphism alone.
+No converse is required for non-final duplicate elimination, because replay
+does not quotient non-final states. The untrusted hint producer may search for
+a final map however it likes; Candle accepts it only through the proved
+one-way implication above. Hashes and `pre_iso_test` may select candidates but
+may never decide isomorphism alone.
 
-### 2. Finite certificate closure
+### 2. Deterministic replay closure
 
-An accepted certificate contains a canonical seed representative and a finite
-set of representative nodes. Every node is one of:
+The replay stack starts at the exact production `Seed p`. A non-final state
+is replaced by the exact typed HOL `next_tame p` successor list. A final state
+has exactly one of two outcomes:
 
-- `expanded`: it is non-final; the checker recomputes the exact executable
-  `next_tame p` successors, and every successor has an accepted explicit
-  isomorphism map to a declared representative;
-- `final`: it has no required expansion, and an archive index plus explicit
-  map proves isomorphism to that exact `archive_part` entry; or
-- `duplicate`: optional in the physical format, but if present it carries an
-  explicit map to a declared representative and cannot introduce or suppress
-  successors.
+- the executable rejection predicate proves that the invariant final state
+  cannot be tame; or
+- one hint supplies an archive index, explicit vertex map, and orientation
+  bit, all of which are checked against that exact final graph and production
+  archive entry.
 
-The checker rejects duplicate node identities, dangling indices, undeclared
-successors, graph/map mismatches, a missing seed, a nonempty output frontier,
-and any final node without a valid archive witness. Node order and producer
-search order have no logical meaning.
-
-Closure soundness proves that every state reachable by `next_tame p` is
-represented modulo `iso_fgraph`, and every reachable final state has an
-archive witness. This proof includes the required equivariance result: an
-isomorphism between representatives preserves finality and transports
-`next_tame` successors. Without that theorem, quotienting the worklist by
-isomorphism is unsound.
+The replay soundness theorem states its starting-state requirements
+explicitly. Seed validity establishes the invariant for the initial stack,
+and a general successor-preservation theorem maintains it. A separate
+completion-preservation theorem proves that pruning cannot discard any tame
+final completion. Acceptance therefore covers every relevant final graph; no
+non-final quotient, duplicate representative, external frontier identity, or
+producer-supplied pruning label appears in the argument.
 
 ### 3. Pruning completeness
 
@@ -177,29 +180,21 @@ condition behind `tame13a` must be connected to the executable
 `squanderLowerBound`/`is_tame13a` test generally. An external assertion that a
 branch is non-tame is never sufficient.
 
-These three results compose to the backend-independent acceptance theorem.
+These three results compose to the deterministic replay acceptance theorem.
 
-## Two admissible computation backends
+## Single computation backend
 
-### Algorithm replay
+The only production backend is the typed HOL deterministic replay above,
+refined to a cval program by checked equations. It does not reproduce AFP's
+trie, `samet`, or archive-deduplication worklist, and it does not accept a
+whole-tree witness certificate. External reference enumeration may produce
+the ordered final-leaf hints and performance traces, but Candle recomputes
+all successor, final, rejection, and explicit-map decisions.
 
-Mirror `tameEnumFilter` and its trie/worklist implementation in reflected HOL
-data. Acceptance means the executable enumerator terminates with the exact
-checked final set and the bidirectional archive comparison succeeds. This is
-closest to the AFP computation and is initially attractive for the nine-graph
-partition.
-
-### Witness-carrying replay
-
-An untrusted producer supplies the finite representative graph, explicit edge
-maps, and final archive maps. Candle recomputes every local successor list and
-checks every map, then proves the frontier empty. This can reduce evaluator
-search and expose checkpointable chunks, at the cost of larger certificate
-data and a general finite-closure proof.
-
-The triangle prototype should measure both only while both remain cheap. A
-backend may be dropped for scaling reasons, but it may not gain trust or use a
-weaker logical conclusion. Both target the same acceptance theorem above.
+If a monolithic replay approaches resource limits, a proved HOL splitter may
+construct a logical frontier and sequential replay calls may be composed by
+the `covers` finite-union theorem in the same Candle kernel state. External
+frontier files, counts, or hashes are never soundness premises.
 
 ## Archive data binding
 
@@ -258,7 +253,7 @@ graph/fgraph representation
 ```
 
 The existing legacy mappings for `PlaneGraphs`, `next_plane`, `tame`,
-`fgraph`, `Archive`, and `iso_fgraph` are valuable proof leads. Their ledger
+`fgraph`, `archive`, and `iso_fgraph` are valuable proof leads. Their ledger
 status remains `existing_translation_entry_unvalidated` until the exact HOL
 theorem needed by this checker has been checked.
 
@@ -282,11 +277,18 @@ The next code packet is intentionally below the expensive enumeration layer:
 4. encode the nine authentic triangle archive entries and prove the archive
    partition binding; and
 5. use one `Kernel.compute` call to prove their structural preconditions,
-   with mutation tests for a face, vertex, ordering field, and map.
+   with mutation tests for a face, vertex, ordering field, and map;
+6. instrument the exact final-constant reference replay to count generated,
+   retained, rejected, final, and hint-consuming states; and
+7. define a deterministic bounded parameter-2 fixture that exercises
+   quadrilateral, exceptional-face, nonzero-excess, and multiple-size
+   branches.
 
-This slice establishes the data and theorem handoff used by either backend.
-It does not require the generator, lower-bound proof, or full Flyspeck replay,
-and it can run from a small isolated Candle state.
+This slice establishes the data and theorem handoff used by deterministic
+replay. Data, map, archive, and soundness experiments can run from a small
+isolated Candle state. The instrumentation and bounded parameter-2 fixture
+use the generator in a separate reference state; neither requires the full
+Flyspeck replay or contributes proof authority.
 
 ## Parameter-0 exit gate
 
@@ -303,8 +305,11 @@ The prototype is complete only when all of the following hold:
 - theorem assumptions are empty and no axiom beyond the existing allowed HOL
   basis is introduced;
 - malformed archive, map, successor, seed, and frontier mutations reject; and
-- cold preparation, recurring evaluation, theorem handoff, peak RSS, encoded
-  bytes, node counts, and retained theorem size are measured separately.
+- cold preparation, recurring evaluation, theorem handoff, required failed
+  and successful repeats, peak RSS, encoded bytes, node counts, and retained
+  theorem size are measured separately; and
+- the feasibility decision reports total elapsed cost as well as evaluator
+  time, charging reusable preparation once and all required repeats.
 
 Only after this gate should parameters 1--3 or production chunk formats be
 fixed.
