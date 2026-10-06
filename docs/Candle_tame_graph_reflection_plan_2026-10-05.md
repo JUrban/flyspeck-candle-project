@@ -1,5 +1,10 @@
 # Candle reflected tame-graph classification plan
 
+> **Superseded for scheduling and architecture.** This v1 document is
+> retained as project history. The authoritative plan is now
+> `docs/Candle_tame_graph_reflection_plan_v2_2026-10-06.md`, following the
+> scale and proof-risk review dated 2026-10-06.
+
 Date: 2026-10-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**

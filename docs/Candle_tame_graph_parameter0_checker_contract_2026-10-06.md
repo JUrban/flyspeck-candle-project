@@ -1,5 +1,11 @@
 # Reflected tame-graph parameter-0 checker contract
 
+> **Partly superseded.** The two-backend, non-final duplicate-node, and
+> scheduling provisions in this contract are replaced by
+> `docs/Candle_tame_graph_reflection_plan_v2_2026-10-06.md`. The exact theorem,
+> production-constant binding, total-decoder, and rejecting-validation
+> requirements remain in force.
+
 Date: 2026-10-06 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
