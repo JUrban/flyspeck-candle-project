@@ -499,7 +499,7 @@ performance gaps as separate architectural targets.
 
 ## Arithmetic/algorithm separation after the angle specialization
 
-Three further native experiments use the same 128 genuine case-10173 boxes.
+Four further native experiments use the same 128 genuine case-10173 boxes.
 They preserve complete-program acceptance and charge parsing/preparation
 separately from evaluation.  These are untrusted development discriminators,
 not theorem evidence.
@@ -559,6 +559,25 @@ theorem are established.  The paired phase table has SHA-256
 It reduced semantic interval products from 694,272 to 564,480 and interpreted
 polynomial steps from 11,648 to 6,656.
 
+Fourth, a minimal sparsity discriminator kept the fixed-256 arithmetic,
+direct `delta_x4`, all dense jet objects, all rounding, and the numerical
+algorithm fixed.  It only bypassed interval multiplication when either input
+was the exact zero interval.  In 21 warmed, order-balanced pairs it reduced
+evaluation from 0.144457137 to 0.129686915 seconds, a **1.114-times** speedup
+or **10.22%** reduction.  The exact 128-result stream was byte-identical between
+the two lanes and all cells remained accepted.  It bypassed 479,872 of 564,480
+attempted interval products.  The paired phase table has SHA-256
+`9d96b658754aea4903fcccdef6bec49fb2aa4accad9929322ea19b04d954c7c7`;
+both result streams have SHA-256
+`ec685c4db6d5780af36893470d65c880ca9243c0bd072d9db3c3fdd55ca30200`.
+
+This is informative precisely because the timing gain is much smaller than
+the product-count reduction.  With fixed-width endpoints, multiplication by
+zero is cheap; dense traversal, object movement, additions, comparisons, and
+rounding still occur.  A useful sparse experiment must therefore use a compact
+representation and omit absent gradient/Hessian entries end to end.  Merely
+adding zero tests to the dense checker is not a serious architecture.
+
 These results keep the performance layers explicit.  Relative to the
 historical specialized-C++ per-cell time, the original exact native
 fixed-scale lane was about **341 times** slower, the centered-angle GMP lane
@@ -578,16 +597,16 @@ plus authenticated exact-payload dispatch with fallback to the generic proved
 path.  It will not grow into a collection of fixture-specific arithmetic
 proofs merely because the first instruction passed its benchmark.
 
-The next cheap native discriminator should hold the now-promising fixed-256
-arithmetic constant while replacing the dense generic value/gradient/Hessian
-interpreter with a compiled sparse symmetric-jet plan.  The plan should carry
-coordinate dependency masks, store only used gradient and symmetric Hessian
-entries, and use direct instructions for the recurring low-degree source
-families.  Running that plan over the same genuine boxes separates generic
-derivative/Taylor work from arithmetic representation without changing both
-at once.  A specialized complete-dihedral instruction is the next candidate
-only after the sparse-plan result identifies how much generic machinery
-remains.
+The zero-skip discriminator confirms that the next native experiment should
+hold the now-promising fixed-256 arithmetic constant while replacing the dense
+generic value/gradient/Hessian interpreter with a genuinely compact compiled
+sparse symmetric-jet plan.  The plan should carry coordinate dependency masks,
+store only used gradient and upper-triangular Hessian entries, and avoid
+rounding or traversing absent entries.  Running that plan over the same genuine
+boxes separates generic derivative/Taylor work from arithmetic representation
+without changing both at once.  A specialized complete-dihedral instruction
+is the next candidate only after the compact sparse-plan result identifies how
+much generic machinery remains.
 
 The staged route is:
 

@@ -40,6 +40,7 @@ Fixed kScale("1000000000000");
 constexpr const char* kFixedBackend = "mpz";
 #endif
 Fixed kTwoScaleSquared = 2 * kScale * kScale;
+bool kSkipExactZeroProducts = false;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -83,6 +84,7 @@ struct PolynomialJet {
 
 struct Counters {
   std::uint64_t interval_products = 0;
+  std::uint64_t skipped_zero_products = 0;
   std::uint64_t completed_results = 0;
   std::uint64_t polynomial_steps = 0;
   std::uint64_t outer_steps = 0;
@@ -449,6 +451,12 @@ Interval interval_sum(std::initializer_list<Interval> values) {
 
 Interval raw_interval_mul(const Interval& left, const Interval& right,
                           Counters& counters) {
+  if (kSkipExactZeroProducts &&
+      ((left.lower == 0 && left.upper == 0) ||
+       (right.lower == 0 && right.upper == 0))) {
+    ++counters.skipped_zero_products;
+    return zero_interval();
+  }
   ++counters.interval_products;
   const Fixed ll = left.lower * right.lower;
   const Fixed lu = left.lower * right.upper;
@@ -1370,6 +1378,7 @@ struct Evaluation {
 
 void add_counters(Counters& total, const Counters& value) {
   total.interval_products += value.interval_products;
+  total.skipped_zero_products += value.skipped_zero_products;
   total.completed_results += value.completed_results;
   total.polynomial_steps += value.polynomial_steps;
   total.outer_steps += value.outer_steps;
@@ -1380,6 +1389,7 @@ void add_counters(Counters& total, const Counters& value) {
 
 Counters subtract_counters(const Counters& value, const Counters& baseline) {
   return {value.interval_products - baseline.interval_products,
+          value.skipped_zero_products - baseline.skipped_zero_products,
           value.completed_results - baseline.completed_results,
           value.polynomial_steps - baseline.polynomial_steps,
           value.outer_steps - baseline.outer_steps,
@@ -1571,6 +1581,7 @@ int main(int argc, char** argv) {
                 << " [--fused-polynomial-index=N]"
                 << " [--fused-polynomial-max-steps=N]"
                 << " [--direct-delta-x4]"
+                << " [--skip-exact-zero-products]"
                 << " [--dyadic-scale]\n";
       return 2;
     }
@@ -1606,6 +1617,8 @@ int main(int argc, char** argv) {
         }
       } else if (option == "--direct-delta-x4") {
         direct_delta_x4 = true;
+      } else if (option == "--skip-exact-zero-products") {
+        kSkipExactZeroProducts = true;
       } else {
         throw std::runtime_error("unknown optional argument: " + option);
       }
@@ -1682,6 +1695,8 @@ int main(int argc, char** argv) {
               << " fused_outer_index=" << fused_polynomial_outer_index
               << " fused_max_steps=" << fused_polynomial_max_steps
               << " direct_delta_x4=" << (direct_delta_x4 ? 1 : 0)
+              << " skip_exact_zero_products="
+              << (kSkipExactZeroProducts ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
@@ -1693,6 +1708,7 @@ int main(int argc, char** argv) {
               << " preparation_seconds=" << preparation_seconds
               << " evaluation_seconds=" << evaluation_seconds
               << " interval_products=" << total.interval_products
+              << " skipped_zero_products=" << total.skipped_zero_products
               << " completed_results=" << total.completed_results
               << " polynomial_steps=" << total.polynomial_steps
               << " outer_steps=" << total.outer_steps
@@ -1713,6 +1729,8 @@ int main(int argc, char** argv) {
                   << " sqrt_slot_after=" << profile.sqrt_slot_after
                   << " nanoseconds=" << profile.nanoseconds
                   << " interval_products=" << profile.counters.interval_products
+                  << " skipped_zero_products="
+                  << profile.counters.skipped_zero_products
                   << " completed_results=" << profile.counters.completed_results
                   << " polynomial_steps=" << profile.counters.polynomial_steps
                   << " outer_steps=" << profile.counters.outer_steps
