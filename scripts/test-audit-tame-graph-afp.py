@@ -29,6 +29,8 @@ class TameGraphAfpAuditTests(unittest.TestCase):
     def test_nested_comments_do_not_create_declarations(self) -> None:
         source = b"""theory X imports Main begin
 (* outer (* lemma fake: True *) still comment *)
+text{* function fake_text where "fake_text x = x" *}
+method_setup x = {* fun fake_ml x = x *}
 definition real :: bool where "real = True"
 lemma [simp]: "real" by (simp add: real_def)
 primrec "quoted" :: "nat => nat" where "quoted 0 = 0"

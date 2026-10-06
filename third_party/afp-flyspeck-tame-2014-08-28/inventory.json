@@ -347,7 +347,7 @@
     }
   },
   "isabelle_inventory": {
-    "declaration_occurrence_count": 1184,
+    "declaration_occurrence_count": 1182,
     "theories": [
       {
         "declarations": [
@@ -385,12 +385,6 @@
       },
       {
         "declarations": [
-          {
-            "kind": "fun",
-            "line": 11,
-            "name": "eval_tac",
-            "source_header": "fun eval_tac ctxt ="
-          },
           {
             "kind": "lemma",
             "line": 25,
@@ -530,25 +524,25 @@
           {
             "kind": "definition",
             "line": 94,
-            "name": null,
+            "name": "insert_mod_trie",
             "source_header": "definition [code del]:"
           },
           {
             "kind": "definition",
             "line": 96,
-            "name": null,
+            "name": "worklist_tree_coll_trie",
             "source_header": "definition [code del]:"
           },
           {
             "kind": "definition",
             "line": 98,
-            "name": null,
+            "name": "worklist_tree_coll_aux_trie",
             "source_header": "definition [code del]:"
           },
           {
             "kind": "definition",
             "line": 100,
-            "name": null,
+            "name": "insert_mod2_trie",
             "source_header": "definition [code del]:"
           },
           {
@@ -630,7 +624,7 @@
           {
             "kind": "definition",
             "line": 57,
-            "name": "\"avgmax",
+            "name": "avgmax",
             "source_header": "definition \"avgmax ns = (listsum ns, length ns, max_list ns)\""
           },
           {
@@ -642,7 +636,7 @@
           {
             "kind": "ML",
             "line": 66,
-            "name": "\"Toplevel.timing",
+            "name": "Toplevel.timing",
             "source_header": "ML \"Toplevel.timing := true\""
           }
         ],
@@ -3243,7 +3237,7 @@
           {
             "kind": "abbreviation",
             "line": 110,
-            "name": null,
+            "name": "triangle",
             "source_header": "abbreviation"
           },
           {
@@ -3261,7 +3255,7 @@
           {
             "kind": "abbreviation",
             "line": 122,
-            "name": null,
+            "name": "Faces",
             "source_header": "abbreviation"
           },
           {
@@ -4135,7 +4129,7 @@
           {
             "kind": "definition",
             "line": 334,
-            "name": null,
+            "name": "containsUnacceptableEdgeSnd'",
             "source_header": "definition"
           },
           {
@@ -4567,7 +4561,7 @@
           {
             "kind": "abbreviation",
             "line": 2101,
-            "name": null,
+            "name": "Edges_if",
             "source_header": "abbreviation (input)"
           },
           {
@@ -5870,7 +5864,7 @@
           {
             "kind": "definition",
             "line": 16,
-            "name": "\"set_of",
+            "name": "set_of",
             "source_header": "definition \"set_of m = (UN x. set(map_of m x))\""
           },
           {
@@ -5882,7 +5876,7 @@
           {
             "kind": "definition",
             "line": 34,
-            "name": "\"insert_mod",
+            "name": "insert_mod",
             "source_header": "definition \"insert_mod x m ="
           },
           {
@@ -6801,21 +6795,15 @@
       {
         "declarations": [
           {
-            "kind": "function",
-            "line": 10,
-            "name": "of",
-            "source_header": "function of type @{typ\"'a \\<Rightarrow> 'a list\"}. Instead of defining the closure"
-          },
-          {
             "kind": "abbreviation",
             "line": 13,
-            "name": null,
+            "name": "in_set",
             "source_header": "abbreviation (input)"
           },
           {
             "kind": "inductive_set",
             "line": 17,
-            "name": null,
+            "name": "RTranCl",
             "source_header": "inductive_set"
           },
           {
@@ -7424,7 +7412,7 @@
           {
             "kind": "datatype",
             "line": 65,
-            "name": null,
+            "name": "tries",
             "source_header": "datatype ('a,'v)tries = Tries  \"'v list\"  \"('a * ('a,'v)tries)list\""
           },
           {
@@ -7589,7 +7577,7 @@
           {
             "kind": "definition",
             "line": 5,
-            "name": null,
+            "name": "worklist_aux",
             "source_header": "definition"
           },
           {
@@ -7619,7 +7607,7 @@
           {
             "kind": "definition",
             "line": 33,
-            "name": null,
+            "name": "worklist_tree_aux",
             "source_header": "definition"
           },
           {
@@ -7661,7 +7649,7 @@
           {
             "kind": "definition",
             "line": 116,
-            "name": "\"worklist_tree",
+            "name": "worklist_tree",
             "source_header": "definition \"worklist_tree succs f ws s ="
           },
           {
@@ -7727,7 +7715,7 @@
           {
             "kind": "definition",
             "line": 249,
-            "name": "\"SI",
+            "name": "SI",
             "source_header": "definition \"SI s = (S s \\<and> (\\<forall>x \\<in> set_of s. I x))\""
           },
           {
@@ -7801,7 +7789,7 @@
       }
     ],
     "theory_count": 35,
-    "unnamed_declaration_occurrence_count": 31
+    "unnamed_declaration_occurrence_count": 18
   },
   "schema_version": 1,
   "upstream": {

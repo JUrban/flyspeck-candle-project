@@ -31,7 +31,7 @@ DECLARATION_RE = re.compile(
     r"inductive_set|locale|class|instantiation|interpretation|sublocale|"
     r"instance|ML|code_[A-Za-z_]+)\b(.*)$"
 )
-NAME_RE = re.compile(r'^\s*(?:"([^" ]+)"|([^\s:\[=(]+))')
+NAME_RE = re.compile(r'^\s*(?:"([^" \t]+)|([^\s":\[=(]+))')
 THEORY_RE = re.compile(
     r"\btheory\s+([^\s]+)\s+imports\s+(.*?)\s+begin\b", re.DOTALL
 )
@@ -69,9 +69,33 @@ def strip_nested_comments(text: str) -> str:
     return "".join(result)
 
 
+def strip_isabelle_cartouches(text: str) -> str:
+    """Remove legacy ``{* ... *}`` document/ML cartouches, retaining lines."""
+    result: list[str] = []
+    index = 0
+    depth = 0
+    while index < len(text):
+        pair = text[index : index + 2]
+        if pair == "{*":
+            depth += 1
+            result.extend("  ")
+            index += 2
+        elif pair == "*}" and depth:
+            depth -= 1
+            result.extend("  ")
+            index += 2
+        else:
+            char = text[index]
+            result.append(char if depth == 0 or char == "\n" else " ")
+            index += 1
+    if depth:
+        raise ValueError("unterminated Isabelle cartouche")
+    return "".join(result)
+
+
 def declaration_inventory(path: str, raw: bytes) -> dict[str, Any]:
     text = raw.decode("utf-8")
-    uncommented = strip_nested_comments(text)
+    uncommented = strip_isabelle_cartouches(strip_nested_comments(text))
     theory_match = THEORY_RE.search(uncommented)
     theory = None
     imports: list[str] = []
@@ -80,8 +104,9 @@ def declaration_inventory(path: str, raw: bytes) -> dict[str, Any]:
         imports = re.findall(r'"([^"]+)"|([^\s]+)', theory_match.group(2))
         imports = [quoted or plain for quoted, plain in imports]
 
+    lines = uncommented.splitlines()
     declarations: list[dict[str, Any]] = []
-    for line_number, line in enumerate(uncommented.splitlines(), 1):
+    for line_number, line in enumerate(lines, 1):
         match = DECLARATION_RE.match(line)
         if not match:
             continue
@@ -92,6 +117,32 @@ def declaration_inventory(path: str, raw: bytes) -> dict[str, Any]:
             candidate = name_match.group(1) or name_match.group(2)
             if candidate not in {"where", "assumes", "shows", "fixes"}:
                 name = candidate
+        if name is None:
+            lookahead = " ".join(lines[line_number - 1 : line_number + 5])
+            if kind == "datatype":
+                inferred = re.search(
+                    r"\bdatatype\s+(?:\([^)]*\)\s*)?([A-Za-z_][A-Za-z0-9_']*)",
+                    lookahead,
+                )
+            elif kind in {
+                "definition",
+                "abbreviation",
+                "primrec",
+                "fun",
+                "function",
+                "typedef",
+                "inductive",
+                "inductive_set",
+            }:
+                inferred = re.search(
+                    r'(?:^|\s|\")([A-Za-z_][A-Za-z0-9_\']*)'
+                    r"\s*(?:::|=|\\<equiv>)",
+                    lookahead,
+                )
+            else:
+                inferred = None
+            if inferred:
+                name = inferred.group(1)
         declarations.append(
             {
                 "kind": kind,
