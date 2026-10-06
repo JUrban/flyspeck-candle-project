@@ -57,6 +57,13 @@ struct TaylorResult {
   IntervalMatrix hessian;
 };
 
+struct PolynomialJet {
+  FirstJet center;
+  Interval box_value;
+  IntervalVector box_gradient;
+  IntervalMatrix box_hessian;
+};
+
 struct Counters {
   std::uint64_t interval_products = 0;
   std::uint64_t completed_results = 0;
@@ -75,6 +82,12 @@ struct InstructionProfile {
   std::size_t stack_after = 0;
   std::size_t sqrt_slot_before = 0;
   std::size_t sqrt_slot_after = 0;
+};
+
+enum class PolynomialMode {
+  kBaseline,
+  kFusedAll,
+  kFusedDeltaX4,
 };
 
 struct Node {
@@ -464,6 +477,67 @@ IntervalMatrix interval_outer(const IntervalVector& left,
                               const IntervalVector& right,
                               Counters& counters) {
   return raw_matrix_round(raw_outer(left, right, counters), kScale);
+}
+
+PolynomialJet polynomial_constant(const Rat& value) {
+  const Interval fixed = interval_constant(value);
+  return {{fixed, zero_vector()}, fixed, zero_vector(), zero_matrix()};
+}
+
+PolynomialJet polynomial_variable(const IntervalVector& center_environment,
+                                  const IntervalVector& box_environment,
+                                  std::size_t variable) {
+  const Interval center = variable < kDimensions
+                              ? center_environment[variable]
+                              : zero_interval();
+  const Interval box = variable < kDimensions
+                           ? box_environment[variable]
+                           : zero_interval();
+  const IntervalVector gradient = unit_vector(variable);
+  return {{center, gradient}, box, gradient, zero_matrix()};
+}
+
+PolynomialJet polynomial_neg(const PolynomialJet& value) {
+  return {{interval_neg(value.center.value),
+           vector_neg(value.center.gradient)},
+          interval_neg(value.box_value),
+          vector_neg(value.box_gradient),
+          matrix_neg(value.box_hessian)};
+}
+
+PolynomialJet polynomial_add(const PolynomialJet& left,
+                             const PolynomialJet& right) {
+  return {{interval_add(left.center.value, right.center.value),
+           vector_add(left.center.gradient, right.center.gradient)},
+          interval_add(left.box_value, right.box_value),
+          vector_add(left.box_gradient, right.box_gradient),
+          matrix_add(left.box_hessian, right.box_hessian)};
+}
+
+PolynomialJet polynomial_mul(const PolynomialJet& left,
+                             const PolynomialJet& right,
+                             Counters& counters) {
+  const FirstJet raw_center = {
+      raw_interval_mul(left.center.value, right.center.value, counters),
+      vector_add(raw_vector_scale(right.center.value, left.center.gradient,
+                                  counters),
+                 raw_vector_scale(left.center.value, right.center.gradient,
+                                  counters))};
+  const Interval raw_box_value =
+      raw_interval_mul(left.box_value, right.box_value, counters);
+  const IntervalVector raw_box_gradient = vector_add(
+      raw_vector_scale(right.box_value, left.box_gradient, counters),
+      raw_vector_scale(left.box_value, right.box_gradient, counters));
+  const IntervalMatrix raw_box_hessian = matrix_add(
+      matrix_add(raw_matrix_scale(right.box_value, left.box_hessian, counters),
+                 raw_outer(left.box_gradient, right.box_gradient, counters)),
+      matrix_add(raw_outer(right.box_gradient, left.box_gradient, counters),
+                 raw_matrix_scale(left.box_value, right.box_hessian, counters)));
+  return {{raw_interval_round(kScale, raw_center.value),
+           raw_vector_round(raw_center.gradient, kScale)},
+          raw_interval_round(kScale, raw_box_value),
+          raw_vector_round(raw_box_gradient, kScale),
+          raw_matrix_round(raw_box_hessian, kScale)};
 }
 
 Integer dot_abs_upper(const IntegerVector& radii,
@@ -898,6 +972,66 @@ TaylorResult evaluate_polynomial(const Program& program,
   return stack.back();
 }
 
+TaylorResult evaluate_polynomial_fused(
+    const Program& program, std::size_t payload,
+    const IntegerVector& radii,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, Counters& counters) {
+  std::vector<PolynomialJet> stack;
+  const std::vector<std::size_t> instructions =
+      decode_list(program, payload, "fused polynomial program");
+  for (const std::size_t instruction_index : instructions) {
+    ++counters.polynomial_steps;
+    const Node& instruction = node_at(program, instruction_index);
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "fused polynomial tag");
+      if (tag == 0) {
+        stack.push_back(polynomial_constant(
+            decode_q(program, instruction.right)));
+      } else if (tag == 1) {
+        const Integer variable = require_numeral(
+            program, instruction.right, "fused polynomial variable");
+        stack.push_back(polynomial_variable(
+            center_environment, box_environment, variable.get_ui()));
+      } else {
+        throw std::runtime_error("unknown fused polynomial pair instruction");
+      }
+      continue;
+    }
+
+    const unsigned long opcode = instruction.numeral.get_ui();
+    if (opcode == 2 || opcode == 5) {
+      if (stack.empty()) {
+        throw std::runtime_error("fused polynomial stack underflow");
+      }
+      PolynomialJet value = stack.back();
+      stack.pop_back();
+      stack.push_back(opcode == 2
+                          ? polynomial_neg(value)
+                          : polynomial_mul(value, value, counters));
+    } else if (opcode == 3 || opcode == 4) {
+      if (stack.size() < 2) {
+        throw std::runtime_error("fused polynomial stack underflow");
+      }
+      PolynomialJet right = stack.back();
+      stack.pop_back();
+      PolynomialJet left = stack.back();
+      stack.pop_back();
+      stack.push_back(opcode == 3
+                          ? polynomial_add(left, right)
+                          : polynomial_mul(left, right, counters));
+    } else {
+      throw std::runtime_error("unknown fused polynomial scalar instruction");
+    }
+  }
+  if (stack.size() != 1) {
+    throw std::runtime_error("fused polynomial result stack drift");
+  }
+  return complete_result(radii, true, stack.back().center,
+                         stack.back().box_hessian, counters);
+}
+
 struct Evaluation {
   Rat upper;
   Counters counters;
@@ -949,13 +1083,17 @@ std::string instruction_label(const Program& program,
 }
 
 Evaluation evaluate_job(const Program& program, const Job& job,
+                        PolynomialMode polynomial_mode,
                         std::vector<InstructionProfile>* profiles) {
   IntervalVector center_environment;
+  IntervalVector box_environment;
   IntegerVector radii;
   for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
     const Rat midpoint = (job.lower[coordinate] + job.upper[coordinate]) / 2;
     const Rat radius = (job.upper[coordinate] - job.lower[coordinate]) / 2;
     center_environment[coordinate] = interval_constant(midpoint);
+    box_environment[coordinate] = interval_of_q(
+        {job.lower[coordinate], job.upper[coordinate]});
     radii[coordinate] = ceil_scaled(radius);
   }
 
@@ -977,8 +1115,19 @@ Evaluation evaluate_job(const Program& program, const Job& job,
     if (instruction.is_pair) {
       const Integer tag = require_numeral(program, instruction.left, "analytic tag");
       if (tag == 0) {
-        stack.push_back(evaluate_polynomial(program, instruction.right, radii,
-                                            center_environment, counters));
+        const std::size_t polynomial_steps = decode_list(
+            program, instruction.right, "polynomial mode selection").size();
+        const bool use_fused_polynomial =
+            polynomial_mode == PolynomialMode::kFusedAll ||
+            (polynomial_mode == PolynomialMode::kFusedDeltaX4 &&
+             polynomial_steps == 39);
+        stack.push_back(use_fused_polynomial
+                            ? evaluate_polynomial_fused(
+                                  program, instruction.right, radii,
+                                  center_environment, box_environment, counters)
+                            : evaluate_polynomial(
+                                  program, instruction.right, radii,
+                                  center_environment, counters));
       } else if (tag == 1) {
         if (sqrt_slot >= kSqrtSlots || stack.empty()) {
           throw std::runtime_error("sqrt slot/stack drift");
@@ -1063,14 +1212,25 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc != 4 && argc != 5) {
+    if (argc < 4 || argc > 6) {
       std::cerr << "usage: " << argv[0]
-                << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv [--profile]\n";
+                << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
+                << " [--profile] [--fused-polynomial|--fused-delta-x4]\n";
       return 2;
     }
-    const bool profile_enabled = argc == 5 && std::string(argv[4]) == "--profile";
-    if (argc == 5 && !profile_enabled) {
-      throw std::runtime_error("unknown optional argument");
+    bool profile_enabled = false;
+    PolynomialMode polynomial_mode = PolynomialMode::kBaseline;
+    for (int index = 4; index < argc; ++index) {
+      const std::string option(argv[index]);
+      if (option == "--profile") {
+        profile_enabled = true;
+      } else if (option == "--fused-polynomial") {
+        polynomial_mode = PolynomialMode::kFusedAll;
+      } else if (option == "--fused-delta-x4") {
+        polynomial_mode = PolynomialMode::kFusedDeltaX4;
+      } else {
+        throw std::runtime_error("unknown optional argument: " + option);
+      }
     }
 
     const auto preparation_begin = std::chrono::steady_clock::now();
@@ -1088,13 +1248,16 @@ int main(int argc, char** argv) {
     std::vector<InstructionProfile> profiles(
         profile_enabled ? program.instructions.size() : 0);
     std::size_t mismatches = 0;
+    std::size_t accepted = 0;
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
       const Evaluation evaluation = evaluate_job(
-          program, jobs[index], profile_enabled ? &profiles : nullptr);
+          program, jobs[index], polynomial_mode,
+          profile_enabled ? &profiles : nullptr);
       results.push_back(evaluation.upper);
       add_counters(total, evaluation.counters);
       if (evaluation.upper != expected[index]) ++mismatches;
+      if (evaluation.upper < 0) ++accepted;
     }
     const auto evaluation_end = std::chrono::steady_clock::now();
 
@@ -1105,8 +1268,15 @@ int main(int argc, char** argv) {
     std::cout << std::setprecision(17);
     std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY"
               << " cells=" << jobs.size()
+              << " mode="
+              << (polynomial_mode == PolynomialMode::kFusedAll
+                      ? "fused-polynomial"
+                      : polynomial_mode == PolynomialMode::kFusedDeltaX4
+                            ? "fused-delta-x4"
+                            : "baseline")
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
+              << " accepted=" << accepted
               << " preparation_seconds=" << preparation_seconds
               << " evaluation_seconds=" << evaluation_seconds
               << " interval_products=" << total.interval_products
@@ -1143,13 +1313,29 @@ int main(int argc, char** argv) {
                 << " index=" << index
                 << " upper=" << results[index].get_str()
                 << " expected=" << expected[index].get_str()
+                << " upper_minus_expected="
+                << Rat(results[index] - expected[index]).get_str()
                 << " match=" << (results[index] == expected[index] ? 1 : 0)
                 << "\n";
     }
-    if (mismatches != 0) {
+    if (polynomial_mode == PolynomialMode::kBaseline && mismatches != 0) {
       std::cerr << "fixed-scale native comparison found " << mismatches
                 << " mismatches\n";
       return 1;
+    }
+    if (polynomial_mode != PolynomialMode::kBaseline &&
+        accepted != jobs.size()) {
+      std::cerr << "optimized polynomial comparison accepted " << accepted
+                << " of " << jobs.size() << " jobs\n";
+      return 1;
+    }
+    if (polynomial_mode == PolynomialMode::kFusedAll) {
+      std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_FUSED_POLYNOMIAL_OK"
+                << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
+    }
+    if (polynomial_mode == PolynomialMode::kFusedDeltaX4) {
+      std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_FUSED_DELTA_X4_OK"
+                << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
     }
     std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_CASE10173_OK"
               << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";

@@ -275,6 +275,48 @@ strengthens the case for the instruction while showing that scalar
 representation, sparse/symmetric derivative machinery, completion strategy,
 and other specialized arithmetic remain first-class architectural targets.
 
+### Fused-polynomial discriminator
+
+A follow-up native prototype tested whether the two dihedral polynomials could
+be evaluated as whole value/gradient/Hessian jets and completed only at their
+block boundaries.  This is a development diagnostic for a possible generally
+proved polynomial instruction, not theorem evidence.
+
+Fusing all 22 polynomial blocks reduced the one-run native time from roughly
+0.88 seconds to 0.669 seconds and reduced completed Taylor results from 26,624
+to 6,912.  It was rejected: naïve whole-box interval differentiation widened
+the final bound enough that only **122 / 128** genuine cells remained accepted.
+The failed result is preserved with SHA-256
+`9ce5ffb8c29285ee0221a707c9b79653609d0b488bd2a5367e3da2d78cbc1336`.
+This is direct evidence that reducing arithmetic work without preserving the
+established centered enclosure quality is not a viable optimization.
+
+The constrained variant fuses only the 39-step `delta_x4` block.  Its Hessian
+is constant, so the block can avoid 38 intermediate completions per cell
+without losing the established enclosure.  It reproduced all **128 / 128**
+final upper bounds exactly and retained all certificate acceptance.  Across
+seven alternating warm repetitions:
+
+| Exact-native lane | Mean evaluation time |
+|---|---:|
+| Established fixed-scale program | 0.858544 s |
+| Fused `delta_x4` block | 0.809125 s |
+
+That is a **5.76%** reduction or **1.061-times** speedup.  The required
+completions fell from 26,624 to 21,760, while semantic interval products rose
+slightly from 995,840 to 1,005,824 because the fused box jet carries its value
+and gradient directly.  The paired timing table has SHA-256
+`605d144c67d41c96d44c29105a68334eb87f076c5ff6d38188256171d46e4dd0`;
+the seven-pair run, including compilation, took 15.350 seconds.
+
+This exact positive result is too small to justify interrupting the larger
+architecture work for a new proof layer by itself.  It does identify a safe
+component for a future specialized dihedral instruction.  The next numerical
+prototype must address the difficult 85-step `4*x1*delta_x` block with a tight
+specialized Hessian enclosure, rather than using its rejected natural interval
+extension.  The previously proved lazy polynomial evaluator remains the
+preferred general optimization where exact established results are required.
+
 This closes the ambiguity left by the first native comparison.  Extra generic
 mathematical work explains the historical C++ subdivision explosion, but it
 does **not** explain Candle's remaining recurring cost on these certificate
@@ -352,6 +394,8 @@ The isolated development sources now include:
 - a proved canonical signed-product discriminator and matched baseline driver;
 - an exact-native per-instruction profiler identifying the generic dihedral
   subgraph's measured share;
+- rejected whole-program and exact `delta_x4`-only fused-polynomial
+  discriminators with a seven-pair timing driver;
 - a native C++ driver evaluating specialized and generic formulations on the
   exported boxes; and
 - repeatable drivers that preserve inputs, logs, phase profiles, timings, and
