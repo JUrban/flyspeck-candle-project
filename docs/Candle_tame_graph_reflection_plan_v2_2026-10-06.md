@@ -148,6 +148,30 @@ The following work remains valid under v2:
 The current data layer does not yet prove canonical ordering, graph
 isomorphism, archive binding, enumeration completeness, or any S4 theorem.
 
+## Near-term executable-enumeration milestone
+
+Execution feasibility is tested in parallel with the proof ledger rather than
+waiting for every pruning and classification obligation to close.  The first
+decision-bearing benchmark will faithfully preserve the AFP graph/state
+representation, successor generation, pruning decisions, and deterministic
+worklist order.  It will:
+
+1. complete the smallest final-constant partition (`p = 0`);
+2. execute a fixed representative bounded prefix of the dominant `p = 2`
+   partition;
+3. compare visited/pruned/final counts and result-graph identities against the
+   independently instrumented Isabelle run; and
+4. report cold preparation, encoding/program construction, evaluator work,
+   theorem handoff, required repeats, retained state/checkpoint size, peak
+   memory, and total elapsed cost.
+
+An ordinary ML implementation may be used as a differential stepping stone,
+but it is not the feasibility result and has no proof authority.  The key
+measurement must run the intended representation and algorithm through
+`Kernel.compute`.  A matching development run is still DEVELOPMENT /
+NON-RELEASE evidence until the general refinement, invariant, pruning, and
+coverage theorems close.
+
 ## Corrected trusted architecture
 
 ```text
@@ -485,10 +509,14 @@ The next tame-graph packet is:
 
 1. generate the named-premise `covers` skeleton and weighted proof ledger;
 2. revise the parameter-0 implementation contract to replay plus leaf hints;
-3. extend the existing data layer through exact explicit-map correctness;
-4. bind the archive representation to `tame_archive_lists`;
-5. add final-constant reference instrumentation; and
-6. define the bounded representative `p = 2` fixture.
+3. add final-constant reference instrumentation and freeze its differential
+   counts/graph identities;
+4. implement the faithful executable enumerator and obtain an initial
+   `Kernel.compute` seed/successor measurement;
+5. complete the `p = 0` and bounded representative `p = 2` development
+   benchmarks with the full cost decomposition;
+6. extend the existing data layer through exact explicit-map correctness; and
+7. bind the archive representation to `tame_archive_lists`.
 
 Do not build a whole-tree witness certificate, prove non-final isomorphism
 quotienting, port tries/worklists only to mimic `samet`, or start a large
