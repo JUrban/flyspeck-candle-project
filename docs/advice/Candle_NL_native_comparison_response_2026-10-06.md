@@ -353,12 +353,14 @@ authority.
 ### First `Kernel.compute` specialization result
 
 The bounded specialization has now also run through the intended encoded
-evaluator on the same 128 genuine boxes.  Its temporary development dispatcher
-selects the authentic 85-step polynomial by length; that dispatcher is
-deliberately non-authoritative and must be replaced by exact authenticated
-compiled-program identity before proof integration.  The numerical operation
-it selects is the centered direct `4*x1*delta_x` jet above.  The established
-39-step `delta_x4` block remains on the generic path in this first Candle test.
+evaluator on the same 128 genuine boxes.  The first run selected the authentic
+85-step polynomial by length.  A second run replaced that temporary condition:
+the prepared source supplies the exact compiled polynomial payload and both
+patched programs must match it structurally before the specialized operation
+is selected.  A formal preparation-to-source theorem is still required before
+proof integration.  The numerical operation is the centered direct
+`4*x1*delta_x` jet above.  The established 39-step `delta_x4` block remains on
+the generic path in these first Candle tests.
 
 The candidate reproduced all **128 / 128 final upper bounds exactly**, retained
 all certificate acceptance, introduced no assumptions, and caused no axiom
@@ -373,10 +375,13 @@ This first matched run is a **32.26% evaluator-time reduction** or
 **1.476-times speedup**.  The timing table has SHA-256
 `a43a2281c55b4d70ed0f0055da2426cbfa75bd497424d3921cb91c7c9219c076`.
 The preserved run is
-`cv-case10173-angle-polynomials-prefix128-v2-dev-001`.  A paired repetition is
-still appropriate before treating the precise percentage as stable, but exact
-output and full 128-box coverage already clear the bounded Candle numerical
-gate.
+`cv-case10173-angle-polynomials-prefix128-v2-dev-001`.  The exact-payload rerun
+also matched all 128 outputs and took 12.7172 seconds versus 8.5971 seconds, a
+**1.479-times** speedup; its timing table has SHA-256
+`b59e8c33010d0606d1a2b7ba9dfcb29fbc0185822e81c088a30efd5f2484697b`.
+The agreement between the two runs makes the approximate 1.48-times result a
+useful gate, although a longer alternating series would still be needed for a
+high-precision performance claim.
 
 This result must not collapse the two performance questions into one.  The
 rough **15-times** gap from exact-output-matched native fixed-scale execution to
