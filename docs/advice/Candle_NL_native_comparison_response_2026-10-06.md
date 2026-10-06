@@ -225,6 +225,16 @@ figures are deliberately not turned into a ratio: the native measurement
 starts from an exported representation whereas Candle constructs its internal
 encoded jobs.
 
+A second, larger gap must remain visible alongside that evaluator ratio.  The
+exact-native fixed-scale batch costs 0.006856 seconds per cell, whereas the
+historical specialized C++ lane costs 0.00002009 seconds per cell over all
+4,173 boxes.  The throughput-normalized ratio is therefore about **341
+times**.  This comparison is not exact-output matched across arithmetic
+representations, but it measures a much larger architectural opportunity than
+the Candle/native gap: the current fixed-scale equations do substantially more
+arithmetic work per box than the specialized numerical algorithm even though
+their final enclosure quality is close on this certificate.
+
 The native operation ledger recorded 995,840 interval products, 26,624
 completed centered results, 22,528 polynomial steps, 6,912 outer-product
 steps, 896 square-root steps, 128 inverse steps, and 128 arctangent steps.  The
@@ -242,7 +252,10 @@ mathematical work explains the historical C++ subdivision explosion, but it
 does **not** explain Candle's remaining recurring cost on these certificate
 boxes.  The current reflected equations produce specialized-quality bounds;
 executing those same equations through the current encoded representation is
-the large measured gap.
+one large measured gap.  Producing those bounds with the current dense,
+generic fixed-scale algorithm rather than specialized arithmetic is the other,
+substantially larger measured throughput gap.  Good enclosure quality does
+not imply comparable work per box.
 
 The exact-native result is an untrusted performance diagnostic, not theorem
 evidence.  Its usefulness comes from exact cross-checking against the closed
@@ -250,22 +263,51 @@ Candle computation result, not from trusting the C++ implementation.  The
 native result file has SHA-256
 `f4dfbf401e0e7b81ca465ddda1332ace10048d1eca8f5b5a1853f24c66b219fc`.
 
-## Updated implementation choice
+## Compact-product result and updated implementation choice
 
-The next bounded checker experiment should attack the high-multiplicity
-encoded interval/signed-integer boundary while preserving the exact 128
-outputs and complete-program acceptance.  It must use a mechanism materially
-different from the already unsuccessful source-level endpoint-product and
-`let` sharing attempts; merely spelling the same products once in the encoded
-term is not justified by this result.  A compact proved primitive or a
-representation-level signed product that avoids pair expansion is the most
-direct discriminator.
+The bounded compact signed-product experiment is also complete.  Four
+constructor-specific user equations would express the desired operation most
+directly, but `Kernel.compute` rejected them because its user-equation contract
+requires variable arguments.  A HOL conditional implementation was then
+proved equal to the existing product but rejected because user-equation
+right-hand sides must remain in the cexp language.  Both failures occurred
+before computation and are preserved.
+
+The accepted candidate stays inside that contract.  It redirects the existing
+raw product to a generally proved cexp function: canonical signed operands use
+one natural multiplication, while noncanonical values use the unchanged
+four-product formula.  The redirect replaces exactly one equation by identity,
+leaves every public function and theorem interface unchanged, and retains the
+original rule as a semantic fallback.
+
+On the same 128 genuine boxes it reproduced the baseline theorem result
+exactly, with no assumptions and no axiom growth, but it was slower:
+
+| Matched `Kernel.compute` lane | Time |
+|---|---:|
+| Existing fixed-scale equations | 13.3351 s |
+| Proved canonical-product redirect | 17.4195 s |
+
+The candidate is **1.306 times slower** (30.6%) and must not be integrated.
+This is consistent with the verified evaluator's call-by-value cexp boundary:
+expressing the sign dispatch with ordinary cexp operations does not create the
+cheap constructor dispatch that the native implementation uses.  It also
+confirms that repeating the prior source-level sharing strategy in another
+surface form is not the route to the 14.81-times gap.  A truly compact signed
+primitive would require an intentional change to the fixed `Kernel.compute`
+primitive contract and its verified implementation; that is no longer the
+next bounded NL experiment.
 
 A specialized dihedral instruction remains attractive because it can remove a
 large generic instruction subgraph, but the measured justification is now
-reduced work per box, not expected certificate shrinkage.  It is the next
-architectural candidate if the compact interval primitive cannot remove a
-substantial fraction of the 14.81-times gap.  Either prototype must compare
+reduced work per box, not expected certificate shrinkage.  The approximately
+341-times native fixed-scale/specialized throughput gap makes this an
+independent architectural target rather than merely a fallback after compact
+encoded multiplication.  The next bounded prototype should therefore add a
+reusable specialized dihedral operation to the universal instruction invariant
+and measure it on these same boxes.  It should first be exercised as a
+numerical development path, then receive the general correctness theorem if
+the complete-program result is promising.  It must compare
 complete-program time and preserve the present bounds or at least all current
 certificate acceptance.  The sparse-coordinate square-root idea remains
 secondary: the prior complete-program profile did not show an exceptional
@@ -279,6 +321,7 @@ The isolated development sources now include:
 - a Candle exporter for all exact case-10173 certificate boxes;
 - a Candle `Kernel.compute` diagnostic returning the exact current-checker
   upper bound for the first 128 boxes;
+- a proved canonical signed-product discriminator and matched baseline driver;
 - a native C++ driver evaluating specialized and generic formulations on the
   exported boxes; and
 - repeatable drivers that preserve inputs, logs, phase profiles, timings, and
@@ -292,8 +335,9 @@ result projection, and missing standard `LET_END_DEF` normalization.  The final
 drivers handle the prompt explicitly and reuse the production certified-check
 pair and equation normalization without changing any checker equation.
 
-No specialized numerical instruction should be proved or integrated merely
-from the audit's static operation count.  The matched evidence now supports an
-exact-native fixed-scale discriminator first, followed by a specialized
-instruction only if it reduces complete-program recurring cost without losing
-the already strong bound quality.
+No specialized numerical instruction should be integrated merely from the
+audit's static operation count.  The exact-native and compact-product results
+now justify a bounded specialized-dihedral prototype on matched data.  General
+proof integration should follow only if that prototype reduces complete-
+program recurring cost without losing the already strong bound quality or
+certificate coverage.
