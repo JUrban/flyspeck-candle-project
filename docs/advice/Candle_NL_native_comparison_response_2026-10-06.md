@@ -496,3 +496,121 @@ and exact Candle specialization results now justify the general containment
 proof and authenticated instruction dispatch.  The proof work must retain the
 generic proved path for every unrecognized polynomial and preserve the two
 performance gaps as separate architectural targets.
+
+## Arithmetic/algorithm separation after the angle specialization
+
+Three further native experiments use the same 128 genuine case-10173 boxes.
+They preserve complete-program acceptance and charge parsing/preparation
+separately from evaluation.  These are untrusted development discriminators,
+not theorem evidence.
+
+First, changing only the fixed-point scale from decimal `10^12` to the nearby
+dyadic `2^40` did not help.  In 21 warmed, order-balanced pairs, decimal took
+0.523792441 seconds and dyadic took 0.525304832 seconds.  The dyadic lane was
+0.29% slower, with all 128 cells accepted.  It produced 78 tighter and 50
+wider upper bounds, with maximum widening about `2.34e-10`.  Thus denominator
+choice and power-of-two rounding alone do not explain the remaining gap.
+The paired phase table has SHA-256
+`89e730697f89b389c0b7b10accb04f4e645647c51d945a948a64189baf8a62fc`.
+
+Second, keeping the decimal scale and numerical algorithm fixed while
+replacing dynamically sized GMP interval endpoints by Boost's fixed-width
+`int256_t` was decisive.  In 21 warmed, order-balanced pairs:
+
+| Exact native endpoint backend | Mean evaluation time |
+|---|---:|
+| GMP `mpz_class` | 0.532914630 s |
+| Fixed-width 256-bit integer | 0.172964497 s |
+
+This is a **3.081-times** speedup and a **67.54%** reduction.  Every one of the
+128 final upper bounds matched exactly, and every cell remained accepted.
+The paired phase table has SHA-256
+`3ec46c832c154cac7f63f898a99b4eab0d9879f9123bb59cc2503af7cef9d844`.
+An attempted signed 128-bit backend failed with arithmetic overflow, observed
+as an invalid square-root domain.  Fixed-width 256-bit arithmetic is therefore
+only a useful prototype: a production checker must prove a sufficient range
+bound or check overflow explicitly.  Exact fixture output is evidence that no
+overflow was observed here, not a general range proof.
+
+A profile of the fixed-256 centered-angle lane attributes approximately 52.25%
+of time to polynomial evaluation, 19.67% to square roots, 13.09% to outer
+products, 5.50% to arctangent, 3.43% to inverse, and 6.07% to the remaining
+linear stack operations.  Fusing every polynomial block of at most six steps
+preserved all final outputs but improved one representative run by only about
+4%; it is not a large-gap route.
+
+Third, holding the fixed-256 arithmetic and centered angle specialization
+fixed, the native driver directly evaluated the source `delta_x4` value,
+gradient, and constant Hessian instead of interpreting its 39 scalar
+polynomial steps.  In 21 warmed, order-balanced pairs:
+
+| Fixed-256 centered-angle lane | Mean evaluation time |
+|---|---:|
+| Interpreted `delta_x4` polynomial | 0.170087603 s |
+| Direct `delta_x4` jet | 0.143338840 s |
+
+This is a further **1.187-times** speedup and a **15.73%** reduction.  All 128
+cells remained accepted.  The direct lane produced tighter bounds for all 128
+cells rather than reproducing the current final upper bounds exactly; even the
+least tightening was about 0.436.  Therefore it is not ready for formal use
+until the exact source identity and the general centered-jet containment
+theorem are established.  The paired phase table has SHA-256
+`0e84aa4971f4d8062446f2282fdf5d0d374d0ac0e8699ccd7aa44130daebd0c2`.
+It reduced semantic interval products from 694,272 to 564,480 and interpreted
+polynomial steps from 11,648 to 6,656.
+
+These results keep the performance layers explicit.  Relative to the
+historical specialized-C++ per-cell time, the original exact native
+fixed-scale lane was about **341 times** slower, the centered-angle GMP lane
+about **207 times** slower, the centered-angle fixed-256 lane about **67
+times** slower, and the direct-`delta_x4` fixed-256 lane about **56 times**
+slower.  Separately, executing the exact-output-matched original equations in
+`Kernel.compute` was about **15 times** slower than executing them in native
+C++.  Fixed-width arithmetic substantially reduces the much larger native
+algorithm/arithmetic gap, but it does not remove it and says nothing yet about
+the encoded-evaluator gap.
+
+### Bounded proof work and the larger-gap plan
+
+The current Candle angle-specialization proof is deliberately bounded.  It
+will establish the reusable logical representation and containment theorem,
+plus authenticated exact-payload dispatch with fallback to the generic proved
+path.  It will not grow into a collection of fixture-specific arithmetic
+proofs merely because the first instruction passed its benchmark.
+
+The next cheap native discriminator should hold the now-promising fixed-256
+arithmetic constant while replacing the dense generic value/gradient/Hessian
+interpreter with a compiled sparse symmetric-jet plan.  The plan should carry
+coordinate dependency masks, store only used gradient and symmetric Hessian
+entries, and use direct instructions for the recurring low-degree source
+families.  Running that plan over the same genuine boxes separates generic
+derivative/Taylor work from arithmetic representation without changing both
+at once.  A specialized complete-dihedral instruction is the next candidate
+only after the sparse-plan result identifies how much generic machinery
+remains.
+
+The staged route is:
+
+1. keep the present representation/dispatch proof bounded and retain generic
+   fallback;
+2. prototype a checked-overflow or statically range-bounded 256-bit logical
+   arithmetic backend, then measure its encoded form before considering a new
+   evaluator primitive;
+3. compile authenticated expressions to sparse symmetric-jet plans and test
+   exact containment and complete-certificate acceptance in native code;
+4. add generally useful source operations such as `delta_x`, `delta_x4`,
+   `ups_x`, coordinate square root, and complete dihedral only when an
+   end-to-end batch benchmark justifies them;
+5. gate architecture choices on the complete 4,173-box certificate, charging
+   reusable preparation once and recording acceptance, elapsed time, peak
+   memory, and required subdivisions; and
+6. formalize one general sparse-jet/Taylor soundness theorem and a checked
+   expression-to-plan correspondence, rather than per-expression calculus
+   proofs.
+
+An outward-rounded hardware floating-point lane may provide a useful lower
+bound on attainable numerical time, but it is secondary to the exact
+fixed-width/sparse-plan discriminator because changing representation,
+rounding, and algorithm simultaneously would not identify which improvement
+matters.  The deciding result remains total accepted-certificate throughput,
+with preparation and theorem handoff visible and amortized honestly.

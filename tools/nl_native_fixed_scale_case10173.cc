@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cctype>
@@ -13,17 +14,32 @@
 #include <string>
 #include <vector>
 
+#ifdef CANDLE_NL_FIXED_INT256
+#include <boost/multiprecision/cpp_int.hpp>
+#endif
 #include <gmpxx.h>
 
 namespace {
 
 constexpr std::size_t kDimensions = 6;
 constexpr std::size_t kSqrtSlots = 7;
-const mpz_class kScale("1000000000000");
-const mpz_class kTwoScaleSquared = 2 * kScale * kScale;
 
 using Rat = mpq_class;
 using Integer = mpz_class;
+#if defined(CANDLE_NL_FIXED_INT128)
+using Fixed = __int128;
+Fixed kScale = static_cast<Fixed>(1000000000000LL);
+constexpr const char* kFixedBackend = "int128";
+#elif defined(CANDLE_NL_FIXED_INT256)
+using Fixed = boost::multiprecision::int256_t;
+Fixed kScale = static_cast<Fixed>(1000000000000LL);
+constexpr const char* kFixedBackend = "fixed-int256";
+#else
+using Fixed = mpz_class;
+Fixed kScale("1000000000000");
+constexpr const char* kFixedBackend = "mpz";
+#endif
+Fixed kTwoScaleSquared = 2 * kScale * kScale;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -32,8 +48,8 @@ Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
 }
 
 struct Interval {
-  Integer lower;
-  Integer upper;
+  Fixed lower;
+  Fixed upper;
 };
 
 struct RationalInterval {
@@ -43,7 +59,7 @@ struct RationalInterval {
 
 using IntervalVector = std::array<Interval, kDimensions>;
 using IntervalMatrix = std::array<IntervalVector, kDimensions>;
-using IntegerVector = std::array<Integer, kDimensions>;
+using IntegerVector = std::array<Fixed, kDimensions>;
 
 struct FirstJet {
   Interval value;
@@ -298,15 +314,105 @@ Integer ceil_quotient(const Integer& numerator, const Integer& denominator) {
   return result;
 }
 
-Integer floor_scaled(const Rat& value) {
-  return floor_quotient(value.get_num() * kScale, value.get_den());
+#if defined(CANDLE_NL_FIXED_INT128)
+std::string fixed_string(Fixed value) {
+  if (value == 0) return "0";
+  const bool negative = value < 0;
+  unsigned __int128 magnitude = negative
+      ? static_cast<unsigned __int128>(-(value + 1)) + 1
+      : static_cast<unsigned __int128>(value);
+  std::string result;
+  while (magnitude != 0) {
+    result.push_back(static_cast<char>('0' + magnitude % 10));
+    magnitude /= 10;
+  }
+  if (negative) result.push_back('-');
+  std::reverse(result.begin(), result.end());
+  return result;
 }
 
-Integer ceil_scaled(const Rat& value) {
-  return ceil_quotient(value.get_num() * kScale, value.get_den());
+Integer integer_of_fixed(Fixed value) { return Integer(fixed_string(value)); }
+
+Fixed fixed_of_integer(const Integer& value) {
+  const std::string text = value.get_str();
+  const bool negative = !text.empty() && text[0] == '-';
+  const std::size_t begin = negative ? 1 : 0;
+  const unsigned __int128 positive_limit =
+      (~static_cast<unsigned __int128>(0)) >> 1;
+  const unsigned __int128 limit =
+      negative ? positive_limit + 1 : positive_limit;
+  unsigned __int128 magnitude = 0;
+  for (std::size_t index = begin; index < text.size(); ++index) {
+    const unsigned digit = static_cast<unsigned>(text[index] - '0');
+    if (magnitude > (limit - digit) / 10) {
+      throw std::overflow_error("fixed int128 conversion overflow");
+    }
+    magnitude = magnitude * 10 + digit;
+  }
+  if (!negative) return static_cast<Fixed>(magnitude);
+  if (magnitude == positive_limit + 1) {
+    return -static_cast<Fixed>(positive_limit) - 1;
+  }
+  return -static_cast<Fixed>(magnitude);
 }
 
-Integer absolute(const Integer& value) { return value < 0 ? -value : value; }
+Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
+  Fixed quotient = numerator / denominator;
+  const Fixed remainder = numerator % denominator;
+  if (remainder != 0 && ((remainder < 0) != (denominator < 0))) --quotient;
+  return quotient;
+}
+
+Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
+  Fixed quotient = numerator / denominator;
+  const Fixed remainder = numerator % denominator;
+  if (remainder != 0 && ((remainder < 0) == (denominator < 0))) ++quotient;
+  return quotient;
+}
+#elif defined(CANDLE_NL_FIXED_INT256)
+Integer integer_of_fixed(const Fixed& value) {
+  return Integer(value.convert_to<std::string>());
+}
+
+Fixed fixed_of_integer(const Integer& value) {
+  return Fixed(value.get_str());
+}
+
+Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
+  Fixed quotient = numerator / denominator;
+  const Fixed remainder = numerator % denominator;
+  if (remainder != 0 && ((remainder < 0) != (denominator < 0))) --quotient;
+  return quotient;
+}
+
+Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
+  Fixed quotient = numerator / denominator;
+  const Fixed remainder = numerator % denominator;
+  if (remainder != 0 && ((remainder < 0) == (denominator < 0))) ++quotient;
+  return quotient;
+}
+#else
+Integer integer_of_fixed(const Fixed& value) { return value; }
+Fixed fixed_of_integer(const Integer& value) { return value; }
+Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
+  return floor_quotient(numerator, denominator);
+}
+Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
+  return ceil_quotient(numerator, denominator);
+}
+#endif
+
+Fixed floor_scaled(const Rat& value) {
+  return fixed_of_integer(floor_quotient(
+      value.get_num() * integer_of_fixed(kScale), value.get_den()));
+}
+
+Fixed ceil_scaled(const Rat& value) {
+  return fixed_of_integer(ceil_quotient(
+      value.get_num() * integer_of_fixed(kScale), value.get_den()));
+}
+
+Fixed absolute(const Fixed& value) { return value < 0 ? -value : value; }
 
 Interval zero_interval() { return {0, 0}; }
 
@@ -344,25 +450,25 @@ Interval interval_sum(std::initializer_list<Interval> values) {
 Interval raw_interval_mul(const Interval& left, const Interval& right,
                           Counters& counters) {
   ++counters.interval_products;
-  const Integer ll = left.lower * right.lower;
-  const Integer lu = left.lower * right.upper;
-  const Integer ul = left.upper * right.lower;
-  const Integer uu = left.upper * right.upper;
-  Integer lower = ll;
+  const Fixed ll = left.lower * right.lower;
+  const Fixed lu = left.lower * right.upper;
+  const Fixed ul = left.upper * right.lower;
+  const Fixed uu = left.upper * right.upper;
+  Fixed lower = ll;
   if (lu < lower) lower = lu;
   if (ul < lower) lower = ul;
   if (uu < lower) lower = uu;
-  Integer upper = ll;
+  Fixed upper = ll;
   if (lu > upper) upper = lu;
   if (ul > upper) upper = ul;
   if (uu > upper) upper = uu;
   return {lower, upper};
 }
 
-Interval raw_interval_round(const Integer& denominator,
+Interval raw_interval_round(const Fixed& denominator,
                             const Interval& value) {
-  return {floor_quotient(value.lower, denominator),
-          ceil_quotient(value.upper, denominator)};
+  return {floor_fixed_quotient(value.lower, denominator),
+          ceil_fixed_quotient(value.upper, denominator)};
 }
 
 Interval interval_mul(const Interval& left, const Interval& right,
@@ -370,9 +476,9 @@ Interval interval_mul(const Interval& left, const Interval& right,
   return raw_interval_round(kScale, raw_interval_mul(left, right, counters));
 }
 
-Integer interval_abs_upper(const Interval& value) {
-  const Integer lower = absolute(value.lower);
-  const Integer upper = absolute(value.upper);
+Fixed interval_abs_upper(const Interval& value) {
+  const Fixed lower = absolute(value.lower);
+  const Fixed upper = absolute(value.upper);
   return lower > upper ? lower : upper;
 }
 
@@ -459,7 +565,7 @@ IntervalMatrix raw_outer(const IntervalVector& left,
 }
 
 IntervalVector raw_vector_round(const IntervalVector& value,
-                                const Integer& denominator) {
+                                const Fixed& denominator) {
   IntervalVector result;
   for (std::size_t i = 0; i < kDimensions; ++i) {
     result[i] = raw_interval_round(denominator, value[i]);
@@ -468,7 +574,7 @@ IntervalVector raw_vector_round(const IntervalVector& value,
 }
 
 IntervalMatrix raw_matrix_round(const IntervalMatrix& value,
-                                const Integer& denominator) {
+                                const Fixed& denominator) {
   IntervalMatrix result;
   for (std::size_t i = 0; i < kDimensions; ++i) {
     result[i] = raw_vector_round(value[i], denominator);
@@ -555,18 +661,18 @@ PolynomialJet polynomial_mul(const PolynomialJet& left,
           raw_matrix_round(raw_box_hessian, kScale)};
 }
 
-Integer dot_abs_upper(const IntegerVector& radii,
-                      const IntervalVector& row) {
-  Integer result = 0;
+Fixed dot_abs_upper(const IntegerVector& radii,
+                    const IntervalVector& row) {
+  Fixed result = 0;
   for (std::size_t i = 0; i < kDimensions; ++i) {
     result += radii[i] * interval_abs_upper(row[i]);
   }
   return result;
 }
 
-Integer weighted_rows_abs_upper(const IntegerVector& radii,
-                                const IntervalMatrix& matrix) {
-  Integer result = 0;
+Fixed weighted_rows_abs_upper(const IntegerVector& radii,
+                              const IntervalMatrix& matrix) {
+  Fixed result = 0;
   for (std::size_t i = 0; i < kDimensions; ++i) {
     result += radii[i] * dot_abs_upper(radii, matrix[i]);
   }
@@ -578,16 +684,16 @@ TaylorResult complete_result(const IntegerVector& radii, bool domain,
                              const IntervalMatrix& hessian,
                              Counters& counters) {
   ++counters.completed_results;
-  const Integer linear = dot_abs_upper(radii, center.gradient);
-  const Integer quadratic = weighted_rows_abs_upper(radii, hessian);
-  const Integer error = 2 * kScale * linear + quadratic;
+  const Fixed linear = dot_abs_upper(radii, center.gradient);
+  const Fixed quadratic = weighted_rows_abs_upper(radii, hessian);
+  const Fixed error = 2 * kScale * linear + quadratic;
   const Interval raw_value = {
       kTwoScaleSquared * center.value.lower - error,
       kTwoScaleSquared * center.value.upper + error};
 
   IntervalVector gradient_bounds;
   for (std::size_t i = 0; i < kDimensions; ++i) {
-    const Integer variation = dot_abs_upper(radii, hessian[i]);
+    const Fixed variation = dot_abs_upper(radii, hessian[i]);
     gradient_bounds[i] = raw_interval_round(
         kScale, {kScale * center.gradient[i].lower - variation,
                  kScale * center.gradient[i].upper + variation});
@@ -667,8 +773,9 @@ TaylorResult result_mul(const IntegerVector& radii,
 }
 
 RationalInterval fixed_to_q(const Interval& value) {
-  return {normalized_rat(value.lower, kScale),
-          normalized_rat(value.upper, kScale)};
+  const Integer scale = integer_of_fixed(kScale);
+  return {normalized_rat(integer_of_fixed(value.lower), scale),
+          normalized_rat(integer_of_fixed(value.upper), scale)};
 }
 
 RationalInterval rational_interval_neg(const RationalInterval& value) {
@@ -1155,6 +1262,62 @@ IntervalMatrix delta_hessian(const IntervalVector& x) {
   return hessian;
 }
 
+Interval delta_x4_value(const IntervalVector& x, Counters& counters) {
+  const Interval linear = interval_sum({
+      interval_neg(x[0]), x[1], x[2], interval_neg(x[3]), x[4], x[5]});
+  return interval_sum({
+      interval_neg(interval_mul(x[1], x[2], counters)),
+      interval_neg(interval_mul(x[0], x[3], counters)),
+      interval_mul(x[1], x[4], counters),
+      interval_mul(x[2], x[5], counters),
+      interval_neg(interval_mul(x[4], x[5], counters)),
+      interval_mul(x[0], linear, counters)});
+}
+
+IntervalVector delta_x4_gradient(const IntervalVector& x) {
+  IntervalVector gradient;
+  gradient[0] = interval_sum({
+      interval_integer_scale(-2, x[0]), x[1], x[2],
+      interval_integer_scale(-2, x[3]), x[4], x[5]});
+  gradient[1] = interval_sum({x[0], interval_neg(x[2]), x[4]});
+  gradient[2] = interval_sum({x[0], interval_neg(x[1]), x[5]});
+  gradient[3] = interval_integer_scale(-2, x[0]);
+  gradient[4] = interval_sum({x[0], x[1], interval_neg(x[5])});
+  gradient[5] = interval_sum({x[0], x[2], interval_neg(x[4])});
+  return gradient;
+}
+
+IntervalMatrix delta_x4_hessian() {
+  IntervalMatrix hessian = zero_matrix();
+  const Interval one = one_interval();
+  const auto set_symmetric = [&hessian](std::size_t row,
+                                        std::size_t column,
+                                        const Interval& value) {
+    hessian[row][column] = value;
+    hessian[column][row] = value;
+  };
+  set_symmetric(0, 0, interval_integer_scale(-2, one));
+  set_symmetric(0, 1, one);
+  set_symmetric(0, 2, one);
+  set_symmetric(0, 3, interval_integer_scale(-2, one));
+  set_symmetric(0, 4, one);
+  set_symmetric(0, 5, one);
+  set_symmetric(1, 2, interval_neg(one));
+  set_symmetric(1, 4, one);
+  set_symmetric(2, 5, one);
+  set_symmetric(4, 5, interval_neg(one));
+  return hessian;
+}
+
+TaylorResult evaluate_delta_x4_specialized(
+    const IntegerVector& radii,
+    const IntervalVector& center_environment, Counters& counters) {
+  const FirstJet center = {
+      delta_x4_value(center_environment, counters),
+      delta_x4_gradient(center_environment)};
+  return complete_result(radii, true, center, delta_x4_hessian(), counters);
+}
+
 TaylorResult evaluate_four_x1_delta_specialized(
     const IntegerVector& radii,
     const IntervalVector& center_environment,
@@ -1165,7 +1328,7 @@ TaylorResult evaluate_four_x1_delta_specialized(
   const IntervalMatrix box_delta_hessian = delta_hessian(box_environment);
   IntervalVector box_delta_gradient;
   for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
-    const Integer variation = dot_abs_upper(
+    const Fixed variation = dot_abs_upper(
         radii, box_delta_hessian[coordinate]);
     box_delta_gradient[coordinate] = raw_interval_round(
         kScale,
@@ -1252,6 +1415,9 @@ std::string instruction_label(const Program& program,
 
 Evaluation evaluate_job(const Program& program, const Job& job,
                         PolynomialMode polynomial_mode,
+                        int fused_polynomial_outer_index,
+                        int fused_polynomial_max_steps,
+                        bool direct_delta_x4,
                         std::vector<InstructionProfile>* profiles) {
   IntervalVector center_environment;
   IntervalVector box_environment;
@@ -1289,8 +1455,15 @@ Evaluation evaluate_job(const Program& program, const Job& job,
             polynomial_mode == PolynomialMode::kFusedAll ||
             ((polynomial_mode == PolynomialMode::kFusedDeltaX4 ||
               polynomial_mode == PolynomialMode::kSpecializedAngle) &&
-             polynomial_steps == 39);
-        if (polynomial_mode == PolynomialMode::kSpecializedAngle &&
+             polynomial_steps == 39) ||
+            static_cast<int>(outer_index) == fused_polynomial_outer_index ||
+            (fused_polynomial_max_steps >= 0 &&
+             polynomial_steps <=
+                 static_cast<std::size_t>(fused_polynomial_max_steps));
+        if (direct_delta_x4 && polynomial_steps == 39) {
+          stack.push_back(evaluate_delta_x4_specialized(
+              radii, center_environment, counters));
+        } else if (polynomial_mode == PolynomialMode::kSpecializedAngle &&
             polynomial_steps == 85) {
           stack.push_back(evaluate_four_x1_delta_specialized(
               radii, center_environment, box_environment, counters));
@@ -1365,7 +1538,9 @@ Evaluation evaluate_job(const Program& program, const Job& job,
   if (sqrt_slot != kSqrtSlots || stack.size() != 1 || !stack.back().domain) {
     throw std::runtime_error("final analytic result shape/domain drift");
   }
-  return {normalized_rat(stack.back().value_bound.upper, kScale), counters};
+  return {normalized_rat(integer_of_fixed(stack.back().value_bound.upper),
+                         integer_of_fixed(kScale)),
+          counters};
 }
 
 std::vector<Rat> read_expected_bounds(const char* path) {
@@ -1387,15 +1562,23 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 6) {
+    if (argc < 4 || argc > 9) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
                 << " [--fused-polynomial|--fused-delta-x4|"
-                << "--specialized-angle-polynomials]\n";
+                << "--specialized-angle-polynomials]"
+                << " [--fused-polynomial-index=N]"
+                << " [--fused-polynomial-max-steps=N]"
+                << " [--direct-delta-x4]"
+                << " [--dyadic-scale]\n";
       return 2;
     }
     bool profile_enabled = false;
+    bool dyadic_scale = false;
+    int fused_polynomial_outer_index = -1;
+    int fused_polynomial_max_steps = -1;
+    bool direct_delta_x4 = false;
     PolynomialMode polynomial_mode = PolynomialMode::kBaseline;
     for (int index = 4; index < argc; ++index) {
       const std::string option(argv[index]);
@@ -1407,9 +1590,30 @@ int main(int argc, char** argv) {
         polynomial_mode = PolynomialMode::kFusedDeltaX4;
       } else if (option == "--specialized-angle-polynomials") {
         polynomial_mode = PolynomialMode::kSpecializedAngle;
+      } else if (option == "--dyadic-scale") {
+        dyadic_scale = true;
+      } else if (option.rfind("--fused-polynomial-index=", 0) == 0) {
+        fused_polynomial_outer_index = std::stoi(
+            option.substr(std::string("--fused-polynomial-index=").size()));
+        if (fused_polynomial_outer_index < 0) {
+          throw std::runtime_error("negative fused polynomial index");
+        }
+      } else if (option.rfind("--fused-polynomial-max-steps=", 0) == 0) {
+        fused_polynomial_max_steps = std::stoi(option.substr(
+            std::string("--fused-polynomial-max-steps=").size()));
+        if (fused_polynomial_max_steps < 0) {
+          throw std::runtime_error("negative fused polynomial step bound");
+        }
+      } else if (option == "--direct-delta-x4") {
+        direct_delta_x4 = true;
       } else {
         throw std::runtime_error("unknown optional argument: " + option);
       }
+    }
+    if (dyadic_scale) {
+      kScale = fixed_of_integer(
+          Integer("1099511627776"));  // 2^40, close to decimal 10^12.
+      kTwoScaleSquared = 2 * kScale * kScale;
     }
 
     const auto preparation_begin = std::chrono::steady_clock::now();
@@ -1428,15 +1632,33 @@ int main(int argc, char** argv) {
         profile_enabled ? program.instructions.size() : 0);
     std::size_t mismatches = 0;
     std::size_t accepted = 0;
+    std::size_t tighter = 0;
+    std::size_t equal = 0;
+    std::size_t wider = 0;
+    Rat maximum_upper_minus_expected;
+    bool have_difference = false;
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
       const Evaluation evaluation = evaluate_job(
-          program, jobs[index], polynomial_mode,
+          program, jobs[index], polynomial_mode, fused_polynomial_outer_index,
+          fused_polynomial_max_steps, direct_delta_x4,
           profile_enabled ? &profiles : nullptr);
       results.push_back(evaluation.upper);
       add_counters(total, evaluation.counters);
       if (evaluation.upper != expected[index]) ++mismatches;
       if (evaluation.upper < 0) ++accepted;
+      const Rat difference = evaluation.upper - expected[index];
+      if (difference < 0) {
+        ++tighter;
+      } else if (difference == 0) {
+        ++equal;
+      } else {
+        ++wider;
+      }
+      if (!have_difference || difference > maximum_upper_minus_expected) {
+        maximum_upper_minus_expected = difference;
+        have_difference = true;
+      }
     }
     const auto evaluation_end = std::chrono::steady_clock::now();
 
@@ -1447,6 +1669,8 @@ int main(int argc, char** argv) {
     std::cout << std::setprecision(17);
     std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY"
               << " cells=" << jobs.size()
+              << " backend=" << kFixedBackend
+              << " arithmetic=" << (dyadic_scale ? "dyadic-2^40" : "decimal-1e12")
               << " mode="
               << (polynomial_mode == PolynomialMode::kFusedAll
                       ? "fused-polynomial"
@@ -1455,9 +1679,17 @@ int main(int argc, char** argv) {
                             : polynomial_mode == PolynomialMode::kSpecializedAngle
                                   ? "specialized-angle-polynomials"
                                   : "baseline")
+              << " fused_outer_index=" << fused_polynomial_outer_index
+              << " fused_max_steps=" << fused_polynomial_max_steps
+              << " direct_delta_x4=" << (direct_delta_x4 ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
+              << " tighter=" << tighter
+              << " equal=" << equal
+              << " wider=" << wider
+              << " maximum_upper_minus_expected="
+              << maximum_upper_minus_expected.get_str()
               << " preparation_seconds=" << preparation_seconds
               << " evaluation_seconds=" << evaluation_seconds
               << " interval_products=" << total.interval_products
@@ -1499,14 +1731,15 @@ int main(int argc, char** argv) {
                 << " match=" << (results[index] == expected[index] ? 1 : 0)
                 << "\n";
     }
-    if (polynomial_mode == PolynomialMode::kBaseline && mismatches != 0) {
+    if (!dyadic_scale && polynomial_mode == PolynomialMode::kBaseline &&
+        mismatches != 0) {
       std::cerr << "fixed-scale native comparison found " << mismatches
                 << " mismatches\n";
       return 1;
     }
-    if (polynomial_mode != PolynomialMode::kBaseline &&
+    if ((dyadic_scale || polynomial_mode != PolynomialMode::kBaseline) &&
         accepted != jobs.size()) {
-      std::cerr << "optimized polynomial comparison accepted " << accepted
+      std::cerr << "development comparison accepted " << accepted
                 << " of " << jobs.size() << " jobs\n";
       return 1;
     }
@@ -1520,6 +1753,10 @@ int main(int argc, char** argv) {
     }
     if (polynomial_mode == PolynomialMode::kSpecializedAngle) {
       std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_SPECIALIZED_ANGLE_POLYNOMIALS_OK"
+                << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
+    }
+    if (dyadic_scale) {
+      std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_DYADIC_OK"
                 << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
     }
     std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_CASE10173_OK"
