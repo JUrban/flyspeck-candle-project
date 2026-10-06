@@ -247,6 +247,34 @@ to investigate the signed fixed-point/interval primitive boundary, not an
 attribution of the full ratio: recursive evaluator traversal, allocation, and
 GC remain combined in the Candle measurement.
 
+An instruction-level exact-native profile now locates the generic dihedral
+subgraph precisely.  Instructions 31--38 are the `pi/2`, `delta_x4`,
+`4*x1*delta_x`, square-root, inverse, product, arctangent, and final-add
+sequence.  Across the same 128 jobs they account for:
+
+| Generic-dihedral share | Count/time | Share of complete fixed-scale run |
+|---|---:|---:|
+| Instrumented native execution | 0.4973 s | 57.00% |
+| Fixed interval products | 506,368 | 50.85% |
+| Completed Taylor results | 16,640 | 62.50% |
+| Polynomial instructions | 15,872 | 70.45% |
+
+The profiled run still matches all 128 Candle bounds exactly.  Profiling adds
+clock reads at every outer instruction, so its absolute time is not used as a
+new evaluator comparison; its total, 0.8780 seconds, is nevertheless
+consistent with the uninstrumented 0.8776-second run.  The final profile
+result has SHA-256
+`052171126b84477432450c37fd9e911c092a91c4502af1f8addde1a401235b80`.
+
+This also bounds what a specialized dihedral instruction alone can achieve in
+the current fixed-scale architecture.  Even eliminating the entire measured
+subgraph would give at most about **2.33 times** improvement and would leave
+about a **147-times** per-cell gap to the historical specialized C++ lane.
+That is an intentionally optimistic ceiling, not a speedup forecast.  It
+strengthens the case for the instruction while showing that scalar
+representation, sparse/symmetric derivative machinery, completion strategy,
+and other specialized arithmetic remain first-class architectural targets.
+
 This closes the ambiguity left by the first native comparison.  Extra generic
 mathematical work explains the historical C++ subdivision explosion, but it
 does **not** explain Candle's remaining recurring cost on these certificate
@@ -322,6 +350,8 @@ The isolated development sources now include:
 - a Candle `Kernel.compute` diagnostic returning the exact current-checker
   upper bound for the first 128 boxes;
 - a proved canonical signed-product discriminator and matched baseline driver;
+- an exact-native per-instruction profiler identifying the generic dihedral
+  subgraph's measured share;
 - a native C++ driver evaluating specialized and generic formulations on the
   exported boxes; and
 - repeatable drivers that preserve inputs, logs, phase profiles, timings, and

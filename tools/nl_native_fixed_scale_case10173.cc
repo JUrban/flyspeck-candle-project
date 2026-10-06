@@ -67,6 +67,16 @@ struct Counters {
   std::uint64_t atan_steps = 0;
 };
 
+struct InstructionProfile {
+  Counters counters;
+  std::uint64_t nanoseconds = 0;
+  std::size_t observations = 0;
+  std::size_t stack_before = 0;
+  std::size_t stack_after = 0;
+  std::size_t sqrt_slot_before = 0;
+  std::size_t sqrt_slot_after = 0;
+};
+
 struct Node {
   bool is_pair = false;
   Integer numeral = 0;
@@ -893,7 +903,53 @@ struct Evaluation {
   Counters counters;
 };
 
-Evaluation evaluate_job(const Program& program, const Job& job) {
+void add_counters(Counters& total, const Counters& value) {
+  total.interval_products += value.interval_products;
+  total.completed_results += value.completed_results;
+  total.polynomial_steps += value.polynomial_steps;
+  total.outer_steps += value.outer_steps;
+  total.sqrt_steps += value.sqrt_steps;
+  total.inverse_steps += value.inverse_steps;
+  total.atan_steps += value.atan_steps;
+}
+
+Counters subtract_counters(const Counters& value, const Counters& baseline) {
+  return {value.interval_products - baseline.interval_products,
+          value.completed_results - baseline.completed_results,
+          value.polynomial_steps - baseline.polynomial_steps,
+          value.outer_steps - baseline.outer_steps,
+          value.sqrt_steps - baseline.sqrt_steps,
+          value.inverse_steps - baseline.inverse_steps,
+          value.atan_steps - baseline.atan_steps};
+}
+
+std::string instruction_label(const Program& program,
+                              std::size_t instruction_index) {
+  const Node& instruction = node_at(program, instruction_index);
+  if (instruction.is_pair) {
+    const Integer tag = require_numeral(program, instruction.left,
+                                        "analytic profile tag");
+    if (tag == 0) {
+      return "poly:" + std::to_string(
+          decode_list(program, instruction.right,
+                      "profile polynomial program").size());
+    }
+    if (tag == 1) return "sqrt";
+    return "pair:" + tag.get_str();
+  }
+  const unsigned long opcode = instruction.numeral.get_ui();
+  if (opcode == 2) return "neg";
+  if (opcode == 3) return "add";
+  if (opcode == 4) return "mul";
+  if (opcode == 5) return "square";
+  if (opcode == 6) return "inverse";
+  if (opcode == 7) return "atan";
+  if (opcode == 8) return "pi_half";
+  return "opcode:" + instruction.numeral.get_str();
+}
+
+Evaluation evaluate_job(const Program& program, const Job& job,
+                        std::vector<InstructionProfile>* profiles) {
   IntervalVector center_environment;
   IntegerVector radii;
   for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
@@ -906,7 +962,16 @@ Evaluation evaluate_job(const Program& program, const Job& job) {
   Counters counters;
   std::vector<TaylorResult> stack;
   std::size_t sqrt_slot = 0;
-  for (const std::size_t instruction_index : program.instructions) {
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const std::size_t instruction_index = program.instructions[outer_index];
+    const Counters counters_before = counters;
+    const std::size_t stack_before = stack.size();
+    const std::size_t sqrt_slot_before = sqrt_slot;
+    std::chrono::steady_clock::time_point instruction_begin;
+    if (profiles != nullptr) {
+      instruction_begin = std::chrono::steady_clock::now();
+    }
     ++counters.outer_steps;
     const Node& instruction = node_at(program, instruction_index);
     if (instruction.is_pair) {
@@ -927,30 +992,50 @@ Evaluation evaluate_job(const Program& program, const Job& job) {
       } else {
         throw std::runtime_error("unknown analytic pair instruction");
       }
-      continue;
-    }
-
-    const unsigned long opcode = instruction.numeral.get_ui();
-    if (opcode == 2 || opcode == 5 || opcode == 6 || opcode == 7) {
-      if (stack.empty()) throw std::runtime_error("analytic stack underflow");
-      TaylorResult value = stack.back();
-      stack.pop_back();
-      if (opcode == 2) stack.push_back(result_neg(radii, value, counters));
-      if (opcode == 5) stack.push_back(result_mul(radii, value, value, counters));
-      if (opcode == 6) stack.push_back(result_inverse(radii, value, counters));
-      if (opcode == 7) stack.push_back(result_atan(radii, value, counters));
-    } else if (opcode == 3 || opcode == 4) {
-      if (stack.size() < 2) throw std::runtime_error("analytic stack underflow");
-      TaylorResult right = stack.back();
-      stack.pop_back();
-      TaylorResult left = stack.back();
-      stack.pop_back();
-      stack.push_back(opcode == 3 ? result_add(radii, left, right, counters)
-                                  : result_mul(radii, left, right, counters));
-    } else if (opcode == 8) {
-      stack.push_back(result_pi_half(radii, counters));
     } else {
-      throw std::runtime_error("unknown analytic scalar instruction");
+      const unsigned long opcode = instruction.numeral.get_ui();
+      if (opcode == 2 || opcode == 5 || opcode == 6 || opcode == 7) {
+        if (stack.empty()) throw std::runtime_error("analytic stack underflow");
+        TaylorResult value = stack.back();
+        stack.pop_back();
+        if (opcode == 2) stack.push_back(result_neg(radii, value, counters));
+        if (opcode == 5) stack.push_back(result_mul(radii, value, value, counters));
+        if (opcode == 6) stack.push_back(result_inverse(radii, value, counters));
+        if (opcode == 7) stack.push_back(result_atan(radii, value, counters));
+      } else if (opcode == 3 || opcode == 4) {
+        if (stack.size() < 2) throw std::runtime_error("analytic stack underflow");
+        TaylorResult right = stack.back();
+        stack.pop_back();
+        TaylorResult left = stack.back();
+        stack.pop_back();
+        stack.push_back(opcode == 3 ? result_add(radii, left, right, counters)
+                                    : result_mul(radii, left, right, counters));
+      } else if (opcode == 8) {
+        stack.push_back(result_pi_half(radii, counters));
+      } else {
+        throw std::runtime_error("unknown analytic scalar instruction");
+      }
+    }
+    if (profiles != nullptr) {
+      const auto instruction_end = std::chrono::steady_clock::now();
+      InstructionProfile& profile = profiles->at(outer_index);
+      if (profile.observations == 0) {
+        profile.stack_before = stack_before;
+        profile.stack_after = stack.size();
+        profile.sqrt_slot_before = sqrt_slot_before;
+        profile.sqrt_slot_after = sqrt_slot;
+      } else if (profile.stack_before != stack_before ||
+                 profile.stack_after != stack.size() ||
+                 profile.sqrt_slot_before != sqrt_slot_before ||
+                 profile.sqrt_slot_after != sqrt_slot) {
+        throw std::runtime_error("instruction profile shape drift");
+      }
+      ++profile.observations;
+      profile.nanoseconds += static_cast<std::uint64_t>(
+          std::chrono::duration_cast<std::chrono::nanoseconds>(
+              instruction_end - instruction_begin).count());
+      add_counters(profile.counters,
+                   subtract_counters(counters, counters_before));
     }
   }
   if (sqrt_slot != kSqrtSlots || stack.size() != 1 || !stack.back().domain) {
@@ -974,24 +1059,18 @@ std::vector<Rat> read_expected_bounds(const char* path) {
   return bounds;
 }
 
-void add_counters(Counters& total, const Counters& value) {
-  total.interval_products += value.interval_products;
-  total.completed_results += value.completed_results;
-  total.polynomial_steps += value.polynomial_steps;
-  total.outer_steps += value.outer_steps;
-  total.sqrt_steps += value.sqrt_steps;
-  total.inverse_steps += value.inverse_steps;
-  total.atan_steps += value.atan_steps;
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {
   try {
-    if (argc != 4) {
+    if (argc != 4 && argc != 5) {
       std::cerr << "usage: " << argv[0]
-                << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv\n";
+                << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv [--profile]\n";
       return 2;
+    }
+    const bool profile_enabled = argc == 5 && std::string(argv[4]) == "--profile";
+    if (argc == 5 && !profile_enabled) {
+      throw std::runtime_error("unknown optional argument");
     }
 
     const auto preparation_begin = std::chrono::steady_clock::now();
@@ -1006,10 +1085,13 @@ int main(int argc, char** argv) {
     Counters total;
     std::vector<Rat> results;
     results.reserve(jobs.size());
+    std::vector<InstructionProfile> profiles(
+        profile_enabled ? program.instructions.size() : 0);
     std::size_t mismatches = 0;
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
-      const Evaluation evaluation = evaluate_job(program, jobs[index]);
+      const Evaluation evaluation = evaluate_job(
+          program, jobs[index], profile_enabled ? &profiles : nullptr);
       results.push_back(evaluation.upper);
       add_counters(total, evaluation.counters);
       if (evaluation.upper != expected[index]) ++mismatches;
@@ -1034,6 +1116,28 @@ int main(int argc, char** argv) {
               << " sqrt_steps=" << total.sqrt_steps
               << " inverse_steps=" << total.inverse_steps
               << " atan_steps=" << total.atan_steps << "\n";
+    if (profile_enabled) {
+      for (std::size_t index = 0; index < profiles.size(); ++index) {
+        const InstructionProfile& profile = profiles[index];
+        std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_PROFILE"
+                  << " index=" << index
+                  << " label=" << instruction_label(
+                       program, program.instructions[index])
+                  << " observations=" << profile.observations
+                  << " stack_before=" << profile.stack_before
+                  << " stack_after=" << profile.stack_after
+                  << " sqrt_slot_before=" << profile.sqrt_slot_before
+                  << " sqrt_slot_after=" << profile.sqrt_slot_after
+                  << " nanoseconds=" << profile.nanoseconds
+                  << " interval_products=" << profile.counters.interval_products
+                  << " completed_results=" << profile.counters.completed_results
+                  << " polynomial_steps=" << profile.counters.polynomial_steps
+                  << " outer_steps=" << profile.counters.outer_steps
+                  << " sqrt_steps=" << profile.counters.sqrt_steps
+                  << " inverse_steps=" << profile.counters.inverse_steps
+                  << " atan_steps=" << profile.counters.atan_steps << "\n";
+      }
+    }
     for (std::size_t index = 0; index < results.size(); ++index) {
       std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_RESULT"
                 << " index=" << index
