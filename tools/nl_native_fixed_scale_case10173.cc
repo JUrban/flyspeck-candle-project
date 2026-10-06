@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <sstream>
@@ -88,6 +89,7 @@ enum class PolynomialMode {
   kBaseline,
   kFusedAll,
   kFusedDeltaX4,
+  kSpecializedAngle,
 };
 
 struct Node {
@@ -324,6 +326,19 @@ Interval interval_neg(const Interval& value) {
 
 Interval interval_add(const Interval& left, const Interval& right) {
   return {left.lower + right.lower, left.upper + right.upper};
+}
+
+Interval interval_integer_scale(long coefficient, const Interval& value) {
+  if (coefficient >= 0) {
+    return {coefficient * value.lower, coefficient * value.upper};
+  }
+  return {coefficient * value.upper, coefficient * value.lower};
+}
+
+Interval interval_sum(std::initializer_list<Interval> values) {
+  Interval result = zero_interval();
+  for (const Interval& value : values) result = interval_add(result, value);
+  return result;
 }
 
 Interval raw_interval_mul(const Interval& left, const Interval& right,
@@ -1032,6 +1047,159 @@ TaylorResult evaluate_polynomial_fused(
                          stack.back().box_hessian, counters);
 }
 
+IntervalMatrix polynomial_pair_products(const IntervalVector& values,
+                                        Counters& counters) {
+  IntervalMatrix products = zero_matrix();
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      products[row][column] = interval_mul(
+          values[row], values[column], counters);
+      products[column][row] = products[row][column];
+    }
+  }
+  return products;
+}
+
+IntervalVector delta_gradient_from_products(const IntervalMatrix& p) {
+  IntervalVector gradient;
+  gradient[0] = interval_sum({
+      interval_integer_scale(-2, p[0][3]), p[1][3], p[1][4],
+      interval_neg(p[1][5]), p[2][3], interval_neg(p[2][4]), p[2][5],
+      interval_neg(p[3][3]), p[3][4], p[3][5]});
+  gradient[1] = interval_sum({
+      p[0][3], p[0][4], interval_neg(p[0][5]),
+      interval_integer_scale(-2, p[1][4]), interval_neg(p[2][3]),
+      p[2][4], p[2][5], p[3][4], interval_neg(p[4][4]), p[4][5]});
+  gradient[2] = interval_sum({
+      p[0][3], interval_neg(p[0][4]), p[0][5],
+      interval_neg(p[1][3]), p[1][4], p[1][5],
+      interval_integer_scale(-2, p[2][5]), p[3][5], p[4][5],
+      interval_neg(p[5][5])});
+  gradient[3] = interval_sum({
+      interval_neg(p[0][0]), p[0][1], p[0][2],
+      interval_integer_scale(-2, p[0][3]), p[0][4], p[0][5],
+      interval_neg(p[1][2]), p[1][4], p[2][5], interval_neg(p[4][5])});
+  gradient[4] = interval_sum({
+      p[0][1], interval_neg(p[0][2]), p[0][3],
+      interval_neg(p[1][1]), p[1][2], p[1][3],
+      interval_integer_scale(-2, p[1][4]), p[1][5], p[2][5],
+      interval_neg(p[3][5])});
+  gradient[5] = interval_sum({
+      interval_neg(p[0][1]), p[0][2], p[0][3], p[1][2], p[1][4],
+      interval_neg(p[2][2]), p[2][3], p[2][4],
+      interval_integer_scale(-2, p[2][5]), interval_neg(p[3][4])});
+  return gradient;
+}
+
+Interval delta_value(const IntervalVector& x, Counters& counters) {
+  const Interval first_linear = interval_sum({
+      interval_neg(x[0]), x[1], x[2], interval_neg(x[3]), x[4], x[5]});
+  const Interval second_linear = interval_sum({
+      x[0], interval_neg(x[1]), x[2], x[3], interval_neg(x[4]), x[5]});
+  const Interval third_linear = interval_sum({
+      x[0], x[1], interval_neg(x[2]), x[3], x[4], interval_neg(x[5])});
+  const Interval first = interval_mul(
+      interval_mul(x[0], x[3], counters), first_linear, counters);
+  const Interval second = interval_mul(
+      interval_mul(x[1], x[4], counters), second_linear, counters);
+  const Interval third = interval_mul(
+      interval_mul(x[2], x[5], counters), third_linear, counters);
+  const Interval fourth = interval_mul(
+      interval_mul(x[1], x[2], counters), x[3], counters);
+  const Interval fifth = interval_mul(
+      interval_mul(x[0], x[2], counters), x[4], counters);
+  const Interval sixth = interval_mul(
+      interval_mul(x[0], x[1], counters), x[5], counters);
+  const Interval seventh = interval_mul(
+      interval_mul(x[3], x[4], counters), x[5], counters);
+  return interval_sum({first, second, third, interval_neg(fourth),
+                       interval_neg(fifth), interval_neg(sixth),
+                       interval_neg(seventh)});
+}
+
+IntervalMatrix delta_hessian(const IntervalVector& x) {
+  IntervalMatrix hessian = zero_matrix();
+  const auto set_symmetric = [&hessian](std::size_t row,
+                                        std::size_t column,
+                                        const Interval& value) {
+    hessian[row][column] = value;
+    hessian[column][row] = value;
+  };
+  set_symmetric(0, 0, interval_integer_scale(-2, x[3]));
+  set_symmetric(0, 1, interval_sum({x[3], x[4], interval_neg(x[5])}));
+  set_symmetric(0, 2, interval_sum({x[3], interval_neg(x[4]), x[5]}));
+  set_symmetric(0, 3, interval_sum({
+      interval_integer_scale(-2, x[0]), x[1], x[2],
+      interval_integer_scale(-2, x[3]), x[4], x[5]}));
+  set_symmetric(0, 4, interval_sum({x[1], interval_neg(x[2]), x[3]}));
+  set_symmetric(0, 5, interval_sum({interval_neg(x[1]), x[2], x[3]}));
+  set_symmetric(1, 1, interval_integer_scale(-2, x[4]));
+  set_symmetric(1, 2, interval_sum({interval_neg(x[3]), x[4], x[5]}));
+  set_symmetric(1, 3, interval_sum({x[0], interval_neg(x[2]), x[4]}));
+  set_symmetric(1, 4, interval_sum({
+      x[0], interval_integer_scale(-2, x[1]), x[2], x[3],
+      interval_integer_scale(-2, x[4]), x[5]}));
+  set_symmetric(1, 5, interval_sum({interval_neg(x[0]), x[2], x[4]}));
+  set_symmetric(2, 2, interval_integer_scale(-2, x[5]));
+  set_symmetric(2, 3, interval_sum({x[0], interval_neg(x[1]), x[5]}));
+  set_symmetric(2, 4, interval_sum({interval_neg(x[0]), x[1], x[5]}));
+  set_symmetric(2, 5, interval_sum({
+      x[0], x[1], interval_integer_scale(-2, x[2]), x[3], x[4],
+      interval_integer_scale(-2, x[5])}));
+  set_symmetric(3, 3, interval_integer_scale(-2, x[0]));
+  set_symmetric(3, 4, interval_sum({x[0], x[1], interval_neg(x[5])}));
+  set_symmetric(3, 5, interval_sum({x[0], x[2], interval_neg(x[4])}));
+  set_symmetric(4, 4, interval_integer_scale(-2, x[1]));
+  set_symmetric(4, 5, interval_sum({x[1], x[2], interval_neg(x[3])}));
+  set_symmetric(5, 5, interval_integer_scale(-2, x[2]));
+  return hessian;
+}
+
+TaylorResult evaluate_four_x1_delta_specialized(
+    const IntegerVector& radii,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, Counters& counters) {
+  const Interval center_delta = delta_value(center_environment, counters);
+  const IntervalVector center_delta_gradient = delta_gradient_from_products(
+      polynomial_pair_products(center_environment, counters));
+  const IntervalMatrix box_delta_hessian = delta_hessian(box_environment);
+  IntervalVector box_delta_gradient;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const Integer variation = dot_abs_upper(
+        radii, box_delta_hessian[coordinate]);
+    box_delta_gradient[coordinate] = raw_interval_round(
+        kScale,
+        {kScale * center_delta_gradient[coordinate].lower - variation,
+         kScale * center_delta_gradient[coordinate].upper + variation});
+  }
+
+  FirstJet center;
+  center.value = interval_integer_scale(
+      4, interval_mul(center_environment[0], center_delta, counters));
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    Interval value = interval_mul(
+        center_environment[0], center_delta_gradient[coordinate], counters);
+    if (coordinate == 0) value = interval_add(value, center_delta);
+    center.gradient[coordinate] = interval_integer_scale(4, value);
+  }
+
+  IntervalMatrix hessian = zero_matrix();
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = 0; column < kDimensions; ++column) {
+      Interval value = interval_mul(
+          box_environment[0], box_delta_hessian[row][column], counters);
+      if (row == 0) {
+        value = interval_add(value, box_delta_gradient[column]);
+      }
+      if (column == 0) {
+        value = interval_add(value, box_delta_gradient[row]);
+      }
+      hessian[row][column] = interval_integer_scale(4, value);
+    }
+  }
+  return complete_result(radii, true, center, hessian, counters);
+}
+
 struct Evaluation {
   Rat upper;
   Counters counters;
@@ -1119,15 +1287,22 @@ Evaluation evaluate_job(const Program& program, const Job& job,
             program, instruction.right, "polynomial mode selection").size();
         const bool use_fused_polynomial =
             polynomial_mode == PolynomialMode::kFusedAll ||
-            (polynomial_mode == PolynomialMode::kFusedDeltaX4 &&
+            ((polynomial_mode == PolynomialMode::kFusedDeltaX4 ||
+              polynomial_mode == PolynomialMode::kSpecializedAngle) &&
              polynomial_steps == 39);
-        stack.push_back(use_fused_polynomial
-                            ? evaluate_polynomial_fused(
-                                  program, instruction.right, radii,
-                                  center_environment, box_environment, counters)
-                            : evaluate_polynomial(
-                                  program, instruction.right, radii,
-                                  center_environment, counters));
+        if (polynomial_mode == PolynomialMode::kSpecializedAngle &&
+            polynomial_steps == 85) {
+          stack.push_back(evaluate_four_x1_delta_specialized(
+              radii, center_environment, box_environment, counters));
+        } else {
+          stack.push_back(use_fused_polynomial
+                              ? evaluate_polynomial_fused(
+                                    program, instruction.right, radii,
+                                    center_environment, box_environment, counters)
+                              : evaluate_polynomial(
+                                    program, instruction.right, radii,
+                                    center_environment, counters));
+        }
       } else if (tag == 1) {
         if (sqrt_slot >= kSqrtSlots || stack.empty()) {
           throw std::runtime_error("sqrt slot/stack drift");
@@ -1215,7 +1390,9 @@ int main(int argc, char** argv) {
     if (argc < 4 || argc > 6) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
-                << " [--profile] [--fused-polynomial|--fused-delta-x4]\n";
+                << " [--profile]"
+                << " [--fused-polynomial|--fused-delta-x4|"
+                << "--specialized-angle-polynomials]\n";
       return 2;
     }
     bool profile_enabled = false;
@@ -1228,6 +1405,8 @@ int main(int argc, char** argv) {
         polynomial_mode = PolynomialMode::kFusedAll;
       } else if (option == "--fused-delta-x4") {
         polynomial_mode = PolynomialMode::kFusedDeltaX4;
+      } else if (option == "--specialized-angle-polynomials") {
+        polynomial_mode = PolynomialMode::kSpecializedAngle;
       } else {
         throw std::runtime_error("unknown optional argument: " + option);
       }
@@ -1273,7 +1452,9 @@ int main(int argc, char** argv) {
                       ? "fused-polynomial"
                       : polynomial_mode == PolynomialMode::kFusedDeltaX4
                             ? "fused-delta-x4"
-                            : "baseline")
+                            : polynomial_mode == PolynomialMode::kSpecializedAngle
+                                  ? "specialized-angle-polynomials"
+                                  : "baseline")
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
@@ -1335,6 +1516,10 @@ int main(int argc, char** argv) {
     }
     if (polynomial_mode == PolynomialMode::kFusedDeltaX4) {
       std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_FUSED_DELTA_X4_OK"
+                << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
+    }
+    if (polynomial_mode == PolynomialMode::kSpecializedAngle) {
+      std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_SPECIALIZED_ANGLE_POLYNOMIALS_OK"
                 << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
     }
     std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_CASE10173_OK"

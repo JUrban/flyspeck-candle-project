@@ -37,7 +37,7 @@ for ((repetition = 1; repetition <= repetitions; ++repetition)); do
     | rg 'CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY' \
     | sed "s/$/ repetition=$repetition/" >>"$summaries"
   "$output_dir/nl-native-fixed-scale-case10173" \
-    "$program" "$jobs" "$expected" --fused-delta-x4 \
+    "$program" "$jobs" "$expected" --specialized-angle-polynomials \
     | rg 'CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY' \
     | sed "s/$/ repetition=$repetition/" >>"$summaries"
 done
@@ -57,10 +57,11 @@ awk '
   }
   END {
     baseline = sum["baseline"] / count["baseline"];
-    candidate = sum["fused-delta-x4"] / count["fused-delta-x4"];
+    candidate = sum["specialized-angle-polynomials"] / count["specialized-angle-polynomials"];
     print "lane\trepetitions\tmean_evaluation_seconds";
     printf "baseline\t%d\t%.9f\n", count["baseline"], baseline;
-    printf "fused-delta-x4\t%d\t%.9f\n", count["fused-delta-x4"], candidate;
+    printf "specialized-angle-polynomials\t%d\t%.9f\n",
+      count["specialized-angle-polynomials"], candidate;
     printf "speedup\t%d\t%.9f\n", count["baseline"], baseline / candidate;
     printf "time_reduction_percent\t%d\t%.6f\n",
       count["baseline"], 100 * (baseline - candidate) / baseline;
@@ -81,4 +82,4 @@ sha256sum "$source_file" "$program" "$jobs" "$expected" \
   "$output_dir/phase-times.tsv" "$output_dir/wall-times.tsv" \
   >"$output_dir/result-files.sha256"
 printf '%s\n' \
-  'CANDLE_NL_NATIVE_FIXED_SCALE_CASE10173_FUSED_DELTA_X4_PAIRED_OK DEVELOPMENT_NON_RELEASE'
+  'CANDLE_NL_NATIVE_FIXED_SCALE_CASE10173_SPECIALIZED_ANGLE_PAIRED_OK DEVELOPMENT_NON_RELEASE'

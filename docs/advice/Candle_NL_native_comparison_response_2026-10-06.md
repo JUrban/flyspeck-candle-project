@@ -309,13 +309,47 @@ and gradient directly.  The paired timing table has SHA-256
 `605d144c67d41c96d44c29105a68334eb87f076c5ff6d38188256171d46e4dd0`;
 the seven-pair run, including compilation, took 15.350 seconds.
 
-This exact positive result is too small to justify interrupting the larger
-architecture work for a new proof layer by itself.  It does identify a safe
-component for a future specialized dihedral instruction.  The next numerical
-prototype must address the difficult 85-step `4*x1*delta_x` block with a tight
-specialized Hessian enclosure, rather than using its rejected natural interval
-extension.  The previously proved lazy polynomial evaluator remains the
-preferred general optimization where exact established results are required.
+This exact positive result was too small to justify a new proof layer by
+itself, but it identified a safe component for the next prototype.  That
+prototype now also replaces the difficult 85-step `4*x1*delta_x` block.  It
+computes `delta_x` at the center, uses its explicit linear Hessian identities
+over the whole box, obtains tight gradient bounds by one centered Taylor lift,
+and then constructs the value, gradient, and Hessian of `4*x1*delta_x`
+directly.  The established square-root certificate, inverse, arctangent,
+completion, and final source expression remain unchanged.
+
+The first direct-formula attempt used natural interval bounds for the
+`delta_x` gradient.  It was fast (0.538 seconds) but accepted only **118 / 128**
+cells and is rejected.  Replacing only that loose gradient step with the
+center-plus-Hessian bound restored every result.  The centered specialized
+prototype reproduced all **128 / 128 established final upper bounds exactly**.
+
+Across seven alternating warm repetitions:
+
+| Exact-native lane | Mean evaluation time |
+|---|---:|
+| Established fixed-scale program | 0.878711 s |
+| Specialized angle polynomials | 0.532084 s |
+
+This is a **39.45%** reduction or **1.651-times** speedup.  Semantic interval
+products fell from 995,840 to 694,272, completed Taylor results from 26,624 to
+11,008, and interpreted polynomial steps from 22,528 to 11,648.  Peak native
+RSS remained negligible relative to Candle.  The paired timing table has
+SHA-256
+`0ea93927311a332f4989d137c322f1c55c33bfb12f72d888fa08d1f82745ad9e`;
+the seven-pair run, including compilation, took 14.253 seconds.  The exact
+single-run result ledger has SHA-256
+`6953ec551c240217f735cfc66a3ad941a67ce1a9bd5b2cf68dff70b29dd1a99f`.
+
+This clears the numerical gate for a reusable Candle specialization.  The
+intended formal boundary is not a fixture-specific theorem: prove the direct
+fixed-scale `delta_x4` and `4*x1*delta_x` jet enclosures for arbitrary valid
+six-dimensional boxes, dispatch only on the exact authenticated compiled
+polynomial identities, and reuse the existing universal analytic instruction
+and source-soundness chain.  Unrecognized polynomials retain the already
+proved lazy evaluator.  Integration still requires a genuine `Kernel.compute`
+benchmark and complete certificate coverage; the native result alone is not
+proof or production authority.
 
 This closes the ambiguity left by the first native comparison.  Extra generic
 mathematical work explains the historical C++ subdivision explosion, but it
@@ -396,6 +430,8 @@ The isolated development sources now include:
   subgraph's measured share;
 - rejected whole-program and exact `delta_x4`-only fused-polynomial
   discriminators with a seven-pair timing driver;
+- a centered specialized `4*x1*delta_x` jet prototype with exact matched
+  final bounds and a seven-pair timing driver;
 - a native C++ driver evaluating specialized and generic formulations on the
   exported boxes; and
 - repeatable drivers that preserve inputs, logs, phase profiles, timings, and
