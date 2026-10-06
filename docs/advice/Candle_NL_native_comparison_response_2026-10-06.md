@@ -204,24 +204,73 @@ reflected bounds
 and the matched analysis
 `e1d82e652ce1aa226484091fce5aee8a34ddfa6f7856ffde3cd035473d8a067e`.
 
-## Updated next experiment
+## Exact-native fixed-scale result
 
-The decision rule now selects its second branch: implement a bounded native
-version of the **same current fixed-scale equations** and run it on the same
-128 boxes.  Its output must match the Candle rational bounds exactly (or report
-the first precisely explained representation difference).  Measure separately
-the fixed signed-natural arithmetic, interval/Taylor operations, and program
-dispatch.  This is the smallest experiment that can distinguish arithmetic
-representation cost from `Kernel.compute` traversal, pair allocation, and GC.
+The decision rule selected its second branch, and that bounded discriminator is
+now complete.  A native GMP implementation consumes the exact authenticated
+54-instruction reflected source program, all seven exact square-root
+certificate intervals at the box and center, and the exact rational endpoints
+for the same 128 cells.  It implements the current fixed-scale interval,
+centered Taylor, polynomial, square-root, reciprocal, arctangent, and
+pi-half equations rather than substituting the historical floating-point
+generic algorithm.
+
+The native implementation reproduced **128/128 Candle upper bounds exactly**
+as rational numbers.  Its measured phases were 0.0116 seconds to parse and
+prepare the already exported inputs and 0.8776 seconds to evaluate the batch,
+with 4.4 MiB peak RSS.  The corresponding Candle phases were 3.1228 seconds to
+encode the jobs and 12.9968 seconds in `Kernel.compute`.  The strictly matched
+numerical evaluation ratio is therefore **14.81 times**.  The preparation
+figures are deliberately not turned into a ratio: the native measurement
+starts from an exported representation whereas Candle constructs its internal
+encoded jobs.
+
+The native operation ledger recorded 995,840 interval products, 26,624
+completed centered results, 22,528 polynomial steps, 6,912 outer-product
+steps, 896 square-root steps, 128 inverse steps, and 128 arctangent steps.  The
+supplied source audit found that the current encoded interval multiplication
+expands one semantic interval product into 32 natural multiplications.  On
+this batch that means about 31.87 million encoded natural multiplications,
+whereas the native signed-integer implementation performs four GMP products
+per semantic interval product (about 3.98 million).  This is a concrete reason
+to investigate the signed fixed-point/interval primitive boundary, not an
+attribution of the full ratio: recursive evaluator traversal, allocation, and
+GC remain combined in the Candle measurement.
+
+This closes the ambiguity left by the first native comparison.  Extra generic
+mathematical work explains the historical C++ subdivision explosion, but it
+does **not** explain Candle's remaining recurring cost on these certificate
+boxes.  The current reflected equations produce specialized-quality bounds;
+executing those same equations through the current encoded representation is
+the large measured gap.
+
+The exact-native result is an untrusted performance diagnostic, not theorem
+evidence.  Its usefulness comes from exact cross-checking against the closed
+Candle computation result, not from trusting the C++ implementation.  The
+native result file has SHA-256
+`f4dfbf401e0e7b81ca465ddda1332ace10048d1eca8f5b5a1853f24c66b219fc`.
+
+## Updated implementation choice
+
+The next bounded checker experiment should attack the high-multiplicity
+encoded interval/signed-integer boundary while preserving the exact 128
+outputs and complete-program acceptance.  It must use a mechanism materially
+different from the already unsuccessful source-level endpoint-product and
+`let` sharing attempts; merely spelling the same products once in the encoded
+term is not justified by this result.  A compact proved primitive or a
+representation-level signed product that avoids pair expansion is the most
+direct discriminator.
 
 A specialized dihedral instruction remains attractive because it can remove a
 large generic instruction subgraph, but the measured justification is now
-reduced work per box, not expected certificate shrinkage.  Its prototype should
-therefore follow or share the exact-native baseline and compare complete-program
-time while requiring unchanged acceptance.  The sparse-coordinate square-root
-idea remains secondary: the prior complete-program profile did not show an
-exceptional per-step square-root cost, and the current matched bounds give no
-reason to trade tightness for that optimization.
+reduced work per box, not expected certificate shrinkage.  It is the next
+architectural candidate if the compact interval primitive cannot remove a
+substantial fraction of the 14.81-times gap.  Either prototype must compare
+complete-program time and preserve the present bounds or at least all current
+certificate acceptance.  The sparse-coordinate square-root idea remains
+secondary: the prior complete-program profile did not show an exceptional
+per-step square-root cost, and the current matched bounds give no reason to
+trade tightness for that optimization.
 
 ## Implementation started
 
