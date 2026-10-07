@@ -37,6 +37,10 @@ constexpr const char* kFixedBackend = "checked-int128";
 using Fixed = long double;
 Fixed kScale = 1000000000000.0L;
 constexpr const char* kFixedBackend = "long-double-integer";
+#elif defined(CANDLE_NL_FIXED_DOUBLE)
+using Fixed = double;
+Fixed kScale = 1000000000000.0;
+constexpr const char* kFixedBackend = "double-integer";
 #elif defined(CANDLE_NL_FIXED_INT128)
 using Fixed = __int128;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
@@ -76,7 +80,7 @@ bool kFuseConsecutiveAdds = false;
 bool kDeferAdditiveLeafCompletion = false;
 bool kUseNarrowFixedProducts = false;
 bool kUseUncheckedNarrowFixedProducts = false;
-bool kUseUnsafeUnroundedLongDouble = false;
+bool kUseUnsafeUnroundedHardware = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
@@ -523,31 +527,32 @@ Integer ceil_quotient(const Integer& numerator, const Integer& denominator) {
   return result;
 }
 
-#if defined(CANDLE_NL_FIXED_LONG_DOUBLE)
+#if defined(CANDLE_NL_FIXED_LONG_DOUBLE) || defined(CANDLE_NL_FIXED_DOUBLE)
 Integer integer_of_fixed(const Fixed& value) {
-  constexpr Fixed kLongLongExclusiveUpper = 9223372036854775808.0L;
-  const Fixed converted = kUseUnsafeUnroundedLongDouble
+  constexpr Fixed kLongLongExclusiveUpper =
+      static_cast<Fixed>(9223372036854775808.0L);
+  const Fixed converted = kUseUnsafeUnroundedHardware
       ? std::trunc(value)
       : value;
   if (!std::isfinite(value) ||
-      (!kUseUnsafeUnroundedLongDouble && std::trunc(value) != value) ||
+      (!kUseUnsafeUnroundedHardware && std::trunc(value) != value) ||
       value < -kLongLongExclusiveUpper ||
       value >= kLongLongExclusiveUpper) {
-    throw std::runtime_error("invalid long-double fixed conversion");
+    throw std::runtime_error("invalid hardware fixed conversion");
   }
   return Integer(std::to_string(static_cast<long long>(converted)));
 }
 
 Fixed fixed_of_integer(const Integer& value) {
-  return std::stold(value.get_str());
+  return static_cast<Fixed>(std::stold(value.get_str()));
 }
 
 Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
   if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
   if (denominator == 0) {
-    throw std::runtime_error("long-double fixed division by zero");
+    throw std::runtime_error("hardware fixed division by zero");
   }
-  if (kUseUnsafeUnroundedLongDouble) return numerator / denominator;
+  if (kUseUnsafeUnroundedHardware) return numerator / denominator;
   // This backend is an untrusted performance discriminator.  Padding every
   // quotient by one fixed-scale unit makes its final bounds suitable for the
   // fixture containment gate; it is not a replacement for a proved rounding
@@ -558,9 +563,9 @@ Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
 Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
   if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
   if (denominator == 0) {
-    throw std::runtime_error("long-double fixed division by zero");
+    throw std::runtime_error("hardware fixed division by zero");
   }
-  if (kUseUnsafeUnroundedLongDouble) return numerator / denominator;
+  if (kUseUnsafeUnroundedHardware) return numerator / denominator;
   return std::ceil(numerator / denominator) + 1.0L;
 }
 #elif defined(CANDLE_NL_FIXED_INT128)
@@ -4857,7 +4862,7 @@ int main(int argc, char** argv) {
                 << " [--defer-additive-leaf-completion]"
                 << " [--narrow-fixed-products]"
                 << " [--unchecked-narrow-fixed-products]"
-                << " [--unsafe-unrounded-long-double]"
+                << " [--unsafe-unrounded-hardware]"
                 << " [--count-fixed-quotients]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
@@ -4954,8 +4959,9 @@ int main(int argc, char** argv) {
         kUseNarrowFixedProducts = true;
       } else if (option == "--unchecked-narrow-fixed-products") {
         kUseUncheckedNarrowFixedProducts = true;
-      } else if (option == "--unsafe-unrounded-long-double") {
-        kUseUnsafeUnroundedLongDouble = true;
+      } else if (option == "--unsafe-unrounded-hardware" ||
+                 option == "--unsafe-unrounded-long-double") {
+        kUseUnsafeUnroundedHardware = true;
       } else if (option == "--count-fixed-quotients") {
         kCountFixedQuotients = true;
       } else if (option == "--rounding-profile") {
@@ -5171,10 +5177,11 @@ int main(int argc, char** argv) {
           "only");
     }
 #endif
-#if !defined(CANDLE_NL_FIXED_LONG_DOUBLE)
-    if (kUseUnsafeUnroundedLongDouble) {
+#if !defined(CANDLE_NL_FIXED_LONG_DOUBLE) && \
+    !defined(CANDLE_NL_FIXED_DOUBLE)
+    if (kUseUnsafeUnroundedHardware) {
       throw std::runtime_error(
-          "unsafe unrounded arithmetic is a long-double diagnostic only");
+          "unsafe unrounded arithmetic requires a hardware floating backend");
     }
 #endif
     if (dyadic_scale) {
@@ -5392,8 +5399,8 @@ int main(int argc, char** argv) {
               << (kUseNarrowFixedProducts ? 1 : 0)
               << " unchecked_narrow_fixed_products="
               << (kUseUncheckedNarrowFixedProducts ? 1 : 0)
-              << " unsafe_unrounded_long_double="
-              << (kUseUnsafeUnroundedLongDouble ? 1 : 0)
+              << " unsafe_unrounded_hardware="
+              << (kUseUnsafeUnroundedHardware ? 1 : 0)
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)

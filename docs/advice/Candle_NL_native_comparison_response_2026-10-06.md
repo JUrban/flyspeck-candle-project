@@ -1587,3 +1587,34 @@ graph run was only about 2% faster than the generic graph. The next cheap
 factorial test holds those unsafe graphs fixed and changes scalar width/layout
 from `long double` to the historical verifier's `double`; that decides whether
 to pursue representation/layout or a more faithful whole-checker port.
+
+## Update: hardware width and graph factorial
+
+The same unrounded diagnostic was crossed over hardware `long double` versus
+`double` and generic versus source-derived historical derivative graphs.
+Twenty rotated 4,173-box repetitions put generic evaluation at 0.255428156
+seconds for `long double` and 0.171455856 seconds for `double`, a 1.490-times
+gain. The historical graph took 0.257828089 and 0.177338674 seconds
+respectively, making it 3.4% slower than generic on `double`. Both width pairs
+produced identical records for all boxes. The timing-table SHA-256 is
+`a9f88cc2f51c40c4a519eef36e3fa57be0b72adfde78fa2273de439052207681`
+in `nl-native-case10173-hardware-width-factorial-v1-dev-001`.
+
+A matched `double` rounding control measured 0.186921510 seconds with padded
+fixed-grid normalization and 0.172295763 seconds without it. Thus rounding
+accounts for only another 1.085 times; the conservative diagnostic remains
+2.266 times the specialized C++ batch. Its timing-table SHA-256 is
+`4dd3a3870f1f92ed5eff3f559da4658a94f1b31de962f11699f5b58be4f1c24f`
+in `nl-native-case10173-double-rounding-paired-v1-dev-001`.
+
+The width/layout effect is real, while the remaining approximately 2.1-times
+unsafe-native gap is whole-checker/dataflow rather than quotient rounding or
+the tested historical formula graph. Before implementing any formal
+hardware-width design, the next bounded gate will measure a closed,
+assumption-free word endpoint and wide-product microkernel in the actual
+`Kernel.compute` path. The observed contract requires at most 45-bit rounded
+values, 68-bit products, and 83-bit Taylor/quotient numerators. Only a
+material reflected win advances to one generally proved outward dyadic engine
+and complete-box checker; otherwise effort returns to whole-checker layout and
+control. The unsafe floating lanes remain diagnostics and can never support a
+formal claim.
