@@ -248,7 +248,7 @@ attribution of the full ratio: recursive evaluator traversal, allocation, and
 GC remain combined in the Candle measurement.
 
 An instruction-level exact-native profile now locates the generic dihedral
-subgraph precisely.  Instructions 31--38 are the `pi/2`, `delta_x4`,
+subgraph precisely.  Instructions 31--38 are the `pi/2`, `-delta_x4`,
 `4*x1*delta_x`, square-root, inverse, product, arctangent, and final-add
 sequence.  Across the same 128 jobs they account for:
 
@@ -291,7 +291,7 @@ The failed result is preserved with SHA-256
 This is direct evidence that reducing arithmetic work without preserving the
 established centered enclosure quality is not a viable optimization.
 
-The constrained variant fuses only the 39-step `delta_x4` block.  Its Hessian
+The constrained variant fuses only the 39-step `-delta_x4` block.  Its Hessian
 is constant, so the block can avoid 38 intermediate completions per cell
 without losing the established enclosure.  It reproduced all **128 / 128**
 final upper bounds exactly and retained all certificate acceptance.  Across
@@ -300,7 +300,7 @@ seven alternating warm repetitions:
 | Exact-native lane | Mean evaluation time |
 |---|---:|
 | Established fixed-scale program | 0.858544 s |
-| Fused `delta_x4` block | 0.809125 s |
+| Fused `-delta_x4` block | 0.809125 s |
 
 That is a **5.76%** reduction or **1.061-times** speedup.  The required
 completions fell from 26,624 to 21,760, while semantic interval products rose
@@ -343,7 +343,7 @@ single-run result ledger has SHA-256
 
 This clears the numerical gate for a reusable Candle specialization.  The
 intended formal boundary is not a fixture-specific theorem: prove the direct
-fixed-scale `delta_x4` and `4*x1*delta_x` jet enclosures for arbitrary valid
+fixed-scale `-delta_x4` and `4*x1*delta_x` jet enclosures for arbitrary valid
 six-dimensional boxes, dispatch only on the exact authenticated compiled
 polynomial identities, and reuse the existing universal analytic instruction
 and source-soundness chain.  Unrecognized polynomials retain the already
@@ -359,7 +359,7 @@ the prepared source supplies the exact compiled polynomial payload and both
 patched programs must match it structurally before the specialized operation
 is selected.  A formal preparation-to-source theorem is still required before
 proof integration.  The numerical operation is the centered direct
-`4*x1*delta_x` jet above.  The established 39-step `delta_x4` block remains on
+`4*x1*delta_x` jet above.  The established 39-step `-delta_x4` block remains on
 the generic path in these first Candle tests.
 
 The candidate reproduced all **128 / 128 final upper bounds exactly**, retained
@@ -470,7 +470,7 @@ The isolated development sources now include:
 - a proved canonical signed-product discriminator and matched baseline driver;
 - an exact-native per-instruction profiler identifying the generic dihedral
   subgraph's measured share;
-- rejected whole-program and exact `delta_x4`-only fused-polynomial
+- rejected whole-program and exact `-delta_x4`-only fused-polynomial
   discriminators with a seven-pair timing driver;
 - a centered specialized `4*x1*delta_x` jet prototype with exact matched
   final bounds and a seven-pair timing driver;
@@ -540,36 +540,48 @@ preserved all final outputs but improved one representative run by only about
 4%; it is not a large-gap route.
 
 Third, holding the fixed-256 arithmetic and centered angle specialization
-fixed, the native driver directly evaluated the source `delta_x4` value,
-gradient, and constant Hessian instead of interpreting its 39 scalar
-polynomial steps.  In 21 warmed, order-balanced pairs:
+fixed, the native driver directly evaluated the 39-step numerator polynomial
+instead of interpreting its scalar instructions.  A subsequent exact payload
+decode found an important sign error in the first development shortcut: the
+source polynomial is **`-delta_x4`**, while that shortcut had returned
+`delta_x4`.  The earlier apparent tightening by about 0.436 and all timings
+downstream of that sign-wrong shortcut are superseded.  No proved Candle
+specialization used this shortcut.
+
+The corrected driver negates value, gradient, and Hessian, restricts the
+development dispatch to pinned outer position 32, and checks the source
+payload independently with exact rational polynomial normalization.  The
+same check establishes that outer position 33 is `4*x0*delta`.  It emits
+`CANDLE_NL_CASE10173_ANGLE_PAYLOAD_IDENTITIES_OK`; the pinned program has
+SHA-256
+`b044687f3c3f77b50d8dfd7afd8ebb9c7af1fb30637acc2b629107cee6e67b01`.
+
+In 21 warmed, order-balanced corrected pairs:
 
 | Fixed-256 centered-angle lane | Mean evaluation time |
 |---|---:|
-| Interpreted `delta_x4` polynomial | 0.170087603 s |
-| Direct `delta_x4` jet | 0.143338840 s |
+| Interpreted `-delta_x4` polynomial | 0.171291644 s |
+| Direct `-delta_x4` jet | 0.148842708 s |
 
-This is a further **1.187-times** speedup and a **15.73%** reduction.  All 128
-cells remained accepted.  The direct lane produced tighter bounds for all 128
-cells rather than reproducing the current final upper bounds exactly; even the
-least tightening was about 0.436.  Therefore it is not ready for formal use
-until the exact source identity and the general centered-jet containment
-theorem are established.  The paired phase table has SHA-256
-`0e84aa4971f4d8062446f2282fdf5d0d374d0ac0e8699ccd7aa44130daebd0c2`.
+This is a further **1.151-times** speedup and a **13.11%** reduction.  All 128
+cells remained accepted, and at scale `10^12` the direct lane reproduced all
+128 established final bounds exactly.  The paired phase table has SHA-256
+`1eeab30c0ca3955f34cfa1812916294e77c5bae3835a8f2255e0445e00157ae1`.
 It reduced semantic interval products from 694,272 to 564,480 and interpreted
-polynomial steps from 11,648 to 6,656.
+polynomial steps from 11,648 to 6,656.  This corrected result is the only
+direct-numerator result used below.
 
 Fourth, a minimal sparsity discriminator kept the fixed-256 arithmetic,
-direct `delta_x4`, all dense jet objects, all rounding, and the numerical
+direct `-delta_x4`, all dense jet objects, all rounding, and the numerical
 algorithm fixed.  It only bypassed interval multiplication when either input
 was the exact zero interval.  In 21 warmed, order-balanced pairs it reduced
-evaluation from 0.144457137 to 0.129686915 seconds, a **1.114-times** speedup
-or **10.22%** reduction.  The exact 128-result stream was byte-identical between
+evaluation from 0.151343951 to 0.137435641 seconds, a **1.101-times** speedup
+or **9.19%** reduction.  The exact 128-result stream was byte-identical between
 the two lanes and all cells remained accepted.  It bypassed 479,872 of 564,480
 attempted interval products.  The paired phase table has SHA-256
-`9d96b658754aea4903fcccdef6bec49fb2aa4accad9929322ea19b04d954c7c7`;
+`d2386e07ebf68cc6720bd366482002baa2ab3e06b73214dcadb5dc3ddd41a04a`;
 both result streams have SHA-256
-`ec685c4db6d5780af36893470d65c880ca9243c0bd072d9db3c3fdd55ca30200`.
+`21533ccc3e2ea18d0031fb2382d59b3e87d316944faad1706bac56455e01da7c`.
 
 This is informative precisely because the timing gain is much smaller than
 the product-count reduction.  With fixed-width endpoints, multiplication by
@@ -579,24 +591,24 @@ representation and omit absent gradient/Hessian entries end to end.  Merely
 adding zero tests to the dense checker is not a serious architecture.
 
 Fifth, a symmetric-Hessian discriminator kept fixed-256 arithmetic, decimal
-rounding, direct `delta_x4`, and exact-zero bypass fixed.  It computed only the
+rounding, direct `-delta_x4`, and exact-zero bypass fixed.  It computed only the
 upper triangle of every known-symmetric Hessian operation and mirrored the
 result, while deliberately retaining the existing dense in-memory object.  In
 21 warmed, order-balanced pairs:
 
 | Fixed-256 zero-bypass lane | Mean evaluation time |
 |---|---:|
-| Dense Hessian operations | 0.134538433 s |
-| Upper-triangle Hessian operations | 0.111261425 s |
+| Dense Hessian operations | 0.136614395 s |
+| Upper-triangle Hessian operations | 0.113362306 s |
 
-This is a **1.209-times** speedup and a **17.30%** reduction.  The 128-result
+This is a **1.205-times** speedup and a **17.02%** reduction.  The 128-result
 streams were byte-identical and all cells remained accepted.  Semantic
 interval products fell from 84,608 to 58,496; bypassed zero products fell from
 479,872 to 292,864 because the duplicate lower-triangle operations no longer
 occurred.  The paired phase table has SHA-256
-`19623196c0097d239eeac86dc5716c23986d17220d3a580e9d46bec3cfdf5946`;
+`b1083b9d8bc7dabf9d4ec28f2648818102382b7c75ea7a26279f31b3cc77ac78`;
 both result streams again have SHA-256
-`ec685c4db6d5780af36893470d65c880ca9243c0bd072d9db3c3fdd55ca30200`.
+`21533ccc3e2ea18d0031fb2382d59b3e87d316944faad1706bac56455e01da7c`.
 This isolates useful generic derivative/Taylor redundancy while holding
 arithmetic and rounding fixed, but its size rules out symmetry alone as the
 large-gap explanation.
@@ -608,17 +620,18 @@ integers.  In 21 warmed, order-balanced pairs:
 
 | Endpoint backend | Mean preparation | Mean evaluation | Mean 128-box batch |
 |---|---:|---:|---:|
-| Fixed 256-bit | 0.007060719 s | 0.102420758 s | 0.109481477 s |
-| Checked 128-bit | 0.006879125 s | 0.063132211 s | 0.070011336 s |
+| Fixed 256-bit | 0.008070501 s | 0.106953259 s | 0.115023760 s |
+| Checked 128-bit | 0.007275976 s | 0.065849656 s | 0.073125631 s |
 
-The evaluation speedup is **1.622 times** (38.36% reduction); including
-program/job parsing, the recurring 128-box batch speedup is **1.564 times**.
+The evaluation speedup is **1.624 times** (38.43% reduction); including
+program/job parsing, the recurring 128-box batch speedup is **1.573 times**.
 Both backends produced byte-identical result streams, all 128 cells remained
-accepted, and all bounds remained tighter than the earlier reflected fixture.
+accepted, and the lower-scale bounds differed from the `10^12` fixture only
+by outward-rounding amounts (maximum widening about `6.22e-8`).
 The paired phase table has SHA-256
-`28ed4eb7abf93b390df4f58c0aa304edb3d29ad601b3f0c97f349ca2bad4d900`;
+`dcaf0c32680202dc075702c4dc118347169bacab1b17f1fbf06403e6cd69fa95`;
 both result streams have SHA-256
-`f942a4d04f8dc8dce67911e74f0aaf57f02c0583d0e2118ad06a7a9acda56308`.
+`7541bcd5a81792844c8da7f4f2c886203a601c89594eb16b3845a4ecee890355`.
 The same checked backend rejects scale `10^12` with an explicit multiplication
 overflow.  Scale `10^10` is therefore a measured fixture result, not a general
 range argument; a production choice still requires checked arithmetic or a
@@ -628,12 +641,13 @@ These results keep the performance layers explicit.  Relative to the
 historical specialized-C++ per-cell time, the original exact native
 fixed-scale lane was about **341 times** slower, the centered-angle GMP lane
 about **207 times** slower, the centered-angle fixed-256 lane about **67
-times** slower, and the direct-`delta_x4` fixed-256 lane about **56 times**
+times** slower, and the direct negated-numerator fixed-256 lane about **59 times**
 slower.  The dense exact-zero bypass diagnostic lowers the last figure only to
-about **50 times**, and upper-triangle Hessian execution lowers it to about
-**43 times**.  At the lower scale, checked 128-bit evaluation is still about
-**25 times** slower than historical specialized throughput; including this
-128-box lane's parsing/preparation makes the recurring batch ratio about **27
+about **54 times**, and upper-triangle Hessian execution lowers it to about
+**45 times**.  At the lower scale, checked 128-bit evaluation is still about
+**26 times** slower than historical specialized throughput.  The compact
+support-aware lane below lowers that to about **25 times**; including its
+128-box parsing/preparation makes the recurring batch ratio about **29
 times**.  Separately, executing the exact-output-matched original
 equations in `Kernel.compute` was about **15 times** slower than executing them
 in native C++.  Fixed-width arithmetic substantially reduces the much larger native
@@ -645,7 +659,7 @@ the encoded-evaluator gap.
 The next native discriminator held the following fixed on the same 128
 genuine case-10173 boxes:
 
-- the specialized-angle and direct-`delta_x4` polynomial choices;
+- the specialized-angle and direct-`-delta_x4` polynomial choices;
 - the generic analytic instruction sequence and Taylor formulas;
 - decimal scale `10^10`, checked signed 128-bit endpoints, and every
   outward-rounding point; and
@@ -664,19 +678,20 @@ Thirty alternating paired repetitions produced:
 
 | Lane | Mean preparation | Mean evaluation | Mean complete batch | Accepted |
 |---|---:|---:|---:|---:|
-| Dense symmetric control | 0.008519956 s | 0.065427876 s | 0.073947832 s | 128/128 |
-| Compact support-aware outer jets | 0.007795206 s | 0.061410095 s | 0.069205301 s | 128/128 |
+| Dense symmetric control | 0.008698347 s | 0.067140066 s | 0.075838413 s | 128/128 |
+| Compact support-aware outer jets | 0.009185835 s | 0.063152007 s | 0.072337842 s | 128/128 |
 
-The recurring evaluation gain is **1.0654 times**, or **6.14%**; including
-parsing/preparation, the batch gain is **1.0685 times**.  Both lanes performed
+The recurring evaluation gain is **1.0632 times**, or **5.94%**; including
+parsing/preparation in this paired sample, the batch gain is **1.0484 times**.
+Both lanes performed
 the same 58,496 nonzero interval products.  The compact lane reduced
 zero-product dispatches from 292,864 to 159,744, yet both 128-result streams
 are byte-identical with SHA-256
-`f942a4d04f8dc8dce67911e74f0aaf57f02c0583d0e2118ad06a7a9acda56308`.
+`7541bcd5a81792844c8da7f4f2c886203a601c89594eb16b3845a4ecee890355`.
 The phase table has SHA-256
-`90cef6db933090d2ea3badfe74073253d17845067e241ab67f5c1b9276f36d38`
+`f60e1e14238e877e02b5460f5363992517fd61781d1550a4a28f3883deee7b60`
 in development run
-`nl-native-case10173-compact-support-checked128-v1-dev-001`.
+`nl-native-case10173-compact-support-checked128-v3-sign-guarded-dev-001`.
 
 This rejects dense zero-entry traversal as the principal explanation of the
 remaining native/specialized gap on this fixture.  Completing a general
@@ -744,14 +759,14 @@ the first instruction passed its benchmark.
 The zero-skip, upper-triangle, and compact-support discriminators now bound
 the immediate representation opportunity.  The compact-support lane held the
 checked arithmetic and outward rounding fixed while removing a large subset
-of absent-entry work at the outer analytic boundary; its 6.14% evaluation
+of absent-entry work at the outer analytic boundary; its 5.94% evaluation
 improvement is real but local.  A fully compiled sparse plan remains a
 plausible reusable
 implementation step, but it is no longer the next large-gap experiment.
 
 The three controlled tests now bracket the causes.  Avoiding duplicate
 symmetric derivative work buys 1.21 times, unchanged-plan narrow arithmetic
-buys 1.62 times, and compact outer support execution buys a further local 1.07
+buys 1.62 times, and compact outer support execution buys a further local 1.06
 times against its dense checked-128 control.  None closes most of the gap.
 The next major native prototype is therefore a complete specialized-dihedral
 instruction modeled on the historical algorithm rather than another sequence

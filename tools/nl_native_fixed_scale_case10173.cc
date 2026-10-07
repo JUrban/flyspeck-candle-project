@@ -1961,13 +1961,14 @@ IntervalMatrix delta_x4_hessian() {
   return hessian;
 }
 
-TaylorResult evaluate_delta_x4_specialized(
+TaylorResult evaluate_neg_delta_x4_specialized(
     const IntegerVector& radii,
     const IntervalVector& center_environment, Counters& counters) {
   const FirstJet center = {
-      delta_x4_value(center_environment, counters),
-      delta_x4_gradient(center_environment)};
-  return complete_result(radii, true, center, delta_x4_hessian(), counters);
+      interval_neg(delta_x4_value(center_environment, counters)),
+      vector_neg(delta_x4_gradient(center_environment))};
+  return complete_result(radii, true, center,
+                         matrix_neg(delta_x4_hessian()), counters);
 }
 
 TaylorResult evaluate_four_x1_delta_specialized(
@@ -2088,6 +2089,7 @@ Evaluation evaluate_job(const Program& program, const Job& job,
   Counters counters;
   std::vector<TaylorResult> stack;
   std::size_t sqrt_slot = 0;
+  bool direct_delta_x4_used = false;
   for (std::size_t outer_index = 0;
        outer_index < program.instructions.size(); ++outer_index) {
     const std::size_t instruction_index = program.instructions[outer_index];
@@ -2114,11 +2116,14 @@ Evaluation evaluate_job(const Program& program, const Job& job,
             (fused_polynomial_max_steps >= 0 &&
              polynomial_steps <=
                  static_cast<std::size_t>(fused_polynomial_max_steps));
-        if (direct_delta_x4 && polynomial_steps == 39) {
-          stack.push_back(evaluate_delta_x4_specialized(
+        // The pinned case-10173 source payload at outer index 32 is
+        // -delta_x4, not delta_x4.  Do not dispatch merely by program length.
+        if (direct_delta_x4 && outer_index == 32 && polynomial_steps == 39) {
+          stack.push_back(evaluate_neg_delta_x4_specialized(
               radii, center_environment, counters));
+          direct_delta_x4_used = true;
         } else if (polynomial_mode == PolynomialMode::kSpecializedAngle &&
-            polynomial_steps == 85) {
+                   outer_index == 33 && polynomial_steps == 85) {
           stack.push_back(evaluate_four_x1_delta_specialized(
               radii, center_environment, box_environment, counters));
         } else {
@@ -2189,6 +2194,9 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                    subtract_counters(counters, counters_before));
     }
   }
+  if (direct_delta_x4 && !direct_delta_x4_used) {
+    throw std::runtime_error("negated delta_x4 source position drift");
+  }
   if (sqrt_slot != kSqrtSlots || stack.size() != 1 || !stack.back().domain) {
     throw std::runtime_error("final analytic result shape/domain drift");
   }
@@ -2217,6 +2225,7 @@ Evaluation evaluate_job_compact(const Program& program, const Job& job,
   Counters counters;
   std::vector<CompactTaylorResult> stack;
   std::size_t sqrt_slot = 0;
+  bool direct_delta_x4_used = false;
   for (std::size_t outer_index = 0;
        outer_index < program.instructions.size(); ++outer_index) {
     ++counters.outer_steps;
@@ -2239,11 +2248,14 @@ Evaluation evaluate_job_compact(const Program& program, const Job& job,
              polynomial_steps <=
                  static_cast<std::size_t>(fused_polynomial_max_steps));
         TaylorResult dense;
-        if (direct_delta_x4 && polynomial_steps == 39) {
-          dense = evaluate_delta_x4_specialized(
+        // The pinned case-10173 source payload at outer index 32 is
+        // -delta_x4, not delta_x4.  Do not dispatch merely by program length.
+        if (direct_delta_x4 && outer_index == 32 && polynomial_steps == 39) {
+          dense = evaluate_neg_delta_x4_specialized(
               radii, center_environment, counters);
+          direct_delta_x4_used = true;
         } else if (polynomial_mode == PolynomialMode::kSpecializedAngle &&
-                   polynomial_steps == 85) {
+                   outer_index == 33 && polynomial_steps == 85) {
           dense = evaluate_four_x1_delta_specialized(
               radii, center_environment, box_environment, counters);
         } else {
@@ -2304,6 +2316,9 @@ Evaluation evaluate_job_compact(const Program& program, const Job& job,
     } else {
       throw std::runtime_error("unknown compact analytic scalar instruction");
     }
+  }
+  if (direct_delta_x4 && !direct_delta_x4_used) {
+    throw std::runtime_error("compact negated delta_x4 source position drift");
   }
   if (sqrt_slot != kSqrtSlots || stack.size() != 1 ||
       !stack.back().domain) {
@@ -2491,6 +2506,7 @@ int main(int argc, char** argv) {
               << " fused_outer_index=" << fused_polynomial_outer_index
               << " fused_max_steps=" << fused_polynomial_max_steps
               << " direct_delta_x4=" << (direct_delta_x4 ? 1 : 0)
+              << " direct_delta_x4_source_sign=negated"
               << " skip_exact_zero_products="
               << (kSkipExactZeroProducts ? 1 : 0)
               << " symmetric_hessian_ops="
