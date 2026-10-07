@@ -583,9 +583,10 @@ historical specialized-C++ per-cell time, the original exact native
 fixed-scale lane was about **341 times** slower, the centered-angle GMP lane
 about **207 times** slower, the centered-angle fixed-256 lane about **67
 times** slower, and the direct-`delta_x4` fixed-256 lane about **56 times**
-slower.  Separately, executing the exact-output-matched original equations in
-`Kernel.compute` was about **15 times** slower than executing them in native
-C++.  Fixed-width arithmetic substantially reduces the much larger native
+slower.  The dense exact-zero bypass diagnostic lowers the last figure only to
+about **50 times**.  Separately, executing the exact-output-matched original
+equations in `Kernel.compute` was about **15 times** slower than executing them
+in native C++.  Fixed-width arithmetic substantially reduces the much larger native
 algorithm/arithmetic gap, but it does not remove it and says nothing yet about
 the encoded-evaluator gap.
 
