@@ -642,11 +642,20 @@ the encoded-evaluator gap.
 
 ### Bounded proof work and the larger-gap plan
 
-The current Candle angle-specialization proof is deliberately bounded.  It
-will establish the reusable logical representation and containment theorem,
-plus authenticated exact-payload dispatch with fallback to the generic proved
-path.  It will not grow into a collection of fixture-specific arithmetic
-proofs merely because the first instruction passed its benchmark.
+The first bounded proof boundary is now complete at Candle commit `d70c17ea`.
+The specialized `4*x0*delta` executable has assumption-free logical
+representation theorems for its interval operations, delta value/gradient/
+Hessian, product gradient/Hessian, fixed-scale result, and rational-input
+wrapper.  A clean checkpoint replay emitted
+`CANDLE_CV_FIXED_SCALE_ANGLE_POLYNOMIALS_SOUND_OK assumptions=0`.  This is a
+representation result, not yet the analytic containment theorem or the
+authenticated dispatch theorem, and it makes no certificate claim.
+
+The remaining Candle angle-specialization proof is deliberately bounded.  It
+will establish the reusable containment theorem plus authenticated
+exact-payload dispatch with fallback to the generic proved path.  It will not
+grow into a collection of fixture-specific arithmetic proofs merely because
+the first instruction passed its benchmark.
 
 The zero-skip and upper-triangle discriminators confirm that the next
 representation experiment should hold fixed-256 arithmetic constant while
