@@ -139,6 +139,7 @@ bool kUseUnsafeUnroundedHardware = false;
 bool kUseSignSpecializedIntervalProducts = false;
 bool kUseSpecializedDeltaRadicands = false;
 bool kUseSpecializedDeltaDerivatives = false;
+bool kUseSpecializedDeltaInverseRoots = false;
 bool kUseSpecializedDeltaDihedralChains = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
@@ -5117,23 +5118,16 @@ TaylorResult evaluate_historical_dihedral(
       : complete_result(radii, true, center, box.hessian, counters);
 }
 
-TaylorResult evaluate_delta_dihedral_chain_specialized(
+TaylorResult evaluate_delta_inverse_root_specialized(
     const IntegerVector& radii, const IntervalVector& center_environment,
     const IntervalVector& box_environment,
     const Interval& center_sqrt_certificate,
     const Interval& box_sqrt_certificate,
-    std::size_t radicand_coordinate,
-    std::size_t derivative_coordinate, Counters& counters,
+    std::size_t radicand_coordinate, Counters& counters,
     bool legacy_coordinate_zero = false) {
-  if (radicand_coordinate >= 3 ||
-      derivative_coordinate != radicand_coordinate + 3) {
-    throw std::runtime_error("delta dihedral coordinate pairing drift");
+  if (radicand_coordinate >= 3) {
+    throw std::runtime_error("delta inverse-root coordinate drift");
   }
-  const TaylorResult numerator = legacy_coordinate_zero
-      ? evaluate_neg_delta_x4_specialized(
-          radii, center_environment, counters)
-      : evaluate_neg_delta_derivative_specialized(
-          radii, center_environment, derivative_coordinate, counters);
   const TaylorResult radicand = legacy_coordinate_zero
       ? evaluate_four_x1_delta_specialized(
           radii, center_environment, box_environment, counters)
@@ -5151,7 +5145,7 @@ TaylorResult evaluate_delta_dihedral_chain_specialized(
       fixed_interval_not_zero(center_sqrt_certificate) &&
       fixed_interval_not_zero(box_sqrt_certificate);
   if (!sqrt_domain) {
-    throw std::runtime_error("prepared dihedral square-root domain failure");
+    throw std::runtime_error("delta inverse-root square-root domain failure");
   }
 
   const Interval center_inverse_root = fixed_interval_inv(
@@ -5179,24 +5173,43 @@ TaylorResult evaluate_delta_dihedral_chain_specialized(
       center_inverse_root,
       interval_vector_scale(center_inverse_root_d,
                             radicand.center.gradient, counters)};
-  const IntervalVector inverse_root_box_gradient = interval_vector_scale(
-      box_inverse_root_d, radicand.gradient_bounds, counters);
   const IntervalMatrix inverse_root_hessian = matrix_add(
       interval_matrix_scale(
           box_inverse_root_dd,
           interval_self_outer(radicand.gradient_bounds, counters), counters),
       interval_matrix_scale(
           box_inverse_root_d, radicand.hessian, counters));
-  const PolynomialJet inverse_root = {
-      inverse_root_center, box_inverse_root, inverse_root_box_gradient,
-      inverse_root_hessian};
+  return complete_result(
+      radii, true, inverse_root_center, inverse_root_hessian, counters);
+}
+
+TaylorResult evaluate_delta_dihedral_chain_specialized(
+    const IntegerVector& radii, const IntervalVector& center_environment,
+    const IntervalVector& box_environment,
+    const Interval& center_sqrt_certificate,
+    const Interval& box_sqrt_certificate,
+    std::size_t radicand_coordinate,
+    std::size_t derivative_coordinate, Counters& counters,
+    bool legacy_coordinate_zero = false) {
+  if (radicand_coordinate >= 3 ||
+      derivative_coordinate != radicand_coordinate + 3) {
+    throw std::runtime_error("delta dihedral coordinate pairing drift");
+  }
+  const TaylorResult numerator = legacy_coordinate_zero
+      ? evaluate_neg_delta_x4_specialized(
+          radii, center_environment, counters)
+      : evaluate_neg_delta_derivative_specialized(
+          radii, center_environment, derivative_coordinate, counters);
+  const TaylorResult completed_inverse_root =
+      evaluate_delta_inverse_root_specialized(
+          radii, center_environment, box_environment,
+          center_sqrt_certificate, box_sqrt_certificate,
+          radicand_coordinate, counters, legacy_coordinate_zero);
   // Preserve the source evaluator's useful Taylor tightening at both of the
   // late composition boundaries. Raw box composition can cross the fixed
   // atan kernel's (-1,1) contract even when the completed quotient is safely
   // inside it.  The authenticated numerator and radicand preparation above
   // remains shared.
-  const TaylorResult completed_inverse_root = complete_result(
-      radii, true, inverse_root.center, inverse_root.box_hessian, counters);
   const TaylorResult completed_quotient = result_mul(
       radii, numerator, completed_inverse_root, counters);
 
@@ -6139,6 +6152,34 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       outer_index += 7;
       continue;
     }
+    const Program::DeltaDihedralChain* delta_inverse_root_chain =
+        outer_index >= 2 &&
+                !program.specialized_delta_dihedral_chains.empty()
+            ? &program.specialized_delta_dihedral_chains.at(outer_index - 2)
+            : nullptr;
+    if (kUseSpecializedDeltaInverseRoots &&
+        delta_inverse_root_chain != nullptr &&
+        delta_inverse_root_chain->active) {
+      if (sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error(
+            "specialized delta inverse-root square-root slot drift");
+      }
+      stack.push_back(evaluate_delta_inverse_root_specialized(
+          radii, center_environment, box_environment,
+          job.fixed_center_certificates[sqrt_slot],
+          job.fixed_box_certificates[sqrt_slot],
+          delta_inverse_root_chain->radicand_coordinate, counters));
+      ++sqrt_slot;
+      counters.outer_steps += 3;
+      if (rounding_profiles != nullptr) {
+        record_rounding_profile(rounding_profiles, outer_index + 1,
+                                "specialized_delta_inverse_root",
+                                rounding_floor_before, rounding_ceil_before,
+                                rounding_begin);
+      }
+      outer_index += 2;
+      continue;
+    }
     if (kUseHistoricalDihedral && outer_index == 31) {
       if (!program.prepared_dihedral_chain || sqrt_slot != 6 ||
           sqrt_slot >= kSqrtSlots) {
@@ -6639,7 +6680,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 42) {
+    if (argc < 4 || argc > 43) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -6681,6 +6722,7 @@ int main(int argc, char** argv) {
                 << " [--sign-specialized-interval-products]"
                 << " [--specialized-delta-radicands]"
                 << " [--specialized-delta-derivatives]"
+                << " [--specialized-delta-inverse-roots]"
                 << " [--specialized-delta-dihedral-chains]"
                 << " [--count-fixed-quotients]"
                 << " [--rounding-profile]"
@@ -6815,6 +6857,8 @@ int main(int argc, char** argv) {
         kUseSpecializedDeltaRadicands = true;
       } else if (option == "--specialized-delta-derivatives") {
         kUseSpecializedDeltaDerivatives = true;
+      } else if (option == "--specialized-delta-inverse-roots") {
+        kUseSpecializedDeltaInverseRoots = true;
       } else if (option == "--specialized-delta-dihedral-chains") {
         kUseSpecializedDeltaDihedralChains = true;
       } else if (option == "--count-fixed-quotients") {
@@ -6912,6 +6956,7 @@ int main(int argc, char** argv) {
     }
     if ((kUseSpecializedDeltaRadicands ||
          kUseSpecializedDeltaDerivatives ||
+         kUseSpecializedDeltaInverseRoots ||
          kUseSpecializedDeltaDihedralChains) &&
         (kUseCompactSupportJets || polynomial_mode != PolynomialMode::kBaseline ||
          fused_polynomial_outer_index >= 0 ||
@@ -6919,11 +6964,18 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "specialized delta radicands require the dense baseline graph");
     }
-    if (kUseSpecializedDeltaDihedralChains &&
+    if ((kUseSpecializedDeltaInverseRoots ||
+         kUseSpecializedDeltaDihedralChains) &&
         (!kUseSpecializedDeltaRadicands ||
          !kUseSpecializedDeltaDerivatives)) {
       throw std::runtime_error(
-          "specialized delta chains require both authenticated pair lanes");
+          "specialized delta chain operations require both authenticated "
+          "pair lanes");
+    }
+    if (kUseSpecializedDeltaInverseRoots &&
+        kUseSpecializedDeltaDihedralChains) {
+      throw std::runtime_error(
+          "conflicting specialized delta chain operations");
     }
     if (kNormalizeFusedPolynomialProducts &&
         polynomial_mode == PolynomialMode::kBaseline &&
@@ -7209,11 +7261,13 @@ int main(int argc, char** argv) {
     if (kUseSpecializedDeltaDerivatives) {
       prepare_specialized_delta_derivatives(program);
     }
-    if (kUseSpecializedDeltaDihedralChains) {
+    if (kUseSpecializedDeltaInverseRoots ||
+        kUseSpecializedDeltaDihedralChains) {
       prepare_specialized_delta_dihedral_chains(program);
     }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels ||
+        kUseSpecializedDeltaInverseRoots ||
         kUseSpecializedDeltaDihedralChains) {
       prepare_fixed_sqrt_certificates(jobs);
     }
@@ -7530,6 +7584,8 @@ int main(int argc, char** argv) {
               << (kUseSpecializedDeltaDerivatives ? 1 : 0)
               << " specialized_delta_derivative_count="
               << specialized_delta_derivative_count
+              << " specialized_delta_inverse_roots="
+              << (kUseSpecializedDeltaInverseRoots ? 1 : 0)
               << " specialized_delta_dihedral_chains="
               << (kUseSpecializedDeltaDihedralChains ? 1 : 0)
               << " specialized_delta_dihedral_chain_count="
