@@ -117,6 +117,7 @@ bool kPrecomputeTightSqrtCertificates = false;
 bool kUseHardwareSeededIntegerSqrt = false;
 bool kUseHardwareSeededFixedQuotient = false;
 bool kUseDyadicShiftFixedQuotient = false;
+bool kNormalizeFusedPolynomialProducts = false;
 int kDyadicScaleBits = -1;
 bool kFuseConsecutiveAdds = false;
 bool kDeferAdditiveLeafCompletion = false;
@@ -3550,9 +3551,16 @@ TaylorResult evaluate_polynomial_fused(
       }
       PolynomialJet value = stack.back();
       stack.pop_back();
-      stack.push_back(opcode == 2
-                          ? polynomial_neg(value)
-                          : polynomial_mul(value, value, counters));
+      PolynomialJet result = opcode == 2
+          ? polynomial_neg(value)
+          : polynomial_mul(value, value, counters);
+      if (opcode == 5 && kNormalizeFusedPolynomialProducts) {
+        const TaylorResult normalized = complete_result(
+            radii, true, result.center, result.box_hessian, counters);
+        result = {normalized.center, normalized.value_bound,
+                  normalized.gradient_bounds, normalized.hessian};
+      }
+      stack.push_back(result);
     } else if (opcode == 3 || opcode == 4) {
       if (stack.size() < 2) {
         throw std::runtime_error("fused polynomial stack underflow");
@@ -3561,9 +3569,16 @@ TaylorResult evaluate_polynomial_fused(
       stack.pop_back();
       PolynomialJet left = stack.back();
       stack.pop_back();
-      stack.push_back(opcode == 3
-                          ? polynomial_add(left, right)
-                          : polynomial_mul(left, right, counters));
+      PolynomialJet result = opcode == 3
+          ? polynomial_add(left, right)
+          : polynomial_mul(left, right, counters);
+      if (opcode == 4 && kNormalizeFusedPolynomialProducts) {
+        const TaylorResult normalized = complete_result(
+            radii, true, result.center, result.box_hessian, counters);
+        result = {normalized.center, normalized.value_bound,
+                  normalized.gradient_bounds, normalized.hessian};
+      }
+      stack.push_back(result);
     } else {
       throw std::runtime_error("unknown fused polynomial scalar instruction");
     }
@@ -6068,7 +6083,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 41) {
+    if (argc < 4 || argc > 42) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -6076,6 +6091,7 @@ int main(int argc, char** argv) {
                 << "--specialized-angle-polynomials]"
                 << " [--fused-polynomial-index=N]"
                 << " [--fused-polynomial-max-steps=N]"
+                << " [--normalize-fused-polynomial-products]"
                 << " [--prepared-polynomial-pair=N]"
                 << " [--direct-delta-x4]"
                 << " [--skip-exact-zero-products]"
@@ -6172,6 +6188,8 @@ int main(int argc, char** argv) {
           throw std::runtime_error(
               "negative prepared polynomial pair index");
         }
+      } else if (option == "--normalize-fused-polynomial-products") {
+        kNormalizeFusedPolynomialProducts = true;
       } else if (option == "--direct-delta-x4") {
         direct_delta_x4 = true;
       } else if (option == "--skip-exact-zero-products") {
@@ -6326,6 +6344,12 @@ int main(int argc, char** argv) {
          kUsePreparedSimplePolynomials || kUseDirectSpecializedFunction)) {
       throw std::runtime_error(
           "prepared polynomial pair requires the dense baseline evaluator");
+    }
+    if (kNormalizeFusedPolynomialProducts &&
+        polynomial_mode == PolynomialMode::kBaseline &&
+        fused_polynomial_outer_index < 0 && fused_polynomial_max_steps < 0) {
+      throw std::runtime_error(
+          "fused product normalization requires a fused polynomial lane");
     }
     if (full_stage_diagnostics && kUseCompactSupportJets) {
       throw std::runtime_error(
@@ -6822,6 +6846,8 @@ int main(int argc, char** argv) {
                                   : "baseline")
               << " fused_outer_index=" << fused_polynomial_outer_index
               << " fused_max_steps=" << fused_polynomial_max_steps
+              << " normalize_fused_products="
+              << (kNormalizeFusedPolynomialProducts ? 1 : 0)
               << " prepared_polynomial_pair_index="
               << prepared_polynomial_pair_index
               << " prepared_polynomial_instruction_count="
