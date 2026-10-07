@@ -191,9 +191,13 @@ struct FixedRangeProfile {
   unsigned taylor_gradient_product_bits = 0;
   unsigned taylor_gradient_raw_bits = 0;
   std::uint64_t quotient_results_outside_int64 = 0;
+  std::uint64_t quotient_negative_numerators = 0;
+  std::uint64_t quotient_nonzero_remainders = 0;
   std::uint64_t multiplication_operands_outside_int64 = 0;
   std::uint64_t addition_results_outside_int64 = 0;
+  std::uint64_t addition_endpoints = 0;
   std::uint64_t scaled_inputs_outside_int64 = 0;
+  std::array<std::uint64_t, 9> multiplication_sign_classes{};
   std::uint64_t scalar_dot_terms = 0;
   std::uint64_t scalar_weighted_terms = 0;
   std::uint64_t taylor_completion_calls = 0;
@@ -240,6 +244,12 @@ Fixed range_profile_quotient(Fixed numerator, Fixed denominator,
   if (!fixed_fits_int64(result)) {
     ++kFixedRangeProfile.quotient_results_outside_int64;
   }
+  if (numerator < 0) {
+    ++kFixedRangeProfile.quotient_negative_numerators;
+  }
+  if (numerator % denominator != 0) {
+    ++kFixedRangeProfile.quotient_nonzero_remainders;
+  }
   return result;
 }
 
@@ -274,6 +284,13 @@ struct Interval {
 void range_profile_multiplication(const Interval& left,
                                   const Interval& right,
                                   const Interval& product) {
+  const auto sign_class = [](const Interval& interval) {
+    if (interval.lower >= 0) return 0U;
+    if (interval.upper <= 0) return 1U;
+    return 2U;
+  };
+  ++kFixedRangeProfile.multiplication_sign_classes[
+      3 * sign_class(left) + sign_class(right)];
   for (const Fixed& value : {left.lower, left.upper,
                              right.lower, right.upper}) {
     update_fixed_bits(kFixedRangeProfile.multiplication_operand_bits, value);
@@ -288,6 +305,7 @@ void range_profile_multiplication(const Interval& left,
 }
 
 void range_profile_addition(const Interval& result) {
+  kFixedRangeProfile.addition_endpoints += 2;
   for (const Fixed& value : {result.lower, result.upper}) {
     update_fixed_bits(kFixedRangeProfile.addition_result_bits, value);
     if (!fixed_fits_int64(value)) {
@@ -7563,6 +7581,10 @@ int main(int argc, char** argv) {
               << kFixedRangeProfile.quotient_result_bits
               << " range_quotient_results_outside_int64="
               << kFixedRangeProfile.quotient_results_outside_int64
+              << " range_quotient_negative_numerators="
+              << kFixedRangeProfile.quotient_negative_numerators
+              << " range_quotient_nonzero_remainders="
+              << kFixedRangeProfile.quotient_nonzero_remainders
               << " range_multiplication_operand_bits="
               << kFixedRangeProfile.multiplication_operand_bits
               << " range_multiplication_operands_outside_int64="
@@ -7573,6 +7595,26 @@ int main(int argc, char** argv) {
               << kFixedRangeProfile.addition_result_bits
               << " range_addition_results_outside_int64="
               << kFixedRangeProfile.addition_results_outside_int64
+              << " range_addition_endpoints="
+              << kFixedRangeProfile.addition_endpoints
+              << " range_multiplication_sign_nn="
+              << kFixedRangeProfile.multiplication_sign_classes[0]
+              << " range_multiplication_sign_np="
+              << kFixedRangeProfile.multiplication_sign_classes[1]
+              << " range_multiplication_sign_nm="
+              << kFixedRangeProfile.multiplication_sign_classes[2]
+              << " range_multiplication_sign_pn="
+              << kFixedRangeProfile.multiplication_sign_classes[3]
+              << " range_multiplication_sign_pp="
+              << kFixedRangeProfile.multiplication_sign_classes[4]
+              << " range_multiplication_sign_pm="
+              << kFixedRangeProfile.multiplication_sign_classes[5]
+              << " range_multiplication_sign_mn="
+              << kFixedRangeProfile.multiplication_sign_classes[6]
+              << " range_multiplication_sign_mp="
+              << kFixedRangeProfile.multiplication_sign_classes[7]
+              << " range_multiplication_sign_mm="
+              << kFixedRangeProfile.multiplication_sign_classes[8]
               << " range_scaled_input_bits="
               << kFixedRangeProfile.scaled_input_bits
               << " range_scaled_inputs_outside_int64="
