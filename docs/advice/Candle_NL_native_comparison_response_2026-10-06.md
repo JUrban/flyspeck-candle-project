@@ -2433,3 +2433,37 @@ target.
 Complete timings, exact-output identities, memory, staging, and evidence
 hashes are in
 `docs/progress/2026-10-07-v3.73-nl-mixed-width-gate.md`.
+
+## Update: the proof-safe fallback boundary is explicit
+
+The first reflected proof packet now specifies total bounded results with
+exclusive `2^128` endpoint and `2^192` accumulator limits.  It proves that a
+successful result may be selected and that every rejected/overflow result
+delegates to the unchanged exact fixed-scale value.  Focused computation
+covers both success and an endpoint exactly at the exclusive bound; the
+generic fallback, addition, and multiplication theorems have no hypotheses.
+
+This is intentionally a safety contract, not a speed claim.  The current
+logical wrapper computes the exact value before checking its bound, and the
+existing `Kernel.compute` still lacks a checked word value type.  The proof
+effort is therefore bounded to lifting this result shape across a complete
+Taylor completion and defining the future executor refinement; it will not
+expand into proofs for every helper before an execution experiment justifies
+them.
+
+The broader performance lane remains primary.  The next discriminator will
+hold the exact natural arithmetic and mathematical graph fixed while putting
+the complete 875-cell case16594 family into one flat prepared
+`Kernel.compute` call and returning only compact acceptance data.  Preparation,
+evaluation, decoding, theorem handoff, total time, RSS, exact output, and
+875/875 acceptance will be compared with the 225.8-second reflected control.
+This directly tests evaluator setup and intermediate-result traffic without
+confounding them with the positive mixed-width specialization.  A substantial
+gain would justify a reusable flat-batch interpreter theorem; a negative
+result would strengthen the case for the larger verified word-compute
+extension.  The second 4,173-cell family remains the cross-family gate.
+
+The implementation, accepted focused run, evidence hashes, and explicit
+scope limit are recorded in
+`docs/progress/2026-10-07-v3.74-nl-bounded-fallback-contract.md` and isolated
+Candle commit `662193d7`.
