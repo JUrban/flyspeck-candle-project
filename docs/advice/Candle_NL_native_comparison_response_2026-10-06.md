@@ -640,6 +640,65 @@ in native C++.  Fixed-width arithmetic substantially reduces the much larger nat
 algorithm/arithmetic gap, but it does not remove it and says nothing yet about
 the encoded-evaluator gap.
 
+### Compact-support discriminator: useful, but only a local gain
+
+The next native discriminator held the following fixed on the same 128
+genuine case-10173 boxes:
+
+- the specialized-angle and direct-`delta_x4` polynomial choices;
+- the generic analytic instruction sequence and Taylor formulas;
+- decimal scale `10^10`, checked signed 128-bit endpoints, and every
+  outward-rounding point; and
+- the input program, square-root certificates, boxes, and expected results.
+
+It changed only the outer analytic jet representation and execution.  The
+control kept dense six-entry gradients and symmetric dense matrices.  The
+candidate carried explicit gradient support masks and a 21-entry
+upper-triangular Hessian with a support mask, and did not traverse or dispatch
+known-absent entries.  Polynomial subprograms still use the established dense
+or specialized evaluators and are converted at their result boundary; this is
+therefore a bounded outer-jet discriminator, not a claim that every possible
+sparse compiler optimization has been exhausted.
+
+Thirty alternating paired repetitions produced:
+
+| Lane | Mean preparation | Mean evaluation | Mean complete batch | Accepted |
+|---|---:|---:|---:|---:|
+| Dense symmetric control | 0.008519956 s | 0.065427876 s | 0.073947832 s | 128/128 |
+| Compact support-aware outer jets | 0.007795206 s | 0.061410095 s | 0.069205301 s | 128/128 |
+
+The recurring evaluation gain is **1.0654 times**, or **6.14%**; including
+parsing/preparation, the batch gain is **1.0685 times**.  Both lanes performed
+the same 58,496 nonzero interval products.  The compact lane reduced
+zero-product dispatches from 292,864 to 159,744, yet both 128-result streams
+are byte-identical with SHA-256
+`f942a4d04f8dc8dce67911e74f0aaf57f02c0583d0e2118ad06a7a9acda56308`.
+The phase table has SHA-256
+`90cef6db933090d2ea3badfe74073253d17845067e241ab67f5c1b9276f36d38`
+in development run
+`nl-native-case10173-compact-support-checked128-v1-dev-001`.
+
+This rejects dense zero-entry traversal as the principal explanation of the
+remaining native/specialized gap on this fixture.  Completing a general
+sparse plan may still be worthwhile as reusable engineering, but the measured
+gain is too local to justify making it the next major proof project.  It also
+sharpens the distinction between the two gaps: arithmetic width and outer
+support-aware execution have reduced native time, while the historical
+specialized implementation still avoids substantially more numerical work
+per accepted box.
+
+The next large-gap experiment will therefore hold checked fixed-scale
+arithmetic and the genuine boxes fixed while replacing the complete generic
+dihedral derivative/composition path with a faithful native port of the
+historical specialized dihedral enclosure structure.  It will record final
+upper-bound width, 128-box acceptance, preparation/evaluation time, interval
+operation counts, and peak memory.  If that lane has a material complete-batch
+win, it will be extended to the full 4,173-box certificate before any broad
+formalization.  If it does not, the next discriminator will keep that
+specialized algorithm fixed and compare checked fixed-scale endpoints with
+outward-rounded machine arithmetic, separating algorithmic work from endpoint
+representation and rounding.
+
 ### Bounded proof work and the larger-gap plan
 
 The first bounded proof boundary is now complete at Candle commit `d70c17ea`.
@@ -657,39 +716,36 @@ exact-payload dispatch with fallback to the generic proved path.  It will not
 grow into a collection of fixture-specific arithmetic proofs merely because
 the first instruction passed its benchmark.
 
-The zero-skip and upper-triangle discriminators confirm that the next
-representation experiment should hold fixed-256 arithmetic constant while
-replacing the dense generic value/gradient/Hessian interpreter with a genuinely
-compact compiled sparse symmetric-jet plan.  The plan should carry coordinate
-dependency masks, store only used gradient and upper-triangular Hessian
-entries, and avoid rounding or traversing absent entries.  Running that plan
-over the same genuine boxes separates the remaining generic derivative/Taylor
-work from arithmetic representation without changing both at once.
+The zero-skip, upper-triangle, and compact-support discriminators now bound
+the immediate representation opportunity.  The compact-support lane held the
+checked arithmetic and outward rounding fixed while removing a large subset
+of absent-entry work at the outer analytic boundary; its 6.14% evaluation
+improvement is real but local.  A fully compiled sparse plan remains a
+plausible reusable
+implementation step, but it is no longer the next large-gap experiment.
 
-The upper-triangle and checked-width tests now bracket the causes.  Avoiding
-duplicate symmetric derivative work buys 1.21 times while unchanged-plan
-narrow arithmetic buys 1.62 times; neither closes most of the gap.  A genuinely
-compact sparse plan remains useful because the upper-triangle test retained
-dense objects and traversal, but it is bounded to one implementation and one
-128-box gate.  Unless that result is unexpectedly large, the next major native
-prototype should be a complete specialized-dihedral instruction modeled on
-the historical algorithm rather than another sequence of local jet
-micro-optimizations.  The specialized instruction must still emit the data
-needed by the general Taylor contract, and its eventual proof should be one
-reusable instruction theorem plus authenticated source-to-plan checking.
+The three controlled tests now bracket the causes.  Avoiding duplicate
+symmetric derivative work buys 1.21 times, unchanged-plan narrow arithmetic
+buys 1.62 times, and compact outer support execution buys a further local 1.07
+times against its dense checked-128 control.  None closes most of the gap.
+The next major native prototype is therefore a complete specialized-dihedral
+instruction modeled on the historical algorithm rather than another sequence
+of jet micro-optimizations.  The specialized instruction must still emit the
+data needed by the general Taylor contract, and its eventual proof should be
+one reusable instruction theorem plus authenticated source-to-plan checking.
 
 The staged route is:
 
 1. keep the present representation/dispatch proof bounded and retain generic
    fallback;
-2. prototype a checked-overflow or statically range-bounded 256-bit logical
-   arithmetic backend, then measure its encoded form before considering a new
-   evaluator primitive;
-3. compile authenticated expressions to sparse symmetric-jet plans and test
-   exact containment and complete-certificate acceptance in native code;
+2. retain checked fixed-width arithmetic and compact support-aware jets as
+   measured implementation candidates, without broadening their proof surface
+   before the architecture gate;
+3. test a faithful complete-dihedral numerical instruction on genuine boxes,
+   then separate its algorithmic gain from endpoint/rounding cost if needed;
 4. add generally useful source operations such as `delta_x`, `delta_x4`,
-   `ups_x`, coordinate square root, and complete dihedral only when an
-   end-to-end batch benchmark justifies them;
+   `ups_x`, coordinate square root, and complete dihedral only when their
+   end-to-end batch benchmarks justify them;
 5. gate architecture choices on the complete 4,173-box certificate, charging
    reusable preparation once and recording acceptance, elapsed time, peak
    memory, and required subdivisions; and
@@ -704,14 +760,13 @@ rounding, and algorithm simultaneously would not identify which improvement
 matters.  The deciding result remains total accepted-certificate throughput,
 with preparation and theorem handoff visible and amortized honestly.
 
-The immediate decision sequence is therefore concrete and bounded:
+The immediate decision sequence is therefore concrete and bounded.  The
+compact-support gate is complete with only a local gain:
 
-1. implement one compact upper-triangular sparse-plan lane over the present
-   128 genuine boxes, using the checked `10^10` arithmetic result as its native
-   control and preserving complete-box acceptance;
-2. stop extending that representation if it gives only another local gain,
-   and instead port the historical complete-dihedral numerical structure into
-   the native harness with explicit outward rounding and the same box inputs;
+1. retain the compact-support implementation and result as a measured
+   lower-level optimization, but do not expand its proof surface now;
+2. port the historical complete-dihedral numerical structure into the native
+   harness with explicit outward rounding and the same box inputs;
 3. record bound width, acceptance, complete-batch preparation/evaluation time,
    and operation counts for generic compact and specialized-dihedral lanes;
 4. only after a native specialized lane demonstrates a material end-to-end

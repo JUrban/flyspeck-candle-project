@@ -23,6 +23,8 @@ namespace {
 
 constexpr std::size_t kDimensions = 6;
 constexpr std::size_t kSqrtSlots = 7;
+constexpr std::size_t kSymmetricEntries =
+    kDimensions * (kDimensions + 1) / 2;
 
 using Rat = mpq_class;
 using Integer = mpz_class;
@@ -46,6 +48,7 @@ constexpr const char* kFixedBackend = "mpz";
 Fixed kTwoScaleSquared = 2 * kScale * kScale;
 bool kSkipExactZeroProducts = false;
 bool kUseSymmetricHessianOps = false;
+bool kUseCompactSupportJets = false;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -85,6 +88,25 @@ struct PolynomialJet {
   Interval box_value;
   IntervalVector box_gradient;
   IntervalMatrix box_hessian;
+};
+
+using GradientMask = std::uint8_t;
+using HessianMask = std::uint32_t;
+
+struct CompactMatrix {
+  std::array<Interval, kSymmetricEntries> entries;
+  HessianMask mask = 0;
+};
+
+struct CompactTaylorResult {
+  bool domain;
+  Interval center_value;
+  IntervalVector center_gradient;
+  GradientMask center_gradient_mask;
+  Interval value_bound;
+  IntervalVector gradient_bounds;
+  GradientMask gradient_bounds_mask;
+  CompactMatrix hessian;
 };
 
 struct Counters {
@@ -1092,6 +1114,543 @@ TaylorResult result_pi_half(const IntegerVector& radii, Counters& counters) {
                          zero_matrix(), counters);
 }
 
+bool interval_is_zero(const Interval& value) {
+  return value.lower == 0 && value.upper == 0;
+}
+
+GradientMask gradient_bit(std::size_t coordinate) {
+  return static_cast<GradientMask>(1U << coordinate);
+}
+
+std::size_t symmetric_index(std::size_t row, std::size_t column) {
+  if (row > column) std::swap(row, column);
+  return row * kDimensions - row * (row - 1) / 2 + (column - row);
+}
+
+HessianMask hessian_bit(std::size_t row, std::size_t column) {
+  return static_cast<HessianMask>(1U << symmetric_index(row, column));
+}
+
+const Interval& compact_matrix_at(const CompactMatrix& matrix,
+                                  std::size_t row, std::size_t column) {
+  return matrix.entries[symmetric_index(row, column)];
+}
+
+bool compact_matrix_has(const CompactMatrix& matrix,
+                        std::size_t row, std::size_t column) {
+  return (matrix.mask & hessian_bit(row, column)) != 0;
+}
+
+void compact_matrix_set(CompactMatrix& matrix, std::size_t row,
+                        std::size_t column, const Interval& value) {
+  const std::size_t index = symmetric_index(row, column);
+  const HessianMask bit = static_cast<HessianMask>(1U << index);
+  matrix.entries[index] = value;
+  if (interval_is_zero(value)) {
+    matrix.mask &= ~bit;
+  } else {
+    matrix.mask |= bit;
+  }
+}
+
+CompactMatrix compact_matrix_from_dense(const IntervalMatrix& dense) {
+  CompactMatrix result;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      compact_matrix_set(result, row, column, dense[row][column]);
+    }
+  }
+  return result;
+}
+
+CompactTaylorResult compact_from_dense(const TaylorResult& dense) {
+  GradientMask center_mask = 0;
+  GradientMask bounds_mask = 0;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    if (!interval_is_zero(dense.center.gradient[coordinate])) {
+      center_mask |= gradient_bit(coordinate);
+    }
+    if (!interval_is_zero(dense.gradient_bounds[coordinate])) {
+      bounds_mask |= gradient_bit(coordinate);
+    }
+  }
+  return {dense.domain,
+          dense.center.value,
+          dense.center.gradient,
+          center_mask,
+          dense.value_bound,
+          dense.gradient_bounds,
+          bounds_mask,
+          compact_matrix_from_dense(dense.hessian)};
+}
+
+IntervalVector compact_vector_neg(const IntervalVector& value,
+                                  GradientMask mask) {
+  IntervalVector result = zero_vector();
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    if ((mask & gradient_bit(coordinate)) != 0) {
+      result[coordinate] = interval_neg(value[coordinate]);
+    }
+  }
+  return result;
+}
+
+IntervalVector compact_vector_add(const IntervalVector& left,
+                                  GradientMask left_mask,
+                                  const IntervalVector& right,
+                                  GradientMask right_mask,
+                                  GradientMask* result_mask) {
+  IntervalVector result = zero_vector();
+  const GradientMask candidates = left_mask | right_mask;
+  *result_mask = 0;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const GradientMask bit = gradient_bit(coordinate);
+    if ((candidates & bit) == 0) continue;
+    const Interval value = interval_add(left[coordinate], right[coordinate]);
+    result[coordinate] = value;
+    if (!interval_is_zero(value)) *result_mask |= bit;
+  }
+  return result;
+}
+
+IntervalVector compact_raw_vector_scale(const Interval& scalar,
+                                        const IntervalVector& value,
+                                        GradientMask mask,
+                                        GradientMask* result_mask,
+                                        Counters& counters) {
+  IntervalVector result = zero_vector();
+  *result_mask = 0;
+  if (interval_is_zero(scalar)) return result;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const GradientMask bit = gradient_bit(coordinate);
+    if ((mask & bit) == 0) continue;
+    const Interval product = raw_interval_mul(
+        scalar, value[coordinate], counters);
+    result[coordinate] = product;
+    if (!interval_is_zero(product)) *result_mask |= bit;
+  }
+  return result;
+}
+
+IntervalVector compact_raw_vector_round(const IntervalVector& value,
+                                        GradientMask mask,
+                                        const Fixed& denominator,
+                                        GradientMask* result_mask) {
+  IntervalVector result = zero_vector();
+  *result_mask = 0;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const GradientMask bit = gradient_bit(coordinate);
+    if ((mask & bit) == 0) continue;
+    const Interval rounded = raw_interval_round(
+        denominator, value[coordinate]);
+    result[coordinate] = rounded;
+    if (!interval_is_zero(rounded)) *result_mask |= bit;
+  }
+  return result;
+}
+
+IntervalVector compact_vector_scale(const Interval& scalar,
+                                    const IntervalVector& value,
+                                    GradientMask mask,
+                                    GradientMask* result_mask,
+                                    Counters& counters) {
+  GradientMask raw_mask = 0;
+  const IntervalVector raw = compact_raw_vector_scale(
+      scalar, value, mask, &raw_mask, counters);
+  return compact_raw_vector_round(raw, raw_mask, kScale, result_mask);
+}
+
+CompactMatrix compact_matrix_neg(const CompactMatrix& value) {
+  CompactMatrix result;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      if (compact_matrix_has(value, row, column)) {
+        compact_matrix_set(result, row, column,
+                           interval_neg(compact_matrix_at(value, row, column)));
+      }
+    }
+  }
+  return result;
+}
+
+CompactMatrix compact_matrix_add(const CompactMatrix& left,
+                                 const CompactMatrix& right) {
+  CompactMatrix result;
+  const HessianMask candidates = left.mask | right.mask;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      const HessianMask bit = hessian_bit(row, column);
+      if ((candidates & bit) == 0) continue;
+      const Interval left_value = compact_matrix_has(left, row, column)
+                                      ? compact_matrix_at(left, row, column)
+                                      : zero_interval();
+      const Interval right_value = compact_matrix_has(right, row, column)
+                                       ? compact_matrix_at(right, row, column)
+                                       : zero_interval();
+      compact_matrix_set(result, row, column,
+                         interval_add(left_value, right_value));
+    }
+  }
+  return result;
+}
+
+CompactMatrix compact_raw_matrix_scale(const Interval& scalar,
+                                       const CompactMatrix& value,
+                                       Counters& counters) {
+  CompactMatrix result;
+  if (interval_is_zero(scalar)) return result;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      if (!compact_matrix_has(value, row, column)) continue;
+      compact_matrix_set(
+          result, row, column,
+          raw_interval_mul(scalar, compact_matrix_at(value, row, column),
+                           counters));
+    }
+  }
+  return result;
+}
+
+CompactMatrix compact_raw_matrix_round(const CompactMatrix& value,
+                                       const Fixed& denominator) {
+  CompactMatrix result;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      if (!compact_matrix_has(value, row, column)) continue;
+      compact_matrix_set(
+          result, row, column,
+          raw_interval_round(denominator,
+                             compact_matrix_at(value, row, column)));
+    }
+  }
+  return result;
+}
+
+CompactMatrix compact_matrix_scale(const Interval& scalar,
+                                   const CompactMatrix& value,
+                                   Counters& counters) {
+  return compact_raw_matrix_round(
+      compact_raw_matrix_scale(scalar, value, counters), kScale);
+}
+
+CompactMatrix compact_self_outer(const IntervalVector& value,
+                                 GradientMask mask, Counters& counters) {
+  CompactMatrix result;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    if ((mask & gradient_bit(row)) == 0) continue;
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      if ((mask & gradient_bit(column)) == 0) continue;
+      compact_matrix_set(
+          result, row, column,
+          interval_mul(value[row], value[column], counters));
+    }
+  }
+  return result;
+}
+
+Fixed compact_dot_abs_upper(const IntegerVector& radii,
+                            const IntervalVector& row,
+                            GradientMask mask) {
+  Fixed result = 0;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    if ((mask & gradient_bit(coordinate)) != 0) {
+      result += radii[coordinate] * interval_abs_upper(row[coordinate]);
+    }
+  }
+  return result;
+}
+
+Fixed compact_weighted_abs_upper(const IntegerVector& radii,
+                                 const CompactMatrix& matrix) {
+  Fixed result = 0;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      if (!compact_matrix_has(matrix, row, column)) continue;
+      Fixed contribution = radii[row] * radii[column] *
+                           interval_abs_upper(compact_matrix_at(
+                               matrix, row, column));
+      if (row != column) contribution *= 2;
+      result += contribution;
+    }
+  }
+  return result;
+}
+
+CompactTaylorResult compact_complete_result(
+    const IntegerVector& radii, bool domain, const Interval& center_value,
+    const IntervalVector& center_gradient, GradientMask center_gradient_mask,
+    const CompactMatrix& hessian, Counters& counters) {
+  ++counters.completed_results;
+  const Fixed linear = compact_dot_abs_upper(
+      radii, center_gradient, center_gradient_mask);
+  const Fixed quadratic = compact_weighted_abs_upper(radii, hessian);
+  const Fixed error = 2 * kScale * linear + quadratic;
+  const Interval raw_value = {
+      kTwoScaleSquared * center_value.lower - error,
+      kTwoScaleSquared * center_value.upper + error};
+
+  IntervalVector gradient_bounds = zero_vector();
+  GradientMask gradient_bounds_mask = 0;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    Fixed variation = 0;
+    for (std::size_t column = 0; column < kDimensions; ++column) {
+      if (compact_matrix_has(hessian, row, column)) {
+        variation += radii[column] * interval_abs_upper(
+            compact_matrix_at(hessian, row, column));
+      }
+    }
+    const GradientMask bit = gradient_bit(row);
+    const Interval center = (center_gradient_mask & bit) != 0
+                                ? center_gradient[row]
+                                : zero_interval();
+    const Interval bound = raw_interval_round(
+        kScale, {kScale * center.lower - variation,
+                 kScale * center.upper + variation});
+    gradient_bounds[row] = bound;
+    if (!interval_is_zero(bound)) gradient_bounds_mask |= bit;
+  }
+
+  return {domain,
+          center_value,
+          center_gradient,
+          center_gradient_mask,
+          raw_interval_round(kTwoScaleSquared, raw_value),
+          gradient_bounds,
+          gradient_bounds_mask,
+          hessian};
+}
+
+CompactTaylorResult compact_complete_raw_result(
+    const IntegerVector& radii, bool domain, const Interval& raw_center_value,
+    const IntervalVector& raw_center_gradient,
+    GradientMask raw_center_gradient_mask,
+    const CompactMatrix& raw_hessian, Counters& counters) {
+  GradientMask center_gradient_mask = 0;
+  const IntervalVector center_gradient = compact_raw_vector_round(
+      raw_center_gradient, raw_center_gradient_mask, kScale,
+      &center_gradient_mask);
+  return compact_complete_result(
+      radii, domain, raw_interval_round(kScale, raw_center_value),
+      center_gradient, center_gradient_mask,
+      compact_raw_matrix_round(raw_hessian, kScale), counters);
+}
+
+CompactTaylorResult compact_result_neg(
+    const IntegerVector& radii, const CompactTaylorResult& value,
+    Counters& counters) {
+  return compact_complete_result(
+      radii, value.domain, interval_neg(value.center_value),
+      compact_vector_neg(value.center_gradient, value.center_gradient_mask),
+      value.center_gradient_mask, compact_matrix_neg(value.hessian), counters);
+}
+
+CompactTaylorResult compact_result_add(
+    const IntegerVector& radii, const CompactTaylorResult& left,
+    const CompactTaylorResult& right, Counters& counters) {
+  GradientMask center_mask = 0;
+  const IntervalVector center_gradient = compact_vector_add(
+      left.center_gradient, left.center_gradient_mask,
+      right.center_gradient, right.center_gradient_mask, &center_mask);
+  return compact_complete_result(
+      radii, left.domain && right.domain,
+      interval_add(left.center_value, right.center_value), center_gradient,
+      center_mask, compact_matrix_add(left.hessian, right.hessian), counters);
+}
+
+CompactMatrix compact_raw_product_hessian(
+    const CompactTaylorResult& left, const CompactTaylorResult& right,
+    Counters& counters) {
+  CompactMatrix result;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      const bool left_hessian = compact_matrix_has(left.hessian, row, column);
+      const bool right_hessian = compact_matrix_has(right.hessian, row, column);
+      const bool left_right =
+          (left.gradient_bounds_mask & gradient_bit(row)) != 0 &&
+          (right.gradient_bounds_mask & gradient_bit(column)) != 0;
+      const bool right_left =
+          (right.gradient_bounds_mask & gradient_bit(row)) != 0 &&
+          (left.gradient_bounds_mask & gradient_bit(column)) != 0;
+      if (!left_hessian && !right_hessian && !left_right && !right_left) {
+        continue;
+      }
+      const Interval first = left_hessian
+          ? raw_interval_mul(right.value_bound,
+                             compact_matrix_at(left.hessian, row, column),
+                             counters)
+          : zero_interval();
+      const Interval second = left_right
+          ? raw_interval_mul(left.gradient_bounds[row],
+                             right.gradient_bounds[column], counters)
+          : zero_interval();
+      const Interval third = right_left
+          ? raw_interval_mul(right.gradient_bounds[row],
+                             left.gradient_bounds[column], counters)
+          : zero_interval();
+      const Interval fourth = right_hessian
+          ? raw_interval_mul(left.value_bound,
+                             compact_matrix_at(right.hessian, row, column),
+                             counters)
+          : zero_interval();
+      compact_matrix_set(
+          result, row, column,
+          interval_add(interval_add(first, second),
+                       interval_add(third, fourth)));
+    }
+  }
+  return result;
+}
+
+CompactTaylorResult compact_result_mul(
+    const IntegerVector& radii, const CompactTaylorResult& left,
+    const CompactTaylorResult& right, Counters& counters) {
+  const Interval raw_center_value = raw_interval_mul(
+      left.center_value, right.center_value, counters);
+  GradientMask left_scaled_mask = 0;
+  GradientMask right_scaled_mask = 0;
+  const IntervalVector left_scaled = compact_raw_vector_scale(
+      right.center_value, left.center_gradient, left.center_gradient_mask,
+      &left_scaled_mask, counters);
+  const IntervalVector right_scaled = compact_raw_vector_scale(
+      left.center_value, right.center_gradient, right.center_gradient_mask,
+      &right_scaled_mask, counters);
+  GradientMask raw_center_mask = 0;
+  const IntervalVector raw_center_gradient = compact_vector_add(
+      left_scaled, left_scaled_mask, right_scaled, right_scaled_mask,
+      &raw_center_mask);
+  return compact_complete_raw_result(
+      radii, left.domain && right.domain, raw_center_value,
+      raw_center_gradient, raw_center_mask,
+      compact_raw_product_hessian(left, right, counters), counters);
+}
+
+CompactTaylorResult compact_result_inverse(
+    const IntegerVector& radii, const CompactTaylorResult& value,
+    Counters& counters) {
+  ++counters.inverse_steps;
+  const RationalInterval center_input = fixed_to_q(value.center_value);
+  const RationalInterval box_input = fixed_to_q(value.value_bound);
+  const bool domain = value.domain && rational_interval_not_zero(center_input) &&
+                      rational_interval_not_zero(box_input);
+  if (!domain) throw std::runtime_error("compact inverse domain failure");
+  const Interval r = interval_of_q(rational_interval_inv(center_input));
+  const Interval r2 = interval_mul(r, r, counters);
+  GradientMask center_mask = 0;
+  const IntervalVector center_gradient = compact_vector_scale(
+      interval_neg(r2), value.center_gradient, value.center_gradient_mask,
+      &center_mask, counters);
+
+  const Interval box_r = interval_of_q(rational_interval_inv(box_input));
+  const Interval box_r2 = interval_mul(box_r, box_r, counters);
+  const Interval box_r3 = interval_mul(box_r2, box_r, counters);
+  const CompactMatrix hessian = compact_matrix_add(
+      compact_matrix_scale(interval_neg(box_r2), value.hessian, counters),
+      compact_matrix_scale(
+          interval_add(box_r3, box_r3),
+          compact_self_outer(value.gradient_bounds,
+                             value.gradient_bounds_mask, counters),
+          counters));
+  return compact_complete_result(radii, domain, r, center_gradient,
+                                 center_mask, hessian, counters);
+}
+
+CompactTaylorResult compact_result_sqrt(
+    const IntegerVector& radii,
+    const RationalInterval& center_certificate,
+    const RationalInterval& box_certificate,
+    const CompactTaylorResult& value, Counters& counters) {
+  ++counters.sqrt_steps;
+  const RationalInterval center_input = fixed_to_q(value.center_value);
+  const RationalInterval box_input = fixed_to_q(value.value_bound);
+  const RationalInterval center_twice = rational_interval_add(
+      center_certificate, center_certificate);
+  const RationalInterval box_twice = rational_interval_add(
+      box_certificate, box_certificate);
+  const RationalInterval input_twice = rational_interval_add(
+      box_input, box_input);
+  const bool domain = value.domain &&
+                      sqrt_certificate(center_input, center_certificate) &&
+                      sqrt_certificate(box_input, box_certificate) &&
+                      rational_interval_not_zero(center_twice) &&
+                      rational_interval_not_zero(box_twice) &&
+                      rational_interval_not_zero(
+                          rational_interval_mul(box_twice, input_twice));
+  if (!domain) throw std::runtime_error("compact sqrt domain failure");
+
+  const Interval center_result = interval_of_q(center_certificate);
+  const RationalInterval center_d_q = rational_interval_inv(center_twice);
+  const Interval center_d = interval_of_q(center_d_q);
+  GradientMask center_mask = 0;
+  const IntervalVector center_gradient = compact_vector_scale(
+      center_d, value.center_gradient, value.center_gradient_mask,
+      &center_mask, counters);
+
+  const Interval box_d = interval_of_q(rational_interval_inv(box_twice));
+  const RationalInterval box_dd_q = rational_interval_neg(
+      rational_interval_inv(rational_interval_mul(box_twice, input_twice)));
+  const Interval box_dd = interval_of_q(box_dd_q);
+  const CompactMatrix hessian = compact_matrix_add(
+      compact_matrix_scale(
+          box_dd,
+          compact_self_outer(value.gradient_bounds,
+                             value.gradient_bounds_mask, counters),
+          counters),
+      compact_matrix_scale(box_d, value.hessian, counters));
+  return compact_complete_result(radii, domain, center_result,
+                                 center_gradient, center_mask, hessian,
+                                 counters);
+}
+
+CompactTaylorResult compact_result_atan(
+    const IntegerVector& radii, const CompactTaylorResult& value,
+    Counters& counters) {
+  ++counters.atan_steps;
+  const RationalInterval center_input = fixed_to_q(value.center_value);
+  const RationalInterval box_input = fixed_to_q(value.value_bound);
+  const RationalInterval one = {1, 1};
+  const RationalInterval center_denominator = rational_interval_add(
+      one, rational_interval_square(center_input));
+  const RationalInterval box_denominator = rational_interval_add(
+      one, rational_interval_square(box_input));
+  const bool domain = value.domain && atan_interval_domain(center_input) &&
+                      atan_interval_domain(box_input) &&
+                      rational_interval_not_zero(center_denominator) &&
+                      rational_interval_not_zero(box_denominator);
+  if (!domain) throw std::runtime_error("compact atan domain failure");
+
+  const Interval center_d = interval_of_q(
+      rational_interval_inv(center_denominator));
+  GradientMask center_mask = 0;
+  const IntervalVector center_gradient = compact_vector_scale(
+      center_d, value.center_gradient, value.center_gradient_mask,
+      &center_mask, counters);
+
+  const RationalInterval box_d_q = rational_interval_inv(box_denominator);
+  const RationalInterval box_dd_q = rational_interval_neg(
+      rational_interval_mul(
+          rational_interval_add(box_input, box_input),
+          rational_interval_mul(box_d_q, box_d_q)));
+  const Interval box_d = interval_of_q(box_d_q);
+  const Interval box_dd = interval_of_q(box_dd_q);
+  const CompactMatrix hessian = compact_matrix_add(
+      compact_matrix_scale(
+          box_dd,
+          compact_self_outer(value.gradient_bounds,
+                             value.gradient_bounds_mask, counters),
+          counters),
+      compact_matrix_scale(box_d, value.hessian, counters));
+  return compact_complete_result(
+      radii, domain, interval_of_q(atan_interval(center_input)),
+      center_gradient, center_mask, hessian, counters);
+}
+
+CompactTaylorResult compact_result_pi_half(
+    const IntegerVector& radii, Counters& counters) {
+  return compact_complete_result(
+      radii, true, interval_of_q({kPiHalfLower, kPiHalfUpper}),
+      zero_vector(), 0, CompactMatrix(), counters);
+}
+
 const Node& node_at(const Program& program, std::size_t index) {
   if (index >= program.nodes.size()) throw std::runtime_error("cval node index drift");
   return program.nodes[index];
@@ -1638,6 +2197,123 @@ Evaluation evaluate_job(const Program& program, const Job& job,
           counters};
 }
 
+Evaluation evaluate_job_compact(const Program& program, const Job& job,
+                                PolynomialMode polynomial_mode,
+                                int fused_polynomial_outer_index,
+                                int fused_polynomial_max_steps,
+                                bool direct_delta_x4) {
+  IntervalVector center_environment;
+  IntervalVector box_environment;
+  IntegerVector radii;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const Rat midpoint = (job.lower[coordinate] + job.upper[coordinate]) / 2;
+    const Rat radius = (job.upper[coordinate] - job.lower[coordinate]) / 2;
+    center_environment[coordinate] = interval_constant(midpoint);
+    box_environment[coordinate] = interval_of_q(
+        {job.lower[coordinate], job.upper[coordinate]});
+    radii[coordinate] = ceil_scaled(radius);
+  }
+
+  Counters counters;
+  std::vector<CompactTaylorResult> stack;
+  std::size_t sqrt_slot = 0;
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    ++counters.outer_steps;
+    const std::size_t instruction_index = program.instructions[outer_index];
+    const Node& instruction = node_at(program, instruction_index);
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "compact analytic tag");
+      if (tag == 0) {
+        const std::size_t polynomial_steps = decode_list(
+            program, instruction.right,
+            "compact polynomial mode selection").size();
+        const bool use_fused_polynomial =
+            polynomial_mode == PolynomialMode::kFusedAll ||
+            ((polynomial_mode == PolynomialMode::kFusedDeltaX4 ||
+              polynomial_mode == PolynomialMode::kSpecializedAngle) &&
+             polynomial_steps == 39) ||
+            static_cast<int>(outer_index) == fused_polynomial_outer_index ||
+            (fused_polynomial_max_steps >= 0 &&
+             polynomial_steps <=
+                 static_cast<std::size_t>(fused_polynomial_max_steps));
+        TaylorResult dense;
+        if (direct_delta_x4 && polynomial_steps == 39) {
+          dense = evaluate_delta_x4_specialized(
+              radii, center_environment, counters);
+        } else if (polynomial_mode == PolynomialMode::kSpecializedAngle &&
+                   polynomial_steps == 85) {
+          dense = evaluate_four_x1_delta_specialized(
+              radii, center_environment, box_environment, counters);
+        } else {
+          dense = use_fused_polynomial
+                      ? evaluate_polynomial_fused(
+                            program, instruction.right, radii,
+                            center_environment, box_environment, counters)
+                      : evaluate_polynomial(
+                            program, instruction.right, radii,
+                            center_environment, counters);
+        }
+        stack.push_back(compact_from_dense(dense));
+      } else if (tag == 1) {
+        if (sqrt_slot >= kSqrtSlots || stack.empty()) {
+          throw std::runtime_error("compact sqrt slot/stack drift");
+        }
+        CompactTaylorResult value = stack.back();
+        stack.pop_back();
+        stack.push_back(compact_result_sqrt(
+            radii, job.center_certificates[sqrt_slot],
+            job.box_certificates[sqrt_slot], value, counters));
+        ++sqrt_slot;
+      } else {
+        throw std::runtime_error("unknown compact analytic pair instruction");
+      }
+      continue;
+    }
+
+    const unsigned long opcode = instruction.numeral.get_ui();
+    if (opcode == 2 || opcode == 5 || opcode == 6 || opcode == 7) {
+      if (stack.empty()) {
+        throw std::runtime_error("compact analytic stack underflow");
+      }
+      CompactTaylorResult value = stack.back();
+      stack.pop_back();
+      if (opcode == 2) {
+        stack.push_back(compact_result_neg(radii, value, counters));
+      } else if (opcode == 5) {
+        stack.push_back(compact_result_mul(radii, value, value, counters));
+      } else if (opcode == 6) {
+        stack.push_back(compact_result_inverse(radii, value, counters));
+      } else {
+        stack.push_back(compact_result_atan(radii, value, counters));
+      }
+    } else if (opcode == 3 || opcode == 4) {
+      if (stack.size() < 2) {
+        throw std::runtime_error("compact analytic stack underflow");
+      }
+      CompactTaylorResult right = stack.back();
+      stack.pop_back();
+      CompactTaylorResult left = stack.back();
+      stack.pop_back();
+      stack.push_back(opcode == 3
+                          ? compact_result_add(radii, left, right, counters)
+                          : compact_result_mul(radii, left, right, counters));
+    } else if (opcode == 8) {
+      stack.push_back(compact_result_pi_half(radii, counters));
+    } else {
+      throw std::runtime_error("unknown compact analytic scalar instruction");
+    }
+  }
+  if (sqrt_slot != kSqrtSlots || stack.size() != 1 ||
+      !stack.back().domain) {
+    throw std::runtime_error("final compact analytic result shape/domain drift");
+  }
+  return {normalized_rat(integer_of_fixed(stack.back().value_bound.upper),
+                         integer_of_fixed(kScale)),
+          counters};
+}
+
 std::vector<Rat> read_expected_bounds(const char* path) {
   std::ifstream input(path);
   if (!input) throw std::runtime_error(std::string("cannot open expected bounds: ") + path);
@@ -1657,7 +2333,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 9) {
+    if (argc < 4 || argc > 12) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -1668,6 +2344,7 @@ int main(int argc, char** argv) {
                 << " [--direct-delta-x4]"
                 << " [--skip-exact-zero-products]"
                 << " [--symmetric-hessian-ops]"
+                << " [--compact-support-jets]"
                 << " [--decimal-scale=N]"
                 << " [--dyadic-scale]\n";
       return 2;
@@ -1710,6 +2387,8 @@ int main(int argc, char** argv) {
         kSkipExactZeroProducts = true;
       } else if (option == "--symmetric-hessian-ops") {
         kUseSymmetricHessianOps = true;
+      } else if (option == "--compact-support-jets") {
+        kUseCompactSupportJets = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -1723,6 +2402,10 @@ int main(int argc, char** argv) {
     }
     if (dyadic_scale && custom_decimal_scale) {
       throw std::runtime_error("conflicting scale selections");
+    }
+    if (profile_enabled && kUseCompactSupportJets) {
+      throw std::runtime_error(
+          "instruction profiling is not implemented for compact support jets");
     }
     if (dyadic_scale) {
       kScale = fixed_of_integer(
@@ -1756,10 +2439,15 @@ int main(int argc, char** argv) {
     bool have_difference = false;
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
-      const Evaluation evaluation = evaluate_job(
-          program, jobs[index], polynomial_mode, fused_polynomial_outer_index,
-          fused_polynomial_max_steps, direct_delta_x4,
-          profile_enabled ? &profiles : nullptr);
+      const Evaluation evaluation = kUseCompactSupportJets
+          ? evaluate_job_compact(
+                program, jobs[index], polynomial_mode,
+                fused_polynomial_outer_index, fused_polynomial_max_steps,
+                direct_delta_x4)
+          : evaluate_job(
+                program, jobs[index], polynomial_mode,
+                fused_polynomial_outer_index, fused_polynomial_max_steps,
+                direct_delta_x4, profile_enabled ? &profiles : nullptr);
       results.push_back(evaluation.upper);
       add_counters(total, evaluation.counters);
       if (evaluation.upper != expected[index]) ++mismatches;
@@ -1807,6 +2495,8 @@ int main(int argc, char** argv) {
               << (kSkipExactZeroProducts ? 1 : 0)
               << " symmetric_hessian_ops="
               << (kUseSymmetricHessianOps ? 1 : 0)
+              << " compact_support_jets="
+              << (kUseCompactSupportJets ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
