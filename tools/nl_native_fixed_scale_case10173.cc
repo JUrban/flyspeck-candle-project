@@ -4524,6 +4524,72 @@ void run_delta_full_diagnostics(const std::vector<Job>& jobs) {
             << " status=DEVELOPMENT_NON_RELEASE\n";
 }
 
+std::uint64_t signed_fixed_digest(const Fixed& value) {
+  Integer magnitude = integer_of_fixed(value);
+  const bool negative = magnitude < 0;
+  if (negative) magnitude = -magnitude;
+  const Integer low_mask = (Integer(1) << 64) - 1;
+  const Integer low_value = magnitude & low_mask;
+  const Integer high_value = magnitude >> 64;
+  const std::uint64_t low = low_value.get_ui();
+  const std::uint64_t high = high_value.get_ui();
+  return (negative ? std::numeric_limits<std::uint64_t>::max() : 0) ^
+         high ^ low;
+}
+
+void benchmark_delta_gradient0(const std::vector<Job>& jobs,
+                               std::size_t repetitions) {
+  const auto preparation_begin = std::chrono::steady_clock::now();
+  std::vector<IntervalVector> boxes;
+  boxes.reserve(jobs.size());
+  for (const Job& job : jobs) {
+    IntervalVector box;
+    for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+      box[coordinate] = interval_of_q(
+          {job.lower[coordinate], job.upper[coordinate]});
+    }
+    boxes.push_back(box);
+  }
+  std::vector<Interval> results(jobs.size());
+  const auto preparation_end = std::chrono::steady_clock::now();
+
+  Counters counters;
+  const auto evaluation_begin = std::chrono::steady_clock::now();
+  for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
+    for (std::size_t index = 0; index < boxes.size(); ++index) {
+      results[index] = delta_gradient_component(0, boxes[index], counters);
+    }
+  }
+  const auto evaluation_end = std::chrono::steady_clock::now();
+
+  std::uint64_t digest = 0;
+  for (const Interval& result : results) {
+    digest ^= signed_fixed_digest(result.lower);
+    digest ^= signed_fixed_digest(result.upper);
+  }
+  constexpr std::uint64_t kExpectedDigest = 111527807236922ULL;
+  if (jobs.size() != 875 || digest != kExpectedDigest ||
+      counters.interval_products != repetitions * jobs.size() * 10) {
+    throw std::runtime_error("delta gradient-0 benchmark result drift");
+  }
+
+  const double preparation_seconds = std::chrono::duration<double>(
+      preparation_end - preparation_begin).count();
+  const double evaluation_seconds = std::chrono::duration<double>(
+      evaluation_end - evaluation_begin).count();
+  std::cout << "CANDLE_NL_NATIVE_DELTA_GRADIENT0_SUMMARY"
+            << " cells=" << jobs.size()
+            << " repetitions=" << repetitions
+            << " preparation_seconds=" << preparation_seconds
+            << " evaluation_seconds=" << evaluation_seconds
+            << " mean_evaluation_seconds="
+            << evaluation_seconds / static_cast<double>(repetitions)
+            << " interval_products=" << counters.interval_products
+            << " digest=" << digest
+            << " backend=" << kFixedBackend
+            << " status=DEVELOPMENT_NON_RELEASE\n";
+}
+
 Interval delta_x4_value(const IntervalVector& x, Counters& counters) {
   const Interval linear = interval_sum({
       interval_neg(x[0]), x[1], x[2], interval_neg(x[3]), x[4], x[5]});
@@ -6749,6 +6815,7 @@ int main(int argc, char** argv) {
                 << " [--historical-kernel-diagnostics]"
                 << " [--historical-first-benchmark-repetitions=N]"
                 << " [--historical-second-benchmark-repetitions=N]"
+                << " [--delta-gradient0-benchmark-repetitions=N]"
                 << " [--delta-full-diagnostics]"
                 << " [--full-stage-diagnostics]"
                 << " [--accept-only]"
@@ -6769,6 +6836,7 @@ int main(int argc, char** argv) {
     bool historical_kernel_diagnostics = false;
     std::size_t historical_first_benchmark_repetitions = 0;
     std::size_t historical_second_benchmark_repetitions = 0;
+    std::size_t delta_gradient0_benchmark_repetitions = 0;
     bool delta_full_diagnostics = false;
     bool full_stage_diagnostics = false;
     bool accept_only = false;
@@ -6908,6 +6976,16 @@ int main(int argc, char** argv) {
         if (historical_second_benchmark_repetitions == 0) {
           throw std::runtime_error(
               "zero historical second-order benchmark repetitions");
+        }
+      } else if (option.rfind(
+                     "--delta-gradient0-benchmark-repetitions=", 0) == 0) {
+        delta_gradient0_benchmark_repetitions =
+            static_cast<std::size_t>(std::stoull(option.substr(
+                std::string("--delta-gradient0-benchmark-repetitions=")
+                    .size())));
+        if (delta_gradient0_benchmark_repetitions == 0) {
+          throw std::runtime_error(
+              "zero delta gradient-0 benchmark repetitions");
         }
       } else if (option == "--delta-full-diagnostics") {
         delta_full_diagnostics = true;
@@ -7301,6 +7379,11 @@ int main(int argc, char** argv) {
       throw std::runtime_error("expected-bound count drift");
     }
     const auto preparation_end = std::chrono::steady_clock::now();
+    if (delta_gradient0_benchmark_repetitions != 0) {
+      benchmark_delta_gradient0(
+          jobs, delta_gradient0_benchmark_repetitions);
+      return 0;
+    }
     const std::uint64_t preparation_floor_calls =
         kFloorFixedQuotientCalls - preparation_floor_begin;
     const std::uint64_t preparation_ceil_calls =
