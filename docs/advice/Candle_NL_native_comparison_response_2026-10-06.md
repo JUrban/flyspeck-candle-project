@@ -699,6 +699,31 @@ specialized algorithm fixed and compare checked fixed-scale endpoints with
 outward-rounded machine arithmetic, separating algorithmic work from endpoint
 representation and rounding.
 
+The full-certificate historical target has also now been measured directly,
+using the hash-pinned audit build on the exported 4,173 genuine case-10173
+boxes.  Across 21 repetitions:
+
+| Historical C++ lane | Mean numerical time | Minimum acceptance |
+|---|---:|---:|
+| Specialized dihedral | 0.082490265 s | 4,173/4,173 |
+| Equivalent generic composition | 0.326891192 s | 52/4,173 |
+
+The generic lane is 3.96 times slower on this already partitioned batch and,
+more importantly, is far too loose to validate the certificate.  The result
+therefore supplies a concrete target rather than a production comparison:
+the fixed-scale specialized port must preserve complete-certificate
+acceptance, and its preparation plus recurring checking must be reported
+separately.  The one complete resource-observed run used 5,376 KiB peak RSS;
+its two numerical phases were 0.083103199 and 0.323921624 seconds.  The
+21-run phase table has SHA-256
+`f5b52a607504dfb07e96e5c3c0a2a65d5a154a4420b0f3b6bd710ac56972be22`
+in development run `nl-historical-case10173-full4173-v1-dev-001`.
+
+This measurement also prevents an attractive but invalid shortcut: a native
+lane that runs quickly while accepting only a small fraction of the existing
+boxes has not improved certificate verification.  Complete-batch acceptance
+and time remain the joint gate.
+
 ### Bounded proof work and the larger-gap plan
 
 The first bounded proof boundary is now complete at Candle commit `d70c17ea`.
