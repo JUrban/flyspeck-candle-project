@@ -15,7 +15,8 @@
 #include <string>
 #include <vector>
 
-#if defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128)
+#if defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
+    defined(CANDLE_NL_CHECKED_INT256)
 #include <boost/multiprecision/cpp_int.hpp>
 #endif
 #include <gmpxx.h>
@@ -44,6 +45,10 @@ using Integer = mpz_class;
 using Fixed = boost::multiprecision::checked_int128_t;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
 constexpr const char* kFixedBackend = "checked-int128";
+#elif defined(CANDLE_NL_CHECKED_INT256)
+using Fixed = boost::multiprecision::checked_int256_t;
+Fixed kScale = static_cast<Fixed>(1000000000000LL);
+constexpr const char* kFixedBackend = "checked-int256";
 #elif defined(CANDLE_NL_FIXED_LONG_DOUBLE)
 using Fixed = long double;
 Fixed kScale = 1000000000000.0L;
@@ -895,7 +900,8 @@ Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
       numerator, denominator,
       native_ceil_fixed_quotient(numerator, denominator));
 }
-#elif defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128)
+#elif defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
+    defined(CANDLE_NL_CHECKED_INT256)
 Integer integer_of_fixed(const Fixed& value) {
   return Integer(value.convert_to<std::string>());
 }
