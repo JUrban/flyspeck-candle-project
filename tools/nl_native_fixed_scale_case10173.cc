@@ -53,6 +53,7 @@ bool kUseFixedSqrtInverseKernels = false;
 bool kUseFixedAtanKernel = false;
 bool kVerifyFixedKernelEnclosures = false;
 bool kUsePreparedSimplePolynomials = false;
+bool kUsePreparedCoordinateSqrtTerms = false;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -230,6 +231,13 @@ struct Program {
     std::size_t variable = 0;
   };
   std::vector<SimplePolynomial> prepared_simple_polynomials;
+  struct CoordinateSqrtTerm {
+    bool active = false;
+    std::size_t variable = 0;
+    Rat coefficient = 0;
+    std::size_t sqrt_slot = 0;
+  };
+  std::vector<CoordinateSqrtTerm> prepared_coordinate_sqrt_terms;
 };
 
 struct Job {
@@ -1259,6 +1267,53 @@ TaylorResult result_sqrt_fixed(
   return complete_result(radii, domain, center, hessian, counters);
 }
 
+TaylorResult result_scaled_coordinate_sqrt_fixed(
+    const IntegerVector& radii, const Interval& center_certificate,
+    const Interval& box_certificate,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, std::size_t variable,
+    const Rat& coefficient_value, Counters& counters) {
+  if (variable >= kDimensions) {
+    throw std::runtime_error("coordinate sqrt variable outside environment");
+  }
+  ++counters.sqrt_steps;
+  const Interval center_twice = interval_integer_scale(
+      2, center_certificate);
+  const Interval box_twice = interval_integer_scale(2, box_certificate);
+  const Interval input_twice = interval_integer_scale(
+      2, box_environment[variable]);
+  const bool domain =
+      fixed_sqrt_certificate(center_environment[variable],
+                             center_certificate) &&
+      fixed_sqrt_certificate(box_environment[variable], box_certificate) &&
+      fixed_interval_not_zero(center_twice) &&
+      fixed_interval_not_zero(box_twice);
+  if (!domain) {
+    throw std::runtime_error("prepared coordinate sqrt domain failure");
+  }
+
+  const Interval dd_denominator = interval_mul(
+      box_twice, input_twice, counters);
+  if (!fixed_interval_not_zero(dd_denominator)) {
+    throw std::runtime_error(
+        "prepared coordinate sqrt second derivative domain failure");
+  }
+  const Interval coefficient = interval_constant(coefficient_value);
+  const Interval center_d = fixed_interval_inv(center_twice);
+  const Interval box_dd = interval_neg(fixed_interval_inv(dd_denominator));
+
+  IntervalVector center_gradient = zero_vector();
+  center_gradient[variable] = interval_mul(
+      coefficient, center_d, counters);
+  IntervalMatrix hessian = zero_matrix();
+  hessian[variable][variable] = interval_mul(
+      coefficient, box_dd, counters);
+  const FirstJet center = {
+      interval_mul(coefficient, center_certificate, counters),
+      center_gradient};
+  return complete_result(radii, domain, center, hessian, counters);
+}
+
 TaylorResult result_atan(const IntegerVector& radii,
                          const TaylorResult& value, Counters& counters) {
   ++counters.atan_steps;
@@ -2047,6 +2102,53 @@ void prepare_simple_polynomials(Program& program) {
   }
 }
 
+void prepare_coordinate_sqrt_terms(Program& program) {
+  using Kind = Program::SimplePolynomialKind;
+  if (program.prepared_simple_polynomials.size() !=
+      program.instructions.size()) {
+    throw std::runtime_error(
+        "coordinate sqrt preparation requires simple polynomials");
+  }
+  program.prepared_coordinate_sqrt_terms.assign(
+      program.instructions.size(), Program::CoordinateSqrtTerm());
+  std::size_t sqrt_slot = 0;
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "coordinate sqrt preparation tag");
+      if (tag == 1) ++sqrt_slot;
+    }
+    if (outer_index + 3 >= program.instructions.size()) continue;
+
+    const Program::SimplePolynomial& input =
+        program.prepared_simple_polynomials[outer_index];
+    const Program::SimplePolynomial& coefficient =
+        program.prepared_simple_polynomials[outer_index + 2];
+    if (input.kind != Kind::kVariable ||
+        coefficient.kind != Kind::kConstant) {
+      continue;
+    }
+    const Node& sqrt_instruction = node_at(
+        program, program.instructions[outer_index + 1]);
+    const Node& multiply_instruction = node_at(
+        program, program.instructions[outer_index + 3]);
+    if (!sqrt_instruction.is_pair || multiply_instruction.is_pair) continue;
+    const Integer sqrt_tag = require_numeral(
+        program, sqrt_instruction.left, "coordinate sqrt operation tag");
+    if (sqrt_tag != 1 || multiply_instruction.numeral != 4) continue;
+
+    Program::CoordinateSqrtTerm term;
+    term.active = true;
+    term.variable = input.variable;
+    term.coefficient = coefficient.constant;
+    term.sqrt_slot = sqrt_slot;
+    program.prepared_coordinate_sqrt_terms[outer_index] = term;
+  }
+}
+
 TaylorResult evaluate_polynomial(const Program& program,
                                  std::size_t payload,
                                  const IntegerVector& radii,
@@ -2443,6 +2545,42 @@ Evaluation evaluate_job(const Program& program, const Job& job,
   bool direct_delta_x4_used = false;
   for (std::size_t outer_index = 0;
        outer_index < program.instructions.size(); ++outer_index) {
+    const Program::CoordinateSqrtTerm* coordinate_sqrt_term =
+        program.prepared_coordinate_sqrt_terms.empty()
+            ? nullptr
+            : &program.prepared_coordinate_sqrt_terms.at(outer_index);
+    if (kUsePreparedCoordinateSqrtTerms &&
+        coordinate_sqrt_term != nullptr && coordinate_sqrt_term->active) {
+      if (sqrt_slot != coordinate_sqrt_term->sqrt_slot ||
+          sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error("prepared coordinate sqrt slot drift");
+      }
+      const TaylorResult candidate = result_scaled_coordinate_sqrt_fixed(
+          radii, job.fixed_center_certificates[sqrt_slot],
+          job.fixed_box_certificates[sqrt_slot], center_environment,
+          box_environment, coordinate_sqrt_term->variable,
+          coordinate_sqrt_term->coefficient, counters);
+      if (kVerifyFixedKernelEnclosures) {
+        Counters reference_counters;
+        const TaylorResult variable = result_variable(
+            radii, center_environment, coordinate_sqrt_term->variable,
+            reference_counters);
+        const TaylorResult root = result_sqrt(
+            radii, job.center_certificates[sqrt_slot],
+            job.box_certificates[sqrt_slot], variable, reference_counters);
+        const TaylorResult coefficient = result_constant(
+            radii, coordinate_sqrt_term->coefficient, reference_counters);
+        const TaylorResult reference = result_mul(
+            radii, root, coefficient, reference_counters);
+        require_result_contains(
+            candidate, reference, "prepared-coordinate-sqrt");
+      }
+      stack.push_back(candidate);
+      ++sqrt_slot;
+      counters.outer_steps += 4;
+      outer_index += 3;
+      continue;
+    }
     const std::size_t instruction_index = program.instructions[outer_index];
     const Counters counters_before = counters;
     const std::size_t stack_before = stack.size();
@@ -2754,7 +2892,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 14) {
+    if (argc < 4 || argc > 15) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -2770,6 +2908,7 @@ int main(int argc, char** argv) {
                 << " [--fixed-atan-kernel]"
                 << " [--verify-fixed-kernel-enclosures]"
                 << " [--prepared-simple-polynomials]"
+                << " [--prepared-coordinate-sqrt-terms]"
                 << " [--decimal-scale=N]"
                 << " [--dyadic-scale]\n";
       return 2;
@@ -2822,6 +2961,8 @@ int main(int argc, char** argv) {
         kVerifyFixedKernelEnclosures = true;
       } else if (option == "--prepared-simple-polynomials") {
         kUsePreparedSimplePolynomials = true;
+      } else if (option == "--prepared-coordinate-sqrt-terms") {
+        kUsePreparedCoordinateSqrtTerms = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -2836,9 +2977,17 @@ int main(int argc, char** argv) {
     if (dyadic_scale && custom_decimal_scale) {
       throw std::runtime_error("conflicting scale selections");
     }
+    if (kUsePreparedCoordinateSqrtTerms) {
+      kUsePreparedSimplePolynomials = true;
+    }
     if (profile_enabled && kUseCompactSupportJets) {
       throw std::runtime_error(
           "instruction profiling is not implemented for compact support jets");
+    }
+    if (profile_enabled && kUsePreparedCoordinateSqrtTerms) {
+      throw std::runtime_error(
+          "instruction profiling is not implemented for prepared coordinate "
+          "sqrt terms");
     }
     if (kUseCompactSupportJets &&
         (kUseFixedSqrtInverseKernels || kUseFixedAtanKernel ||
@@ -2851,6 +3000,11 @@ int main(int argc, char** argv) {
         !(kUseFixedSqrtInverseKernels || kUseFixedAtanKernel)) {
       throw std::runtime_error(
           "fixed kernel verification requires a fixed nonlinear kernel");
+    }
+    if (kUsePreparedCoordinateSqrtTerms &&
+        !kUseFixedSqrtInverseKernels) {
+      throw std::runtime_error(
+          "prepared coordinate sqrt terms require fixed sqrt kernels");
     }
     if (dyadic_scale) {
       kScale = fixed_of_integer(
@@ -2865,6 +3019,9 @@ int main(int argc, char** argv) {
     Program program = read_program(argv[1]);
     if (kUsePreparedSimplePolynomials) {
       prepare_simple_polynomials(program);
+    }
+    if (kUsePreparedCoordinateSqrtTerms) {
+      prepare_coordinate_sqrt_terms(program);
     }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels) {
@@ -2882,6 +3039,11 @@ int main(int argc, char** argv) {
       if (polynomial.kind != Program::SimplePolynomialKind::kUnknown) {
         ++prepared_simple_polynomial_count;
       }
+    }
+    std::size_t prepared_coordinate_sqrt_term_count = 0;
+    for (const Program::CoordinateSqrtTerm& term :
+         program.prepared_coordinate_sqrt_terms) {
+      if (term.active) ++prepared_coordinate_sqrt_term_count;
     }
 
     Counters total;
@@ -2966,6 +3128,10 @@ int main(int argc, char** argv) {
               << (kUsePreparedSimplePolynomials ? 1 : 0)
               << " prepared_simple_polynomial_count="
               << prepared_simple_polynomial_count
+              << " prepared_coordinate_sqrt_terms="
+              << (kUsePreparedCoordinateSqrtTerms ? 1 : 0)
+              << " prepared_coordinate_sqrt_term_count="
+              << prepared_coordinate_sqrt_term_count
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted

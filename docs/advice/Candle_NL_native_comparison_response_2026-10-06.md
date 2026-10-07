@@ -922,20 +922,53 @@ in run `nl-native-case10173-prepared-simple-v1-dev-001`.  The result stream is
 the same fixed-kernel stream with SHA-256
 `82d86f072427c309ccb1c9038445358fa28c9464b0dd3e51e6e00d6901e10ba9`.
 
-The prepared profile moves the remaining cost rather than hiding it:
+The prepared profile moved the remaining cost rather than hiding it:
 instructions 0--30 still use 53.3% of profiled instruction time, now primarily
 the six generic coordinate-square-root and scaling paths; the dihedral uses
-31.6%, final additions 11.5%, and final scale/multiply 3.6%.  The next native
-lane will therefore keep checked `int128`, scale `10^10`, fixed nonlinear
-kernels, outward rounding, and genuine boxes fixed while compiling the six
-repeated `coefficient * sqrt(coordinate)` paths into a general sparse unary
-operation.  It will preserve the source-derived constants and square-root
-certificates and compare exact bounds, acceptance, preparation, evaluation,
-memory, and operation counts.  The complete specialized dihedral plan follows
-that larger measured target rather than preceding it.
+31.6%, final additions 11.5%, and final scale/multiply 3.6%.
 
-If the prepared coordinate/unary lane and then the specialized dihedral lane
-materially win, the native-input capture will be extended to all 4,173 boxes
+That next native lane is now complete.  A general plan pass recognizes the
+actual four-instruction pattern
+`coordinate; sqrt; constant coefficient; multiply` after exact simple-program
+classification.  It found six terms.  Each compiled term checks the same
+source-derived square-root certificates and directly constructs only its one
+nonzero gradient and Hessian entry.  Unknown patterns retain the unchanged
+generic path.
+
+Fifty warmed, order-balanced checked-`int128` pairs gave:
+
+| Prepared execution | Preparation | Evaluation | Complete batch | Accepted |
+|---|---:|---:|---:|---:|
+| Simple constants/coordinates only | 0.013193098 s | 0.034747861 s | 0.047940960 s | 128/128 |
+| Six compiled coordinate-square-root terms | 0.013081843 s | 0.025099001 s | 0.038180844 s | 128/128 |
+
+The incremental gain is **1.384 times** in evaluation and **1.256 times** for
+the complete measured batch.  Every final result is byte-identical and all
+128 cells remain accepted.  A validation run also required each compiled term
+to enclose the full exact-rational generic value/gradient/Hessian result at
+scale `10^10`; the same check passed with fixed-256 endpoints at scale
+`10^12`.  At the larger scale, 89 final results remain exact and 39 are wider
+by exactly `10^-12`, unchanged from the fixed-kernel control.
+
+The paired phase table has SHA-256
+`93cfb5b60498d2c2c37a626a18358cd8a04cfd2015eb70232d01e56823d0f508`
+in run `nl-native-case10173-coordinate-sqrt-v2-crosschecked-dev-001`.
+The checked and fixed-256 cross-check logs have SHA-256
+`6841604dedb430efa8467ee40c8c503e993bb97fd61f61c5b13c0b8eb5679949`
+and
+`983932b9ded142ce2ef1f9ae7758f8783cdcc7416c424e3abc343008e2817188`.
+
+Against the historical specialized batch, the new checked evaluation is
+still about **9.92 times** slower per box.  Projecting the observed per-box
+evaluation uniformly over all 4,173 boxes and charging the observed
+preparation once gives about 0.831 seconds versus the historical 0.08249
+seconds, or **10.08 times**.  That is only a projection; full-certificate
+inputs and acceptance remain required before it becomes a certificate-wide
+claim.  The result nevertheless clears the bounded native gate and makes the
+complete specialized dihedral plan the next measured algorithmic target.
+
+If the specialized dihedral lane also materially wins, the native-input
+capture will be extended to all 4,173 boxes
 and the same comparisons will charge shared preparation once.
 Only after the full batch passes will the specialized algorithm be held fixed
 while endpoint representation is varied, including a checked fixed-width
