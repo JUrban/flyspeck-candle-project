@@ -14,7 +14,7 @@
 #include <string>
 #include <vector>
 
-#ifdef CANDLE_NL_FIXED_INT256
+#if defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128)
 #include <boost/multiprecision/cpp_int.hpp>
 #endif
 #include <gmpxx.h>
@@ -26,7 +26,11 @@ constexpr std::size_t kSqrtSlots = 7;
 
 using Rat = mpq_class;
 using Integer = mpz_class;
-#if defined(CANDLE_NL_FIXED_INT128)
+#if defined(CANDLE_NL_CHECKED_INT128)
+using Fixed = boost::multiprecision::checked_int128_t;
+Fixed kScale = static_cast<Fixed>(1000000000000LL);
+constexpr const char* kFixedBackend = "checked-int128";
+#elif defined(CANDLE_NL_FIXED_INT128)
 using Fixed = __int128;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
 constexpr const char* kFixedBackend = "int128";
@@ -372,7 +376,7 @@ Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
   if (remainder != 0 && ((remainder < 0) == (denominator < 0))) ++quotient;
   return quotient;
 }
-#elif defined(CANDLE_NL_FIXED_INT256)
+#elif defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128)
 Integer integer_of_fixed(const Fixed& value) {
   return Integer(value.convert_to<std::string>());
 }
@@ -1664,6 +1668,7 @@ int main(int argc, char** argv) {
                 << " [--direct-delta-x4]"
                 << " [--skip-exact-zero-products]"
                 << " [--symmetric-hessian-ops]"
+                << " [--decimal-scale=N]"
                 << " [--dyadic-scale]\n";
       return 2;
     }
@@ -1672,6 +1677,8 @@ int main(int argc, char** argv) {
     int fused_polynomial_outer_index = -1;
     int fused_polynomial_max_steps = -1;
     bool direct_delta_x4 = false;
+    bool custom_decimal_scale = false;
+    Integer requested_decimal_scale("1000000000000");
     PolynomialMode polynomial_mode = PolynomialMode::kBaseline;
     for (int index = 4; index < argc; ++index) {
       const std::string option(argv[index]);
@@ -1703,13 +1710,26 @@ int main(int argc, char** argv) {
         kSkipExactZeroProducts = true;
       } else if (option == "--symmetric-hessian-ops") {
         kUseSymmetricHessianOps = true;
+      } else if (option.rfind("--decimal-scale=", 0) == 0) {
+        requested_decimal_scale = Integer(
+            option.substr(std::string("--decimal-scale=").size()));
+        if (requested_decimal_scale <= 0) {
+          throw std::runtime_error("nonpositive decimal scale");
+        }
+        custom_decimal_scale = true;
       } else {
         throw std::runtime_error("unknown optional argument: " + option);
       }
     }
+    if (dyadic_scale && custom_decimal_scale) {
+      throw std::runtime_error("conflicting scale selections");
+    }
     if (dyadic_scale) {
       kScale = fixed_of_integer(
           Integer("1099511627776"));  // 2^40, close to decimal 10^12.
+      kTwoScaleSquared = 2 * kScale * kScale;
+    } else if (custom_decimal_scale) {
+      kScale = fixed_of_integer(requested_decimal_scale);
       kTwoScaleSquared = 2 * kScale * kScale;
     }
 
@@ -1767,7 +1787,11 @@ int main(int argc, char** argv) {
     std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY"
               << " cells=" << jobs.size()
               << " backend=" << kFixedBackend
-              << " arithmetic=" << (dyadic_scale ? "dyadic-2^40" : "decimal-1e12")
+              << " arithmetic="
+              << (dyadic_scale ? "dyadic-2^40"
+                               : custom_decimal_scale ? "decimal-custom"
+                                                      : "decimal-1e12")
+              << " scale=" << integer_of_fixed(kScale).get_str()
               << " mode="
               << (polynomial_mode == PolynomialMode::kFusedAll
                       ? "fused-polynomial"

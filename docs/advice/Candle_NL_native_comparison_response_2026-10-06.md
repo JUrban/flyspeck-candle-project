@@ -499,7 +499,7 @@ performance gaps as separate architectural targets.
 
 ## Arithmetic/algorithm separation after the angle specialization
 
-Five further native experiments use the same 128 genuine case-10173 boxes.
+Six further native experiments use the same 128 genuine case-10173 boxes.
 They preserve complete-program acceptance and charge parsing/preparation
 separately from evaluation.  These are untrusted development discriminators,
 not theorem evidence.
@@ -601,6 +601,29 @@ This isolates useful generic derivative/Taylor redundancy while holding
 arithmetic and rounding fixed, but its size rules out symmetry alone as the
 large-gap explanation.
 
+Sixth, a checked-width discriminator held the complete symmetric numerical
+algorithm and decimal scale `10^10` fixed while changing only the endpoint
+backend from fixed 256-bit integers to Boost's overflow-checking 128-bit
+integers.  In 21 warmed, order-balanced pairs:
+
+| Endpoint backend | Mean preparation | Mean evaluation | Mean 128-box batch |
+|---|---:|---:|---:|
+| Fixed 256-bit | 0.007060719 s | 0.102420758 s | 0.109481477 s |
+| Checked 128-bit | 0.006879125 s | 0.063132211 s | 0.070011336 s |
+
+The evaluation speedup is **1.622 times** (38.36% reduction); including
+program/job parsing, the recurring 128-box batch speedup is **1.564 times**.
+Both backends produced byte-identical result streams, all 128 cells remained
+accepted, and all bounds remained tighter than the earlier reflected fixture.
+The paired phase table has SHA-256
+`28ed4eb7abf93b390df4f58c0aa304edb3d29ad601b3f0c97f349ca2bad4d900`;
+both result streams have SHA-256
+`f942a4d04f8dc8dce67911e74f0aaf57f02c0583d0e2118ad06a7a9acda56308`.
+The same checked backend rejects scale `10^12` with an explicit multiplication
+overflow.  Scale `10^10` is therefore a measured fixture result, not a general
+range argument; a production choice still requires checked arithmetic or a
+proved global range.
+
 These results keep the performance layers explicit.  Relative to the
 historical specialized-C++ per-cell time, the original exact native
 fixed-scale lane was about **341 times** slower, the centered-angle GMP lane
@@ -608,7 +631,10 @@ about **207 times** slower, the centered-angle fixed-256 lane about **67
 times** slower, and the direct-`delta_x4` fixed-256 lane about **56 times**
 slower.  The dense exact-zero bypass diagnostic lowers the last figure only to
 about **50 times**, and upper-triangle Hessian execution lowers it to about
-**43 times**.  Separately, executing the exact-output-matched original
+**43 times**.  At the lower scale, checked 128-bit evaluation is still about
+**25 times** slower than historical specialized throughput; including this
+128-box lane's parsing/preparation makes the recurring batch ratio about **27
+times**.  Separately, executing the exact-output-matched original
 equations in `Kernel.compute` was about **15 times** slower than executing them
 in native C++.  Fixed-width arithmetic substantially reduces the much larger native
 algorithm/arithmetic gap, but it does not remove it and says nothing yet about
@@ -631,18 +657,17 @@ entries, and avoid rounding or traversing absent entries.  Running that plan
 over the same genuine boxes separates the remaining generic derivative/Taylor
 work from arithmetic representation without changing both at once.
 
-In parallel, the cheapest arithmetic-only discriminator is to run the same
-algorithm and symmetric plan with a narrower checked fixed-width backend at
-the largest scale that does not overflow, recording both acceptance and bound
-degradation.  The previous signed-128-bit failure at scale `10^12` establishes
-that range cannot be assumed; a bounded scale sweep with explicit overflow
-detection can determine whether 128-bit arithmetic is viable at all.  These
-two native tests bracket the causes: compact fixed-256 measures generic
-derivative/representation cost, while unchanged-plan narrow arithmetic
-measures endpoint cost.  If neither closes most of the roughly 43-times
-residual, the next prototype should be a complete specialized-dihedral
-instruction modeled on the historical algorithm rather than another local
-jet micro-optimization.
+The upper-triangle and checked-width tests now bracket the causes.  Avoiding
+duplicate symmetric derivative work buys 1.21 times while unchanged-plan
+narrow arithmetic buys 1.62 times; neither closes most of the gap.  A genuinely
+compact sparse plan remains useful because the upper-triangle test retained
+dense objects and traversal, but it is bounded to one implementation and one
+128-box gate.  Unless that result is unexpectedly large, the next major native
+prototype should be a complete specialized-dihedral instruction modeled on
+the historical algorithm rather than another sequence of local jet
+micro-optimizations.  The specialized instruction must still emit the data
+needed by the general Taylor contract, and its eventual proof should be one
+reusable instruction theorem plus authenticated source-to-plan checking.
 
 The staged route is:
 
