@@ -63,6 +63,7 @@ bool kUsePreparedDihedralChain = false;
 bool kUseSpecializedDihedralIdentities = false;
 bool kUseHistoricalDihedral = false;
 bool kUseHistoricalBlockRounding = false;
+bool kUseHistoricalCenterTangent = false;
 bool kUseTightDihedralSqrtCertificates = false;
 bool kUseOptimizedDihedralUBounds = false;
 bool kUseComputedTightSqrtCertificates = false;
@@ -3649,17 +3650,108 @@ SecondOrderBox historical_dihedral_second_order(
   return result;
 }
 
+FirstJet historical_dihedral_first_order(
+    const IntervalVector& environment, Counters& counters) {
+  const Interval delta_value_at_center = delta_value(environment, counters);
+  const IntervalVector delta_gradient_at_center =
+      delta_gradient_from_products(
+          polynomial_pair_products(environment, counters));
+  if (delta_value_at_center.lower <= 0) {
+    throw std::runtime_error(
+        "historical dihedral center square-root domain failure");
+  }
+
+  ++counters.sqrt_steps;
+  const Interval root_delta = fixed_sqrt_enclosure(delta_value_at_center);
+  const Interval root_delta_derivative = fixed_interval_inv(
+      interval_integer_scale(2, root_delta));
+  const IntervalVector root_delta_gradient = interval_vector_scale(
+      root_delta_derivative, delta_gradient_at_center, counters);
+
+  const Interval delta_x4 = delta_x4_value(environment, counters);
+  const IntervalVector delta_x4_gradient_at_center =
+      delta_x4_gradient(environment);
+  const ValueGradient u126 = optimized_triangle_u(
+      environment, std::array<std::size_t, 3>{{0, 1, 5}}, counters,
+      kUseHistoricalBlockRounding);
+  const ValueGradient u135 = optimized_triangle_u(
+      environment, std::array<std::size_t, 3>{{0, 2, 4}}, counters,
+      kUseHistoricalBlockRounding);
+  if (u126.value.lower <= 0 || u135.value.lower <= 0) {
+    throw std::runtime_error("historical dihedral center U domain failure");
+  }
+
+  ++counters.sqrt_steps;
+  const Interval root_four_x0 = fixed_sqrt_enclosure(
+      interval_integer_scale(4, environment[0]));
+  const Interval b = interval_mul(root_delta, root_four_x0, counters);
+  if (!fixed_interval_not_zero(b)) {
+    throw std::runtime_error(
+        "historical dihedral center denominator failure");
+  }
+  const Interval two_over_root_four_x0 = interval_mul(
+      interval_integer_scale(2, one_interval()),
+      fixed_interval_inv(root_four_x0), counters);
+  IntervalVector b_gradient = interval_vector_scale(
+      root_four_x0, root_delta_gradient, counters);
+  b_gradient[0] = interval_add(
+      b_gradient[0],
+      interval_mul(root_delta, two_over_root_four_x0, counters));
+
+  IntervalVector c;
+  for (std::size_t coordinate = 0;
+       coordinate < kDimensions; ++coordinate) {
+    c[coordinate] = interval_add(
+        interval_neg(interval_mul(
+            delta_x4_gradient_at_center[coordinate], b, counters)),
+        interval_mul(delta_x4, b_gradient[coordinate], counters));
+  }
+  const Interval u_product = interval_mul(
+      u126.value, u135.value, counters);
+  if (!fixed_interval_not_zero(u_product)) {
+    throw std::runtime_error(
+        "historical dihedral center U product failure");
+  }
+  FirstJet result;
+  result.gradient = interval_vector_scale(
+      fixed_interval_inv(u_product), c, counters);
+  const Interval two_root_delta = interval_integer_scale(2, root_delta);
+  if (!fixed_interval_not_zero(two_root_delta)) {
+    throw std::runtime_error(
+        "historical dihedral center delta root failure");
+  }
+  result.gradient[3] = interval_mul(
+      root_four_x0, fixed_interval_inv(two_root_delta), counters);
+
+  const Interval quotient = interval_mul(
+      interval_neg(delta_x4), fixed_interval_inv(b), counters);
+  if (absolute(quotient.lower) >= kScale ||
+      absolute(quotient.upper) >= kScale) {
+    throw std::runtime_error("historical dihedral center atan domain failure");
+  }
+  ++counters.atan_steps;
+  result.value = interval_add(
+      interval_of_q({kPiHalfLower, kPiHalfUpper}),
+      fixed_atan_interval(quotient, counters));
+  return result;
+}
+
 TaylorResult evaluate_historical_dihedral(
     const IntegerVector& radii,
     const IntervalVector& center_environment,
     const IntervalVector& box_environment,
     Counters& counters) {
-  const SecondOrderBox center = historical_dihedral_second_order(
-      center_environment, false, counters);
+  const FirstJet center = kUseHistoricalCenterTangent
+      ? historical_dihedral_first_order(center_environment, counters)
+      : [&center_environment, &counters]() {
+          const SecondOrderBox full = historical_dihedral_second_order(
+              center_environment, false, counters);
+          return FirstJet{full.value, full.gradient};
+        }();
   const SecondOrderBox box = historical_dihedral_second_order(
       box_environment, true, counters);
   return complete_result(
-      radii, true, {center.value, center.gradient}, box.hessian, counters);
+      radii, true, center, box.hessian, counters);
 }
 
 TaylorResult evaluate_dihedral_chain_specialized(
@@ -4673,6 +4765,7 @@ int main(int argc, char** argv) {
                 << " [--specialized-dihedral-identities]"
                 << " [--historical-dihedral]"
                 << " [--historical-block-rounding]"
+                << " [--historical-center-tangent]"
                 << " [--tight-dihedral-sqrt-certificates]"
                 << " [--optimized-dihedral-u-bounds]"
                 << " [--computed-tight-sqrt-certificates]"
@@ -4755,6 +4848,8 @@ int main(int argc, char** argv) {
         kUseHistoricalDihedral = true;
       } else if (option == "--historical-block-rounding") {
         kUseHistoricalBlockRounding = true;
+      } else if (option == "--historical-center-tangent") {
+        kUseHistoricalCenterTangent = true;
       } else if (option == "--tight-dihedral-sqrt-certificates") {
         kUseTightDihedralSqrtCertificates = true;
       } else if (option == "--optimized-dihedral-u-bounds") {
@@ -4916,6 +5011,10 @@ int main(int argc, char** argv) {
     if (kUseHistoricalBlockRounding && !kUseHistoricalDihedral) {
       throw std::runtime_error(
           "historical block rounding requires the historical dihedral path");
+    }
+    if (kUseHistoricalCenterTangent && !kUseHistoricalDihedral) {
+      throw std::runtime_error(
+          "historical center tangent requires the historical dihedral path");
     }
     if (dihedral_identity_diagnostics &&
         !kUseSpecializedDihedralIdentities && !kUseHistoricalDihedral) {
@@ -5165,6 +5264,8 @@ int main(int argc, char** argv) {
               << (kUseHistoricalDihedral ? 1 : 0)
               << " historical_block_rounding="
               << (kUseHistoricalBlockRounding ? 1 : 0)
+              << " historical_center_tangent="
+              << (kUseHistoricalCenterTangent ? 1 : 0)
               << " tight_dihedral_sqrt_certificates="
               << (kUseTightDihedralSqrtCertificates ? 1 : 0)
               << " optimized_dihedral_u_bounds="

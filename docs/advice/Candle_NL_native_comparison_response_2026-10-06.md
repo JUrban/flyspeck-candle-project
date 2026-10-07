@@ -1498,3 +1498,38 @@ investment. The residual cost is distributed whole-graph work, not ordinary
 endpoint multiplication width. The next native gate must remove work across a
 substantial authenticated source block or the complete box while retaining
 certificate coverage and charging reusable geometry preparation honestly.
+
+## Update: center tangent versus discarded center Hessian
+
+A controlled full-fixture experiment now holds the fixed-point arithmetic,
+directed rounding, authenticated formula, box Hessian, and final Taylor
+handoff constant while removing one class of generic derivative work. The
+historical-formula lane had built a complete second-order jet at the center,
+although only its value and gradient survive. The candidate computes that
+center tangent directly.
+
+Across twenty rotated 4,173-box pairs, evaluation fell from 0.421083508 to
+0.376574926 seconds, a 1.118-times gain; complete preparation plus evaluation
+fell from 0.759238146 to 0.716522144 seconds. It removed 759,486 interval
+products. Every box remained accepted and all emitted bounds are
+byte-identical. The timing and common-bound hashes are
+`70c4a446eaaad73ba2b66cd0048aeaf68a316e2b728c0fb30ba004dbac3551ba`
+and
+`0cb9afcfb27561526728fed8b498a25bda337b8baaa2a35aa8c92bf8093c51c1`
+in `nl-native-case10173-center-tangent-paired-v1-dev-001`.
+
+This is useful attribution, not the next proof target. The candidate remains
+4.565 times the historical specialized C++ batch and is slower than the best
+generic dyadic/fused native lane. No standalone center-tangent instruction
+proof will be started. The code is retained only as reusable machinery for a
+complete raw primitive.
+
+The next concrete factorial comparison will accumulate center tangents and
+box Hessians for the complete authenticated formula and perform Taylor
+completion once. It will first use the current exact dyadic arithmetic; a
+material winner will then run through a development-only direct outward
+hardware-endpoint backend with the same numerical graph. That separates
+derivative/Taylor architecture from representation and rounding on the same
+genuine boxes. Acceptance, enclosure quality, memory, reusable preparation,
+recurring execution, and cold total remain mandatory gates, followed by a
+small multi-certificate batch before proof investment.
