@@ -3765,13 +3765,18 @@ SecondOrderBox delta_x4_full_direct(const IntervalVector& environment,
 }
 
 SecondOrderBox second_order_sqrt(const SecondOrderBox& input,
-                                 Counters& counters) {
+                                 Counters& counters,
+                                 const Interval* supplied_root = nullptr) {
   if (input.value.lower <= 0) {
     throw std::runtime_error("second-order square-root domain failure");
   }
-  ++counters.sqrt_steps;
   SecondOrderBox result;
-  result.value = fixed_sqrt_enclosure(input.value);
+  if (supplied_root == nullptr) {
+    ++counters.sqrt_steps;
+    result.value = fixed_sqrt_enclosure(input.value);
+  } else {
+    result.value = *supplied_root;
+  }
   const Interval derivative = fixed_interval_inv(
       interval_integer_scale(2, result.value));
   result.gradient = interval_vector_scale(
@@ -3796,12 +3801,16 @@ SecondOrderBox second_order_sqrt(const SecondOrderBox& input,
 
 SecondOrderBox historical_dihedral_second_order(
     const IntervalVector& environment, bool use_sign_directed_bounds,
-    Counters& counters, HistoricalDihedralRootTrace* trace = nullptr) {
+    Counters& counters, HistoricalDihedralRootTrace* trace = nullptr,
+    const HistoricalDihedralRootTrace* supplied_roots = nullptr) {
   const SecondOrderBox delta = use_sign_directed_bounds
       ? delta_full_sign_directed(
             environment, counters, kUseHistoricalBlockRounding)
       : delta_full_direct(environment, counters);
-  const SecondOrderBox root_delta = second_order_sqrt(delta, counters);
+  const Interval* supplied_root_delta = supplied_roots == nullptr
+      ? nullptr : &supplied_roots->root_delta;
+  const SecondOrderBox root_delta = second_order_sqrt(
+      delta, counters, supplied_root_delta);
   const SecondOrderBox delta_x4 = use_sign_directed_bounds
       ? delta_x4_full_sign_directed(
             environment, counters, kUseHistoricalBlockRounding)
@@ -3816,9 +3825,14 @@ SecondOrderBox historical_dihedral_second_order(
     throw std::runtime_error("historical dihedral U domain failure");
   }
 
-  ++counters.sqrt_steps;
-  const Interval root_four_x0 = fixed_sqrt_enclosure(
-      interval_integer_scale(4, environment[0]));
+  Interval root_four_x0;
+  if (supplied_roots == nullptr) {
+    ++counters.sqrt_steps;
+    root_four_x0 = fixed_sqrt_enclosure(
+        interval_integer_scale(4, environment[0]));
+  } else {
+    root_four_x0 = supplied_roots->root_four_x0;
+  }
   if (trace != nullptr) {
     trace->root_delta = root_delta.value;
     trace->root_four_x0 = root_four_x0;
@@ -4662,6 +4676,67 @@ void benchmark_historical_dihedral_first_order(
             << " checksum=" << checksum.get_str() << "\n";
 }
 
+void benchmark_historical_dihedral_second_order(
+    const std::vector<Job>& jobs, std::size_t repetitions) {
+  std::vector<IntervalVector> environments(jobs.size());
+  std::vector<HistoricalDihedralRootTrace> roots(jobs.size());
+  Counters preparation_counters;
+  const auto preparation_begin = std::chrono::steady_clock::now();
+  for (std::size_t index = 0; index < jobs.size(); ++index) {
+    for (std::size_t coordinate = 0;
+         coordinate < kDimensions; ++coordinate) {
+      environments[index][coordinate] = interval_of_q(
+          {jobs[index].lower[coordinate], jobs[index].upper[coordinate]});
+    }
+    (void)historical_dihedral_second_order(
+        environments[index], true, preparation_counters, &roots[index]);
+  }
+  const auto preparation_end = std::chrono::steady_clock::now();
+
+  Counters evaluation_counters;
+  Integer checksum = 0;
+  const auto evaluation_begin = std::chrono::steady_clock::now();
+  for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
+    for (std::size_t index = 0; index < jobs.size(); ++index) {
+      const SecondOrderBox result = historical_dihedral_second_order(
+          environments[index], true, evaluation_counters, nullptr,
+          &roots[index]);
+      checksum += integer_of_fixed(result.value.lower);
+      checksum += integer_of_fixed(result.value.upper);
+      for (std::size_t row = 0; row < kDimensions; ++row) {
+        checksum += integer_of_fixed(result.gradient[row].lower);
+        checksum += integer_of_fixed(result.gradient[row].upper);
+        for (std::size_t column = row;
+             column < kDimensions; ++column) {
+          checksum += integer_of_fixed(result.hessian[row][column].lower);
+          checksum += integer_of_fixed(result.hessian[row][column].upper);
+        }
+      }
+    }
+  }
+  const auto evaluation_end = std::chrono::steady_clock::now();
+  const double preparation_seconds = std::chrono::duration<double>(
+      preparation_end - preparation_begin).count();
+  const double evaluation_seconds = std::chrono::duration<double>(
+      evaluation_end - evaluation_begin).count();
+  std::cout << "CANDLE_NL_NATIVE_HISTORICAL_SECOND_BENCHMARK"
+            << " cells=" << jobs.size()
+            << " repetitions=" << repetitions
+            << " preparation_seconds=" << preparation_seconds
+            << " evaluation_seconds=" << evaluation_seconds
+            << " seconds_per_batch="
+            << evaluation_seconds / static_cast<double>(repetitions)
+            << " preparation_sqrt_steps="
+            << preparation_counters.sqrt_steps
+            << " evaluation_sqrt_steps=" << evaluation_counters.sqrt_steps
+            << " evaluation_interval_products="
+            << evaluation_counters.interval_products
+            << " evaluation_endpoint_products="
+            << evaluation_counters.interval_endpoint_products
+            << " evaluation_atan_steps=" << evaluation_counters.atan_steps
+            << " checksum=" << checksum.get_str() << "\n";
+}
+
 void print_full_stage_diagnostic(const Job& job,
                                  const TaylorResult& result) {
   IntegerVector radii;
@@ -5412,7 +5487,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 35) {
+    if (argc < 4 || argc > 36) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -5455,6 +5530,7 @@ int main(int argc, char** argv) {
                 << " [--dihedral-identity-diagnostics]"
                 << " [--historical-kernel-diagnostics]"
                 << " [--historical-first-benchmark-repetitions=N]"
+                << " [--historical-second-benchmark-repetitions=N]"
                 << " [--delta-full-diagnostics]"
                 << " [--full-stage-diagnostics]"
                 << " [--decimal-scale=N]"
@@ -5472,6 +5548,7 @@ int main(int argc, char** argv) {
     bool dihedral_identity_diagnostics = false;
     bool historical_kernel_diagnostics = false;
     std::size_t historical_first_benchmark_repetitions = 0;
+    std::size_t historical_second_benchmark_repetitions = 0;
     bool delta_full_diagnostics = false;
     bool full_stage_diagnostics = false;
     bool custom_decimal_scale = false;
@@ -5583,6 +5660,16 @@ int main(int argc, char** argv) {
         if (historical_first_benchmark_repetitions == 0) {
           throw std::runtime_error(
               "zero historical first-order benchmark repetitions");
+        }
+      } else if (option.rfind(
+                     "--historical-second-benchmark-repetitions=", 0) == 0) {
+        historical_second_benchmark_repetitions =
+            static_cast<std::size_t>(std::stoull(option.substr(
+                std::string("--historical-second-benchmark-repetitions=")
+                    .size())));
+        if (historical_second_benchmark_repetitions == 0) {
+          throw std::runtime_error(
+              "zero historical second-order benchmark repetitions");
         }
       } else if (option == "--delta-full-diagnostics") {
         delta_full_diagnostics = true;
@@ -6352,6 +6439,10 @@ int main(int argc, char** argv) {
     if (historical_first_benchmark_repetitions != 0) {
       benchmark_historical_dihedral_first_order(
           jobs, historical_first_benchmark_repetitions);
+    }
+    if (historical_second_benchmark_repetitions != 0) {
+      benchmark_historical_dihedral_second_order(
+          jobs, historical_second_benchmark_repetitions);
     }
     if (!dyadic_scale && polynomial_mode == PolynomialMode::kBaseline &&
         mismatches != 0) {
