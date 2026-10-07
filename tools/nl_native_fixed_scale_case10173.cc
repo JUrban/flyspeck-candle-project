@@ -146,10 +146,25 @@ struct FixedRangeProfile {
   unsigned multiplication_product_bits = 0;
   unsigned addition_result_bits = 0;
   unsigned scaled_input_bits = 0;
+  unsigned scalar_dot_product_bits = 0;
+  unsigned scalar_dot_accumulator_bits = 0;
+  unsigned scalar_radius_product_bits = 0;
+  unsigned scalar_weighted_product_bits = 0;
+  unsigned scalar_weighted_accumulator_bits = 0;
+  unsigned taylor_error_product_bits = 0;
+  unsigned taylor_error_bits = 0;
+  unsigned taylor_center_product_bits = 0;
+  unsigned taylor_center_raw_bits = 0;
+  unsigned taylor_gradient_product_bits = 0;
+  unsigned taylor_gradient_raw_bits = 0;
   std::uint64_t quotient_results_outside_int64 = 0;
   std::uint64_t multiplication_operands_outside_int64 = 0;
   std::uint64_t addition_results_outside_int64 = 0;
   std::uint64_t scaled_inputs_outside_int64 = 0;
+  std::uint64_t scalar_dot_terms = 0;
+  std::uint64_t scalar_weighted_terms = 0;
+  std::uint64_t taylor_completion_calls = 0;
+  std::uint64_t taylor_gradient_bound_endpoints = 0;
 };
 
 FixedRangeProfile kFixedRangeProfile;
@@ -247,10 +262,67 @@ void range_profile_addition(const Interval& result) {
     }
   }
 }
+
+void range_profile_scalar_dot(const Fixed& product,
+                              const Fixed& accumulator) {
+  ++kFixedRangeProfile.scalar_dot_terms;
+  update_fixed_bits(kFixedRangeProfile.scalar_dot_product_bits, product);
+  update_fixed_bits(kFixedRangeProfile.scalar_dot_accumulator_bits,
+                    accumulator);
+}
+
+void range_profile_scalar_weighted(const Fixed& radius_product,
+                                   const Fixed& product,
+                                   const Fixed& accumulator) {
+  ++kFixedRangeProfile.scalar_weighted_terms;
+  update_fixed_bits(kFixedRangeProfile.scalar_radius_product_bits,
+                    radius_product);
+  update_fixed_bits(kFixedRangeProfile.scalar_weighted_product_bits, product);
+  update_fixed_bits(kFixedRangeProfile.scalar_weighted_accumulator_bits,
+                    accumulator);
+}
+
+void range_profile_taylor_completion(
+    const Fixed& error_product, const Fixed& error,
+    const Fixed& lower_center_product, const Fixed& upper_center_product,
+    const Interval& raw_value) {
+  ++kFixedRangeProfile.taylor_completion_calls;
+  update_fixed_bits(kFixedRangeProfile.taylor_error_product_bits,
+                    error_product);
+  update_fixed_bits(kFixedRangeProfile.taylor_error_bits, error);
+  update_fixed_bits(kFixedRangeProfile.taylor_center_product_bits,
+                    lower_center_product);
+  update_fixed_bits(kFixedRangeProfile.taylor_center_product_bits,
+                    upper_center_product);
+  update_fixed_bits(kFixedRangeProfile.taylor_center_raw_bits,
+                    raw_value.lower);
+  update_fixed_bits(kFixedRangeProfile.taylor_center_raw_bits,
+                    raw_value.upper);
+}
+
+void range_profile_taylor_gradient(const Fixed& lower_product,
+                                   const Fixed& upper_product,
+                                   const Interval& raw_bound) {
+  kFixedRangeProfile.taylor_gradient_bound_endpoints += 2;
+  update_fixed_bits(kFixedRangeProfile.taylor_gradient_product_bits,
+                    lower_product);
+  update_fixed_bits(kFixedRangeProfile.taylor_gradient_product_bits,
+                    upper_product);
+  update_fixed_bits(kFixedRangeProfile.taylor_gradient_raw_bits,
+                    raw_bound.lower);
+  update_fixed_bits(kFixedRangeProfile.taylor_gradient_raw_bits,
+                    raw_bound.upper);
+}
 #else
 void range_profile_multiplication(const Interval&, const Interval&,
                                   const Interval&) {}
 void range_profile_addition(const Interval&) {}
+void range_profile_scalar_dot(const Fixed&, const Fixed&) {}
+void range_profile_scalar_weighted(const Fixed&, const Fixed&, const Fixed&) {}
+void range_profile_taylor_completion(
+    const Fixed&, const Fixed&, const Fixed&, const Fixed&, const Interval&) {}
+void range_profile_taylor_gradient(
+    const Fixed&, const Fixed&, const Interval&) {}
 #endif
 
 struct RationalInterval {
@@ -1517,7 +1589,9 @@ Fixed dot_abs_upper(const IntegerVector& radii,
                     const IntervalVector& row) {
   Fixed result = 0;
   for (std::size_t i = 0; i < kDimensions; ++i) {
-    result += radii[i] * interval_abs_upper(row[i]);
+    const Fixed product = radii[i] * interval_abs_upper(row[i]);
+    result += product;
+    range_profile_scalar_dot(product, result);
   }
   return result;
 }
@@ -1526,7 +1600,9 @@ Fixed weighted_rows_abs_upper(const IntegerVector& radii,
                               const IntervalMatrix& matrix) {
   Fixed result = 0;
   for (std::size_t i = 0; i < kDimensions; ++i) {
-    result += radii[i] * dot_abs_upper(radii, matrix[i]);
+    const Fixed product = radii[i] * dot_abs_upper(radii, matrix[i]);
+    result += product;
+    range_profile_scalar_weighted(radii[i], product, result);
   }
   return result;
 }
@@ -1538,17 +1614,27 @@ TaylorResult complete_result(const IntegerVector& radii, bool domain,
   ++counters.completed_results;
   const Fixed linear = dot_abs_upper(radii, center.gradient);
   const Fixed quadratic = weighted_rows_abs_upper(radii, hessian);
-  const Fixed error = 2 * kScale * linear + quadratic;
+  const Fixed error_product = 2 * kScale * linear;
+  const Fixed error = error_product + quadratic;
+  const Fixed lower_center_product =
+      kTwoScaleSquared * center.value.lower;
+  const Fixed upper_center_product =
+      kTwoScaleSquared * center.value.upper;
   const Interval raw_value = {
-      kTwoScaleSquared * center.value.lower - error,
-      kTwoScaleSquared * center.value.upper + error};
+      lower_center_product - error, upper_center_product + error};
+  range_profile_taylor_completion(
+      error_product, error, lower_center_product, upper_center_product,
+      raw_value);
 
   IntervalVector gradient_bounds;
   for (std::size_t i = 0; i < kDimensions; ++i) {
     const Fixed variation = dot_abs_upper(radii, hessian[i]);
-    gradient_bounds[i] = raw_interval_round(
-        kScale, {kScale * center.gradient[i].lower - variation,
-                 kScale * center.gradient[i].upper + variation});
+    const Fixed lower_product = kScale * center.gradient[i].lower;
+    const Fixed upper_product = kScale * center.gradient[i].upper;
+    const Interval raw_bound = {
+        lower_product - variation, upper_product + variation};
+    range_profile_taylor_gradient(lower_product, upper_product, raw_bound);
+    gradient_bounds[i] = raw_interval_round(kScale, raw_bound);
   }
 
   return {domain,
@@ -2473,7 +2559,10 @@ Fixed compact_dot_abs_upper(const IntegerVector& radii,
   Fixed result = 0;
   for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
     if ((mask & gradient_bit(coordinate)) != 0) {
-      result += radii[coordinate] * interval_abs_upper(row[coordinate]);
+      const Fixed product =
+          radii[coordinate] * interval_abs_upper(row[coordinate]);
+      result += product;
+      range_profile_scalar_dot(product, result);
     }
   }
   return result;
@@ -2485,11 +2574,13 @@ Fixed compact_weighted_abs_upper(const IntegerVector& radii,
   for (std::size_t row = 0; row < kDimensions; ++row) {
     for (std::size_t column = row; column < kDimensions; ++column) {
       if (!compact_matrix_has(matrix, row, column)) continue;
-      Fixed contribution = radii[row] * radii[column] *
-                           interval_abs_upper(compact_matrix_at(
-                               matrix, row, column));
+      const Fixed radius_product = radii[row] * radii[column];
+      Fixed contribution = radius_product * interval_abs_upper(
+          compact_matrix_at(matrix, row, column));
       if (row != column) contribution *= 2;
       result += contribution;
+      range_profile_scalar_weighted(
+          radius_product, contribution, result);
     }
   }
   return result;
@@ -2503,10 +2594,15 @@ CompactTaylorResult compact_complete_result(
   const Fixed linear = compact_dot_abs_upper(
       radii, center_gradient, center_gradient_mask);
   const Fixed quadratic = compact_weighted_abs_upper(radii, hessian);
-  const Fixed error = 2 * kScale * linear + quadratic;
+  const Fixed error_product = 2 * kScale * linear;
+  const Fixed error = error_product + quadratic;
+  const Fixed lower_center_product = kTwoScaleSquared * center_value.lower;
+  const Fixed upper_center_product = kTwoScaleSquared * center_value.upper;
   const Interval raw_value = {
-      kTwoScaleSquared * center_value.lower - error,
-      kTwoScaleSquared * center_value.upper + error};
+      lower_center_product - error, upper_center_product + error};
+  range_profile_taylor_completion(
+      error_product, error, lower_center_product, upper_center_product,
+      raw_value);
 
   IntervalVector gradient_bounds = zero_vector();
   GradientMask gradient_bounds_mask = 0;
@@ -2522,9 +2618,12 @@ CompactTaylorResult compact_complete_result(
     const Interval center = (center_gradient_mask & bit) != 0
                                 ? center_gradient[row]
                                 : zero_interval();
-    const Interval bound = raw_interval_round(
-        kScale, {kScale * center.lower - variation,
-                 kScale * center.upper + variation});
+    const Fixed lower_product = kScale * center.lower;
+    const Fixed upper_product = kScale * center.upper;
+    const Interval raw_bound = {
+        lower_product - variation, upper_product + variation};
+    range_profile_taylor_gradient(lower_product, upper_product, raw_bound);
+    const Interval bound = raw_interval_round(kScale, raw_bound);
     gradient_bounds[row] = bound;
     if (!interval_is_zero(bound)) gradient_bounds_mask |= bit;
   }
@@ -6690,6 +6789,36 @@ int main(int argc, char** argv) {
               << kFixedRangeProfile.scaled_input_bits
               << " range_scaled_inputs_outside_int64="
               << kFixedRangeProfile.scaled_inputs_outside_int64
+              << " range_scalar_dot_product_bits="
+              << kFixedRangeProfile.scalar_dot_product_bits
+              << " range_scalar_dot_accumulator_bits="
+              << kFixedRangeProfile.scalar_dot_accumulator_bits
+              << " range_scalar_dot_terms="
+              << kFixedRangeProfile.scalar_dot_terms
+              << " range_scalar_radius_product_bits="
+              << kFixedRangeProfile.scalar_radius_product_bits
+              << " range_scalar_weighted_product_bits="
+              << kFixedRangeProfile.scalar_weighted_product_bits
+              << " range_scalar_weighted_accumulator_bits="
+              << kFixedRangeProfile.scalar_weighted_accumulator_bits
+              << " range_scalar_weighted_terms="
+              << kFixedRangeProfile.scalar_weighted_terms
+              << " range_taylor_error_product_bits="
+              << kFixedRangeProfile.taylor_error_product_bits
+              << " range_taylor_error_bits="
+              << kFixedRangeProfile.taylor_error_bits
+              << " range_taylor_center_product_bits="
+              << kFixedRangeProfile.taylor_center_product_bits
+              << " range_taylor_center_raw_bits="
+              << kFixedRangeProfile.taylor_center_raw_bits
+              << " range_taylor_completion_calls="
+              << kFixedRangeProfile.taylor_completion_calls
+              << " range_taylor_gradient_product_bits="
+              << kFixedRangeProfile.taylor_gradient_product_bits
+              << " range_taylor_gradient_raw_bits="
+              << kFixedRangeProfile.taylor_gradient_raw_bits
+              << " range_taylor_gradient_bound_endpoints="
+              << kFixedRangeProfile.taylor_gradient_bound_endpoints
 #endif
               << " interval_products=" << total.interval_products
               << " interval_endpoint_products="

@@ -114,9 +114,42 @@ rg -q '^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY cells=4173 .*backend=checked-int256
   done
 } >"$output_dir/range-summary.tsv"
 
+{
+  printf 'lane\tscalar_dot_product_bits\tscalar_dot_accumulator_bits\tscalar_radius_product_bits\tscalar_weighted_product_bits\tscalar_weighted_accumulator_bits\ttaylor_error_product_bits\ttaylor_error_bits\ttaylor_center_product_bits\ttaylor_center_raw_bits\ttaylor_gradient_product_bits\ttaylor_gradient_raw_bits\tscalar_dot_terms\tscalar_weighted_terms\ttaylor_completion_calls\ttaylor_gradient_bound_endpoints\taccepted\n'
+  for lane in case16594-decimal case16594-dyadic \
+              case10173-decimal case10173-dyadic; do
+    awk -v lane="$lane" '
+      /^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY/ {
+        for (i = 1; i <= NF; ++i) {
+          split($i, field, "=");
+          value[field[1]] = field[2];
+        }
+        printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", lane,
+          value["range_scalar_dot_product_bits"],
+          value["range_scalar_dot_accumulator_bits"],
+          value["range_scalar_radius_product_bits"],
+          value["range_scalar_weighted_product_bits"],
+          value["range_scalar_weighted_accumulator_bits"],
+          value["range_taylor_error_product_bits"],
+          value["range_taylor_error_bits"],
+          value["range_taylor_center_product_bits"],
+          value["range_taylor_center_raw_bits"],
+          value["range_taylor_gradient_product_bits"],
+          value["range_taylor_gradient_raw_bits"],
+          value["range_scalar_dot_terms"],
+          value["range_scalar_weighted_terms"],
+          value["range_taylor_completion_calls"],
+          value["range_taylor_gradient_bound_endpoints"],
+          value["accepted"];
+      }
+    ' "$output_dir/$lane.txt"
+  done
+} >"$output_dir/operation-ledger.tsv"
+
 sha256sum "$0" "$source_file" "$case16594_program" "$case16594_jobs" \
   "$case16594_expected" "$case10173_program" "$case10173_jobs" \
   "$case10173_expected" "$output_dir"/*.txt \
-  "$output_dir/range-summary.tsv" >"$output_dir/result-files.sha256"
+  "$output_dir/range-summary.tsv" "$output_dir/operation-ledger.tsv" \
+  >"$output_dir/result-files.sha256"
 printf 'CANDLE_NL_NATIVE_CHECKED256_RANGE_MULTIFAMILY_OK %s DEVELOPMENT_NON_RELEASE\n' \
   "$label"

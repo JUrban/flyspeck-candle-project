@@ -2385,3 +2385,25 @@ case10173 architecture comparison; after native algorithm specialization its
 residual on that fixture is about 1.35 times.  Complete evidence and the
 bounded forward plan are in
 `docs/progress/2026-10-07-v3.71-nl-checked-width-discriminator.md`.
+
+## Update: the complete scalar-width ledger identifies a real split boundary
+
+The missing Taylor scalar operations are now instrumented on both complete
+families.  Case16594's ordinary stored endpoints remain at most 64 bits, raw
+interval products 104 bits, interval additions 92 bits, and dot accumulators
+92 bits.  In contrast, Hessian-weighted terms reach 128 bits, their sum 130
+bits, the Taylor error 133 bits, and center recomposition 135 bits.  This
+mechanically explains both checked-128 failures.  Case10173's largest scalar
+intermediate is 114 bits on the decimal grid and 83 bits on the dyadic grid.
+
+All 875 and 4,173 cells pass on both grids, and the case16594 dyadic results
+remain byte-identical to the earlier checked-256 control.  The next bounded
+native prototype is therefore no longer a blanket integer-width
+substitution: it uses checked-128 persistent interval values and a checked
+192-bit accumulator only for weighted Hessian sums, error/center assembly,
+and the final directed quotient, with checked narrowing and exact fallback.
+This targets the tens of millions of narrow hot-path operations while keeping
+the observed 135-bit boundary explicit.
+
+Complete tables, operation counts, proof limits, and evidence hashes are in
+`docs/progress/2026-10-07-v3.72-nl-operation-width-ledger.md`.
