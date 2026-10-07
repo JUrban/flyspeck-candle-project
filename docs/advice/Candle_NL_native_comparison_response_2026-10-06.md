@@ -2114,3 +2114,41 @@ acceptance as the decision criteria.
 Implementation and complete evidence are recorded in
 `docs/progress/2026-10-07-v3.63-nl-whole-checker-historical-splice.md` and
 isolated Candle commit `25cb33e1`.
+
+## Update: compact whole-expression gate is negative
+
+The broader candidate described above has now run.  It validates the expected
+54-instruction outer skeleton once, extracts the seven constants, six
+coordinate input/coefficient pairs, and angle coefficient, and then bypasses
+the generic outer postfix stack.  Per box it accumulates domain, center jet,
+and Hessian as data and performs one final Taylor completion.  Both
+consecutive 128-job calls accept with closed theorems and no axiom growth.
+
+The candidate takes 5.850289807 and 6.038545621 seconds.  The historical-angle
+splice took 5.579671179 and 7.330267185 seconds.  Their two-run means differ by
+only 1.086 times.  Although the compact candidate remains 2.084 times faster
+than the old fixed-nonlinear candidate mean, almost all of that improvement
+was already present in the angle splice.  Generic outer traversal and repeated
+Taylor completion are therefore not the missing orders-of-magnitude factor.
+
+This result stops the present case-specific route before a full 4173-box run
+or soundness proof.  The four historical roots are still supplied development
+data, and the compact plan/source connection is not yet a general theorem;
+those proof obligations are not worth expanding for an 8.6% incremental mean
+gain.
+
+The next discriminator stays on the same exact representation and genuine
+128 jobs but separates structural/validity traversal, the six coordinate-root
+terms, the combined historical angle, and final completion into matched
+computed stage batches.  Existing native stage measurements provide the
+control.  This will identify whether the remaining encoded gap is concentrated
+in coordinate sqrt, angle arithmetic, conversion/validation, or broadly in
+the evaluator.  Only a large stage-specific recurring gap earns another
+general primitive prototype; a broadly uniform loss redirects the programme
+to evaluator or compiled-computation architecture.  The next useful native
+test is a second genuine expression family, because exact-versus-double and
+generic-versus-direct have already been isolated on all 4173 case-10173 boxes.
+
+Complete evidence is in
+`docs/progress/2026-10-07-v3.64-nl-compact-whole-expression-gate.md` and
+isolated Candle commit `4edec7ab`.
