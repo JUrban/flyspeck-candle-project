@@ -23,7 +23,18 @@
 namespace {
 
 constexpr std::size_t kDimensions = 6;
-constexpr std::size_t kSqrtSlots = 7;
+#ifndef CANDLE_NL_SQRT_SLOTS
+#define CANDLE_NL_SQRT_SLOTS 7
+#endif
+#ifndef CANDLE_NL_PROGRAM_INSTRUCTIONS
+#define CANDLE_NL_PROGRAM_INSTRUCTIONS 54
+#endif
+#ifndef CANDLE_NL_CASE_ID
+#define CANDLE_NL_CASE_ID 10173
+#endif
+constexpr std::size_t kSqrtSlots = CANDLE_NL_SQRT_SLOTS;
+constexpr std::size_t kProgramInstructions = CANDLE_NL_PROGRAM_INSTRUCTIONS;
+constexpr int kCaseId = CANDLE_NL_CASE_ID;
 constexpr std::size_t kSymmetricEntries =
     kDimensions * (kDimensions + 1) / 2;
 
@@ -568,7 +579,8 @@ Program read_program(const char* path) {
     program.instructions.push_back(program.nodes[current].left);
     current = program.nodes[current].right;
   }
-  if (program.nodes[current].numeral != 0 || program.instructions.size() != 54) {
+  if (program.nodes[current].numeral != 0 ||
+      program.instructions.size() != kProgramInstructions) {
     throw std::runtime_error("source program spine drift");
   }
   return program;
@@ -1795,7 +1807,32 @@ TaylorResult result_sqrt(const IntegerVector& radii,
       rational_interval_not_zero(center_twice) &&
       rational_interval_not_zero(box_twice) &&
       rational_interval_not_zero(rational_interval_mul(box_twice, input_twice));
-  if (!domain) throw std::runtime_error("sqrt domain failure");
+  if (!domain) {
+    throw std::runtime_error(
+        "sqrt domain failure value_domain=" +
+        std::to_string(value.domain ? 1 : 0) +
+        " center_certificate_ok=" +
+        std::to_string(sqrt_certificate(center_input, center_certificate) ?
+                           1 : 0) +
+        " box_certificate_ok=" +
+        std::to_string(sqrt_certificate(box_input, box_certificate) ? 1 : 0) +
+        " center_nonzero=" +
+        std::to_string(rational_interval_not_zero(center_twice) ? 1 : 0) +
+        " box_nonzero=" +
+        std::to_string(rational_interval_not_zero(box_twice) ? 1 : 0) +
+        " second_nonzero=" +
+        std::to_string(rational_interval_not_zero(
+                           rational_interval_mul(box_twice, input_twice)) ?
+                           1 : 0) +
+        " center_input=" + center_input.lower.get_str() + ":" +
+        center_input.upper.get_str() +
+        " center_certificate=" + center_certificate.lower.get_str() + ":" +
+        center_certificate.upper.get_str() +
+        " box_input=" + box_input.lower.get_str() + ":" +
+        box_input.upper.get_str() +
+        " box_certificate=" + box_certificate.lower.get_str() + ":" +
+        box_certificate.upper.get_str());
+  }
 
   const Interval center_d = interval_of_q(rational_interval_inv(center_twice));
   const FirstJet center = {
@@ -5207,9 +5244,16 @@ Evaluation evaluate_job(const Program& program, const Job& job,
           }
           stack.push_back(candidate);
         } else {
-          stack.push_back(result_sqrt(
-              radii, job.center_certificates[sqrt_slot],
-              job.box_certificates[sqrt_slot], value, counters));
+          try {
+            stack.push_back(result_sqrt(
+                radii, job.center_certificates[sqrt_slot],
+                job.box_certificates[sqrt_slot], value, counters));
+          } catch (const std::exception& error) {
+            throw std::runtime_error(
+                "outer " + std::to_string(outer_index) +
+                " sqrt_slot " + std::to_string(sqrt_slot) + ": " +
+                error.what());
+          }
         }
         ++sqrt_slot;
       } else {
@@ -5487,7 +5531,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 36) {
+    if (argc < 4 || argc > 40) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -5533,6 +5577,7 @@ int main(int argc, char** argv) {
                 << " [--historical-second-benchmark-repetitions=N]"
                 << " [--delta-full-diagnostics]"
                 << " [--full-stage-diagnostics]"
+                << " [--accept-only]"
                 << " [--decimal-scale=N]"
                 << " [--binary-scale-bits=N]"
                 << " [--dyadic-scale]\n";
@@ -5551,6 +5596,7 @@ int main(int argc, char** argv) {
     std::size_t historical_second_benchmark_repetitions = 0;
     bool delta_full_diagnostics = false;
     bool full_stage_diagnostics = false;
+    bool accept_only = false;
     bool custom_decimal_scale = false;
     bool custom_binary_scale = false;
     int requested_binary_scale_bits = 40;
@@ -5675,6 +5721,8 @@ int main(int argc, char** argv) {
         delta_full_diagnostics = true;
       } else if (option == "--full-stage-diagnostics") {
         full_stage_diagnostics = true;
+      } else if (option == "--accept-only") {
+        accept_only = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -6044,23 +6092,29 @@ int main(int argc, char** argv) {
         kDyadicFallbackFixedQuotientCalls;
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
-      const Evaluation evaluation = kUseDirectSpecializedFunction
-          ? evaluate_direct_specialized_function(
-                program, jobs[index],
-                direct_stage_profile_enabled ? &direct_stage_profiles
-                                             : nullptr,
-                full_stage_diagnostics ? &stage_results[index] : nullptr)
-          : kUseCompactSupportJets
-              ? evaluate_job_compact(
-                program, jobs[index], polynomial_mode,
-                fused_polynomial_outer_index, fused_polynomial_max_steps,
-                direct_delta_x4)
-              : evaluate_job(
-                program, jobs[index], polynomial_mode,
-                fused_polynomial_outer_index, fused_polynomial_max_steps,
-                direct_delta_x4, profile_enabled ? &profiles : nullptr,
-                rounding_profile_enabled ? &rounding_profiles : nullptr,
-                full_stage_diagnostics ? &stage_results[index] : nullptr);
+      Evaluation evaluation;
+      try {
+        evaluation = kUseDirectSpecializedFunction
+            ? evaluate_direct_specialized_function(
+                  program, jobs[index],
+                  direct_stage_profile_enabled ? &direct_stage_profiles
+                                               : nullptr,
+                  full_stage_diagnostics ? &stage_results[index] : nullptr)
+            : kUseCompactSupportJets
+                ? evaluate_job_compact(
+                  program, jobs[index], polynomial_mode,
+                  fused_polynomial_outer_index, fused_polynomial_max_steps,
+                  direct_delta_x4)
+                : evaluate_job(
+                  program, jobs[index], polynomial_mode,
+                  fused_polynomial_outer_index, fused_polynomial_max_steps,
+                  direct_delta_x4, profile_enabled ? &profiles : nullptr,
+                  rounding_profile_enabled ? &rounding_profiles : nullptr,
+                  full_stage_diagnostics ? &stage_results[index] : nullptr);
+      } catch (const std::exception& error) {
+        throw std::runtime_error(
+            "job " + std::to_string(index) + ": " + error.what());
+      }
       results.push_back(evaluation.upper);
       add_counters(total, evaluation.counters);
       if (evaluation.upper != expected[index]) ++mismatches;
@@ -6257,6 +6311,8 @@ int main(int argc, char** argv) {
               << (kUseSignSpecializedIntervalProducts ? 1 : 0)
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
+              << " case_id=" << kCaseId
+              << " reference_comparison=" << (accept_only ? 0 : 1)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
@@ -6444,13 +6500,15 @@ int main(int argc, char** argv) {
       benchmark_historical_dihedral_second_order(
           jobs, historical_second_benchmark_repetitions);
     }
-    if (!dyadic_scale && polynomial_mode == PolynomialMode::kBaseline &&
+    if (!accept_only && !dyadic_scale &&
+        polynomial_mode == PolynomialMode::kBaseline &&
         mismatches != 0) {
       std::cerr << "fixed-scale native comparison found " << mismatches
                 << " mismatches\n";
       return 1;
     }
-    if ((dyadic_scale || polynomial_mode != PolynomialMode::kBaseline) &&
+    if ((accept_only || dyadic_scale ||
+         polynomial_mode != PolynomialMode::kBaseline) &&
         accepted != jobs.size()) {
       std::cerr << "development comparison accepted " << accepted
                 << " of " << jobs.size() << " jobs\n";
@@ -6472,8 +6530,13 @@ int main(int argc, char** argv) {
       std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_DYADIC_OK"
                 << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
     }
-    std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_CASE10173_OK"
-              << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
+    std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_OK"
+              << " DEVELOPMENT_NON_RELEASE case=" << kCaseId
+              << " cells=" << jobs.size() << "\n";
+    if (kCaseId == 10173) {
+      std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_CASE10173_OK"
+                << " DEVELOPMENT_NON_RELEASE cells=" << jobs.size() << "\n";
+    }
     return 0;
   } catch (const std::exception& error) {
     std::cerr << "native fixed-scale comparison failed: " << error.what() << "\n";
