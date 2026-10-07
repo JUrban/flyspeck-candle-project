@@ -107,6 +107,12 @@ struct PolynomialJet {
   IntervalMatrix box_hessian;
 };
 
+struct SecondOrderBox {
+  Interval value;
+  IntervalVector gradient;
+  IntervalMatrix hessian;
+};
+
 using GradientMask = std::uint8_t;
 using HessianMask = std::uint32_t;
 
@@ -2507,6 +2513,279 @@ IntervalMatrix delta_hessian(const IntervalVector& x) {
   return hessian;
 }
 
+Interval delta_gradient_component(std::size_t coordinate,
+                                  const IntervalVector& x,
+                                  Counters& counters) {
+  const auto product = [&counters](const Interval& left,
+                                    const Interval& right) {
+    return interval_mul(left, right, counters);
+  };
+  switch (coordinate) {
+    case 0:
+      return interval_sum({
+          interval_integer_scale(-2, product(x[0], x[3])),
+          product(x[1], x[3]), product(x[1], x[4]),
+          interval_neg(product(x[1], x[5])), product(x[2], x[3]),
+          interval_neg(product(x[2], x[4])), product(x[2], x[5]),
+          interval_neg(product(x[3], x[3])), product(x[3], x[4]),
+          product(x[3], x[5])});
+    case 1:
+      return interval_sum({
+          product(x[0], x[3]), product(x[0], x[4]),
+          interval_neg(product(x[0], x[5])),
+          interval_integer_scale(-2, product(x[1], x[4])),
+          interval_neg(product(x[2], x[3])), product(x[2], x[4]),
+          product(x[2], x[5]), product(x[3], x[4]),
+          interval_neg(product(x[4], x[4])), product(x[4], x[5])});
+    case 2:
+      return interval_sum({
+          product(x[0], x[3]), interval_neg(product(x[0], x[4])),
+          product(x[0], x[5]), interval_neg(product(x[1], x[3])),
+          product(x[1], x[4]), product(x[1], x[5]),
+          interval_integer_scale(-2, product(x[2], x[5])),
+          product(x[3], x[5]), product(x[4], x[5]),
+          interval_neg(product(x[5], x[5]))});
+    case 3:
+      return interval_sum({
+          interval_neg(product(x[0], x[0])), product(x[0], x[1]),
+          product(x[0], x[2]),
+          interval_integer_scale(-2, product(x[0], x[3])),
+          product(x[0], x[4]), product(x[0], x[5]),
+          interval_neg(product(x[1], x[2])), product(x[1], x[4]),
+          product(x[2], x[5]), interval_neg(product(x[4], x[5]))});
+    case 4:
+      return interval_sum({
+          product(x[0], x[1]), interval_neg(product(x[0], x[2])),
+          product(x[0], x[3]), interval_neg(product(x[1], x[1])),
+          product(x[1], x[2]), product(x[1], x[3]),
+          interval_integer_scale(-2, product(x[1], x[4])),
+          product(x[1], x[5]), product(x[2], x[5]),
+          interval_neg(product(x[3], x[5]))});
+    case 5:
+      return interval_sum({
+          interval_neg(product(x[0], x[1])), product(x[0], x[2]),
+          product(x[0], x[3]), product(x[1], x[2]),
+          product(x[1], x[4]), interval_neg(product(x[2], x[2])),
+          product(x[2], x[3]), product(x[2], x[4]),
+          interval_integer_scale(-2, product(x[2], x[5])),
+          interval_neg(product(x[3], x[4]))});
+    default:
+      throw std::runtime_error("delta gradient coordinate out of range");
+  }
+}
+
+IntervalVector monotone_extremum_environment(
+    const IntervalVector& box, const IntervalVector& derivatives,
+    bool upper) {
+  IntervalVector result = box;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    if (derivatives[coordinate].lower >= 0) {
+      const Fixed endpoint = upper ? box[coordinate].upper
+                                   : box[coordinate].lower;
+      result[coordinate] = {endpoint, endpoint};
+    } else if (derivatives[coordinate].upper <= 0) {
+      const Fixed endpoint = upper ? box[coordinate].lower
+                                   : box[coordinate].upper;
+      result[coordinate] = {endpoint, endpoint};
+    }
+  }
+  return result;
+}
+
+SecondOrderBox delta_full_sign_directed(const IntervalVector& box,
+                                        Counters& counters) {
+  SecondOrderBox result;
+  result.hessian = delta_hessian(box);
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const IntervalVector lower_environment = monotone_extremum_environment(
+        box, result.hessian[coordinate], false);
+    const IntervalVector upper_environment = monotone_extremum_environment(
+        box, result.hessian[coordinate], true);
+    const Interval lower = delta_gradient_component(
+        coordinate, lower_environment, counters);
+    const Interval upper = delta_gradient_component(
+        coordinate, upper_environment, counters);
+    result.gradient[coordinate] = {lower.lower, upper.upper};
+    if (result.gradient[coordinate].lower >
+        result.gradient[coordinate].upper) {
+      throw std::runtime_error("sign-directed delta gradient is empty");
+    }
+  }
+  const IntervalVector lower_environment = monotone_extremum_environment(
+      box, result.gradient, false);
+  const IntervalVector upper_environment = monotone_extremum_environment(
+      box, result.gradient, true);
+  const Interval lower = delta_value(lower_environment, counters);
+  const Interval upper = delta_value(upper_environment, counters);
+  result.value = {lower.lower, upper.upper};
+  if (result.value.lower > result.value.upper) {
+    throw std::runtime_error("sign-directed delta value is empty");
+  }
+  return result;
+}
+
+bool interval_is_subset(const Interval& candidate,
+                        const Interval& reference) {
+  return candidate.lower >= reference.lower &&
+         candidate.upper <= reference.upper;
+}
+
+void require_interval_contains(const Interval& candidate,
+                               const Interval& reference,
+                               const std::string& label);
+
+void run_delta_full_diagnostics(const std::vector<Job>& jobs) {
+  std::vector<SecondOrderBox> generics;
+  generics.reserve(jobs.size());
+  Counters generic_counters;
+  const auto generic_begin = std::chrono::steady_clock::now();
+  for (const Job& job : jobs) {
+    IntervalVector box;
+    for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+      box[coordinate] = interval_of_q(
+          {job.lower[coordinate], job.upper[coordinate]});
+    }
+    generics.push_back({
+        delta_value(box, generic_counters),
+        delta_gradient_from_products(
+            polynomial_pair_products(box, generic_counters)),
+        delta_hessian(box)});
+  }
+  const auto generic_end = std::chrono::steady_clock::now();
+
+  std::vector<SecondOrderBox> candidates;
+  candidates.reserve(jobs.size());
+  Counters candidate_counters;
+  const auto candidate_begin = std::chrono::steady_clock::now();
+  for (const Job& job : jobs) {
+    IntervalVector box;
+    for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+      box[coordinate] = interval_of_q(
+          {job.lower[coordinate], job.upper[coordinate]});
+    }
+    candidates.push_back(delta_full_sign_directed(box, candidate_counters));
+  }
+  const auto candidate_end = std::chrono::steady_clock::now();
+
+  Counters validation_counters;
+  std::size_t narrower_values = 0;
+  std::size_t narrower_gradients = 0;
+  std::size_t vertex_checks = 0;
+  Fixed candidate_value_width_sum = 0;
+  Fixed generic_value_width_sum = 0;
+  Fixed candidate_gradient_width_sum = 0;
+  Fixed generic_gradient_width_sum = 0;
+  const auto validation_begin = std::chrono::steady_clock::now();
+  for (std::size_t job_index = 0; job_index < jobs.size(); ++job_index) {
+    const Job& job = jobs[job_index];
+    const SecondOrderBox& generic = generics[job_index];
+    const SecondOrderBox& candidate = candidates[job_index];
+    IntervalVector box;
+    for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+      box[coordinate] = interval_of_q(
+          {job.lower[coordinate], job.upper[coordinate]});
+    }
+
+    if (!interval_is_subset(candidate.value, generic.value)) {
+      throw std::runtime_error(
+          "sign-directed delta value is not inside generic enclosure");
+    }
+    candidate_value_width_sum += candidate.value.upper - candidate.value.lower;
+    generic_value_width_sum += generic.value.upper - generic.value.lower;
+    if (candidate.value.lower > generic.value.lower ||
+        candidate.value.upper < generic.value.upper) {
+      ++narrower_values;
+    }
+    for (std::size_t row = 0; row < kDimensions; ++row) {
+      if (!interval_is_subset(candidate.gradient[row],
+                              generic.gradient[row])) {
+        throw std::runtime_error(
+            "sign-directed delta gradient is not inside generic enclosure");
+      }
+      candidate_gradient_width_sum +=
+          candidate.gradient[row].upper - candidate.gradient[row].lower;
+      generic_gradient_width_sum +=
+          generic.gradient[row].upper - generic.gradient[row].lower;
+      if (candidate.gradient[row].lower > generic.gradient[row].lower ||
+          candidate.gradient[row].upper < generic.gradient[row].upper) {
+        ++narrower_gradients;
+      }
+      for (std::size_t column = 0; column < kDimensions; ++column) {
+        if (candidate.hessian[row][column].lower !=
+                generic.hessian[row][column].lower ||
+            candidate.hessian[row][column].upper !=
+                generic.hessian[row][column].upper) {
+          throw std::runtime_error("delta Hessian formula drift");
+        }
+      }
+    }
+
+    for (std::size_t vertex = 0;
+         vertex < (static_cast<std::size_t>(1) << kDimensions); ++vertex) {
+      IntervalVector point;
+      for (std::size_t coordinate = 0;
+           coordinate < kDimensions; ++coordinate) {
+        const Fixed endpoint =
+            (vertex & (static_cast<std::size_t>(1) << coordinate))
+                ? box[coordinate].upper
+                : box[coordinate].lower;
+        point[coordinate] = {endpoint, endpoint};
+      }
+      require_interval_contains(
+          candidate.value, delta_value(point, validation_counters),
+          "sign-directed-delta/value-vertex");
+      for (std::size_t coordinate = 0;
+           coordinate < kDimensions; ++coordinate) {
+        require_interval_contains(
+            candidate.gradient[coordinate],
+            delta_gradient_component(
+                coordinate, point, validation_counters),
+            "sign-directed-delta/gradient-vertex");
+      }
+      const IntervalMatrix point_hessian = delta_hessian(point);
+      for (std::size_t row = 0; row < kDimensions; ++row) {
+        for (std::size_t column = 0; column < kDimensions; ++column) {
+          require_interval_contains(
+              candidate.hessian[row][column], point_hessian[row][column],
+              "sign-directed-delta/hessian-vertex");
+        }
+      }
+      ++vertex_checks;
+    }
+  }
+  const auto validation_end = std::chrono::steady_clock::now();
+  const double generic_seconds = std::chrono::duration<double>(
+      generic_end - generic_begin).count();
+  const double candidate_seconds = std::chrono::duration<double>(
+      candidate_end - candidate_begin).count();
+  const double validation_seconds = std::chrono::duration<double>(
+      validation_end - validation_begin).count();
+  std::cout << "CANDLE_NL_NATIVE_DELTA_FULL_SUMMARY"
+            << " cells=" << jobs.size()
+            << " generic_seconds=" << generic_seconds
+            << " candidate_seconds=" << candidate_seconds
+            << " validation_seconds=" << validation_seconds
+            << " generic_interval_products="
+            << generic_counters.interval_products
+            << " candidate_interval_products="
+            << candidate_counters.interval_products
+            << " validation_interval_products="
+            << validation_counters.interval_products
+            << " narrower_values=" << narrower_values
+            << " narrower_gradients=" << narrower_gradients
+            << " gradient_entries=" << jobs.size() * kDimensions
+            << " vertex_checks=" << vertex_checks
+            << " candidate_value_width_units="
+            << integer_of_fixed(candidate_value_width_sum).get_str()
+            << " generic_value_width_units="
+            << integer_of_fixed(generic_value_width_sum).get_str()
+            << " candidate_gradient_width_units="
+            << integer_of_fixed(candidate_gradient_width_sum).get_str()
+            << " generic_gradient_width_units="
+            << integer_of_fixed(generic_gradient_width_sum).get_str()
+            << " status=DEVELOPMENT_NON_RELEASE\n";
+}
+
 Interval delta_x4_value(const IntervalVector& x, Counters& counters) {
   const Interval linear = interval_sum({
       interval_neg(x[0]), x[1], x[2], interval_neg(x[3]), x[4], x[5]});
@@ -3570,7 +3849,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 23) {
+    if (argc < 4 || argc > 24) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -3595,6 +3874,7 @@ int main(int argc, char** argv) {
                 << " [--precompute-tight-sqrt-certificates]"
                 << " [--hardware-seeded-integer-sqrt]"
                 << " [--dihedral-identity-diagnostics]"
+                << " [--delta-full-diagnostics]"
                 << " [--decimal-scale=N]"
                 << " [--dyadic-scale]\n";
       return 2;
@@ -3605,6 +3885,7 @@ int main(int argc, char** argv) {
     int fused_polynomial_max_steps = -1;
     bool direct_delta_x4 = false;
     bool dihedral_identity_diagnostics = false;
+    bool delta_full_diagnostics = false;
     bool custom_decimal_scale = false;
     Integer requested_decimal_scale("1000000000000");
     PolynomialMode polynomial_mode = PolynomialMode::kBaseline;
@@ -3666,6 +3947,8 @@ int main(int argc, char** argv) {
         kUseHardwareSeededIntegerSqrt = true;
       } else if (option == "--dihedral-identity-diagnostics") {
         dihedral_identity_diagnostics = true;
+      } else if (option == "--delta-full-diagnostics") {
+        delta_full_diagnostics = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -3984,6 +4267,9 @@ int main(int argc, char** argv) {
                 << Rat(results[index] - expected[index]).get_str()
                 << " match=" << (results[index] == expected[index] ? 1 : 0)
                 << "\n";
+    }
+    if (delta_full_diagnostics) {
+      run_delta_full_diagnostics(jobs);
     }
     if (dihedral_identity_diagnostics) {
       for (std::size_t index = 0; index < jobs.size(); ++index) {

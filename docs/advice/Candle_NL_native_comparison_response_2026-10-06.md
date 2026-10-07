@@ -1182,3 +1182,47 @@ proof target is one reusable instruction theorem over all valid expressions
 and boxes, followed by a fresh Candle/native measurement and a representative
 multi-certificate batch.  That preserves the orders-of-magnitude objective
 without treating another small arithmetic improvement as the architecture.
+
+## Update: first low-work stage
+
+The fixed-scale `setDeltaFull` stage is now executable.  It follows the
+historical monotonicity structure rather than merely evaluating the same
+polynomial interval expression: Hessian signs select endpoint environments for
+each gradient component, and gradient signs select endpoint environments for
+the value.  Mixed-sign coordinates remain intervals.  The Hessian formulas
+are shared with the already checked direct polynomial implementation.
+
+Twenty warmed full-fixture measurements gave:
+
+| Delta enclosure | Mean time, 4,173 boxes | Interval products |
+|---|---:|---:|
+| Generic interval polynomial | 0.033646651 s | 146,055 |
+| Historical sign-directed structure | 0.051894936 s | 617,604 |
+
+The sign-directed stage is **1.542 times slower** by itself.  It nevertheless
+tightens every one of the 4,173 value enclosures and every one of the 25,038
+gradient enclosures.  Aggregate value width is 14.34% of generic, and aggregate
+gradient width is 42.04% of generic.  The Hessian streams are identical.
+
+A development validation pass checked every value, gradient, and Hessian at
+all 64 corners of every box--267,072 vertex checks--and also required the new
+enclosures to be subsets of the generic enclosures.  It passed with both native
+and overflow-checked `int128`, producing identical aggregate widths.  This is
+strong implementation evidence but is not a soundness proof.  The full native
+validation pass costs about 1.22 seconds and is charged separately from the
+candidate timing.
+
+Evidence is in `nl-native-case10173-delta-full-v3-dev-001`; the paired phase
+table has SHA-256
+`72d86c9d0de947e939042e71dc695021c98c893fd4b0898c9b3351469ce0d706`.
+The single checked-arithmetic cross-check is in
+`nl-native-case10173-delta-full-checked-v1-dev-001`.
+
+This stage is not an end-to-end speed win and therefore receives no standalone
+proof.  It remains useful for the bounded complete port because the historical
+algorithm spends tighter delta derivatives to avoid substantially more generic
+Taylor/chain-rule work later.  The next stage combines this enclosure with the
+historical derivative-square-root and `setDeltaX4` data.  Only the complete
+dihedral replacement can answer the performance gate; the intermediate
+1.542-times delta cost is explicitly carried into that total rather than
+reported as a speedup.
