@@ -819,3 +819,96 @@ compact-support gate is complete with only a local gain:
 The complete 4,173-box fixture remains the architecture gate.  The current
 128-box family is sufficient to reject weak ideas cheaply, but not to claim a
 certificate-wide speedup or to select a production scale/range contract.
+
+## Fixed nonlinear-kernel factorial: arithmetic is material, not sufficient
+
+The next controlled native experiment is complete.  It held the genuine
+128-box fixture, specialized angle-polynomial plan, direct authenticated
+`-delta_x4`, dense symmetric Taylor formulas, decimal scale `10^10`, and every
+fixed interval rounding point constant.  It varied two independent factors:
+
+1. native signed `int128` versus Boost overflow-checking signed `int128`, with
+   identical fixed operations; and
+2. GMP-rational implementations of square root handoff, reciprocal, and
+   arctangent versus outward-rounded fixed-scale implementations, with the
+   surrounding generic derivative/Taylor algorithm unchanged.
+
+Thirty warmed, order-balanced repetitions produced:
+
+| Endpoint lane | Nonlinear kernels | Preparation | Evaluation | Complete batch | Accepted |
+|---|---|---:|---:|---:|---:|
+| unchecked `int128` | rational | 0.009500554 s | 0.047123691 s | 0.056624245 s | 128/128 |
+| unchecked `int128` | fixed | 0.012249432 s | 0.029603075 s | 0.041852507 s | 128/128 |
+| checked `int128` | rational | 0.008929249 s | 0.067840680 s | 0.076769929 s | 128/128 |
+| checked `int128` | fixed | 0.011986593 s | 0.049043404 s | 0.061029997 s | 128/128 |
+
+Holding the generic numerical plan fixed, removing rational nonlinear kernels
+improved checked evaluation by **1.383 times**.  Removing overflow checks as a
+diagnostic improved the fixed-kernel lane by another **1.657 times**; the
+combined rational-checked to fixed-unchecked evaluation ratio is **2.292
+times**.  The unchecked lane is not a checker candidate: identical fixture
+outputs do not establish the absence of signed overflow.  Its purpose is to
+bound the cost of the current checked endpoint representation.
+
+The fixed implementations use integer inequalities for supplied square-root
+certificates, outward integer division for reciprocal bounds, and lower/upper
+alternating arctangent polynomials on the open unit interval.  A validation
+mode ran the fixed and exact-rational nonlinear paths side by side after each
+nonlinear instruction and required the complete candidate value, gradient,
+and Hessian result to enclose the rational reference.  All 896 square-root,
+128 reciprocal, and 128 arctangent results passed at each of scales `10^10`
+and `10^12`.  The `10^12` fixed-256 run accepted 128/128 cells; 89 final bounds
+were exact and 39 were wider by exactly `10^-12`.  The `10^10` checked run also
+accepted 128/128, with maximum widening about `6.22e-8`.  These checks are
+strong development diagnostics, not formal soundness proofs.
+
+The phase table is SHA-256
+`c79a152dea988d364b01033339610c62acb0ce2adecc967b24e234d65c2c1bc2`
+in run
+`nl-native-case10173-fixed-kernel-factorial-v3-crosschecked-dev-001`.
+The two cross-check logs have SHA-256
+`7cea1ff17705e4e2c9c545721d911776a4928618c184477e67b15b52f4009474`
+and
+`8a7c2acd0ee1bcc867ccacfb7f6811dd4618d256278511c0686b087e27cc170e`.
+
+This materially revises, but does not close, the large-gap diagnosis.  The
+original exact GMP fixed-scale lane was about 341 times slower per box than
+the historical specialized C++ batch.  The best fixed-kernel unchecked
+diagnostic is now about **11.70 times** slower per box, and the soundness-
+plausible checked lane is about **19.38 times** slower.  Those ratios compare
+different arithmetic representations and remain 128-box projections, not
+full-certificate results.  They show that arithmetic representation and
+nonlinear conversion were major costs, while leaving a large recurring
+algorithmic gap.  The separately measured roughly 15-times
+`Kernel.compute`/exact-native gap also remains an encoded-execution question;
+it must be remeasured after a proved fixed-kernel operation exists rather than
+combined arithmetically with these native ratios.
+
+### Next controlled discriminator and proof boundary
+
+The next native lane will keep checked `int128`, scale `10^10`, fixed nonlinear
+kernels, outward rounding, and the genuine boxes fixed.  It will change only
+the generic derivative/Taylor work by replacing the complete dihedral
+subgraph with a faithful specialized value/gradient/Hessian plan.  The 128-box
+gate will require complete acceptance, report bound widening, preparation,
+evaluation, memory, and operation counts, and compare against the checked
+fixed-kernel control above.  A fast lane that loses any current cell does not
+pass.
+
+If that lane materially wins, the native-input capture will be extended to
+all 4,173 boxes and the same comparison will charge shared preparation once.
+Only after the full batch passes will the specialized algorithm be held fixed
+while endpoint representation is varied, including a checked fixed-width
+lane and an outward-rounded hardware lane as an attainable-time diagnostic.
+That ordering separates generic analytic work from representation/rounding
+instead of changing both at once.
+
+Formal work stays bounded in parallel.  The current angle specialization may
+receive its one general analytic-containment theorem and exact authenticated
+dispatch/fallback theorem; it will not grow into fixture-specific rewrites.
+The fixed nonlinear kernels are also plausible reusable proof targets--their
+contracts reduce to general integer rounding, square-root certificate, and
+alternating-series lemmas--but integration waits for the complete numerical
+plan decision.  No proof effort will target unchecked arithmetic.  The
+complete 4,173-box accepted time, including reusable preparation and theorem
+handoff, remains the architecture-selection gate.

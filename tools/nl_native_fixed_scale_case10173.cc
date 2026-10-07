@@ -49,6 +49,9 @@ Fixed kTwoScaleSquared = 2 * kScale * kScale;
 bool kSkipExactZeroProducts = false;
 bool kUseSymmetricHessianOps = false;
 bool kUseCompactSupportJets = false;
+bool kUseFixedSqrtInverseKernels = false;
+bool kUseFixedAtanKernel = false;
+bool kVerifyFixedKernelEnclosures = false;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -225,6 +228,8 @@ struct Job {
   int index = 0;
   std::array<RationalInterval, kSqrtSlots> box_certificates;
   std::array<RationalInterval, kSqrtSlots> center_certificates;
+  std::array<Interval, kSqrtSlots> fixed_box_certificates;
+  std::array<Interval, kSqrtSlots> fixed_center_certificates;
   std::array<Rat, kDimensions> lower;
   std::array<Rat, kDimensions> upper;
 };
@@ -449,6 +454,17 @@ Interval one_interval() { return {kScale, kScale}; }
 
 Interval interval_of_q(const RationalInterval& value) {
   return {floor_scaled(value.lower), ceil_scaled(value.upper)};
+}
+
+void prepare_fixed_sqrt_certificates(std::vector<Job>& jobs) {
+  for (Job& job : jobs) {
+    for (std::size_t slot = 0; slot < kSqrtSlots; ++slot) {
+      job.fixed_box_certificates[slot] =
+          interval_of_q(job.box_certificates[slot]);
+      job.fixed_center_certificates[slot] =
+          interval_of_q(job.center_certificates[slot]);
+    }
+  }
 }
 
 Interval interval_constant(const Rat& value) {
@@ -944,6 +960,109 @@ RationalInterval rational_interval_inv(const RationalInterval& value) {
   return {Rat(1) / value.upper, Rat(1) / value.lower};
 }
 
+bool fixed_interval_not_zero(const Interval& value) {
+  return value.lower > 0 || value.upper < 0;
+}
+
+Interval fixed_interval_inv(const Interval& value) {
+  if (!fixed_interval_not_zero(value)) {
+    throw std::runtime_error("fixed inverse interval contains zero");
+  }
+  const Fixed scale_squared = kScale * kScale;
+  return {floor_fixed_quotient(scale_squared, value.upper),
+          ceil_fixed_quotient(scale_squared, value.lower)};
+}
+
+bool fixed_sqrt_certificate(const Interval& input,
+                            const Interval& output) {
+  return input.lower >= 0 && input.lower <= input.upper &&
+         output.lower >= 0 && output.lower <= output.upper &&
+         output.lower * output.lower <= input.lower * kScale &&
+         input.upper * kScale <= output.upper * output.upper;
+}
+
+Interval fixed_rational_constant(long numerator, long denominator) {
+  const Fixed scaled_numerator = static_cast<Fixed>(numerator) * kScale;
+  const Fixed fixed_denominator = static_cast<Fixed>(denominator);
+  return {floor_fixed_quotient(scaled_numerator, fixed_denominator),
+          ceil_fixed_quotient(scaled_numerator, fixed_denominator)};
+}
+
+Interval fixed_interval_square(const Interval& value, Counters& counters) {
+  ++counters.interval_products;
+  if (value.lower >= 0) {
+    return {floor_fixed_quotient(value.lower * value.lower, kScale),
+            ceil_fixed_quotient(value.upper * value.upper, kScale)};
+  }
+  if (value.upper <= 0) {
+    return {floor_fixed_quotient(value.upper * value.upper, kScale),
+            ceil_fixed_quotient(value.lower * value.lower, kScale)};
+  }
+  const Fixed lower_square = value.lower * value.lower;
+  const Fixed upper_square = value.upper * value.upper;
+  const Fixed raw_upper = lower_square > upper_square
+                              ? lower_square
+                              : upper_square;
+  return {0, ceil_fixed_quotient(raw_upper, kScale)};
+}
+
+Interval fixed_atan_pos_lower(Fixed x, Counters& counters) {
+  const Interval point = {x, x};
+  const Interval x2 = fixed_interval_square(point, counters);
+  Interval polynomial = fixed_rational_constant(-1, 11);
+  polynomial = interval_add(fixed_rational_constant(1, 9),
+                            interval_mul(x2, polynomial, counters));
+  polynomial = interval_add(fixed_rational_constant(-1, 7),
+                            interval_mul(x2, polynomial, counters));
+  polynomial = interval_add(fixed_rational_constant(1, 5),
+                            interval_mul(x2, polynomial, counters));
+  polynomial = interval_add(fixed_rational_constant(-1, 3),
+                            interval_mul(x2, polynomial, counters));
+  return interval_mul(
+      point, interval_add(one_interval(),
+                          interval_mul(x2, polynomial, counters)), counters);
+}
+
+Interval fixed_atan_pos_upper(Fixed x, Counters& counters) {
+  const Interval point = {x, x};
+  const Interval x2 = fixed_interval_square(point, counters);
+  Interval polynomial = fixed_rational_constant(1, 13);
+  polynomial = interval_add(fixed_rational_constant(-1, 11),
+                            interval_mul(x2, polynomial, counters));
+  polynomial = interval_add(fixed_rational_constant(1, 9),
+                            interval_mul(x2, polynomial, counters));
+  polynomial = interval_add(fixed_rational_constant(-1, 7),
+                            interval_mul(x2, polynomial, counters));
+  polynomial = interval_add(fixed_rational_constant(1, 5),
+                            interval_mul(x2, polynomial, counters));
+  polynomial = interval_add(fixed_rational_constant(-1, 3),
+                            interval_mul(x2, polynomial, counters));
+  return interval_mul(
+      point, interval_add(one_interval(),
+                          interval_mul(x2, polynomial, counters)), counters);
+}
+
+Fixed fixed_atan_lower_point(Fixed x, Counters& counters) {
+  if (absolute(x) >= kScale) {
+    throw std::runtime_error("fixed atan argument outside open unit interval");
+  }
+  if (x >= 0) return fixed_atan_pos_lower(x, counters).lower;
+  return -fixed_atan_pos_upper(-x, counters).upper;
+}
+
+Fixed fixed_atan_upper_point(Fixed x, Counters& counters) {
+  if (absolute(x) >= kScale) {
+    throw std::runtime_error("fixed atan argument outside open unit interval");
+  }
+  if (x >= 0) return fixed_atan_pos_upper(x, counters).upper;
+  return -fixed_atan_pos_lower(-x, counters).lower;
+}
+
+Interval fixed_atan_interval(const Interval& input, Counters& counters) {
+  return {fixed_atan_lower_point(input.lower, counters),
+          fixed_atan_upper_point(input.upper, counters)};
+}
+
 bool sqrt_certificate(const RationalInterval& input,
                       const RationalInterval& output) {
   return input.lower >= 0 && input.lower <= input.upper &&
@@ -1069,6 +1188,69 @@ TaylorResult result_sqrt(const IntegerVector& radii,
   return complete_result(radii, domain, center, hessian, counters);
 }
 
+TaylorResult result_inverse_fixed(const IntegerVector& radii,
+                                  const TaylorResult& value,
+                                  Counters& counters) {
+  ++counters.inverse_steps;
+  const bool domain = value.domain &&
+                      fixed_interval_not_zero(value.center.value) &&
+                      fixed_interval_not_zero(value.value_bound);
+  if (!domain) throw std::runtime_error("fixed inverse domain failure");
+  const Interval r = fixed_interval_inv(value.center.value);
+  const Interval r2 = interval_mul(r, r, counters);
+  const FirstJet center = {
+      r, interval_vector_scale(interval_neg(r2), value.center.gradient,
+                               counters)};
+
+  const Interval box_r = fixed_interval_inv(value.value_bound);
+  const Interval box_r2 = interval_mul(box_r, box_r, counters);
+  const Interval box_r3 = interval_mul(box_r2, box_r, counters);
+  const IntervalMatrix hessian = matrix_add(
+      interval_matrix_scale(interval_neg(box_r2), value.hessian, counters),
+      interval_matrix_scale(
+          interval_add(box_r3, box_r3),
+          interval_self_outer(value.gradient_bounds, counters), counters));
+  return complete_result(radii, domain, center, hessian, counters);
+}
+
+TaylorResult result_sqrt_fixed(
+    const IntegerVector& radii, const Interval& center_certificate,
+    const Interval& box_certificate, const TaylorResult& value,
+    Counters& counters) {
+  ++counters.sqrt_steps;
+  const Interval center_twice = interval_integer_scale(
+      2, center_certificate);
+  const Interval box_twice = interval_integer_scale(2, box_certificate);
+  const Interval input_twice = interval_integer_scale(2, value.value_bound);
+  const bool domain = value.domain &&
+                      fixed_sqrt_certificate(value.center.value,
+                                             center_certificate) &&
+                      fixed_sqrt_certificate(value.value_bound,
+                                             box_certificate) &&
+                      fixed_interval_not_zero(center_twice) &&
+                      fixed_interval_not_zero(box_twice);
+  if (!domain) throw std::runtime_error("fixed sqrt domain failure");
+
+  const Interval center_d = fixed_interval_inv(center_twice);
+  const FirstJet center = {
+      center_certificate,
+      interval_vector_scale(center_d, value.center.gradient, counters)};
+
+  const Interval box_d = fixed_interval_inv(box_twice);
+  const Interval dd_denominator = interval_mul(
+      box_twice, input_twice, counters);
+  if (!fixed_interval_not_zero(dd_denominator)) {
+    throw std::runtime_error("fixed sqrt second derivative domain failure");
+  }
+  const Interval box_dd = interval_neg(fixed_interval_inv(dd_denominator));
+  const IntervalMatrix hessian = matrix_add(
+      interval_matrix_scale(
+          box_dd, interval_self_outer(value.gradient_bounds, counters),
+          counters),
+      interval_matrix_scale(box_d, value.hessian, counters));
+  return complete_result(radii, domain, center, hessian, counters);
+}
+
 TaylorResult result_atan(const IntegerVector& radii,
                          const TaylorResult& value, Counters& counters) {
   ++counters.atan_steps;
@@ -1105,6 +1287,74 @@ TaylorResult result_atan(const IntegerVector& radii,
           counters),
       interval_matrix_scale(box_d, value.hessian, counters));
   return complete_result(radii, domain, center, hessian, counters);
+}
+
+TaylorResult result_atan_fixed(const IntegerVector& radii,
+                              const TaylorResult& value,
+                              Counters& counters) {
+  ++counters.atan_steps;
+  const Interval center_denominator = interval_add(
+      one_interval(), fixed_interval_square(value.center.value, counters));
+  const Interval box_denominator = interval_add(
+      one_interval(), fixed_interval_square(value.value_bound, counters));
+  const bool arguments_in_range =
+      absolute(value.center.value.lower) < kScale &&
+      absolute(value.center.value.upper) < kScale &&
+      absolute(value.value_bound.lower) < kScale &&
+      absolute(value.value_bound.upper) < kScale;
+  const bool domain = value.domain && arguments_in_range &&
+                      fixed_interval_not_zero(center_denominator) &&
+                      fixed_interval_not_zero(box_denominator);
+  if (!domain) throw std::runtime_error("fixed atan domain failure");
+
+  const Interval center_d = fixed_interval_inv(center_denominator);
+  const FirstJet center = {
+      fixed_atan_interval(value.center.value, counters),
+      interval_vector_scale(center_d, value.center.gradient, counters)};
+
+  const Interval box_d = fixed_interval_inv(box_denominator);
+  const Interval box_d2 = interval_mul(box_d, box_d, counters);
+  const Interval box_dd = interval_neg(interval_mul(
+      interval_add(value.value_bound, value.value_bound), box_d2, counters));
+  const IntervalMatrix hessian = matrix_add(
+      interval_matrix_scale(
+          box_dd, interval_self_outer(value.gradient_bounds, counters),
+          counters),
+      interval_matrix_scale(box_d, value.hessian, counters));
+  return complete_result(radii, domain, center, hessian, counters);
+}
+
+void require_interval_contains(const Interval& candidate,
+                               const Interval& reference,
+                               const std::string& label) {
+  if (candidate.lower > reference.lower || candidate.upper < reference.upper) {
+    throw std::runtime_error("fixed kernel enclosure failure: " + label);
+  }
+}
+
+void require_result_contains(const TaylorResult& candidate,
+                             const TaylorResult& reference,
+                             const std::string& label) {
+  if (reference.domain && !candidate.domain) {
+    throw std::runtime_error("fixed kernel domain failure: " + label);
+  }
+  require_interval_contains(candidate.center.value, reference.center.value,
+                            label + "/center-value");
+  require_interval_contains(candidate.value_bound, reference.value_bound,
+                            label + "/value-bound");
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    require_interval_contains(candidate.center.gradient[row],
+                              reference.center.gradient[row],
+                              label + "/center-gradient");
+    require_interval_contains(candidate.gradient_bounds[row],
+                              reference.gradient_bounds[row],
+                              label + "/gradient-bound");
+    for (std::size_t column = 0; column < kDimensions; ++column) {
+      require_interval_contains(candidate.hessian[row][column],
+                                reference.hessian[row][column],
+                                label + "/hessian");
+    }
+  }
 }
 
 TaylorResult result_pi_half(const IntegerVector& radii, Counters& counters) {
@@ -2141,9 +2391,23 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         }
         TaylorResult value = stack.back();
         stack.pop_back();
-        stack.push_back(result_sqrt(radii, job.center_certificates[sqrt_slot],
-                                    job.box_certificates[sqrt_slot], value,
-                                    counters));
+        if (kUseFixedSqrtInverseKernels) {
+          const TaylorResult candidate = result_sqrt_fixed(
+              radii, job.fixed_center_certificates[sqrt_slot],
+              job.fixed_box_certificates[sqrt_slot], value, counters);
+          if (kVerifyFixedKernelEnclosures) {
+            Counters reference_counters;
+            const TaylorResult reference = result_sqrt(
+                radii, job.center_certificates[sqrt_slot],
+                job.box_certificates[sqrt_slot], value, reference_counters);
+            require_result_contains(candidate, reference, "sqrt");
+          }
+          stack.push_back(candidate);
+        } else {
+          stack.push_back(result_sqrt(
+              radii, job.center_certificates[sqrt_slot],
+              job.box_certificates[sqrt_slot], value, counters));
+        }
         ++sqrt_slot;
       } else {
         throw std::runtime_error("unknown analytic pair instruction");
@@ -2156,8 +2420,36 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         stack.pop_back();
         if (opcode == 2) stack.push_back(result_neg(radii, value, counters));
         if (opcode == 5) stack.push_back(result_mul(radii, value, value, counters));
-        if (opcode == 6) stack.push_back(result_inverse(radii, value, counters));
-        if (opcode == 7) stack.push_back(result_atan(radii, value, counters));
+        if (opcode == 6) {
+          if (kUseFixedSqrtInverseKernels) {
+            const TaylorResult candidate =
+                result_inverse_fixed(radii, value, counters);
+            if (kVerifyFixedKernelEnclosures) {
+              Counters reference_counters;
+              const TaylorResult reference =
+                  result_inverse(radii, value, reference_counters);
+              require_result_contains(candidate, reference, "inverse");
+            }
+            stack.push_back(candidate);
+          } else {
+            stack.push_back(result_inverse(radii, value, counters));
+          }
+        }
+        if (opcode == 7) {
+          if (kUseFixedAtanKernel) {
+            const TaylorResult candidate =
+                result_atan_fixed(radii, value, counters);
+            if (kVerifyFixedKernelEnclosures) {
+              Counters reference_counters;
+              const TaylorResult reference =
+                  result_atan(radii, value, reference_counters);
+              require_result_contains(candidate, reference, "atan");
+            }
+            stack.push_back(candidate);
+          } else {
+            stack.push_back(result_atan(radii, value, counters));
+          }
+        }
       } else if (opcode == 3 || opcode == 4) {
         if (stack.size() < 2) throw std::runtime_error("analytic stack underflow");
         TaylorResult right = stack.back();
@@ -2348,7 +2640,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 12) {
+    if (argc < 4 || argc > 13) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -2360,6 +2652,9 @@ int main(int argc, char** argv) {
                 << " [--skip-exact-zero-products]"
                 << " [--symmetric-hessian-ops]"
                 << " [--compact-support-jets]"
+                << " [--fixed-sqrt-inverse-kernels]"
+                << " [--fixed-atan-kernel]"
+                << " [--verify-fixed-kernel-enclosures]"
                 << " [--decimal-scale=N]"
                 << " [--dyadic-scale]\n";
       return 2;
@@ -2404,6 +2699,12 @@ int main(int argc, char** argv) {
         kUseSymmetricHessianOps = true;
       } else if (option == "--compact-support-jets") {
         kUseCompactSupportJets = true;
+      } else if (option == "--fixed-sqrt-inverse-kernels") {
+        kUseFixedSqrtInverseKernels = true;
+      } else if (option == "--fixed-atan-kernel") {
+        kUseFixedAtanKernel = true;
+      } else if (option == "--verify-fixed-kernel-enclosures") {
+        kVerifyFixedKernelEnclosures = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -2422,6 +2723,16 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "instruction profiling is not implemented for compact support jets");
     }
+    if (kUseCompactSupportJets &&
+        (kUseFixedSqrtInverseKernels || kUseFixedAtanKernel)) {
+      throw std::runtime_error(
+          "compact support jets do not yet implement fixed nonlinear kernels");
+    }
+    if (kVerifyFixedKernelEnclosures &&
+        !(kUseFixedSqrtInverseKernels || kUseFixedAtanKernel)) {
+      throw std::runtime_error(
+          "fixed kernel verification requires a fixed nonlinear kernel");
+    }
     if (dyadic_scale) {
       kScale = fixed_of_integer(
           Integer("1099511627776"));  // 2^40, close to decimal 10^12.
@@ -2433,7 +2744,10 @@ int main(int argc, char** argv) {
 
     const auto preparation_begin = std::chrono::steady_clock::now();
     const Program program = read_program(argv[1]);
-    const std::vector<Job> jobs = read_jobs(argv[2]);
+    std::vector<Job> jobs = read_jobs(argv[2]);
+    if (kUseFixedSqrtInverseKernels) {
+      prepare_fixed_sqrt_certificates(jobs);
+    }
     const std::vector<Rat> expected = read_expected_bounds(argv[3]);
     if (expected.size() != jobs.size()) {
       throw std::runtime_error("expected-bound count drift");
@@ -2513,6 +2827,11 @@ int main(int argc, char** argv) {
               << (kUseSymmetricHessianOps ? 1 : 0)
               << " compact_support_jets="
               << (kUseCompactSupportJets ? 1 : 0)
+              << " fixed_sqrt_inverse_kernels="
+              << (kUseFixedSqrtInverseKernels ? 1 : 0)
+              << " fixed_atan_kernel=" << (kUseFixedAtanKernel ? 1 : 0)
+              << " verify_fixed_kernel_enclosures="
+              << (kVerifyFixedKernelEnclosures ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
