@@ -1533,3 +1533,30 @@ derivative/Taylor architecture from representation and rounding on the same
 genuine boxes. Acceptance, enclosure quality, memory, reusable preparation,
 recurring execution, and cold total remain mandatory gates, followed by a
 small multi-certificate batch before proof investment.
+
+## Update: complete additive-leaf handoff
+
+The authenticated expression has thirteen polynomial/coordinate-root leaves
+whose value and gradient bounds are unused until they join the final sum. A
+new source-shape-checked lane carries their center tangents and box Hessians
+directly and performs one final Taylor handoff. It leaves the dihedral
+subgraph, fixed dyadic arithmetic, and final acceptance calculation unchanged.
+
+Twenty rotated 4,173-box pairs reduced completed results from 100,152 to
+45,903 and dyadic shift quotients from 4,740,528 to 3,981,042. Evaluation fell
+from 0.272384195 to 0.251070965 seconds, a 1.085-times gain. Preparation plus
+evaluation improved only 1.028 times, from 0.596344441 to 0.579948695 seconds.
+Every box is accepted and every result is byte-identical. Peak RSS in one
+full-run observation remained about 38 MB. The timing table has SHA-256
+`e6898734703a4d0c2cdd70fbf847bf37696e7337c03a84e56e742a076869777b`
+in `nl-native-case10173-additive-completion-paired-v1-dev-001`.
+
+This mechanism remains a component, not an independent proof target: the
+candidate is still 3.044 times the specialized C++ batch. The next cheap
+factorial lane will hold this graph fixed and compare padded fixed-grid
+long-double normalization with an explicitly untrusted unrounded-quotient
+lower bound. A large difference would justify building a genuinely outward
+hardware-endpoint backend; a small difference would redirect effort to a
+complete specialized primitive. Neither diagnostic changes the requirement
+for full acceptance, enclosure-quality reporting, cold total cost, and a
+multi-certificate gate before proof work.

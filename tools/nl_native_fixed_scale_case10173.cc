@@ -73,6 +73,7 @@ bool kUseHardwareSeededFixedQuotient = false;
 bool kUseDyadicShiftFixedQuotient = false;
 int kDyadicScaleBits = -1;
 bool kFuseConsecutiveAdds = false;
+bool kDeferAdditiveLeafCompletion = false;
 bool kUseNarrowFixedProducts = false;
 bool kUseUncheckedNarrowFixedProducts = false;
 bool kCountFixedQuotients = false;
@@ -227,6 +228,7 @@ struct TaylorResult {
   Interval value_bound;
   IntervalVector gradient_bounds;
   IntervalMatrix hessian;
+  bool completed = true;
 };
 
 struct PolynomialJet {
@@ -1232,7 +1234,13 @@ TaylorResult complete_result(const IntegerVector& radii, bool domain,
           center,
           raw_interval_round(kTwoScaleSquared, raw_value),
           gradient_bounds,
-          hessian};
+          hessian,
+          true};
+}
+
+TaylorResult deferred_additive_result(bool domain, const FirstJet& center,
+                                      const IntervalMatrix& hessian) {
+  return {domain, center, zero_interval(), zero_vector(), hessian, false};
 }
 
 TaylorResult complete_raw_result(const IntegerVector& radii, bool domain,
@@ -1702,7 +1710,8 @@ TaylorResult result_scaled_coordinate_sqrt_fixed(
     const Interval& box_certificate,
     const IntervalVector& center_environment,
     const IntervalVector& box_environment, std::size_t variable,
-    const Rat& coefficient_value, Counters& counters) {
+    const Rat& coefficient_value, Counters& counters,
+    bool defer_completion = false) {
   if (variable >= kDimensions) {
     throw std::runtime_error("coordinate sqrt variable outside environment");
   }
@@ -1747,7 +1756,9 @@ TaylorResult result_scaled_coordinate_sqrt_fixed(
   const FirstJet center = {
       interval_mul(coefficient, center_sqrt, counters),
       center_gradient};
-  return complete_result(radii, domain, center, hessian, counters);
+  return defer_completion
+      ? deferred_additive_result(domain, center, hessian)
+      : complete_result(radii, domain, center, hessian, counters);
 }
 
 TaylorResult result_atan(const IntegerVector& radii,
@@ -2618,6 +2629,50 @@ void prepare_dihedral_chain(Program& program) {
   require_outer_opcode(37, 7);
   require_outer_opcode(38, 3);
   program.prepared_dihedral_chain = true;
+}
+
+bool is_deferred_additive_polynomial(std::size_t outer_index) {
+  constexpr std::array<std::size_t, 7> kIndices =
+      {{0, 5, 10, 15, 20, 25, 30}};
+  return std::find(kIndices.begin(), kIndices.end(), outer_index) !=
+         kIndices.end();
+}
+
+void validate_deferred_additive_source(const Program& program) {
+  using Kind = Program::SimplePolynomialKind;
+  constexpr std::array<std::size_t, 7> kPolynomialIndices =
+      {{0, 5, 10, 15, 20, 25, 30}};
+  constexpr std::array<std::size_t, 6> kSqrtIndices =
+      {{1, 6, 11, 16, 21, 26}};
+  if (program.instructions.size() != 54 ||
+      program.prepared_simple_polynomials.size() != 54 ||
+      program.prepared_coordinate_sqrt_terms.size() != 54) {
+    throw std::runtime_error("deferred additive source-size drift");
+  }
+  for (const std::size_t index : kPolynomialIndices) {
+    const Kind kind = program.prepared_simple_polynomials.at(index).kind;
+    if (kind != Kind::kConstant && kind != Kind::kVariable) {
+      throw std::runtime_error(
+          "deferred additive polynomial shape drift at outer " +
+          std::to_string(index));
+    }
+  }
+  for (const std::size_t index : kSqrtIndices) {
+    if (!program.prepared_coordinate_sqrt_terms.at(index).active) {
+      throw std::runtime_error(
+          "deferred additive square-root shape drift at outer " +
+          std::to_string(index));
+    }
+  }
+  for (std::size_t index = 41; index < 54; ++index) {
+    const Node& instruction = node_at(
+        program, program.instructions.at(index));
+    if (instruction.is_pair || instruction.numeral != 3) {
+      throw std::runtime_error(
+          "deferred additive final-sum drift at outer " +
+          std::to_string(index));
+    }
+  }
 }
 
 TaylorResult evaluate_polynomial(const Program& program,
@@ -4278,7 +4333,8 @@ Evaluation evaluate_job(const Program& program, const Job& job,
           radii, job.fixed_center_certificates[sqrt_slot],
           job.fixed_box_certificates[sqrt_slot], center_environment,
           box_environment, coordinate_sqrt_term->variable,
-          coordinate_sqrt_term->coefficient, counters);
+          coordinate_sqrt_term->coefficient, counters,
+          kDeferAdditiveLeafCompletion);
       if (kVerifyFixedKernelEnclosures) {
         Counters reference_counters;
         const TaylorResult variable = result_variable(
@@ -4423,12 +4479,28 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         // -delta_x4, not delta_x4.  Do not dispatch merely by program length.
         if (kUsePreparedSimplePolynomials && prepared != nullptr &&
             prepared->kind == Program::SimplePolynomialKind::kConstant) {
-          stack.push_back(result_constant(
-              radii, prepared->constant, counters));
+          stack.push_back(
+              kDeferAdditiveLeafCompletion &&
+                      is_deferred_additive_polynomial(outer_index)
+                  ? deferred_additive_result(
+                        true,
+                        {interval_constant(prepared->constant),
+                         zero_vector()},
+                        zero_matrix())
+                  : result_constant(radii, prepared->constant, counters));
         } else if (kUsePreparedSimplePolynomials && prepared != nullptr &&
                    prepared->kind == Program::SimplePolynomialKind::kVariable) {
-          stack.push_back(result_variable(
-              radii, center_environment, prepared->variable, counters));
+          const Interval value = prepared->variable < kDimensions
+              ? center_environment[prepared->variable]
+              : zero_interval();
+          stack.push_back(
+              kDeferAdditiveLeafCompletion &&
+                      is_deferred_additive_polynomial(outer_index)
+                  ? deferred_additive_result(
+                        true, {value, unit_vector(prepared->variable)},
+                        zero_matrix())
+                  : result_variable(radii, center_environment,
+                                    prepared->variable, counters));
         } else if (direct_delta_x4 && outer_index == 32 &&
                    polynomial_steps == 39) {
           stack.push_back(evaluate_neg_delta_x4_specialized(
@@ -4593,7 +4665,8 @@ Evaluation evaluate_job(const Program& program, const Job& job,
   if (direct_delta_x4 && !direct_delta_x4_used) {
     throw std::runtime_error("negated delta_x4 source position drift");
   }
-  if (sqrt_slot != kSqrtSlots || stack.size() != 1 || !stack.back().domain) {
+  if (sqrt_slot != kSqrtSlots || stack.size() != 1 || !stack.back().domain ||
+      !stack.back().completed) {
     throw std::runtime_error("final analytic result shape/domain drift");
   }
   return {normalized_rat(integer_of_fixed(stack.back().value_bound.upper),
@@ -4774,6 +4847,7 @@ int main(int argc, char** argv) {
                 << " [--hardware-seeded-fixed-quotient]"
                 << " [--dyadic-shift-fixed-quotient]"
                 << " [--fuse-consecutive-adds]"
+                << " [--defer-additive-leaf-completion]"
                 << " [--narrow-fixed-products]"
                 << " [--unchecked-narrow-fixed-products]"
                 << " [--count-fixed-quotients]"
@@ -4866,6 +4940,8 @@ int main(int argc, char** argv) {
         kUseDyadicShiftFixedQuotient = true;
       } else if (option == "--fuse-consecutive-adds") {
         kFuseConsecutiveAdds = true;
+      } else if (option == "--defer-additive-leaf-completion") {
+        kDeferAdditiveLeafCompletion = true;
       } else if (option == "--narrow-fixed-products") {
         kUseNarrowFixedProducts = true;
       } else if (option == "--unchecked-narrow-fixed-products") {
@@ -5016,6 +5092,15 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "historical center tangent requires the historical dihedral path");
     }
+    if (kDeferAdditiveLeafCompletion &&
+        (!kFuseConsecutiveAdds || !kUsePreparedSimplePolynomials ||
+         !kUsePreparedCoordinateSqrtTerms ||
+         kVerifyFixedKernelEnclosures)) {
+      throw std::runtime_error(
+          "deferred additive completion requires fused additions, prepared "
+          "simple polynomials and coordinate roots, and no diagnostic "
+          "reference evaluation");
+    }
     if (dihedral_identity_diagnostics &&
         !kUseSpecializedDihedralIdentities && !kUseHistoricalDihedral) {
       throw std::runtime_error(
@@ -5108,6 +5193,9 @@ int main(int argc, char** argv) {
     }
     if (kUsePreparedCoordinateSqrtTerms) {
       prepare_coordinate_sqrt_terms(program);
+    }
+    if (kDeferAdditiveLeafCompletion) {
+      validate_deferred_additive_source(program);
     }
     if (kUsePreparedDihedralChain || kUseSpecializedDihedralIdentities ||
         kUseHistoricalDihedral || kPrecomputeTightSqrtCertificates) {
@@ -5282,6 +5370,8 @@ int main(int argc, char** argv) {
               << (kUseDyadicShiftFixedQuotient ? 1 : 0)
               << " fuse_consecutive_adds="
               << (kFuseConsecutiveAdds ? 1 : 0)
+              << " defer_additive_leaf_completion="
+              << (kDeferAdditiveLeafCompletion ? 1 : 0)
               << " narrow_fixed_products="
               << (kUseNarrowFixedProducts ? 1 : 0)
               << " unchecked_narrow_fixed_products="
