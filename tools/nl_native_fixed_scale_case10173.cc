@@ -910,8 +910,79 @@ Fixed fixed_of_integer(const Integer& value) {
   return Fixed(value.get_str());
 }
 
+#if defined(CANDLE_NL_CHECKED_INT256)
+Fixed checked_floor_power_of_two_quotient(const Fixed& numerator,
+                                          unsigned shift) {
+  if (shift == 0 || shift >= 256) {
+    throw std::runtime_error("invalid checked floor power-of-two shift");
+  }
+  const bool negative = numerator < 0;
+  const Fixed magnitude = negative ? -numerator : numerator;
+  const Fixed mask = (Fixed(1) << shift) - 1;
+  const Fixed quotient = magnitude >> shift;
+  if (!negative) return quotient;
+  return (magnitude & mask) == 0 ? -quotient : -quotient - 1;
+}
+
+Fixed checked_ceil_power_of_two_quotient(const Fixed& numerator,
+                                         unsigned shift) {
+  if (shift == 0 || shift >= 256) {
+    throw std::runtime_error("invalid checked ceil power-of-two shift");
+  }
+  const bool negative = numerator < 0;
+  const Fixed magnitude = negative ? -numerator : numerator;
+  const Fixed mask = (Fixed(1) << shift) - 1;
+  const Fixed quotient = magnitude >> shift;
+  if (negative) return -quotient;
+  return (magnitude & mask) == 0 ? quotient : quotient + 1;
+}
+
+int checked_fixed_dyadic_denominator_shift(const Fixed& denominator) {
+  if (kDyadicScaleBits <= 0) return -1;
+  if (denominator == kScale) return kDyadicScaleBits;
+  if (denominator == kScale * kScale) return 2 * kDyadicScaleBits;
+  if (denominator == kTwoScaleSquared) return 2 * kDyadicScaleBits + 1;
+  return -1;
+}
+
+void verify_checked_dyadic_shift_quotient_samples() {
+  const Fixed large = (Fixed(1) << 250) - 1;
+  const std::array<Fixed, 15> samples = {
+      -large, -large + 1, -1001, -1000, -999, -2, -1,
+      0, 1, 2, 999, 1000, 1001, large - 1, large};
+  const std::array<unsigned, 9> shifts = {
+      1, 2, 7, 23, 40, 80, 126, 200, 250};
+  for (const unsigned shift : shifts) {
+    const Fixed denominator = Fixed(1) << shift;
+    for (const Fixed& numerator : samples) {
+      Fixed floor = numerator / denominator;
+      Fixed ceil = floor;
+      const Fixed remainder = numerator % denominator;
+      if (remainder != 0 && numerator < 0) --floor;
+      if (remainder != 0 && numerator > 0) ++ceil;
+      if (checked_floor_power_of_two_quotient(numerator, shift) != floor ||
+          checked_ceil_power_of_two_quotient(numerator, shift) != ceil) {
+        throw std::runtime_error(
+            "checked dyadic shift quotient self-check failure");
+      }
+    }
+  }
+}
+#endif
+
 Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
+#if defined(CANDLE_NL_CHECKED_INT256)
+  if (kUseDyadicShiftFixedQuotient) {
+    const int shift = checked_fixed_dyadic_denominator_shift(denominator);
+    if (shift >= 0) {
+      ++kDyadicShiftFixedQuotientCalls;
+      return checked_floor_power_of_two_quotient(
+          numerator, static_cast<unsigned>(shift));
+    }
+    ++kDyadicFallbackFixedQuotientCalls;
+  }
+#endif
   Fixed quotient = numerator / denominator;
   const Fixed remainder = numerator % denominator;
   if (remainder != 0 && ((remainder < 0) != (denominator < 0))) --quotient;
@@ -920,6 +991,17 @@ Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
 
 Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
+#if defined(CANDLE_NL_CHECKED_INT256)
+  if (kUseDyadicShiftFixedQuotient) {
+    const int shift = checked_fixed_dyadic_denominator_shift(denominator);
+    if (shift >= 0) {
+      ++kDyadicShiftFixedQuotientCalls;
+      return checked_ceil_power_of_two_quotient(
+          numerator, static_cast<unsigned>(shift));
+    }
+    ++kDyadicFallbackFixedQuotientCalls;
+  }
+#endif
   Fixed quotient = numerator / denominator;
   const Fixed remainder = numerator % denominator;
   if (remainder != 0 && ((remainder < 0) == (denominator < 0))) ++quotient;
@@ -5965,10 +6047,13 @@ int main(int argc, char** argv) {
           "hardware-seeded fixed quotient is a native int128 diagnostic "
           "only");
     }
+#if !defined(CANDLE_NL_CHECKED_INT256)
     if (kUseDyadicShiftFixedQuotient) {
       throw std::runtime_error(
-          "dyadic shift fixed quotient is a native int128 diagnostic only");
+          "dyadic shift fixed quotient requires native int128 or checked "
+          "int256 arithmetic");
     }
+#endif
     if (kUseNarrowFixedProducts) {
       throw std::runtime_error(
           "narrow fixed products are a native int128 diagnostic only");
@@ -6000,6 +6085,10 @@ int main(int argc, char** argv) {
 #if defined(CANDLE_NL_FIXED_INT128)
     if (kUseDyadicShiftFixedQuotient) {
       verify_dyadic_shift_quotient_samples();
+    }
+#elif defined(CANDLE_NL_CHECKED_INT256)
+    if (kUseDyadicShiftFixedQuotient) {
+      verify_checked_dyadic_shift_quotient_samples();
     }
 #endif
 

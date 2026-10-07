@@ -2294,3 +2294,33 @@ is about 12.01 times slower than native MPZ on the same graph, while it is
 bounded exact arithmetic are therefore complementary rather than competing
 explanations.  Details and evidence hashes are in
 `docs/progress/2026-10-07-v3.68-nl-checked-width-gate.md`.
+
+## Update: exact shift rounding is a small factor; word compute is not present
+
+The checked-width follow-up now holds the 256-bit representation and the
+complete generic case-16594 graph fixed while changing decimal division to
+exact dyadic shift rounding.  Five rotated full-batch repetitions improve
+evaluation from 5.181284 to 4.919975 seconds, only 1.053 times.  All
+20,620,250 directed quotients take the shift path, all 875 cells remain
+accepted, and no fallback occurs.  Checked dyadic execution is still 6.252
+times slower than the padded-double discriminator.
+
+The profile makes the residual more specific.  Three 85-step and three
+39-step polynomial blocks consume about 2.60 seconds of the 4.93-second
+checked-dyadic profile, and run about 11--13 times slower than their hardware
+counterparts.  The square-root and arctangent classes differ by only about
+2.63 and 1.85 times.  The next bounded native experiment will therefore
+prepare one repeated polynomial pair once and execute the identical operation
+and rounding sequence, holding each arithmetic backend fixed.  It must retain
+identical per-backend results and 875/875 acceptance; unlike the rejected
+fused-polynomial attempt, it may not change enclosure boundaries.
+
+The source audit also closes the immediate bounded-word question.  The
+verified `Kernel.compute` value language contains only arbitrary naturals and
+pairs, with a fixed 62-equation contract; `Word64` and `Double` exist only in
+the separate compiled Candle runtime.  A theorem-producing word path would
+require a CakeML compute-language/executor/correctness extension, not a local
+checker change.  That project remains a serious option only after native
+complete-batch results across several real families establish enough
+amortized benefit to justify it.  Complete details and evidence hashes are in
+`docs/progress/2026-10-07-v3.69-nl-rounding-factorial-and-compute-boundary.md`.
