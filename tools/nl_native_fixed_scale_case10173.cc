@@ -83,6 +83,7 @@ bool kDeferAdditiveLeafCompletion = false;
 bool kUseNarrowFixedProducts = false;
 bool kUseUncheckedNarrowFixedProducts = false;
 bool kUseUnsafeUnroundedHardware = false;
+bool kUseSignSpecializedIntervalProducts = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
@@ -272,6 +273,7 @@ struct CompactTaylorResult {
 
 struct Counters {
   std::uint64_t interval_products = 0;
+  std::uint64_t interval_endpoint_products = 0;
   std::uint64_t skipped_zero_products = 0;
   std::uint64_t completed_results = 0;
   std::uint64_t polynomial_steps = 0;
@@ -1020,18 +1022,56 @@ Interval raw_interval_mul(const Interval& left, const Interval& right,
     return zero_interval();
   }
   ++counters.interval_products;
-  const Fixed ll = fixed_product(left.lower, right.lower);
-  const Fixed lu = fixed_product(left.lower, right.upper);
-  const Fixed ul = fixed_product(left.upper, right.lower);
-  const Fixed uu = fixed_product(left.upper, right.upper);
-  Fixed lower = ll;
-  if (lu < lower) lower = lu;
-  if (ul < lower) lower = ul;
-  if (uu < lower) lower = uu;
-  Fixed upper = ll;
-  if (lu > upper) upper = lu;
-  if (ul > upper) upper = ul;
-  if (uu > upper) upper = uu;
+  const auto product = [&counters](const Fixed& first,
+                                   const Fixed& second) {
+    ++counters.interval_endpoint_products;
+    return fixed_product(first, second);
+  };
+  Fixed lower;
+  Fixed upper;
+  if (!kUseSignSpecializedIntervalProducts) {
+    const Fixed ll = product(left.lower, right.lower);
+    const Fixed lu = product(left.lower, right.upper);
+    const Fixed ul = product(left.upper, right.lower);
+    const Fixed uu = product(left.upper, right.upper);
+    lower = std::min(std::min(ll, lu), std::min(ul, uu));
+    upper = std::max(std::max(ll, lu), std::max(ul, uu));
+  } else if (left.lower >= 0) {
+    if (right.lower >= 0) {
+      lower = product(left.lower, right.lower);
+      upper = product(left.upper, right.upper);
+    } else if (right.upper <= 0) {
+      lower = product(left.upper, right.lower);
+      upper = product(left.lower, right.upper);
+    } else {
+      lower = product(left.upper, right.lower);
+      upper = product(left.upper, right.upper);
+    }
+  } else if (left.upper <= 0) {
+    if (right.lower >= 0) {
+      lower = product(left.lower, right.upper);
+      upper = product(left.upper, right.lower);
+    } else if (right.upper <= 0) {
+      lower = product(left.upper, right.upper);
+      upper = product(left.lower, right.lower);
+    } else {
+      lower = product(left.lower, right.upper);
+      upper = product(left.lower, right.lower);
+    }
+  } else if (right.lower >= 0) {
+    lower = product(left.lower, right.upper);
+    upper = product(left.upper, right.upper);
+  } else if (right.upper <= 0) {
+    lower = product(left.upper, right.lower);
+    upper = product(left.lower, right.lower);
+  } else {
+    const Fixed lu = product(left.lower, right.upper);
+    const Fixed ul = product(left.upper, right.lower);
+    const Fixed ll = product(left.lower, right.lower);
+    const Fixed uu = product(left.upper, right.upper);
+    lower = std::min(lu, ul);
+    upper = std::max(ll, uu);
+  }
   const Interval result = {lower, upper};
   range_profile_multiplication(left, right, result);
   return result;
@@ -1565,6 +1605,7 @@ Interval fixed_rational_constant(long numerator, long denominator) {
 
 Interval fixed_interval_square(const Interval& value, Counters& counters) {
   ++counters.interval_products;
+  counters.interval_endpoint_products += 2;
   if (value.lower >= 0) {
     return {floor_fixed_quotient(value.lower * value.lower, kScale),
             ceil_fixed_quotient(value.upper * value.upper, kScale)};
@@ -4584,6 +4625,7 @@ void precompute_tight_sqrt_certificates(
 
 void add_counters(Counters& total, const Counters& value) {
   total.interval_products += value.interval_products;
+  total.interval_endpoint_products += value.interval_endpoint_products;
   total.skipped_zero_products += value.skipped_zero_products;
   total.completed_results += value.completed_results;
   total.polynomial_steps += value.polynomial_steps;
@@ -4595,6 +4637,8 @@ void add_counters(Counters& total, const Counters& value) {
 
 Counters subtract_counters(const Counters& value, const Counters& baseline) {
   return {value.interval_products - baseline.interval_products,
+          value.interval_endpoint_products -
+              baseline.interval_endpoint_products,
           value.skipped_zero_products - baseline.skipped_zero_products,
           value.completed_results - baseline.completed_results,
           value.polynomial_steps - baseline.polynomial_steps,
@@ -4606,6 +4650,8 @@ Counters subtract_counters(const Counters& value, const Counters& baseline) {
 
 bool counters_equal(const Counters& left, const Counters& right) {
   return left.interval_products == right.interval_products &&
+         left.interval_endpoint_products ==
+             right.interval_endpoint_products &&
          left.skipped_zero_products == right.skipped_zero_products &&
          left.completed_results == right.completed_results &&
          left.polynomial_steps == right.polynomial_steps &&
@@ -5245,6 +5291,7 @@ int main(int argc, char** argv) {
                 << " [--narrow-fixed-products]"
                 << " [--unchecked-narrow-fixed-products]"
                 << " [--unsafe-unrounded-hardware]"
+                << " [--sign-specialized-interval-products]"
                 << " [--count-fixed-quotients]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
@@ -5354,6 +5401,8 @@ int main(int argc, char** argv) {
       } else if (option == "--unsafe-unrounded-hardware" ||
                  option == "--unsafe-unrounded-long-double") {
         kUseUnsafeUnroundedHardware = true;
+      } else if (option == "--sign-specialized-interval-products") {
+        kUseSignSpecializedIntervalProducts = true;
       } else if (option == "--count-fixed-quotients") {
         kCountFixedQuotients = true;
       } else if (option == "--rounding-profile") {
@@ -5932,6 +5981,8 @@ int main(int argc, char** argv) {
               << (kUseUncheckedNarrowFixedProducts ? 1 : 0)
               << " unsafe_unrounded_hardware="
               << (kUseUnsafeUnroundedHardware ? 1 : 0)
+              << " sign_specialized_interval_products="
+              << (kUseSignSpecializedIntervalProducts ? 1 : 0)
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
@@ -5987,6 +6038,8 @@ int main(int argc, char** argv) {
               << kFixedRangeProfile.scaled_inputs_outside_int64
 #endif
               << " interval_products=" << total.interval_products
+              << " interval_endpoint_products="
+              << total.interval_endpoint_products
               << " skipped_zero_products=" << total.skipped_zero_products
               << " completed_results=" << total.completed_results
               << " polynomial_steps=" << total.polynomial_steps
@@ -6013,6 +6066,8 @@ int main(int argc, char** argv) {
                   << profile.dyadic_fallback_quotients
                   << " interval_products="
                   << profile.counters.interval_products
+                  << " interval_endpoint_products="
+                  << profile.counters.interval_endpoint_products
                   << " skipped_zero_products="
                   << profile.counters.skipped_zero_products
                   << " completed_results="
@@ -6039,6 +6094,8 @@ int main(int argc, char** argv) {
                   << " sqrt_slot_after=" << profile.sqrt_slot_after
                   << " nanoseconds=" << profile.nanoseconds
                   << " interval_products=" << profile.counters.interval_products
+                  << " interval_endpoint_products="
+                  << profile.counters.interval_endpoint_products
                   << " skipped_zero_products="
                   << profile.counters.skipped_zero_products
                   << " completed_results=" << profile.counters.completed_results

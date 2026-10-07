@@ -1814,3 +1814,42 @@ tables have SHA-256
 `0e58c5283b5d0aa49caf8b715191edbd260b6099969805d1153209e208f2706f`
 and
 `91087754829b1362853d055872095b70fb9ee3d5308fc6426c0090584d2551f4`.
+
+## Update: sign-classified exact interval products and the remaining gaps
+
+The selected arithmetic test is complete. On the same 4,173 genuine boxes,
+the exact sign-classified interval product reduces endpoint products from
+9,731,436 to 4,882,414. Only two of 2,441,205 interval products require the
+four-endpoint both-straddling case. Every final record remains byte-identical
+and both lanes accept every box.
+
+Twenty balanced runs reduce recurring native evaluation from 0.123608838 to
+0.110757078 seconds, a 1.116-times improvement. Once reusable preparation is
+charged, the complete batch improves only 1.025 times. The dihedral Hessian,
+where most products occur, improves 1.169 times. This is a useful general
+primitive candidate, but not an explanation of the historical performance
+gap.
+
+The proof effort is therefore bounded by one reflected compute discriminator.
+The earlier failed endpoint-sharing experiment merely routed the same four
+products through a helper; the new candidate actually selects two products
+from interval signs. If that operation reduction does not win in
+`Kernel.compute`, no soundness proof or production change follows. If it does,
+the proof scope is one general interval multiplication lemma plus one
+integration test, not a per-expression calculus layer.
+
+Both larger boundaries remain explicit: approximately 15 times from encoded
+Candle to equivalent native exact execution, and approximately 340 times from
+the initial generic native fixed-scale route to specialized historical C++.
+The recent native plan improvements reduce diagnostic costs on this fixture,
+but do not convert either starting gap into a formal speedup claim.
+
+The next native factorial uses the prepared direct graph and genuine boxes to
+hold derivative/Taylor work fixed while changing exact fixed endpoints to
+outward hardware-double endpoints. Its paired stage times, bound containment,
+and acceptance distinguish representation/rounding cost. The complementary
+comparison holds hardware-double arithmetic fixed while changing the direct
+graph to the complete pinned specialized historical data flow. That isolates
+the cost of generic derivative/enclosure work. Complete-batch time, all-box
+acceptance, charged preparation, and a second certificate family—not a faster
+micro-operation—remain the gates for substantial reusable proof work.
