@@ -69,6 +69,7 @@ bool kUseHistoricalDihedral = false;
 bool kUseHistoricalBlockRounding = false;
 bool kUseHistoricalCenterTangent = false;
 bool kUseDirectSpecializedFunction = false;
+bool kUseDirectPreparedInputs = false;
 bool kUseTightDihedralSqrtCertificates = false;
 bool kUseOptimizedDihedralUBounds = false;
 bool kUseComputedTightSqrtCertificates = false;
@@ -280,6 +281,71 @@ struct Counters {
   std::uint64_t atan_steps = 0;
 };
 
+void add_counters(Counters& total, const Counters& value);
+Counters subtract_counters(const Counters& value, const Counters& baseline);
+
+struct DirectStageProfile {
+  Counters counters;
+  std::uint64_t floor_quotients = 0;
+  std::uint64_t ceil_quotients = 0;
+  std::uint64_t dyadic_shift_quotients = 0;
+  std::uint64_t dyadic_fallback_quotients = 0;
+  std::uint64_t nanoseconds = 0;
+  std::size_t observations = 0;
+};
+
+constexpr std::array<const char*, 7> kDirectStageNames = {{
+    "job_setup",
+    "coordinate_sqrt_leaves",
+    "source_constants",
+    "angle_tangent",
+    "angle_hessian",
+    "angle_scale_and_add",
+    "final_completion",
+}};
+
+using DirectStageProfiles =
+    std::array<DirectStageProfile, kDirectStageNames.size()>;
+
+struct DirectStageSnapshot {
+  std::chrono::steady_clock::time_point begin;
+  Counters counters;
+  std::uint64_t floor_quotients;
+  std::uint64_t ceil_quotients;
+  std::uint64_t dyadic_shift_quotients;
+  std::uint64_t dyadic_fallback_quotients;
+};
+
+DirectStageSnapshot begin_direct_stage(const Counters& counters) {
+  return {std::chrono::steady_clock::now(),
+          counters,
+          kFloorFixedQuotientCalls,
+          kCeilFixedQuotientCalls,
+          kDyadicShiftFixedQuotientCalls,
+          kDyadicFallbackFixedQuotientCalls};
+}
+
+void finish_direct_stage(DirectStageProfile& profile,
+                         const DirectStageSnapshot& snapshot,
+                         const Counters& counters) {
+  const auto finish = std::chrono::steady_clock::now();
+  add_counters(profile.counters,
+               subtract_counters(counters, snapshot.counters));
+  profile.floor_quotients +=
+      kFloorFixedQuotientCalls - snapshot.floor_quotients;
+  profile.ceil_quotients +=
+      kCeilFixedQuotientCalls - snapshot.ceil_quotients;
+  profile.dyadic_shift_quotients +=
+      kDyadicShiftFixedQuotientCalls - snapshot.dyadic_shift_quotients;
+  profile.dyadic_fallback_quotients +=
+      kDyadicFallbackFixedQuotientCalls -
+      snapshot.dyadic_fallback_quotients;
+  profile.nanoseconds += static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          finish - snapshot.begin).count());
+  ++profile.observations;
+}
+
 struct InstructionProfile {
   Counters counters;
   std::uint64_t nanoseconds = 0;
@@ -402,6 +468,10 @@ struct Program {
   };
   std::vector<CoordinateSqrtTerm> prepared_coordinate_sqrt_terms;
   bool prepared_dihedral_chain = false;
+  bool direct_fixed_plan_prepared = false;
+  Interval direct_fixed_constant{};
+  std::array<Interval, kDimensions> direct_fixed_root_coefficients{};
+  Interval direct_fixed_angle_coefficient{};
 };
 
 struct Job {
@@ -412,6 +482,10 @@ struct Job {
   std::array<Interval, kSqrtSlots> fixed_center_certificates;
   std::array<Rat, kDimensions> lower;
   std::array<Rat, kDimensions> upper;
+  bool direct_fixed_inputs_prepared = false;
+  IntervalVector direct_center_environment{};
+  IntervalVector direct_box_environment{};
+  IntegerVector direct_radii{};
 };
 
 std::vector<std::string> split(const std::string& text, char separator) {
@@ -867,6 +941,46 @@ void prepare_fixed_sqrt_certificates(std::vector<Job>& jobs) {
 
 Interval interval_constant(const Rat& value) {
   return {floor_scaled(value), ceil_scaled(value)};
+}
+
+void prepare_direct_fixed_plan(Program& program) {
+  constexpr std::array<std::size_t, 6> kRootIndices =
+      {{1, 6, 11, 16, 21, 26}};
+  constexpr std::array<std::size_t, 7> kConstantIndices =
+      {{0, 5, 10, 15, 20, 25, 30}};
+  program.direct_fixed_constant = zero_interval();
+  for (const std::size_t outer_index : kConstantIndices) {
+    const Interval value = interval_constant(
+        program.prepared_simple_polynomials.at(outer_index).constant);
+    program.direct_fixed_constant.lower += value.lower;
+    program.direct_fixed_constant.upper += value.upper;
+  }
+  for (std::size_t slot = 0; slot < kRootIndices.size(); ++slot) {
+    program.direct_fixed_root_coefficients[slot] = interval_constant(
+        program.prepared_coordinate_sqrt_terms.at(
+            kRootIndices[slot]).coefficient);
+  }
+  program.direct_fixed_angle_coefficient = interval_constant(
+      program.prepared_simple_polynomials.at(39).constant);
+  program.direct_fixed_plan_prepared = true;
+}
+
+void prepare_direct_fixed_jobs(std::vector<Job>& jobs) {
+  for (Job& job : jobs) {
+    for (std::size_t coordinate = 0; coordinate < kDimensions;
+         ++coordinate) {
+      const Rat midpoint =
+          (job.lower[coordinate] + job.upper[coordinate]) / 2;
+      const Rat radius =
+          (job.upper[coordinate] - job.lower[coordinate]) / 2;
+      job.direct_center_environment[coordinate] =
+          interval_constant(midpoint);
+      job.direct_box_environment[coordinate] = interval_of_q(
+          {job.lower[coordinate], job.upper[coordinate]});
+      job.direct_radii[coordinate] = ceil_scaled(radius);
+    }
+    job.direct_fixed_inputs_prepared = true;
+  }
 }
 
 Interval interval_neg(const Interval& value) {
@@ -1718,12 +1832,12 @@ TaylorResult result_sqrt_fixed(
   return complete_result(radii, domain, center, hessian, counters);
 }
 
-TaylorResult result_scaled_coordinate_sqrt_fixed(
+TaylorResult result_scaled_coordinate_sqrt_fixed_with_coefficient(
     const IntegerVector& radii, const Interval& center_certificate,
     const Interval& box_certificate,
     const IntervalVector& center_environment,
     const IntervalVector& box_environment, std::size_t variable,
-    const Rat& coefficient_value, Counters& counters,
+    const Interval& coefficient, Counters& counters,
     bool defer_completion = false) {
   if (variable >= kDimensions) {
     throw std::runtime_error("coordinate sqrt variable outside environment");
@@ -1756,7 +1870,6 @@ TaylorResult result_scaled_coordinate_sqrt_fixed(
     throw std::runtime_error(
         "prepared coordinate sqrt second derivative domain failure");
   }
-  const Interval coefficient = interval_constant(coefficient_value);
   const Interval center_d = fixed_interval_inv(center_twice);
   const Interval box_dd = interval_neg(fixed_interval_inv(dd_denominator));
 
@@ -1772,6 +1885,19 @@ TaylorResult result_scaled_coordinate_sqrt_fixed(
   return defer_completion
       ? deferred_additive_result(domain, center, hessian)
       : complete_result(radii, domain, center, hessian, counters);
+}
+
+TaylorResult result_scaled_coordinate_sqrt_fixed(
+    const IntegerVector& radii, const Interval& center_certificate,
+    const Interval& box_certificate,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, std::size_t variable,
+    const Rat& coefficient_value, Counters& counters,
+    bool defer_completion = false) {
+  return result_scaled_coordinate_sqrt_fixed_with_coefficient(
+      radii, center_certificate, box_certificate, center_environment,
+      box_environment, variable, interval_constant(coefficient_value),
+      counters, defer_completion);
 }
 
 TaylorResult result_atan(const IntegerVector& radii,
@@ -4151,26 +4277,53 @@ struct Evaluation {
 };
 
 Evaluation evaluate_direct_specialized_function(
-    const Program& program, const Job& job) {
+    const Program& program, const Job& job,
+    DirectStageProfiles* profiles = nullptr) {
   constexpr std::array<std::size_t, 6> kRootIndices =
       {{1, 6, 11, 16, 21, 26}};
   constexpr std::array<std::size_t, 7> kConstantIndices =
       {{0, 5, 10, 15, 20, 25, 30}};
+  Counters counters;
+  const auto begin_stage = [&counters, profiles](std::size_t) {
+    return profiles == nullptr
+        ? DirectStageSnapshot{}
+        : begin_direct_stage(counters);
+  };
+  const auto finish_stage =
+      [&counters, profiles](std::size_t index,
+                            const DirectStageSnapshot& snapshot) {
+        if (profiles != nullptr) {
+          finish_direct_stage(profiles->at(index), snapshot, counters);
+        }
+      };
+
+  const DirectStageSnapshot setup_snapshot = begin_stage(0);
   IntervalVector center_environment;
   IntervalVector box_environment;
   IntegerVector radii;
-  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
-    const Rat midpoint =
-        (job.lower[coordinate] + job.upper[coordinate]) / 2;
-    const Rat radius =
-        (job.upper[coordinate] - job.lower[coordinate]) / 2;
-    center_environment[coordinate] = interval_constant(midpoint);
-    box_environment[coordinate] = interval_of_q(
-        {job.lower[coordinate], job.upper[coordinate]});
-    radii[coordinate] = ceil_scaled(radius);
+  if (kUseDirectPreparedInputs) {
+    if (!program.direct_fixed_plan_prepared ||
+        !job.direct_fixed_inputs_prepared) {
+      throw std::runtime_error("direct fixed preparation is missing");
+    }
+    center_environment = job.direct_center_environment;
+    box_environment = job.direct_box_environment;
+    radii = job.direct_radii;
+  } else {
+    for (std::size_t coordinate = 0; coordinate < kDimensions;
+         ++coordinate) {
+      const Rat midpoint =
+          (job.lower[coordinate] + job.upper[coordinate]) / 2;
+      const Rat radius =
+          (job.upper[coordinate] - job.lower[coordinate]) / 2;
+      center_environment[coordinate] = interval_constant(midpoint);
+      box_environment[coordinate] = interval_of_q(
+          {job.lower[coordinate], job.upper[coordinate]});
+      radii[coordinate] = ceil_scaled(radius);
+    }
   }
+  finish_stage(0, setup_snapshot);
 
-  Counters counters;
   FirstJet center = {zero_interval(), zero_vector()};
   IntervalMatrix hessian = zero_matrix();
   const auto add_deferred = [&center, &hessian](const TaylorResult& term) {
@@ -4183,26 +4336,61 @@ Evaluation evaluate_direct_specialized_function(
     hessian = matrix_add(hessian, term.hessian);
   };
 
+  const DirectStageSnapshot root_snapshot = begin_stage(1);
   for (const std::size_t outer_index : kRootIndices) {
     const Program::CoordinateSqrtTerm& term =
         program.prepared_coordinate_sqrt_terms.at(outer_index);
-    add_deferred(result_scaled_coordinate_sqrt_fixed(
-        radii, job.fixed_center_certificates.at(term.sqrt_slot),
-        job.fixed_box_certificates.at(term.sqrt_slot), center_environment,
-        box_environment, term.variable, term.coefficient, counters, true));
+    add_deferred(kUseDirectPreparedInputs
+        ? result_scaled_coordinate_sqrt_fixed_with_coefficient(
+              radii, job.fixed_center_certificates.at(term.sqrt_slot),
+              job.fixed_box_certificates.at(term.sqrt_slot),
+              center_environment, box_environment, term.variable,
+              program.direct_fixed_root_coefficients.at(term.sqrt_slot),
+              counters, true)
+        : result_scaled_coordinate_sqrt_fixed(
+              radii, job.fixed_center_certificates.at(term.sqrt_slot),
+              job.fixed_box_certificates.at(term.sqrt_slot),
+              center_environment, box_environment, term.variable,
+              term.coefficient, counters, true));
+  }
+  finish_stage(1, root_snapshot);
+
+  const DirectStageSnapshot constant_snapshot = begin_stage(2);
+  if (kUseDirectPreparedInputs) {
+    center.value = interval_add(center.value, program.direct_fixed_constant);
+  } else {
+    for (const std::size_t outer_index : kConstantIndices) {
+      center.value = interval_add(
+          center.value,
+          interval_constant(
+              program.prepared_simple_polynomials.at(outer_index).constant));
+    }
+  }
+  finish_stage(2, constant_snapshot);
+
+  TaylorResult angle;
+  if (profiles == nullptr) {
+    angle = evaluate_historical_dihedral(
+        radii, center_environment, box_environment, counters, true);
+  } else {
+    const DirectStageSnapshot tangent_snapshot = begin_stage(3);
+    const FirstJet angle_center =
+        historical_dihedral_first_order(center_environment, counters);
+    finish_stage(3, tangent_snapshot);
+
+    const DirectStageSnapshot hessian_snapshot = begin_stage(4);
+    const SecondOrderBox angle_box = historical_dihedral_second_order(
+        box_environment, true, counters);
+    finish_stage(4, hessian_snapshot);
+    angle = deferred_additive_result(
+        true, angle_center, angle_box.hessian);
   }
 
-  for (const std::size_t outer_index : kConstantIndices) {
-    center.value = interval_add(
-        center.value,
-        interval_constant(
-            program.prepared_simple_polynomials.at(outer_index).constant));
-  }
-
-  TaylorResult angle = evaluate_historical_dihedral(
-      radii, center_environment, box_environment, counters, true);
-  const Interval angle_coefficient = interval_constant(
-      program.prepared_simple_polynomials.at(39).constant);
+  const DirectStageSnapshot angle_add_snapshot = begin_stage(5);
+  const Interval angle_coefficient = kUseDirectPreparedInputs
+      ? program.direct_fixed_angle_coefficient
+      : interval_constant(
+            program.prepared_simple_polynomials.at(39).constant);
   angle.center.value = interval_mul(
       angle_coefficient, angle.center.value, counters);
   angle.center.gradient = interval_vector_scale(
@@ -4210,10 +4398,13 @@ Evaluation evaluate_direct_specialized_function(
   angle.hessian = interval_matrix_scale(
       angle_coefficient, angle.hessian, counters);
   add_deferred(angle);
+  finish_stage(5, angle_add_snapshot);
 
+  const DirectStageSnapshot completion_snapshot = begin_stage(6);
   const TaylorResult result = complete_result(
       radii, true, center, hessian, counters);
   counters.outer_steps += program.instructions.size();
+  finish_stage(6, completion_snapshot);
   return {normalized_rat(integer_of_fixed(result.value_bound.upper),
                          integer_of_fixed(kScale)),
           counters};
@@ -4411,6 +4602,17 @@ Counters subtract_counters(const Counters& value, const Counters& baseline) {
           value.sqrt_steps - baseline.sqrt_steps,
           value.inverse_steps - baseline.inverse_steps,
           value.atan_steps - baseline.atan_steps};
+}
+
+bool counters_equal(const Counters& left, const Counters& right) {
+  return left.interval_products == right.interval_products &&
+         left.skipped_zero_products == right.skipped_zero_products &&
+         left.completed_results == right.completed_results &&
+         left.polynomial_steps == right.polynomial_steps &&
+         left.outer_steps == right.outer_steps &&
+         left.sqrt_steps == right.sqrt_steps &&
+         left.inverse_steps == right.inverse_steps &&
+         left.atan_steps == right.atan_steps;
 }
 
 void record_rounding_profile(std::vector<RoundingProfile>* profiles,
@@ -5006,7 +5208,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 32) {
+    if (argc < 4 || argc > 33) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -5029,6 +5231,8 @@ int main(int argc, char** argv) {
                 << " [--historical-block-rounding]"
                 << " [--historical-center-tangent]"
                 << " [--direct-specialized-function]"
+                << " [--direct-prepared-inputs]"
+                << " [--direct-stage-profile]"
                 << " [--tight-dihedral-sqrt-certificates]"
                 << " [--optimized-dihedral-u-bounds]"
                 << " [--computed-tight-sqrt-certificates]"
@@ -5053,6 +5257,7 @@ int main(int argc, char** argv) {
     }
     bool profile_enabled = false;
     bool rounding_profile_enabled = false;
+    bool direct_stage_profile_enabled = false;
     bool dyadic_scale = false;
     int fused_polynomial_outer_index = -1;
     int fused_polynomial_max_steps = -1;
@@ -5119,6 +5324,11 @@ int main(int argc, char** argv) {
         kUseHistoricalCenterTangent = true;
       } else if (option == "--direct-specialized-function") {
         kUseDirectSpecializedFunction = true;
+      } else if (option == "--direct-prepared-inputs") {
+        kUseDirectPreparedInputs = true;
+      } else if (option == "--direct-stage-profile") {
+        direct_stage_profile_enabled = true;
+        kCountFixedQuotients = true;
       } else if (option == "--tight-dihedral-sqrt-certificates") {
         kUseTightDihedralSqrtCertificates = true;
       } else if (option == "--optimized-dihedral-u-bounds") {
@@ -5309,6 +5519,15 @@ int main(int argc, char** argv) {
           "direct specialized function requires the authenticated prepared "
           "coordinate-root and historical-dihedral configuration");
     }
+    if (direct_stage_profile_enabled &&
+        !kUseDirectSpecializedFunction) {
+      throw std::runtime_error(
+          "direct stage profiling requires the direct specialized function");
+    }
+    if (kUseDirectPreparedInputs && !kUseDirectSpecializedFunction) {
+      throw std::runtime_error(
+          "direct prepared inputs require the direct specialized function");
+    }
     if (kUseDirectSpecializedFunction &&
         (profile_enabled || rounding_profile_enabled ||
          full_stage_diagnostics || kFuseConsecutiveAdds ||
@@ -5436,12 +5655,18 @@ int main(int argc, char** argv) {
     if (kUseDirectSpecializedFunction) {
       validate_direct_specialized_source(program);
     }
+    if (kUseDirectPreparedInputs) {
+      prepare_direct_fixed_plan(program);
+    }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels) {
       prepare_fixed_sqrt_certificates(jobs);
     }
     if (kPrecomputeTightSqrtCertificates) {
       precompute_tight_sqrt_certificates(program, jobs);
+    }
+    if (kUseDirectPreparedInputs) {
+      prepare_direct_fixed_jobs(jobs);
     }
     const std::vector<Rat> expected = read_expected_bounds(argv[3]);
     if (expected.size() != jobs.size()) {
@@ -5481,6 +5706,7 @@ int main(int argc, char** argv) {
         rounding_profile_enabled ? program.instructions.size() + 1 : 0);
     std::vector<TaylorResult> stage_results(
         full_stage_diagnostics ? jobs.size() : 0);
+    DirectStageProfiles direct_stage_profiles{};
     std::size_t mismatches = 0;
     std::size_t accepted = 0;
     std::size_t tighter = 0;
@@ -5499,7 +5725,10 @@ int main(int argc, char** argv) {
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
       const Evaluation evaluation = kUseDirectSpecializedFunction
-          ? evaluate_direct_specialized_function(program, jobs[index])
+          ? evaluate_direct_specialized_function(
+                program, jobs[index],
+                direct_stage_profile_enabled ? &direct_stage_profiles
+                                             : nullptr)
           : kUseCompactSupportJets
               ? evaluate_job_compact(
                 program, jobs[index], polynomial_mode,
@@ -5537,6 +5766,37 @@ int main(int argc, char** argv) {
         kDyadicShiftFixedQuotientCalls - evaluation_dyadic_shift_begin;
     const std::uint64_t evaluation_dyadic_fallback_calls =
         kDyadicFallbackFixedQuotientCalls - evaluation_dyadic_fallback_begin;
+
+    if (direct_stage_profile_enabled) {
+      Counters profiled_counters;
+      std::uint64_t profiled_floor_quotients = 0;
+      std::uint64_t profiled_ceil_quotients = 0;
+      std::uint64_t profiled_dyadic_shift_quotients = 0;
+      std::uint64_t profiled_dyadic_fallback_quotients = 0;
+      for (const DirectStageProfile& profile : direct_stage_profiles) {
+        if (profile.observations != jobs.size()) {
+          throw std::runtime_error(
+              "direct stage profile observation-count drift");
+        }
+        add_counters(profiled_counters, profile.counters);
+        profiled_floor_quotients += profile.floor_quotients;
+        profiled_ceil_quotients += profile.ceil_quotients;
+        profiled_dyadic_shift_quotients +=
+            profile.dyadic_shift_quotients;
+        profiled_dyadic_fallback_quotients +=
+            profile.dyadic_fallback_quotients;
+      }
+      if (!counters_equal(profiled_counters, total) ||
+          profiled_floor_quotients != evaluation_floor_calls ||
+          profiled_ceil_quotients != evaluation_ceil_calls ||
+          profiled_dyadic_shift_quotients !=
+              evaluation_dyadic_shift_calls ||
+          profiled_dyadic_fallback_quotients !=
+              evaluation_dyadic_fallback_calls) {
+        throw std::runtime_error(
+            "direct stage profile does not reconcile with evaluation total");
+      }
+    }
 
     const double preparation_seconds =
         std::chrono::duration<double>(preparation_end - preparation_begin).count();
@@ -5644,6 +5904,10 @@ int main(int argc, char** argv) {
               << (kUseHistoricalCenterTangent ? 1 : 0)
               << " direct_specialized_function="
               << (kUseDirectSpecializedFunction ? 1 : 0)
+              << " direct_prepared_inputs="
+              << (kUseDirectPreparedInputs ? 1 : 0)
+              << " direct_stage_profile="
+              << (direct_stage_profile_enabled ? 1 : 0)
               << " tight_dihedral_sqrt_certificates="
               << (kUseTightDihedralSqrtCertificates ? 1 : 0)
               << " optimized_dihedral_u_bounds="
@@ -5730,6 +5994,37 @@ int main(int argc, char** argv) {
               << " sqrt_steps=" << total.sqrt_steps
               << " inverse_steps=" << total.inverse_steps
               << " atan_steps=" << total.atan_steps << "\n";
+    if (direct_stage_profile_enabled) {
+      for (std::size_t index = 0; index < direct_stage_profiles.size();
+           ++index) {
+        const DirectStageProfile& profile = direct_stage_profiles[index];
+        std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_DIRECT_PROFILE"
+                  << " index=" << index
+                  << " label=" << kDirectStageNames[index]
+                  << " observations=" << profile.observations
+                  << " nanoseconds=" << profile.nanoseconds
+                  << " floor_quotients=" << profile.floor_quotients
+                  << " ceil_quotients=" << profile.ceil_quotients
+                  << " total_quotients="
+                  << profile.floor_quotients + profile.ceil_quotients
+                  << " dyadic_shift_quotients="
+                  << profile.dyadic_shift_quotients
+                  << " dyadic_fallback_quotients="
+                  << profile.dyadic_fallback_quotients
+                  << " interval_products="
+                  << profile.counters.interval_products
+                  << " skipped_zero_products="
+                  << profile.counters.skipped_zero_products
+                  << " completed_results="
+                  << profile.counters.completed_results
+                  << " polynomial_steps="
+                  << profile.counters.polynomial_steps
+                  << " outer_steps=" << profile.counters.outer_steps
+                  << " sqrt_steps=" << profile.counters.sqrt_steps
+                  << " inverse_steps=" << profile.counters.inverse_steps
+                  << " atan_steps=" << profile.counters.atan_steps << "\n";
+      }
+    }
     if (profile_enabled) {
       for (std::size_t index = 0; index < profiles.size(); ++index) {
         const InstructionProfile& profile = profiles[index];

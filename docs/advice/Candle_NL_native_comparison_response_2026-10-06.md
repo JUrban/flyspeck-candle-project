@@ -1775,3 +1775,42 @@ has SHA-256
 The accepted outward-double factorial is
 `nl-native-stage-factorial-v7-dev-001`; its timing table has SHA-256
 `b4c6feea57a0e583a10ddafa818d23a43de99f84c30db7d3dd5fafedaa3a36be`.
+
+## Update: reusable preparation and selected angle core
+
+The matched exact direct profile exposed a correctable comparison artifact:
+every box was still reconstructing its fixed center, box, radii, source
+constants, root coefficients, and angle coefficient, whereas the
+outward-double direct plan prepared its expression data once. The new lane
+prepares those exact values once, charges that work to the cold batch, and
+then evaluates the unchanged direct formula.
+
+All 4,173 bounds remain byte-identical. Twenty balanced runs reduce recurring
+evaluation from 0.244483008 to 0.139631079 seconds, a 1.751-times speedup.
+Preparation increases from 0.351749042 to 0.413194322 seconds, but eliminating
+coefficient conversion across all boxes still reduces the fully charged batch
+from 0.596232049 to 0.552825401 seconds, a 1.079-times improvement.
+
+The stage profile now selects the next architectural target. In the prepared
+lane, the six coordinate roots take only 0.014063777 seconds, less than their
+0.021750-second outward-double control. By contrast, the exact dihedral
+tangent and Hessian take 0.114136688 seconds, or 83.15% of recurring time,
+versus about 0.033980 seconds with outward doubles. Their difference accounts
+for essentially the whole remaining exact/hardware evaluation gap. Root and
+final-Taylor specialization are therefore removed from the near-term plan.
+
+The next bounded same-formula/same-representation test is exact sign-classified
+interval multiplication. The historical interval library uses two endpoint
+products when signs determine the extrema, while the exact prototype always
+uses four. The candidate will retain four products for the genuinely
+straddling case and must preserve every bound byte-for-byte. Actual endpoint
+products, stage timing, complete acceptance, preparation, and cold total will
+decide whether it earns one general interval-product lemma. Otherwise the
+work returns to a compact dihedral instruction or arithmetic backend.
+
+Accepted evidence is
+`nl-native-case10173-direct-preparation-paired-v2-dev-001`; the phase and stage
+tables have SHA-256
+`0e58c5283b5d0aa49caf8b715191edbd260b6099969805d1153209e208f2706f`
+and
+`91087754829b1362853d055872095b70fb9ee3d5308fc6426c0090584d2551f4`.
