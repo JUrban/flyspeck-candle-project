@@ -1560,3 +1560,30 @@ hardware-endpoint backend; a small difference would redirect effort to a
 complete specialized primitive. Neither diagnostic changes the requirement
 for full acceptance, enclosure-quality reporting, cold total cost, and a
 multi-certificate gate before proof work.
+
+## Update: unrounded hardware lower bound
+
+The compacted graph was run in a controlled long-double factorial comparison.
+Both lanes execute exactly 4,231,422 quotients and 2,220,036 interval products;
+exact-zero skipping is disabled so rounding cannot alter control flow. The
+control uses padded fixed-grid floor/ceiling, while an explicitly untrusted
+lane performs raw hardware division without outward rounding.
+
+Twenty rotated full-batch pairs reduced evaluation from 0.272611681 to
+0.253648174 seconds, only 1.075 times. Cold preparation plus evaluation
+improved 1.035 times. Both lanes report 4,173 accepted boxes, but the unrounded
+lane is tighter on every box because it has discarded sound outward rounding;
+it is timing evidence only. The timing and bound-comparison hashes are
+`8cbba2b3495af427084384af40d9649f6c320256776700a3e33373c23e323e3f`
+and
+`0568af8acbf785018a218c5388213a1c15c834e92f806d0c22f1f1571108ee05`
+in `nl-native-case10173-unrounded-lower-bound-paired-v1-dev-001`.
+
+The lower bound remains 3.075 times the specialized C++ batch and is close to
+the separately measured exact int128/dyadic lane. Directed normalization is
+therefore not the missing multi-fold factor, and a proved outward hardware
+backend is not the next investment. A preliminary same-arithmetic historical
+graph run was only about 2% faster than the generic graph. The next cheap
+factorial test holds those unsafe graphs fixed and changes scalar width/layout
+from `long double` to the historical verifier's `double`; that decides whether
+to pursue representation/layout or a more faithful whole-checker port.
