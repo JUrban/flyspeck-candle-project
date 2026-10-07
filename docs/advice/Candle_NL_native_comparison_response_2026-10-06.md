@@ -1893,3 +1893,44 @@ preparation comparison. Complete acceptance, bounds, operation counts, and
 fully charged batch time decide the result. A material winner must generalize
 to a second certificate family before receiving one universal complete-box
 instruction theorem and an in-`Kernel.compute` integration measurement.
+
+## Update: same-arithmetic algorithm result and evaluator redirection
+
+The complementary algorithm factorial is complete. Holding padded `double`,
+the `2^23` scale, all 4,173 boxes, sign-classified multiplication, and the
+unprepared conversion boundary fixed, the best generic deferred graph takes
+0.190296989 seconds and the direct source-authenticated graph takes
+0.175123190 seconds. That is only a 1.087-times recurring gain and a
+1.030-times fully charged gain. Both accept every box.
+
+The direct graph reduces completed Taylor results from 45,903 to 4,173 and
+directed quotients from 4,231,422 to 3,981,042, but increases semantic interval
+products from 2,061,462 to 2,457,897. The costs largely cancel. Direct bounds
+are tighter on 2,123 boxes, wider on 2,048, and equal on 2, with complete
+acceptance retained.
+
+Together with the 1.628-times exact-versus-double result, this closes the
+native two-axis question for this fixture. The optimized exact direct lane is
+now only about 1.35 times slower than specialized C++, while the padded-double
+direct lane is faster. The original approximately 340-times value remains an
+important starting baseline for the current formal architecture, but further
+native scalar or graph micro-optimization is no longer the highest-value next
+step.
+
+The large remaining opportunity is transferring the low-work direct plan into
+the proof-producing evaluator. The current proved case-10173 checker spends
+434.36 seconds in its complete computed verdict and 46.47 seconds in theorem
+handoff, whereas the optimized exact native direct diagnostic takes about
+0.111 seconds. This is not an exact-output ratio, because the direct bounds
+differ while preserving all acceptances, but it identifies the dominant
+architecture boundary.
+
+The next bounded packet will therefore build a non-authoritative direct
+`Kernel.compute` call using the proved fixed-scale substrate, the established
+angle-polynomial source correspondence, and sealed genuine jobs. A 128-box
+prefix must produce closed computations that exactly match the native direct
+results and materially beat the current encoded checker before all 4,173
+boxes are attempted. Only a full-batch win that generalizes to a second
+certificate family earns one universal source-authenticated complete-box
+soundness theorem. No per-expression calculus proof or production dispatch is
+authorized by the single-fixture prototype.
