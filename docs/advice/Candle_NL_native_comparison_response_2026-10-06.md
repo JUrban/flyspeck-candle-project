@@ -2451,17 +2451,26 @@ Taylor completion and defining the future executor refinement; it will not
 expand into proofs for every helper before an execution experiment justifies
 them.
 
-The broader performance lane remains primary.  The next discriminator will
-hold the exact natural arithmetic and mathematical graph fixed while putting
-the complete 875-cell case16594 family into one flat prepared
-`Kernel.compute` call and returning only compact acceptance data.  Preparation,
-evaluation, decoding, theorem handoff, total time, RSS, exact output, and
-875/875 acceptance will be compared with the 225.8-second reflected control.
-This directly tests evaluator setup and intermediate-result traffic without
-confounding them with the positive mixed-width specialization.  A substantial
-gain would justify a reusable flat-batch interpreter theorem; a negative
-result would strengthen the case for the larger verified word-compute
-extension.  The second 4,173-cell family remains the cross-family gate.
+The broader performance lane remains primary.  A source audit immediately
+after this packet corrected the proposed next experiment: the 225.8-second
+case16594 control already is one flat prepared 875-job `Kernel.compute` call
+returning one compact verdict.  Rebuilding that boundary would not test a new
+hypothesis.  The complete real-family measurements already separate the
+remaining costs: about 7.65 times from native MPZ to exact mixed 128/192
+arithmetic on the unchanged graph, and about 12.1 times from native MPZ to the
+compact reflected `Num`/`Pair` executor.  Together they account for the
+roughly 92-times case16594 boundary.
+
+The concrete larger project is therefore a verified bounded-scalar compute
+extension: two-/three-limb checked endpoint and accumulator operations,
+overflow returned as data, refinement to the current natural operations, and
+the unchanged exact evaluator as fallback.  Its first complete gate is the
+875-cell case16594 verdict with byte-identical outputs and acceptance; the
+4,173-cell case10173 family is the required independent confirmation.  Every
+measurement will continue to charge preparation, evaluator execution,
+fallback, theorem handoff, total elapsed time, and peak memory separately.
+The extension stops before broad integration unless it materially narrows
+both measured components.
 
 The implementation, accepted focused run, evidence hashes, and explicit
 scope limit are recorded in
