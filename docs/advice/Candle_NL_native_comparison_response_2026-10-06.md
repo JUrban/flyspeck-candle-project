@@ -1063,3 +1063,45 @@ all 4,173 boxes accepted and report complete-batch time.  Only a material
 winner will justify reusable rounding/square-root proofs and Candle dispatch.
 No unchecked lane, rejected scale, or current dihedral specialization will
 receive proof work.
+
+## Update: reusable square-root preparation is bounded
+
+The scale-`10^7` unchecked diagnostic was next used to separate reusable
+untrusted square-root preparation from recurring validation.  All seven roots
+per box were either computed during numerical evaluation or computed once in
+the preparation phase and then consumed through the same squaring-based
+certificate checks.  Twenty order-balanced full-batch pairs gave:
+
+| Root schedule | Preparation | Evaluation | Complete batch | Accepted |
+|---|---:|---:|---:|---:|
+| Compute during evaluation | 0.183491426 s | 0.408547342 s | 0.592038768 s | 4,173/4,173 |
+| Prepare, then validate | 0.345616653 s | 0.324471469 s | 0.670088122 s | 4,173/4,173 |
+
+The output bounds are byte-identical.  Reusable preparation therefore buys a
+1.259-fold recurring-evaluation improvement, but recomputing it for one cold
+batch loses 13.2% overall.  The phase table has SHA-256
+`bc24631c75e60e6d1f2bf6c89b0ad813c7f58e0dd2f6ad94105ad2188d995f02`.
+
+A hardware floating-point seed followed by exact integer correction was also
+tested for preparation.  The seed is not trusted; the corrected integer result
+and existing certificate squares determine the output.  Twenty pairs reduced
+preparation from 0.336249406 to 0.262807649 seconds and the cold batch from
+0.658988161 to 0.585664867 seconds, with byte-identical 4,173/4,173 results.
+Its phase-table SHA-256 is
+`b12e908da2eba00d6032b50b9654810cb80465de390d27fc9c9ab684b3b3a6fc`.
+
+This is a bounded improvement, not the larger architecture.  Even removing
+root generation from recurring evaluation leaves about 0.3245 seconds, close
+in order of magnitude to the historical generic-composition batch's 0.3302
+seconds but still 3.93 times the historical specialized 0.08249 seconds.
+Those implementations do not produce the same enclosures--the historical
+generic lane accepted only 52 boxes--so the timing similarity is diagnostic,
+not a controlled equivalence claim.  It nevertheless shows that square-root
+generation cannot explain the remaining orders-of-magnitude objective.
+
+The next large-gap experiment should compare a hardware-rounded endpoint
+implementation of the accepted operation graph with a genuinely low-work
+specialized primitive, while preserving the complete acceptance and bound-
+tightness gates.  The current rejected dihedral composition remains closed,
+and neither hardware-seeded untrusted preparation nor unchecked arithmetic is
+a proof backend.

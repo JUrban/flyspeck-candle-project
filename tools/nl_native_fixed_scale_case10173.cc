@@ -2,6 +2,7 @@
 #include <array>
 #include <chrono>
 #include <cctype>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -59,6 +60,8 @@ bool kUseSpecializedDihedralIdentities = false;
 bool kUseTightDihedralSqrtCertificates = false;
 bool kUseOptimizedDihedralUBounds = false;
 bool kUseComputedTightSqrtCertificates = false;
+bool kPrecomputeTightSqrtCertificates = false;
+bool kUseHardwareSeededIntegerSqrt = false;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -1008,6 +1011,16 @@ Fixed floor_integer_sqrt(const Fixed& value) {
     throw std::runtime_error("integer square root of negative value");
   }
   if (value < 2) return value;
+#if defined(CANDLE_NL_FIXED_INT128)
+  if (kUseHardwareSeededIntegerSqrt) {
+    Fixed result = static_cast<Fixed>(
+        std::sqrt(static_cast<long double>(value)));
+    if (result < 1) result = 1;
+    while (result > value / result) --result;
+    while (result + 1 <= value / (result + 1)) ++result;
+    return result;
+  }
+#endif
   Fixed lower = 1;
   Fixed upper = 2;
   while (upper <= value / upper) {
@@ -2989,6 +3002,66 @@ void print_dihedral_identity_diagnostic(std::size_t index,
   std::cout << "\n";
 }
 
+void precompute_tight_sqrt_certificates(
+    const Program& program, std::vector<Job>& jobs) {
+  if (!program.prepared_dihedral_chain) {
+    throw std::runtime_error(
+        "tight square-root preparation requires authenticated dihedral "
+        "source shape");
+  }
+  std::array<bool, kSqrtSlots> seen{};
+  for (const Program::CoordinateSqrtTerm& term :
+       program.prepared_coordinate_sqrt_terms) {
+    if (!term.active) continue;
+    if (term.sqrt_slot >= kSqrtSlots || seen[term.sqrt_slot]) {
+      throw std::runtime_error(
+          "tight square-root preparation slot drift");
+    }
+    seen[term.sqrt_slot] = true;
+  }
+  for (std::size_t slot = 0; slot < 6; ++slot) {
+    if (!seen[slot]) {
+      throw std::runtime_error(
+          "tight square-root preparation missing coordinate slot");
+    }
+  }
+  seen[6] = true;
+
+  for (Job& job : jobs) {
+    IntervalVector center_environment;
+    IntervalVector box_environment;
+    IntegerVector radii;
+    for (std::size_t coordinate = 0;
+         coordinate < kDimensions; ++coordinate) {
+      const Rat midpoint =
+          (job.lower[coordinate] + job.upper[coordinate]) / 2;
+      const Rat radius =
+          (job.upper[coordinate] - job.lower[coordinate]) / 2;
+      center_environment[coordinate] = interval_constant(midpoint);
+      box_environment[coordinate] = interval_of_q(
+          {job.lower[coordinate], job.upper[coordinate]});
+      radii[coordinate] = ceil_scaled(radius);
+    }
+
+    for (const Program::CoordinateSqrtTerm& term :
+         program.prepared_coordinate_sqrt_terms) {
+      if (!term.active) continue;
+      job.fixed_center_certificates[term.sqrt_slot] =
+          fixed_sqrt_enclosure(center_environment[term.variable]);
+      job.fixed_box_certificates[term.sqrt_slot] =
+          fixed_sqrt_enclosure(box_environment[term.variable]);
+    }
+
+    Counters counters;
+    const TaylorResult radicand = evaluate_four_x1_delta_specialized(
+        radii, center_environment, box_environment, counters);
+    job.fixed_center_certificates[6] =
+        fixed_sqrt_enclosure(radicand.center.value);
+    job.fixed_box_certificates[6] =
+        fixed_sqrt_enclosure(radicand.value_bound);
+  }
+}
+
 void add_counters(Counters& total, const Counters& value) {
   total.interval_products += value.interval_products;
   total.skipped_zero_products += value.skipped_zero_products;
@@ -3461,7 +3534,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 21) {
+    if (argc < 4 || argc > 23) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -3483,6 +3556,8 @@ int main(int argc, char** argv) {
                 << " [--tight-dihedral-sqrt-certificates]"
                 << " [--optimized-dihedral-u-bounds]"
                 << " [--computed-tight-sqrt-certificates]"
+                << " [--precompute-tight-sqrt-certificates]"
+                << " [--hardware-seeded-integer-sqrt]"
                 << " [--dihedral-identity-diagnostics]"
                 << " [--decimal-scale=N]"
                 << " [--dyadic-scale]\n";
@@ -3549,6 +3624,10 @@ int main(int argc, char** argv) {
         kUseOptimizedDihedralUBounds = true;
       } else if (option == "--computed-tight-sqrt-certificates") {
         kUseComputedTightSqrtCertificates = true;
+      } else if (option == "--precompute-tight-sqrt-certificates") {
+        kPrecomputeTightSqrtCertificates = true;
+      } else if (option == "--hardware-seeded-integer-sqrt") {
+        kUseHardwareSeededIntegerSqrt = true;
       } else if (option == "--dihedral-identity-diagnostics") {
         dihedral_identity_diagnostics = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
@@ -3650,6 +3729,27 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "computed tight square-root certificates require fixed kernels");
     }
+    if (kPrecomputeTightSqrtCertificates &&
+        (!kUseFixedSqrtInverseKernels ||
+         !kUsePreparedCoordinateSqrtTerms ||
+         polynomial_mode != PolynomialMode::kSpecializedAngle ||
+         !direct_delta_x4)) {
+      throw std::runtime_error(
+          "tight square-root preparation requires fixed kernels, prepared "
+          "coordinate roots, and authenticated angle polynomials");
+    }
+    if (kPrecomputeTightSqrtCertificates &&
+        kUseComputedTightSqrtCertificates) {
+      throw std::runtime_error(
+          "conflicting precomputed and evaluation-time square roots");
+    }
+#if !defined(CANDLE_NL_FIXED_INT128)
+    if (kUseHardwareSeededIntegerSqrt) {
+      throw std::runtime_error(
+          "hardware-seeded integer square root is a native int128 "
+          "diagnostic only");
+    }
+#endif
     if (dyadic_scale) {
       kScale = fixed_of_integer(
           Integer("1099511627776"));  // 2^40, close to decimal 10^12.
@@ -3667,12 +3767,16 @@ int main(int argc, char** argv) {
     if (kUsePreparedCoordinateSqrtTerms) {
       prepare_coordinate_sqrt_terms(program);
     }
-    if (kUsePreparedDihedralChain || kUseSpecializedDihedralIdentities) {
+    if (kUsePreparedDihedralChain || kUseSpecializedDihedralIdentities ||
+        kPrecomputeTightSqrtCertificates) {
       prepare_dihedral_chain(program);
     }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels) {
       prepare_fixed_sqrt_certificates(jobs);
+    }
+    if (kPrecomputeTightSqrtCertificates) {
+      precompute_tight_sqrt_certificates(program, jobs);
     }
     const std::vector<Rat> expected = read_expected_bounds(argv[3]);
     if (expected.size() != jobs.size()) {
@@ -3789,6 +3893,10 @@ int main(int argc, char** argv) {
               << (kUseOptimizedDihedralUBounds ? 1 : 0)
               << " computed_tight_sqrt_certificates="
               << (kUseComputedTightSqrtCertificates ? 1 : 0)
+              << " precompute_tight_sqrt_certificates="
+              << (kPrecomputeTightSqrtCertificates ? 1 : 0)
+              << " hardware_seeded_integer_sqrt="
+              << (kUseHardwareSeededIntegerSqrt ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
