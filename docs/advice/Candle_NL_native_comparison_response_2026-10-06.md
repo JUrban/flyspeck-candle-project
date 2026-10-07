@@ -2269,3 +2269,28 @@ remains bounded at its present proof boundary.
 Complete measurements, hashes, rejected controls, and the staged proof gates
 are recorded in
 `docs/progress/2026-10-07-v3.67-nl-second-family-arithmetic-factorial.md`.
+
+## Update: checked 256-bit exact arithmetic captures most of the MPZ cost
+
+The immediate checked-width control is positive.  On the same 875 cells and
+identical instruction graph, overflow-checking signed 256-bit arithmetic
+matches every MPZ result exactly and accepts all cells.  Its balanced mean is
+5.219965 seconds, versus 18.800954 for MPZ and 0.793744 for padded doubles.
+It is 3.602 times faster than MPZ and removes 75.4% of the elapsed-time
+difference from MPZ to the hardware discriminator, while retaining exact
+fixed-scale outputs.
+
+This does not authorize a fixed-width checker by observation.  The earlier
+`int128` overflow is now the essential adversarial case: a production checker
+must either establish a range theorem for the prepared batch or expose
+overflow in the computed result and take an exact fallback.  The next bounded
+step is an audit of which word/bounded-integer primitives Candle can execute
+within its verified computation boundary.  Only then is it worth porting the
+checked operations and measuring a reflected complete batch.
+
+This separates two large reusable targets.  The current reflected computation
+is about 12.01 times slower than native MPZ on the same graph, while it is
+43.26 times slower than native checked-256.  Flat evaluator representation and
+bounded exact arithmetic are therefore complementary rather than competing
+explanations.  Details and evidence hashes are in
+`docs/progress/2026-10-07-v3.68-nl-checked-width-gate.md`.
