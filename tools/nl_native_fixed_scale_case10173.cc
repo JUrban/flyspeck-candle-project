@@ -125,7 +125,8 @@ Fixed fixed_product(Fixed left, Fixed right) {
   return left * right;
 }
 
-#if defined(CANDLE_NL_FIXED_INT128) && \
+#if (defined(CANDLE_NL_FIXED_INT128) || \
+     defined(CANDLE_NL_CHECKED_INT256)) && \
     defined(CANDLE_NL_FIXED_RANGE_PROFILE)
 struct FixedRangeProfile {
   unsigned quotient_numerator_bits = 0;
@@ -144,6 +145,7 @@ struct FixedRangeProfile {
 FixedRangeProfile kFixedRangeProfile;
 
 unsigned fixed_magnitude_bits(Fixed value) {
+#if defined(CANDLE_NL_FIXED_INT128)
   const unsigned __int128 magnitude = value < 0
       ? static_cast<unsigned __int128>(-(value + 1)) + 1
       : static_cast<unsigned __int128>(value);
@@ -154,6 +156,12 @@ unsigned fixed_magnitude_bits(Fixed value) {
   }
   return 64U - static_cast<unsigned>(
       __builtin_clzll(static_cast<std::uint64_t>(magnitude)));
+#elif defined(CANDLE_NL_CHECKED_INT256)
+  const Fixed magnitude = value < 0 ? -value : value;
+  return magnitude == 0
+      ? 0
+      : static_cast<unsigned>(boost::multiprecision::msb(magnitude)) + 1;
+#endif
 }
 
 bool fixed_fits_int64(Fixed value) {
@@ -200,13 +208,14 @@ struct Interval {
   Fixed upper;
 };
 
-#if defined(CANDLE_NL_FIXED_INT128) && \
+#if (defined(CANDLE_NL_FIXED_INT128) || \
+     defined(CANDLE_NL_CHECKED_INT256)) && \
     defined(CANDLE_NL_FIXED_RANGE_PROFILE)
 void range_profile_multiplication(const Interval& left,
                                   const Interval& right,
                                   const Interval& product) {
-  for (const Fixed value : {left.lower, left.upper,
-                            right.lower, right.upper}) {
+  for (const Fixed& value : {left.lower, left.upper,
+                             right.lower, right.upper}) {
     update_fixed_bits(kFixedRangeProfile.multiplication_operand_bits, value);
     if (!fixed_fits_int64(value)) {
       ++kFixedRangeProfile.multiplication_operands_outside_int64;
@@ -219,7 +228,7 @@ void range_profile_multiplication(const Interval& left,
 }
 
 void range_profile_addition(const Interval& result) {
-  for (const Fixed value : {result.lower, result.upper}) {
+  for (const Fixed& value : {result.lower, result.upper}) {
     update_fixed_bits(kFixedRangeProfile.addition_result_bits, value);
     if (!fixed_fits_int64(value)) {
       ++kFixedRangeProfile.addition_results_outside_int64;
@@ -481,6 +490,21 @@ class CvalParser {
 struct Program {
   std::vector<Node> nodes;
   std::vector<std::size_t> instructions;
+  enum class PreparedPolynomialKind {
+    kConstant,
+    kVariable,
+    kNeg,
+    kAdd,
+    kMul,
+    kSquare,
+  };
+  struct PreparedPolynomialInstruction {
+    PreparedPolynomialKind kind = PreparedPolynomialKind::kConstant;
+    Rat constant = 0;
+    std::size_t variable = 0;
+  };
+  std::vector<std::vector<PreparedPolynomialInstruction>>
+      prepared_polynomials;
   enum class SimplePolynomialKind { kUnknown, kConstant, kVariable };
   struct SimplePolynomial {
     SimplePolynomialKind kind = SimplePolynomialKind::kUnknown;
@@ -977,8 +1001,10 @@ Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
     const int shift = checked_fixed_dyadic_denominator_shift(denominator);
     if (shift >= 0) {
       ++kDyadicShiftFixedQuotientCalls;
-      return checked_floor_power_of_two_quotient(
-          numerator, static_cast<unsigned>(shift));
+      return range_profile_quotient(
+          numerator, denominator,
+          checked_floor_power_of_two_quotient(
+              numerator, static_cast<unsigned>(shift)));
     }
     ++kDyadicFallbackFixedQuotientCalls;
   }
@@ -986,7 +1012,7 @@ Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   Fixed quotient = numerator / denominator;
   const Fixed remainder = numerator % denominator;
   if (remainder != 0 && ((remainder < 0) != (denominator < 0))) --quotient;
-  return quotient;
+  return range_profile_quotient(numerator, denominator, quotient);
 }
 
 Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
@@ -996,8 +1022,10 @@ Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
     const int shift = checked_fixed_dyadic_denominator_shift(denominator);
     if (shift >= 0) {
       ++kDyadicShiftFixedQuotientCalls;
-      return checked_ceil_power_of_two_quotient(
-          numerator, static_cast<unsigned>(shift));
+      return range_profile_quotient(
+          numerator, denominator,
+          checked_ceil_power_of_two_quotient(
+              numerator, static_cast<unsigned>(shift)));
     }
     ++kDyadicFallbackFixedQuotientCalls;
   }
@@ -1005,7 +1033,7 @@ Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   Fixed quotient = numerator / denominator;
   const Fixed remainder = numerator % denominator;
   if (remainder != 0 && ((remainder < 0) == (denominator < 0))) ++quotient;
-  return quotient;
+  return range_profile_quotient(numerator, denominator, quotient);
 }
 #else
 Integer integer_of_fixed(const Fixed& value) { return value; }
@@ -2771,6 +2799,85 @@ std::vector<std::size_t> decode_list(const Program& program,
   return result;
 }
 
+void prepare_polynomial_at(Program& program, std::size_t outer_index) {
+  if (outer_index >= program.instructions.size()) {
+    throw std::runtime_error("prepared polynomial outer index overflow");
+  }
+  if (program.prepared_polynomials.empty()) {
+    program.prepared_polynomials.resize(program.instructions.size());
+  }
+  const Node& outer = node_at(
+      program, program.instructions.at(outer_index));
+  if (!outer.is_pair ||
+      require_numeral(program, outer.left,
+                      "prepared polynomial outer tag") != 0) {
+    throw std::runtime_error(
+        "prepared polynomial source drift at outer " +
+        std::to_string(outer_index));
+  }
+
+  using Kind = Program::PreparedPolynomialKind;
+  std::vector<Program::PreparedPolynomialInstruction> prepared;
+  std::size_t stack_depth = 0;
+  for (const std::size_t instruction_index :
+       decode_list(program, outer.right, "prepared polynomial program")) {
+    const Node& instruction = node_at(program, instruction_index);
+    Program::PreparedPolynomialInstruction operation;
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "prepared polynomial tag");
+      if (tag == 0) {
+        operation.kind = Kind::kConstant;
+        operation.constant = decode_q(program, instruction.right);
+      } else if (tag == 1) {
+        const Integer variable = require_numeral(
+            program, instruction.right, "prepared polynomial variable");
+        if (variable < 0 || variable >= static_cast<long>(kDimensions)) {
+          throw std::runtime_error(
+              "prepared polynomial variable out of range");
+        }
+        operation.kind = Kind::kVariable;
+        operation.variable = variable.get_ui();
+      } else {
+        throw std::runtime_error("unknown prepared polynomial pair tag");
+      }
+      ++stack_depth;
+    } else {
+      const unsigned long opcode = instruction.numeral.get_ui();
+      if (opcode == 2 || opcode == 5) {
+        if (stack_depth < 1) {
+          throw std::runtime_error(
+              "prepared polynomial unary stack underflow");
+        }
+        operation.kind = opcode == 2 ? Kind::kNeg : Kind::kSquare;
+      } else if (opcode == 3 || opcode == 4) {
+        if (stack_depth < 2) {
+          throw std::runtime_error(
+              "prepared polynomial binary stack underflow");
+        }
+        operation.kind = opcode == 3 ? Kind::kAdd : Kind::kMul;
+        --stack_depth;
+      } else {
+        throw std::runtime_error(
+            "unknown prepared polynomial scalar opcode");
+      }
+    }
+    prepared.push_back(operation);
+  }
+  if (stack_depth != 1 || prepared.empty()) {
+    throw std::runtime_error("prepared polynomial final stack drift");
+  }
+  program.prepared_polynomials.at(outer_index) = std::move(prepared);
+}
+
+void prepare_polynomial_pair(Program& program, std::size_t outer_index) {
+  if (outer_index + 1 >= program.instructions.size()) {
+    throw std::runtime_error("prepared polynomial pair index overflow");
+  }
+  prepare_polynomial_at(program, outer_index);
+  prepare_polynomial_at(program, outer_index + 1);
+}
+
 Program::SimplePolynomial classify_simple_polynomial(
     const Program& program, std::size_t payload) {
   using Kind = Program::SimplePolynomialKind;
@@ -3082,6 +3189,61 @@ TaylorResult evaluate_polynomial(const Program& program,
     }
   }
   if (stack.size() != 1) throw std::runtime_error("polynomial result stack drift");
+  return stack.back();
+}
+
+TaylorResult evaluate_prepared_polynomial(
+    const std::vector<Program::PreparedPolynomialInstruction>& instructions,
+    const IntegerVector& radii,
+    const IntervalVector& center_environment, Counters& counters) {
+  using Kind = Program::PreparedPolynomialKind;
+  std::vector<TaylorResult> stack;
+  for (const Program::PreparedPolynomialInstruction& instruction :
+       instructions) {
+    ++counters.polynomial_steps;
+    switch (instruction.kind) {
+      case Kind::kConstant:
+        stack.push_back(result_constant(
+            radii, instruction.constant, counters));
+        break;
+      case Kind::kVariable:
+        stack.push_back(result_variable(
+            radii, center_environment, instruction.variable, counters));
+        break;
+      case Kind::kNeg:
+      case Kind::kSquare: {
+        if (stack.empty()) {
+          throw std::runtime_error(
+              "prepared polynomial unary evaluation underflow");
+        }
+        TaylorResult value = stack.back();
+        stack.pop_back();
+        stack.push_back(instruction.kind == Kind::kNeg
+                            ? result_neg(radii, value, counters)
+                            : result_mul(radii, value, value, counters));
+        break;
+      }
+      case Kind::kAdd:
+      case Kind::kMul: {
+        if (stack.size() < 2) {
+          throw std::runtime_error(
+              "prepared polynomial binary evaluation underflow");
+        }
+        TaylorResult right = stack.back();
+        stack.pop_back();
+        TaylorResult left = stack.back();
+        stack.pop_back();
+        stack.push_back(instruction.kind == Kind::kAdd
+                            ? result_add(radii, left, right, counters)
+                            : result_mul(radii, left, right, counters));
+        break;
+      }
+    }
+  }
+  if (stack.size() != 1) {
+    throw std::runtime_error(
+        "prepared polynomial evaluation result stack drift");
+  }
   return stack.back();
 }
 
@@ -5254,9 +5416,18 @@ Evaluation evaluate_job(const Program& program, const Job& job,
     if (instruction.is_pair) {
       const Integer tag = require_numeral(program, instruction.left, "analytic tag");
       if (tag == 0) {
-        const std::size_t polynomial_steps = decode_list(
-            program, instruction.right, "polynomial mode selection").size();
-        const Program::SimplePolynomial* prepared =
+        const std::vector<Program::PreparedPolynomialInstruction>*
+            prepared_polynomial =
+                program.prepared_polynomials.empty() ||
+                        program.prepared_polynomials.at(outer_index).empty()
+                    ? nullptr
+                    : &program.prepared_polynomials.at(outer_index);
+        const std::size_t polynomial_steps =
+            prepared_polynomial == nullptr
+                ? decode_list(program, instruction.right,
+                              "polynomial mode selection").size()
+                : prepared_polynomial->size();
+        const Program::SimplePolynomial* prepared_simple =
             program.prepared_simple_polynomials.empty()
                 ? nullptr
                 : &program.prepared_simple_polynomials.at(outer_index);
@@ -5271,30 +5442,38 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                  static_cast<std::size_t>(fused_polynomial_max_steps));
         // The pinned case-10173 source payload at outer index 32 is
         // -delta_x4, not delta_x4.  Do not dispatch merely by program length.
-        if (kUsePreparedSimplePolynomials && prepared != nullptr &&
-            prepared->kind == Program::SimplePolynomialKind::kConstant) {
+        if (kUsePreparedSimplePolynomials && prepared_simple != nullptr &&
+            prepared_simple->kind ==
+                Program::SimplePolynomialKind::kConstant) {
           stack.push_back(
               kDeferAdditiveLeafCompletion &&
                       is_deferred_additive_polynomial(outer_index)
                   ? deferred_additive_result(
                         true,
-                        {interval_constant(prepared->constant),
+                        {interval_constant(prepared_simple->constant),
                          zero_vector()},
                         zero_matrix())
-                  : result_constant(radii, prepared->constant, counters));
-        } else if (kUsePreparedSimplePolynomials && prepared != nullptr &&
-                   prepared->kind == Program::SimplePolynomialKind::kVariable) {
-          const Interval value = prepared->variable < kDimensions
-              ? center_environment[prepared->variable]
+                  : result_constant(
+                        radii, prepared_simple->constant, counters));
+        } else if (kUsePreparedSimplePolynomials &&
+                   prepared_simple != nullptr &&
+                   prepared_simple->kind ==
+                       Program::SimplePolynomialKind::kVariable) {
+          const Interval value = prepared_simple->variable < kDimensions
+              ? center_environment[prepared_simple->variable]
               : zero_interval();
           stack.push_back(
               kDeferAdditiveLeafCompletion &&
                       is_deferred_additive_polynomial(outer_index)
                   ? deferred_additive_result(
-                        true, {value, unit_vector(prepared->variable)},
+                        true,
+                        {value, unit_vector(prepared_simple->variable)},
                         zero_matrix())
                   : result_variable(radii, center_environment,
-                                    prepared->variable, counters));
+                                    prepared_simple->variable, counters));
+        } else if (prepared_polynomial != nullptr) {
+          stack.push_back(evaluate_prepared_polynomial(
+              *prepared_polynomial, radii, center_environment, counters));
         } else if (direct_delta_x4 && outer_index == 32 &&
                    polynomial_steps == 39) {
           stack.push_back(evaluate_neg_delta_x4_specialized(
@@ -5619,7 +5798,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 40) {
+    if (argc < 4 || argc > 41) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -5627,6 +5806,7 @@ int main(int argc, char** argv) {
                 << "--specialized-angle-polynomials]"
                 << " [--fused-polynomial-index=N]"
                 << " [--fused-polynomial-max-steps=N]"
+                << " [--prepared-polynomial-pair=N]"
                 << " [--direct-delta-x4]"
                 << " [--skip-exact-zero-products]"
                 << " [--symmetric-hessian-ops]"
@@ -5677,6 +5857,7 @@ int main(int argc, char** argv) {
     bool dyadic_scale = false;
     int fused_polynomial_outer_index = -1;
     int fused_polynomial_max_steps = -1;
+    int prepared_polynomial_pair_index = -1;
     bool direct_delta_x4 = false;
     bool dihedral_identity_diagnostics = false;
     bool historical_kernel_diagnostics = false;
@@ -5713,6 +5894,13 @@ int main(int argc, char** argv) {
             std::string("--fused-polynomial-max-steps=").size()));
         if (fused_polynomial_max_steps < 0) {
           throw std::runtime_error("negative fused polynomial step bound");
+        }
+      } else if (option.rfind("--prepared-polynomial-pair=", 0) == 0) {
+        prepared_polynomial_pair_index = std::stoi(option.substr(
+            std::string("--prepared-polynomial-pair=").size()));
+        if (prepared_polynomial_pair_index < 0) {
+          throw std::runtime_error(
+              "negative prepared polynomial pair index");
         }
       } else if (option == "--direct-delta-x4") {
         direct_delta_x4 = true;
@@ -5859,6 +6047,15 @@ int main(int argc, char** argv) {
     if (rounding_profile_enabled && kUseCompactSupportJets) {
       throw std::runtime_error(
           "rounding profiling is not implemented for compact support jets");
+    }
+    if (prepared_polynomial_pair_index >= 0 &&
+        (kUseCompactSupportJets ||
+         polynomial_mode != PolynomialMode::kBaseline ||
+         fused_polynomial_outer_index >= 0 ||
+         fused_polynomial_max_steps >= 0 || direct_delta_x4 ||
+         kUsePreparedSimplePolynomials || kUseDirectSpecializedFunction)) {
+      throw std::runtime_error(
+          "prepared polynomial pair requires the dense baseline evaluator");
     }
     if (full_stage_diagnostics && kUseCompactSupportJets) {
       throw std::runtime_error(
@@ -6102,6 +6299,11 @@ int main(int argc, char** argv) {
         kDyadicFallbackFixedQuotientCalls;
     const auto preparation_begin = std::chrono::steady_clock::now();
     Program program = read_program(argv[1]);
+    if (prepared_polynomial_pair_index >= 0) {
+      prepare_polynomial_pair(
+          program,
+          static_cast<std::size_t>(prepared_polynomial_pair_index));
+    }
     if (kUsePreparedSimplePolynomials) {
       prepare_simple_polynomials(program);
     }
@@ -6156,6 +6358,11 @@ int main(int argc, char** argv) {
     for (const Program::CoordinateSqrtTerm& term :
          program.prepared_coordinate_sqrt_terms) {
       if (term.active) ++prepared_coordinate_sqrt_term_count;
+    }
+    std::size_t prepared_polynomial_instruction_count = 0;
+    for (const std::vector<Program::PreparedPolynomialInstruction>&
+             polynomial : program.prepared_polynomials) {
+      prepared_polynomial_instruction_count += polynomial.size();
     }
 
     Counters total;
@@ -6341,6 +6548,10 @@ int main(int argc, char** argv) {
                                   : "baseline")
               << " fused_outer_index=" << fused_polynomial_outer_index
               << " fused_max_steps=" << fused_polynomial_max_steps
+              << " prepared_polynomial_pair_index="
+              << prepared_polynomial_pair_index
+              << " prepared_polynomial_instruction_count="
+              << prepared_polynomial_instruction_count
               << " direct_delta_x4=" << (direct_delta_x4 ? 1 : 0)
               << " direct_delta_x4_source_sign=negated"
               << " skip_exact_zero_products="
@@ -6434,7 +6645,8 @@ int main(int argc, char** argv) {
               << evaluation_dyadic_shift_calls
               << " evaluation_dyadic_fallback_quotients="
               << evaluation_dyadic_fallback_calls
-#if defined(CANDLE_NL_FIXED_INT128) && \
+#if (defined(CANDLE_NL_FIXED_INT128) || \
+     defined(CANDLE_NL_CHECKED_INT256)) && \
     defined(CANDLE_NL_FIXED_RANGE_PROFILE)
               << " fixed_range_profile=1"
               << " range_quotient_numerator_bits="

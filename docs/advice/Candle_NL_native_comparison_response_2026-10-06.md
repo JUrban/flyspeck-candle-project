@@ -2324,3 +2324,38 @@ checker change.  That project remains a serious option only after native
 complete-batch results across several real families establish enough
 amortized benefit to justify it.  Complete details and evidence hashes are in
 `docs/progress/2026-10-07-v3.69-nl-rounding-factorial-and-compute-boundary.md`.
+
+## Update: preparation is not the gap; exact intermediate widths are bounded
+
+The output-identical prepared-polynomial control is complete.  On all 875
+case-16594 cells, resolving one repeated 39/85-step pair once changes checked
+dyadic evaluation from 4.952556225 to 4.963015398 seconds and padded-double
+evaluation from 0.768459099 to 0.779320401 seconds in seven rotated runs.
+Every per-backend result is byte-identical and every cell is accepted, but
+there is no complete-batch speedup.  Repeated opcode decoding and operand
+lookup are not the explanation of the 6.25-times checked/hardware gap, so this
+specialization stops before proof work.
+
+The complementary checked-256 range profile passed two full real families.
+Case16594 stores at most 64-bit rounded endpoints, while its multiplication
+products reach 104 bits, additions 92 bits, and quotient numerators 135 bits.
+The optimized case10173 path reaches only 114 bits on its decimal grid and 83
+bits on its dyadic grid.  This explains the earlier `int128` overflow without
+requiring wide persistent endpoints: the width is needed transiently during
+scale-squared Taylor recomposition.
+
+The next bounded native discriminator therefore holds the derivative graph
+and rounding sequence fixed while narrowing the checked arithmetic width.  A
+longer-lived design would use narrow stored endpoints plus a wider checked
+product/quotient accumulator and an explicit overflow result or exact
+fallback.  Finite observed maxima are not a proof of a universal bound, so a
+verified version must validate a range contract or make overflow visible.
+
+The historical figures should not be merged.  Approximately 340 times was
+the starting generic-native/specialized-C++ case10173 comparison; controlled
+algorithm work has already reduced the residual optimized-native gap on that
+fixture to about 1.35 times.  The presently large reusable targets are the
+roughly 12--34-times matched Candle/native verified-execution boundary and the
+independent 6.25-times case16594 checked-256/hardware arithmetic boundary.
+Complete timings, range tables, scope limits, and hashes are in
+`docs/progress/2026-10-07-v3.70-nl-preparation-gate-and-width-contract.md`.
