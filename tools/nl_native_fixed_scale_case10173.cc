@@ -10,6 +10,7 @@
 #include <initializer_list>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -136,6 +137,7 @@ bool kUseNarrowFixedProducts = false;
 bool kUseUncheckedNarrowFixedProducts = false;
 bool kUseUnsafeUnroundedHardware = false;
 bool kUseSignSpecializedIntervalProducts = false;
+bool kUseSpecializedDeltaRadicands = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
@@ -619,6 +621,10 @@ struct Program {
   };
   std::vector<std::vector<PreparedPolynomialInstruction>>
       prepared_polynomials;
+  // A nonnegative entry identifies a source-authenticated polynomial of the
+  // form 4 * x[coordinate] * delta(x).  Authentication is semantic over the
+  // exact rational polynomial, not by outer index or program basename.
+  std::vector<int> specialized_delta_radicand_coordinates;
   enum class SimplePolynomialKind { kUnknown, kConstant, kVariable };
   struct SimplePolynomial {
     SimplePolynomialKind kind = SimplePolynomialKind::kUnknown;
@@ -3167,6 +3173,210 @@ void prepare_polynomial_pair(Program& program, std::size_t outer_index) {
   prepare_polynomial_at(program, outer_index + 1);
 }
 
+using SymbolicMonomial = std::array<unsigned char, kDimensions>;
+using SymbolicPolynomial = std::map<SymbolicMonomial, Rat>;
+
+SymbolicPolynomial symbolic_constant(const Rat& value) {
+  SymbolicPolynomial result;
+  if (value != 0) result[SymbolicMonomial{}] = value;
+  return result;
+}
+
+SymbolicPolynomial symbolic_variable(std::size_t variable) {
+  if (variable >= kDimensions) {
+    throw std::runtime_error("symbolic polynomial variable out of range");
+  }
+  SymbolicMonomial monomial{};
+  monomial[variable] = 1;
+  return {{monomial, 1}};
+}
+
+SymbolicPolynomial symbolic_add(SymbolicPolynomial left,
+                                const SymbolicPolynomial& right) {
+  for (const auto& [monomial, coefficient] : right) {
+    Rat& destination = left[monomial];
+    destination += coefficient;
+    destination.canonicalize();
+    if (destination == 0) left.erase(monomial);
+  }
+  return left;
+}
+
+SymbolicPolynomial symbolic_neg(SymbolicPolynomial value) {
+  for (auto& [monomial, coefficient] : value) {
+    (void)monomial;
+    coefficient = -coefficient;
+  }
+  return value;
+}
+
+SymbolicPolynomial symbolic_mul(const SymbolicPolynomial& left,
+                                const SymbolicPolynomial& right) {
+  SymbolicPolynomial result;
+  for (const auto& [left_monomial, left_coefficient] : left) {
+    for (const auto& [right_monomial, right_coefficient] : right) {
+      SymbolicMonomial product{};
+      for (std::size_t coordinate = 0; coordinate < kDimensions;
+           ++coordinate) {
+        const unsigned degree = left_monomial[coordinate] +
+                                right_monomial[coordinate];
+        if (degree > std::numeric_limits<unsigned char>::max()) {
+          throw std::runtime_error("symbolic polynomial degree overflow");
+        }
+        product[coordinate] = static_cast<unsigned char>(degree);
+      }
+      Rat& destination = result[product];
+      destination += left_coefficient * right_coefficient;
+      destination.canonicalize();
+      if (destination == 0) result.erase(product);
+    }
+  }
+  return result;
+}
+
+SymbolicPolynomial decode_symbolic_polynomial(const Program& program,
+                                              std::size_t payload) {
+  std::vector<SymbolicPolynomial> stack;
+  for (const std::size_t instruction_index :
+       decode_list(program, payload, "symbolic polynomial program")) {
+    const Node& instruction = node_at(program, instruction_index);
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "symbolic polynomial tag");
+      if (tag == 0) {
+        stack.push_back(symbolic_constant(decode_q(program,
+                                                   instruction.right)));
+      } else if (tag == 1) {
+        const Integer variable = require_numeral(
+            program, instruction.right, "symbolic polynomial variable");
+        if (variable < 0 || variable >= static_cast<long>(kDimensions)) {
+          throw std::runtime_error(
+              "symbolic polynomial variable out of range");
+        }
+        stack.push_back(symbolic_variable(variable.get_ui()));
+      } else {
+        throw std::runtime_error("unknown symbolic polynomial pair tag");
+      }
+      continue;
+    }
+
+    const unsigned long opcode = instruction.numeral.get_ui();
+    if (opcode == 2 || opcode == 5) {
+      if (stack.empty()) {
+        throw std::runtime_error("symbolic polynomial unary underflow");
+      }
+      SymbolicPolynomial value = std::move(stack.back());
+      stack.pop_back();
+      stack.push_back(opcode == 2
+                          ? symbolic_neg(std::move(value))
+                          : symbolic_mul(value, value));
+    } else if (opcode == 3 || opcode == 4) {
+      if (stack.size() < 2) {
+        throw std::runtime_error("symbolic polynomial binary underflow");
+      }
+      SymbolicPolynomial right = std::move(stack.back());
+      stack.pop_back();
+      SymbolicPolynomial left = std::move(stack.back());
+      stack.pop_back();
+      stack.push_back(opcode == 3
+                          ? symbolic_add(std::move(left), right)
+                          : symbolic_mul(left, right));
+    } else {
+      throw std::runtime_error("unknown symbolic polynomial opcode");
+    }
+  }
+  if (stack.size() != 1) {
+    throw std::runtime_error("symbolic polynomial final stack drift");
+  }
+  return stack.back();
+}
+
+SymbolicPolynomial symbolic_delta_polynomial() {
+  std::array<SymbolicPolynomial, kDimensions> x;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    x[coordinate] = symbolic_variable(coordinate);
+  }
+  const SymbolicPolynomial first_linear = symbolic_add(
+      symbolic_neg(x[0]),
+      symbolic_add(x[1], symbolic_add(
+          x[2], symbolic_add(symbolic_neg(x[3]),
+                             symbolic_add(x[4], x[5])))));
+  const SymbolicPolynomial second_linear = symbolic_add(
+      x[0], symbolic_add(symbolic_neg(x[1]), symbolic_add(
+          x[2], symbolic_add(x[3],
+                             symbolic_add(symbolic_neg(x[4]), x[5])))));
+  const SymbolicPolynomial third_linear = symbolic_add(
+      x[0], symbolic_add(x[1], symbolic_add(
+          symbolic_neg(x[2]), symbolic_add(
+              x[3], symbolic_add(x[4], symbolic_neg(x[5]))))));
+  const SymbolicPolynomial first = symbolic_mul(
+      symbolic_mul(x[0], x[3]), first_linear);
+  const SymbolicPolynomial second = symbolic_mul(
+      symbolic_mul(x[1], x[4]), second_linear);
+  const SymbolicPolynomial third = symbolic_mul(
+      symbolic_mul(x[2], x[5]), third_linear);
+  const SymbolicPolynomial fourth = symbolic_mul(
+      symbolic_mul(x[1], x[2]), x[3]);
+  const SymbolicPolynomial fifth = symbolic_mul(
+      symbolic_mul(x[0], x[2]), x[4]);
+  const SymbolicPolynomial sixth = symbolic_mul(
+      symbolic_mul(x[0], x[1]), x[5]);
+  const SymbolicPolynomial seventh = symbolic_mul(
+      symbolic_mul(x[3], x[4]), x[5]);
+  return symbolic_add(
+      symbolic_add(symbolic_add(first, second), third),
+      symbolic_neg(symbolic_add(
+          symbolic_add(symbolic_add(fourth, fifth), sixth), seventh)));
+}
+
+void prepare_specialized_delta_radicands(Program& program) {
+  program.specialized_delta_radicand_coordinates.assign(
+      program.instructions.size(), -1);
+  const SymbolicPolynomial delta = symbolic_delta_polynomial();
+  std::array<std::size_t, kDimensions> coordinate_counts{};
+  std::size_t match_count = 0;
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    if (!instruction.is_pair ||
+        require_numeral(program, instruction.left,
+                        "specialized radicand outer tag") != 0) {
+      continue;
+    }
+    const std::vector<std::size_t> instructions = decode_list(
+        program, instruction.right, "specialized radicand program");
+    if (instructions.size() != 85) continue;
+    const SymbolicPolynomial actual = decode_symbolic_polynomial(
+        program, instruction.right);
+    for (std::size_t coordinate = 0; coordinate < kDimensions;
+         ++coordinate) {
+      const SymbolicPolynomial expected = symbolic_mul(
+          symbolic_constant(4),
+          symbolic_mul(symbolic_variable(coordinate), delta));
+      if (actual == expected) {
+        program.specialized_delta_radicand_coordinates[outer_index] =
+            static_cast<int>(coordinate);
+        ++coordinate_counts[coordinate];
+        ++match_count;
+        break;
+      }
+    }
+  }
+  if (match_count == 0) {
+    throw std::runtime_error(
+        "no source-authenticated 4*x[coordinate]*delta radicands");
+  }
+  if (kCaseId == 16594 &&
+      (match_count != 3 || coordinate_counts[0] != 1 ||
+       coordinate_counts[1] != 1 || coordinate_counts[2] != 1 ||
+       coordinate_counts[3] != 0 || coordinate_counts[4] != 0 ||
+       coordinate_counts[5] != 0)) {
+    throw std::runtime_error(
+        "case16594 specialized delta-radicand source coverage drift");
+  }
+}
+
 Program::SimplePolynomial classify_simple_polynomial(
     const Program& program, std::size_t payload) {
   using Kind = Program::SimplePolynomialKind;
@@ -4152,10 +4362,14 @@ TaylorResult evaluate_neg_delta_x4_specialized(
                          matrix_neg(delta_x4_hessian()), counters);
 }
 
-TaylorResult evaluate_four_x1_delta_specialized(
+TaylorResult evaluate_four_coordinate_delta_specialized(
     const IntegerVector& radii,
     const IntervalVector& center_environment,
-    const IntervalVector& box_environment, Counters& counters) {
+    const IntervalVector& box_environment, std::size_t coordinate,
+    Counters& counters) {
+  if (coordinate >= kDimensions) {
+    throw std::runtime_error("four-coordinate-delta coordinate out of range");
+  }
   const Interval center_delta = delta_value(center_environment, counters);
   const IntervalVector center_delta_gradient = delta_gradient_from_products(
       polynomial_pair_products(center_environment, counters));
@@ -4172,29 +4386,41 @@ TaylorResult evaluate_four_x1_delta_specialized(
 
   FirstJet center;
   center.value = interval_integer_scale(
-      4, interval_mul(center_environment[0], center_delta, counters));
-  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+      4, interval_mul(center_environment[coordinate], center_delta, counters));
+  for (std::size_t gradient_coordinate = 0;
+       gradient_coordinate < kDimensions; ++gradient_coordinate) {
     Interval value = interval_mul(
-        center_environment[0], center_delta_gradient[coordinate], counters);
-    if (coordinate == 0) value = interval_add(value, center_delta);
-    center.gradient[coordinate] = interval_integer_scale(4, value);
+        center_environment[coordinate],
+        center_delta_gradient[gradient_coordinate], counters);
+    if (gradient_coordinate == coordinate) {
+      value = interval_add(value, center_delta);
+    }
+    center.gradient[gradient_coordinate] = interval_integer_scale(4, value);
   }
 
   IntervalMatrix hessian = zero_matrix();
   for (std::size_t row = 0; row < kDimensions; ++row) {
     for (std::size_t column = 0; column < kDimensions; ++column) {
       Interval value = interval_mul(
-          box_environment[0], box_delta_hessian[row][column], counters);
-      if (row == 0) {
+          box_environment[coordinate], box_delta_hessian[row][column], counters);
+      if (row == coordinate) {
         value = interval_add(value, box_delta_gradient[column]);
       }
-      if (column == 0) {
+      if (column == coordinate) {
         value = interval_add(value, box_delta_gradient[row]);
       }
       hessian[row][column] = interval_integer_scale(4, value);
     }
   }
   return complete_result(radii, true, center, hessian, counters);
+}
+
+TaylorResult evaluate_four_x1_delta_specialized(
+    const IntegerVector& radii,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, Counters& counters) {
+  return evaluate_four_coordinate_delta_specialized(
+      radii, center_environment, box_environment, 0, counters);
 }
 
 Interval neg_delta_x4_monotone_box_value(
@@ -5784,6 +6010,16 @@ Evaluation evaluate_job(const Program& program, const Job& job,
           stack.push_back(evaluate_neg_delta_x4_specialized(
               radii, center_environment, counters));
           direct_delta_x4_used = true;
+        } else if (kUseSpecializedDeltaRadicands &&
+                   !program.specialized_delta_radicand_coordinates.empty() &&
+                   program.specialized_delta_radicand_coordinates.at(
+                       outer_index) >= 0) {
+          stack.push_back(evaluate_four_coordinate_delta_specialized(
+              radii, center_environment, box_environment,
+              static_cast<std::size_t>(
+                  program.specialized_delta_radicand_coordinates.at(
+                      outer_index)),
+              counters));
         } else if (polynomial_mode == PolynomialMode::kSpecializedAngle &&
                    outer_index == 33 && polynomial_steps == 85) {
           stack.push_back(evaluate_four_x1_delta_specialized(
@@ -6143,6 +6379,7 @@ int main(int argc, char** argv) {
                 << " [--unchecked-narrow-fixed-products]"
                 << " [--unsafe-unrounded-hardware]"
                 << " [--sign-specialized-interval-products]"
+                << " [--specialized-delta-radicands]"
                 << " [--count-fixed-quotients]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
@@ -6272,6 +6509,8 @@ int main(int argc, char** argv) {
         kUseUnsafeUnroundedHardware = true;
       } else if (option == "--sign-specialized-interval-products") {
         kUseSignSpecializedIntervalProducts = true;
+      } else if (option == "--specialized-delta-radicands") {
+        kUseSpecializedDeltaRadicands = true;
       } else if (option == "--count-fixed-quotients") {
         kCountFixedQuotients = true;
       } else if (option == "--rounding-profile") {
@@ -6364,6 +6603,13 @@ int main(int argc, char** argv) {
          kUsePreparedSimplePolynomials || kUseDirectSpecializedFunction)) {
       throw std::runtime_error(
           "prepared polynomial pair requires the dense baseline evaluator");
+    }
+    if (kUseSpecializedDeltaRadicands &&
+        (kUseCompactSupportJets || polynomial_mode != PolynomialMode::kBaseline ||
+         fused_polynomial_outer_index >= 0 ||
+         fused_polynomial_max_steps >= 0)) {
+      throw std::runtime_error(
+          "specialized delta radicands require the dense baseline graph");
     }
     if (kNormalizeFusedPolynomialProducts &&
         polynomial_mode == PolynomialMode::kBaseline &&
@@ -6643,6 +6889,9 @@ int main(int argc, char** argv) {
     if (kUseDirectPreparedInputs) {
       prepare_direct_fixed_plan(program);
     }
+    if (kUseSpecializedDeltaRadicands) {
+      prepare_specialized_delta_radicands(program);
+    }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels) {
       prepare_fixed_sqrt_certificates(jobs);
@@ -6683,6 +6932,11 @@ int main(int argc, char** argv) {
     for (const std::vector<Program::PreparedPolynomialInstruction>&
              polynomial : program.prepared_polynomials) {
       prepared_polynomial_instruction_count += polynomial.size();
+    }
+    std::size_t specialized_delta_radicand_count = 0;
+    for (const int coordinate :
+         program.specialized_delta_radicand_coordinates) {
+      if (coordinate >= 0) ++specialized_delta_radicand_count;
     }
 
     Counters total;
@@ -6937,6 +7191,10 @@ int main(int argc, char** argv) {
               << (kUseUnsafeUnroundedHardware ? 1 : 0)
               << " sign_specialized_interval_products="
               << (kUseSignSpecializedIntervalProducts ? 1 : 0)
+              << " specialized_delta_radicands="
+              << (kUseSpecializedDeltaRadicands ? 1 : 0)
+              << " specialized_delta_radicand_count="
+              << specialized_delta_radicand_count
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
               << " mixed_wide_taylor_completions="
