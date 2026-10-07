@@ -16,7 +16,8 @@
 #include <vector>
 
 #if defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
-    defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256)
+    defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256) || \
+    defined(CANDLE_NL_MIXED_INT128_192)
 #include <boost/multiprecision/cpp_int.hpp>
 #endif
 #include <gmpxx.h>
@@ -45,6 +46,15 @@ using Integer = mpz_class;
 using Fixed = boost::multiprecision::checked_int128_t;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
 constexpr const char* kFixedBackend = "checked-int128";
+#elif defined(CANDLE_NL_MIXED_INT128_192)
+using Fixed = boost::multiprecision::checked_int128_t;
+using MixedWideBackend = boost::multiprecision::cpp_int_backend<
+    192, 192, boost::multiprecision::signed_magnitude,
+    boost::multiprecision::checked, void>;
+using MixedWide = boost::multiprecision::number<MixedWideBackend>;
+Fixed kScale = static_cast<Fixed>(1000000000000LL);
+constexpr const char* kFixedBackend = "mixed-checked-int128-192";
+constexpr unsigned kCheckedFixedBits = 128;
 #elif defined(CANDLE_NL_CHECKED_INT192)
 using CheckedInt192Backend = boost::multiprecision::cpp_int_backend<
     192, 192, boost::multiprecision::signed_magnitude,
@@ -78,6 +88,11 @@ constexpr const char* kFixedBackend = "fixed-int256";
 using Fixed = mpz_class;
 Fixed kScale("1000000000000");
 constexpr const char* kFixedBackend = "mpz";
+#endif
+#if defined(CANDLE_NL_MIXED_INT128_192)
+using TaylorAccumulator = MixedWide;
+#else
+using TaylorAccumulator = Fixed;
 #endif
 Fixed kTwoScaleSquared = 2 * kScale * kScale;
 bool kSkipExactZeroProducts = false;
@@ -114,6 +129,8 @@ std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
 std::uint64_t kDyadicShiftFixedQuotientCalls = 0;
 std::uint64_t kDyadicFallbackFixedQuotientCalls = 0;
+std::uint64_t kMixedWideTaylorCompletions = 0;
+std::uint64_t kMixedWideNarrowings = 0;
 
 Fixed fixed_product(Fixed left, Fixed right) {
 #if defined(CANDLE_NL_FIXED_INT128)
@@ -314,14 +331,15 @@ void range_profile_taylor_gradient(const Fixed& lower_product,
                     raw_bound.upper);
 }
 #else
-void range_profile_multiplication(const Interval&, const Interval&,
-                                  const Interval&) {}
-void range_profile_addition(const Interval&) {}
-void range_profile_scalar_dot(const Fixed&, const Fixed&) {}
-void range_profile_scalar_weighted(const Fixed&, const Fixed&, const Fixed&) {}
-void range_profile_taylor_completion(
+[[maybe_unused]] void range_profile_multiplication(
+    const Interval&, const Interval&, const Interval&) {}
+[[maybe_unused]] void range_profile_addition(const Interval&) {}
+[[maybe_unused]] void range_profile_scalar_dot(const Fixed&, const Fixed&) {}
+[[maybe_unused]] void range_profile_scalar_weighted(
+    const Fixed&, const Fixed&, const Fixed&) {}
+[[maybe_unused]] void range_profile_taylor_completion(
     const Fixed&, const Fixed&, const Fixed&, const Fixed&, const Interval&) {}
-void range_profile_taylor_gradient(
+[[maybe_unused]] void range_profile_taylor_gradient(
     const Fixed&, const Fixed&, const Interval&) {}
 #endif
 
@@ -1009,7 +1027,8 @@ Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
       native_ceil_fixed_quotient(numerator, denominator));
 }
 #elif defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
-    defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256)
+    defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256) || \
+    defined(CANDLE_NL_MIXED_INT128_192)
 Integer integer_of_fixed(const Fixed& value) {
   return Integer(value.convert_to<std::string>());
 }
@@ -1019,6 +1038,7 @@ Fixed fixed_of_integer(const Integer& value) {
 }
 
 #if defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_MIXED_INT128_192) || \
     defined(CANDLE_NL_CHECKED_INT256)
 Fixed checked_floor_power_of_two_quotient(const Fixed& numerator,
                                           unsigned shift) {
@@ -1083,6 +1103,7 @@ void verify_checked_dyadic_shift_quotient_samples() {
 Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
 #if defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_MIXED_INT128_192) || \
     defined(CANDLE_NL_CHECKED_INT256)
   if (kUseDyadicShiftFixedQuotient) {
     const int shift = checked_fixed_dyadic_denominator_shift(denominator);
@@ -1105,6 +1126,7 @@ Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
 Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
 #if defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_MIXED_INT128_192) || \
     defined(CANDLE_NL_CHECKED_INT256)
   if (kUseDyadicShiftFixedQuotient) {
     const int shift = checked_fixed_dyadic_denominator_shift(denominator);
@@ -1308,6 +1330,83 @@ Interval raw_interval_round(const Fixed& denominator,
   return {floor_fixed_quotient(value.lower, denominator),
           ceil_fixed_quotient(value.upper, denominator)};
 }
+
+#if defined(CANDLE_NL_MIXED_INT128_192)
+TaylorAccumulator floor_mixed_wide_quotient(
+    const TaylorAccumulator& numerator,
+    const TaylorAccumulator& denominator) {
+  TaylorAccumulator quotient = numerator / denominator;
+  const TaylorAccumulator remainder = numerator % denominator;
+  if (remainder != 0 && ((remainder < 0) != (denominator < 0))) --quotient;
+  return quotient;
+}
+
+TaylorAccumulator ceil_mixed_wide_quotient(
+    const TaylorAccumulator& numerator,
+    const TaylorAccumulator& denominator) {
+  TaylorAccumulator quotient = numerator / denominator;
+  const TaylorAccumulator remainder = numerator % denominator;
+  if (remainder != 0 && ((remainder < 0) == (denominator < 0))) ++quotient;
+  return quotient;
+}
+
+TaylorAccumulator floor_mixed_wide_power_of_two(
+    const TaylorAccumulator& numerator, unsigned shift) {
+  const bool negative = numerator < 0;
+  const TaylorAccumulator magnitude = negative ? -numerator : numerator;
+  const TaylorAccumulator mask = (TaylorAccumulator(1) << shift) - 1;
+  const TaylorAccumulator quotient = magnitude >> shift;
+  if (!negative) return quotient;
+  return (magnitude & mask) == 0 ? -quotient : -quotient - 1;
+}
+
+TaylorAccumulator ceil_mixed_wide_power_of_two(
+    const TaylorAccumulator& numerator, unsigned shift) {
+  const bool negative = numerator < 0;
+  const TaylorAccumulator magnitude = negative ? -numerator : numerator;
+  const TaylorAccumulator mask = (TaylorAccumulator(1) << shift) - 1;
+  const TaylorAccumulator quotient = magnitude >> shift;
+  if (negative) return -quotient;
+  return (magnitude & mask) == 0 ? quotient : quotient + 1;
+}
+
+Fixed narrow_mixed_wide(const TaylorAccumulator& value) {
+  ++kMixedWideNarrowings;
+  return Fixed(value);
+}
+
+Interval round_mixed_wide_taylor(
+    const TaylorAccumulator& lower, const TaylorAccumulator& upper) {
+  ++kMixedWideTaylorCompletions;
+  if (kCountFixedQuotients) {
+    ++kFloorFixedQuotientCalls;
+    ++kCeilFixedQuotientCalls;
+  }
+  TaylorAccumulator rounded_lower;
+  TaylorAccumulator rounded_upper;
+  if (kUseDyadicShiftFixedQuotient && kDyadicScaleBits > 0) {
+    const unsigned shift = static_cast<unsigned>(2 * kDyadicScaleBits + 1);
+    ++kDyadicShiftFixedQuotientCalls;
+    ++kDyadicShiftFixedQuotientCalls;
+    rounded_lower = floor_mixed_wide_power_of_two(lower, shift);
+    rounded_upper = ceil_mixed_wide_power_of_two(upper, shift);
+  } else {
+    const TaylorAccumulator denominator(kTwoScaleSquared);
+    rounded_lower = floor_mixed_wide_quotient(lower, denominator);
+    rounded_upper = ceil_mixed_wide_quotient(upper, denominator);
+  }
+  return {narrow_mixed_wide(rounded_lower),
+          narrow_mixed_wide(rounded_upper)};
+}
+
+Integer integer_of_taylor_accumulator(const TaylorAccumulator& value) {
+  return Integer(value.convert_to<std::string>());
+}
+#else
+Integer integer_of_taylor_accumulator(const TaylorAccumulator& value) {
+  return integer_of_fixed(value);
+}
+#endif
 
 Interval interval_mul(const Interval& left, const Interval& right,
                       Counters& counters) {
@@ -1596,13 +1695,20 @@ Fixed dot_abs_upper(const IntegerVector& radii,
   return result;
 }
 
-Fixed weighted_rows_abs_upper(const IntegerVector& radii,
-                              const IntervalMatrix& matrix) {
-  Fixed result = 0;
+TaylorAccumulator weighted_rows_abs_upper(const IntegerVector& radii,
+                                          const IntervalMatrix& matrix) {
+  TaylorAccumulator result = 0;
   for (std::size_t i = 0; i < kDimensions; ++i) {
-    const Fixed product = radii[i] * dot_abs_upper(radii, matrix[i]);
+    const Fixed dot = dot_abs_upper(radii, matrix[i]);
+#if defined(CANDLE_NL_MIXED_INT128_192)
+    const TaylorAccumulator product =
+        TaylorAccumulator(radii[i]) * TaylorAccumulator(dot);
+    result += product;
+#else
+    const Fixed product = radii[i] * dot;
     result += product;
     range_profile_scalar_weighted(radii[i], product, result);
+#endif
   }
   return result;
 }
@@ -1613,7 +1719,23 @@ TaylorResult complete_result(const IntegerVector& radii, bool domain,
                              Counters& counters) {
   ++counters.completed_results;
   const Fixed linear = dot_abs_upper(radii, center.gradient);
-  const Fixed quadratic = weighted_rows_abs_upper(radii, hessian);
+  const TaylorAccumulator quadratic =
+      weighted_rows_abs_upper(radii, hessian);
+#if defined(CANDLE_NL_MIXED_INT128_192)
+  const TaylorAccumulator error =
+      TaylorAccumulator(2) * TaylorAccumulator(kScale) *
+          TaylorAccumulator(linear) +
+      quadratic;
+  const TaylorAccumulator raw_lower =
+      TaylorAccumulator(kTwoScaleSquared) *
+          TaylorAccumulator(center.value.lower) -
+      error;
+  const TaylorAccumulator raw_upper =
+      TaylorAccumulator(kTwoScaleSquared) *
+          TaylorAccumulator(center.value.upper) +
+      error;
+  const Interval value_bound = round_mixed_wide_taylor(raw_lower, raw_upper);
+#else
   const Fixed error_product = 2 * kScale * linear;
   const Fixed error = error_product + quadratic;
   const Fixed lower_center_product =
@@ -1625,6 +1747,9 @@ TaylorResult complete_result(const IntegerVector& radii, bool domain,
   range_profile_taylor_completion(
       error_product, error, lower_center_product, upper_center_product,
       raw_value);
+  const Interval value_bound =
+      raw_interval_round(kTwoScaleSquared, raw_value);
+#endif
 
   IntervalVector gradient_bounds;
   for (std::size_t i = 0; i < kDimensions; ++i) {
@@ -1639,7 +1764,7 @@ TaylorResult complete_result(const IntegerVector& radii, bool domain,
 
   return {domain,
           center,
-          raw_interval_round(kTwoScaleSquared, raw_value),
+          value_bound,
           gradient_bounds,
           hessian,
           true};
@@ -2568,12 +2693,20 @@ Fixed compact_dot_abs_upper(const IntegerVector& radii,
   return result;
 }
 
-Fixed compact_weighted_abs_upper(const IntegerVector& radii,
-                                 const CompactMatrix& matrix) {
-  Fixed result = 0;
+TaylorAccumulator compact_weighted_abs_upper(
+    const IntegerVector& radii, const CompactMatrix& matrix) {
+  TaylorAccumulator result = 0;
   for (std::size_t row = 0; row < kDimensions; ++row) {
     for (std::size_t column = row; column < kDimensions; ++column) {
       if (!compact_matrix_has(matrix, row, column)) continue;
+#if defined(CANDLE_NL_MIXED_INT128_192)
+      const TaylorAccumulator radius_product =
+          TaylorAccumulator(radii[row]) * TaylorAccumulator(radii[column]);
+      TaylorAccumulator contribution = radius_product * TaylorAccumulator(
+          interval_abs_upper(compact_matrix_at(matrix, row, column)));
+      if (row != column) contribution *= 2;
+      result += contribution;
+#else
       const Fixed radius_product = radii[row] * radii[column];
       Fixed contribution = radius_product * interval_abs_upper(
           compact_matrix_at(matrix, row, column));
@@ -2581,6 +2714,7 @@ Fixed compact_weighted_abs_upper(const IntegerVector& radii,
       result += contribution;
       range_profile_scalar_weighted(
           radius_product, contribution, result);
+#endif
     }
   }
   return result;
@@ -2593,7 +2727,23 @@ CompactTaylorResult compact_complete_result(
   ++counters.completed_results;
   const Fixed linear = compact_dot_abs_upper(
       radii, center_gradient, center_gradient_mask);
-  const Fixed quadratic = compact_weighted_abs_upper(radii, hessian);
+  const TaylorAccumulator quadratic =
+      compact_weighted_abs_upper(radii, hessian);
+#if defined(CANDLE_NL_MIXED_INT128_192)
+  const TaylorAccumulator error =
+      TaylorAccumulator(2) * TaylorAccumulator(kScale) *
+          TaylorAccumulator(linear) +
+      quadratic;
+  const TaylorAccumulator raw_lower =
+      TaylorAccumulator(kTwoScaleSquared) *
+          TaylorAccumulator(center_value.lower) -
+      error;
+  const TaylorAccumulator raw_upper =
+      TaylorAccumulator(kTwoScaleSquared) *
+          TaylorAccumulator(center_value.upper) +
+      error;
+  const Interval value_bound = round_mixed_wide_taylor(raw_lower, raw_upper);
+#else
   const Fixed error_product = 2 * kScale * linear;
   const Fixed error = error_product + quadratic;
   const Fixed lower_center_product = kTwoScaleSquared * center_value.lower;
@@ -2603,6 +2753,9 @@ CompactTaylorResult compact_complete_result(
   range_profile_taylor_completion(
       error_product, error, lower_center_product, upper_center_product,
       raw_value);
+  const Interval value_bound =
+      raw_interval_round(kTwoScaleSquared, raw_value);
+#endif
 
   IntervalVector gradient_bounds = zero_vector();
   GradientMask gradient_bounds_mask = 0;
@@ -2632,7 +2785,7 @@ CompactTaylorResult compact_complete_result(
           center_value,
           center_gradient,
           center_gradient_mask,
-          raw_interval_round(kTwoScaleSquared, raw_value),
+          value_bound,
           gradient_bounds,
           gradient_bounds_mask,
           hessian};
@@ -5147,14 +5300,16 @@ void print_full_stage_diagnostic(const Job& job,
         (job.upper[coordinate] - job.lower[coordinate]) / 2);
   }
   const Fixed linear_raw = dot_abs_upper(radii, result.center.gradient);
-  const Fixed quadratic_raw = weighted_rows_abs_upper(radii, result.hessian);
+  const TaylorAccumulator quadratic_raw =
+      weighted_rows_abs_upper(radii, result.hessian);
   const Integer scale = integer_of_fixed(kScale);
   const Rat center_upper = normalized_rat(
       integer_of_fixed(result.center.value.upper), scale);
   const Rat linear = normalized_rat(
       integer_of_fixed(linear_raw), scale * scale);
   const Rat quadratic = normalized_rat(
-      integer_of_fixed(quadratic_raw), 2 * scale * scale * scale);
+      integer_of_taylor_accumulator(quadratic_raw),
+      2 * scale * scale * scale);
   const Rat recomposed_upper = center_upper + linear + quadratic;
   const Rat upper = normalized_rat(
       integer_of_fixed(result.value_bound.upper), scale);
@@ -6360,6 +6515,7 @@ int main(int argc, char** argv) {
           "only");
     }
 #if !defined(CANDLE_NL_CHECKED_INT192) && \
+    !defined(CANDLE_NL_MIXED_INT128_192) && \
     !defined(CANDLE_NL_CHECKED_INT256)
     if (kUseDyadicShiftFixedQuotient) {
       throw std::runtime_error(
@@ -6400,6 +6556,7 @@ int main(int argc, char** argv) {
       verify_dyadic_shift_quotient_samples();
     }
 #elif defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_MIXED_INT128_192) || \
     defined(CANDLE_NL_CHECKED_INT256)
     if (kUseDyadicShiftFixedQuotient) {
       verify_checked_dyadic_shift_quotient_samples();
@@ -6734,6 +6891,10 @@ int main(int argc, char** argv) {
               << (kUseSignSpecializedIntervalProducts ? 1 : 0)
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
+              << " mixed_wide_taylor_completions="
+              << kMixedWideTaylorCompletions
+              << " mixed_wide_narrowings="
+              << kMixedWideNarrowings
               << " case_id=" << kCaseId
               << " reference_comparison=" << (accept_only ? 0 : 1)
               << " matched=" << (jobs.size() - mismatches)

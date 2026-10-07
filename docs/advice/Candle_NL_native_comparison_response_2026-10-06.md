@@ -2407,3 +2407,29 @@ the observed 135-bit boundary explicit.
 
 Complete tables, operation counts, proof limits, and evidence hashes are in
 `docs/progress/2026-10-07-v3.72-nl-operation-width-ledger.md`.
+
+## Update: mixed-width exact arithmetic clears the multifamily gate
+
+The ledger-directed prototype is positive.  Checked-128 interval values with
+checked-192 Hessian/Taylor aggregation preserve byte-identical outputs and
+complete acceptance on both real families.  Relative to the same checked-256
+graphs, recurring evaluation improves from 4.979947225 to 2.447025000 seconds
+on all 875 case16594 cells (2.035 times) and from 1.583477709 to 0.678812085
+seconds on all 4,173 optimized case10173 cells (2.333 times).  Including
+preparation, both complete batches improve by about 2.01 times; peak memory
+also falls.
+
+This validates the architectural split but does not close the larger gap.
+Case16594 mixed exact execution is still about 3.1 times slower than the
+padded-hardware discriminator, and the previously measured reflected batch
+is roughly 92 times slower than the now-equivalent native mixed computation.
+The next proof packet therefore specifies total bounded operations and proves
+successful mixed execution equal to the existing exact checker, with
+overflow delegated to that proof-safe fallback.  Fast execution still
+requires a separate verified CakeML word-compute extension; the existing
+natural-number batch remains the baseline and a simultaneous flattening
+target.
+
+Complete timings, exact-output identities, memory, staging, and evidence
+hashes are in
+`docs/progress/2026-10-07-v3.73-nl-mixed-width-gate.md`.
