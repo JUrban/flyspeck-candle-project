@@ -1622,3 +1622,61 @@ win advances to one generally proved outward dyadic engine and complete-box
 checker. A loss redirects work to whole-checker layout/control; it does not
 justify extending the trusted compute datatype. The unsafe floating lanes
 remain diagnostics and can never support a formal claim.
+
+## Update: reflected limb rejection and the next bridge experiment
+
+The bounded representation gate has now run inside the existing
+proof-producing evaluator. A closed benchmark repeated one exact 68-bit
+multiply followed by a 23-bit downshift 32,768 times. The control used one
+unbounded natural; the candidate used two 30-bit limbs and reconstructed the
+same quotient from low, cross, and high products. Both lanes produced exactly
+the same closed, assumption-free theorem.
+
+Because Candle's internal clock is deterministic, the existing read-only
+phase observer supplied wall and process times. One balanced run measured
+0.096525104 seconds for the natural lane and 0.105102460 seconds for the limb
+lane, a 1.089-times limb slowdown. A second run's warm samples measured
+0.125032158 and 0.132089458 seconds, a 1.056-times limb slowdown. The first
+sample of the second run was an isolated 0.204-second control outlier and is
+preserved rather than hidden in an aggregate. The accepted run is
+`cv-nl-limb-mul-shift-v9-dev-001`; its phase-profile SHA-256 is
+`5a3fc5350fc2aa164291cc8d8a483f9aa80007630a9f827d2bc483f7cf8fcf66`.
+
+This rejects the limb engine. It did not win before charging signed interval
+structure, pair handling, range validation, or its reusable correctness proof,
+so no such proof or complete limb checker will be developed.
+
+The broader investigation remains active. The most informative controls now
+point in different directions:
+
+- the hash-pinned historical C++ implementation changes from 0.082490265
+  seconds and 4,173/4,173 acceptance under its specialized route to about
+  0.326891 seconds and 52/4,173 under generic composition on the same genuine
+  boxes, holding that library's endpoint representation fixed;
+- the current native generic graph gains 1.490 times from `long double` to
+  `double`, and only 1.085 times from removing padded normalization, while the
+  tested historical-formula substitution does not win;
+- the original approximately 15-times encoded-Candle/exact-native gap and
+  approximately 341-times generic-native/specialized-C++ starting gap therefore
+  remain separate. Later native candidates reduce the latter only as untrusted
+  diagnostics; those gains have not yet become a formal checker.
+
+The next native gate will be a faithful complete-box bridge. The pinned C++
+specialized route will export center/tangent, derivative/Hessian or table-use,
+Taylor-remainder, final-bound, and primitive-count boundaries for genuine
+boxes. The current native harness will reproduce that complete data flow using
+the same hardware-`double` arithmetic. Only after those boundaries and full
+acceptance agree will the same algorithm be crossed with exact outward dyadic
+arithmetic. This first holds arithmetic fixed while changing the
+derivative/enclosure algorithm, then holds that algorithm fixed while changing
+arithmetic.
+
+The existing `historical-dihedral` lane is not this experiment: it inserted
+historical formulas into the current theorem-shaped Taylor machinery and was
+slower. The bridge must include the specialized bound/table choices and
+complete-box handoff that produce the C++ acceptance behavior. Preparation,
+recurring execution, cold total, memory, bound tightness, and all 4,173
+acceptances remain mandatory gates. Only a material full-batch winner earns
+one authenticated complete-box instruction theorem; the dyadic-rounding and
+deferred-completion proofs remain bounded candidate components rather than
+independent projects.
