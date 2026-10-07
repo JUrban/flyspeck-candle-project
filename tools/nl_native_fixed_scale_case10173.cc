@@ -139,6 +139,7 @@ bool kUseUnsafeUnroundedHardware = false;
 bool kUseSignSpecializedIntervalProducts = false;
 bool kUseSpecializedDeltaRadicands = false;
 bool kUseSpecializedDeltaDerivatives = false;
+bool kUseSpecializedDeltaDihedralChains = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
@@ -627,6 +628,12 @@ struct Program {
   // exact rational polynomial, not by outer index or program basename.
   std::vector<int> specialized_delta_radicand_coordinates;
   std::vector<int> specialized_delta_derivative_coordinates;
+  struct DeltaDihedralChain {
+    bool active = false;
+    std::size_t radicand_coordinate = 0;
+    std::size_t derivative_coordinate = 0;
+  };
+  std::vector<DeltaDihedralChain> specialized_delta_dihedral_chains;
   enum class SimplePolynomialKind { kUnknown, kConstant, kVariable };
   struct SimplePolynomial {
     SimplePolynomialKind kind = SimplePolynomialKind::kUnknown;
@@ -3443,6 +3450,68 @@ void prepare_specialized_delta_derivatives(Program& program) {
   }
 }
 
+void prepare_specialized_delta_dihedral_chains(Program& program) {
+  if (program.specialized_delta_radicand_coordinates.empty() ||
+      program.specialized_delta_derivative_coordinates.empty()) {
+    throw std::runtime_error(
+        "specialized delta chain requires authenticated pair sources");
+  }
+  program.specialized_delta_dihedral_chains.assign(
+      program.instructions.size(), Program::DeltaDihedralChain{});
+  const auto outer_opcode = [&program](std::size_t outer_index,
+                                        unsigned long opcode) {
+    if (outer_index >= program.instructions.size()) return false;
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    return !instruction.is_pair && instruction.numeral == opcode;
+  };
+  const auto outer_tag = [&program](std::size_t outer_index, long tag) {
+    if (outer_index >= program.instructions.size()) return false;
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    return instruction.is_pair &&
+           require_numeral(program, instruction.left,
+                           "specialized delta-chain tag") == tag;
+  };
+
+  std::array<std::size_t, 3> radicand_counts{};
+  std::size_t chain_count = 0;
+  for (std::size_t start = 0; start + 7 < program.instructions.size();
+       ++start) {
+    if (!outer_opcode(start, 8) || !outer_tag(start + 1, 0) ||
+        !outer_tag(start + 2, 0) || !outer_tag(start + 3, 1) ||
+        !outer_opcode(start + 4, 6) || !outer_opcode(start + 5, 4) ||
+        !outer_opcode(start + 6, 7) || !outer_opcode(start + 7, 3)) {
+      continue;
+    }
+    const int derivative =
+        program.specialized_delta_derivative_coordinates[start + 1];
+    const int radicand =
+        program.specialized_delta_radicand_coordinates[start + 2];
+    if (radicand < 0 || radicand >= 3 ||
+        derivative != radicand + 3) {
+      continue;
+    }
+    Program::DeltaDihedralChain& chain =
+        program.specialized_delta_dihedral_chains[start];
+    chain.active = true;
+    chain.radicand_coordinate = static_cast<std::size_t>(radicand);
+    chain.derivative_coordinate = static_cast<std::size_t>(derivative);
+    ++radicand_counts[chain.radicand_coordinate];
+    ++chain_count;
+  }
+  if (chain_count == 0) {
+    throw std::runtime_error(
+        "no source-authenticated delta dihedral chains");
+  }
+  if (kCaseId == 16594 &&
+      (chain_count != 3 || radicand_counts[0] != 1 ||
+       radicand_counts[1] != 1 || radicand_counts[2] != 1)) {
+    throw std::runtime_error(
+        "case16594 specialized delta-chain source coverage drift");
+  }
+}
+
 Program::SimplePolynomial classify_simple_polynomial(
     const Program& program, std::size_t payload) {
   using Kind = Program::SimplePolynomialKind;
@@ -4984,15 +5053,29 @@ TaylorResult evaluate_historical_dihedral(
       : complete_result(radii, true, center, box.hessian, counters);
 }
 
-TaylorResult evaluate_dihedral_chain_specialized(
+TaylorResult evaluate_delta_dihedral_chain_specialized(
     const IntegerVector& radii, const IntervalVector& center_environment,
     const IntervalVector& box_environment,
     const Interval& center_sqrt_certificate,
-    const Interval& box_sqrt_certificate, Counters& counters) {
-  const TaylorResult numerator = evaluate_neg_delta_x4_specialized(
-      radii, center_environment, counters);
-  const TaylorResult radicand = evaluate_four_x1_delta_specialized(
-      radii, center_environment, box_environment, counters);
+    const Interval& box_sqrt_certificate,
+    std::size_t radicand_coordinate,
+    std::size_t derivative_coordinate, Counters& counters,
+    bool legacy_coordinate_zero = false) {
+  if (radicand_coordinate >= 3 ||
+      derivative_coordinate != radicand_coordinate + 3) {
+    throw std::runtime_error("delta dihedral coordinate pairing drift");
+  }
+  const TaylorResult numerator = legacy_coordinate_zero
+      ? evaluate_neg_delta_x4_specialized(
+          radii, center_environment, counters)
+      : evaluate_neg_delta_derivative_specialized(
+          radii, center_environment, derivative_coordinate, counters);
+  const TaylorResult radicand = legacy_coordinate_zero
+      ? evaluate_four_x1_delta_specialized(
+          radii, center_environment, box_environment, counters)
+      : evaluate_four_coordinate_delta_specialized(
+          radii, center_environment, box_environment,
+          radicand_coordinate, counters);
 
   ++counters.sqrt_steps;
   ++counters.inverse_steps;
@@ -5056,7 +5139,13 @@ TaylorResult evaluate_dihedral_chain_specialized(
       absolute(quotient.box_value.lower) < kScale &&
       absolute(quotient.box_value.upper) < kScale;
   if (!atan_domain) {
-    throw std::runtime_error("prepared dihedral arctangent domain failure");
+    throw std::runtime_error(
+        "prepared dihedral arctangent domain failure center=" +
+        integer_of_fixed(quotient.center.value.lower).get_str() + ":" +
+        integer_of_fixed(quotient.center.value.upper).get_str() +
+        " box=" + integer_of_fixed(quotient.box_value.lower).get_str() +
+        ":" + integer_of_fixed(quotient.box_value.upper).get_str() +
+        " scale=" + integer_of_fixed(kScale).get_str());
   }
   const Interval center_denominator = interval_add(
       one_interval(), fixed_interval_square(quotient.center.value, counters));
@@ -5080,6 +5169,16 @@ TaylorResult evaluate_dihedral_chain_specialized(
           interval_self_outer(quotient.box_gradient, counters), counters),
       interval_matrix_scale(box_atan_d, quotient.box_hessian, counters));
   return complete_result(radii, true, center, hessian, counters);
+}
+
+TaylorResult evaluate_dihedral_chain_specialized(
+    const IntegerVector& radii, const IntervalVector& center_environment,
+    const IntervalVector& box_environment,
+    const Interval& center_sqrt_certificate,
+    const Interval& box_sqrt_certificate, Counters& counters) {
+  return evaluate_delta_dihedral_chain_specialized(
+      radii, center_environment, box_environment,
+      center_sqrt_certificate, box_sqrt_certificate, 0, 3, counters, true);
 }
 
 TaylorResult evaluate_dihedral_identities_specialized(
@@ -5938,6 +6037,33 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       outer_index += 3;
       continue;
     }
+    const Program::DeltaDihedralChain* delta_chain =
+        program.specialized_delta_dihedral_chains.empty()
+            ? nullptr
+            : &program.specialized_delta_dihedral_chains.at(outer_index);
+    if (kUseSpecializedDeltaDihedralChains && delta_chain != nullptr &&
+        delta_chain->active) {
+      if (sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error(
+            "specialized delta-chain square-root slot drift");
+      }
+      stack.push_back(evaluate_delta_dihedral_chain_specialized(
+          radii, center_environment, box_environment,
+          job.fixed_center_certificates[sqrt_slot],
+          job.fixed_box_certificates[sqrt_slot],
+          delta_chain->radicand_coordinate,
+          delta_chain->derivative_coordinate, counters));
+      ++sqrt_slot;
+      counters.outer_steps += 8;
+      if (rounding_profiles != nullptr) {
+        record_rounding_profile(rounding_profiles, outer_index + 1,
+                                "specialized_delta_dihedral_chain",
+                                rounding_floor_before, rounding_ceil_before,
+                                rounding_begin);
+      }
+      outer_index += 7;
+      continue;
+    }
     if (kUseHistoricalDihedral && outer_index == 31) {
       if (!program.prepared_dihedral_chain || sqrt_slot != 6 ||
           sqrt_slot >= kSqrtSlots) {
@@ -6480,6 +6606,7 @@ int main(int argc, char** argv) {
                 << " [--sign-specialized-interval-products]"
                 << " [--specialized-delta-radicands]"
                 << " [--specialized-delta-derivatives]"
+                << " [--specialized-delta-dihedral-chains]"
                 << " [--count-fixed-quotients]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
@@ -6613,6 +6740,8 @@ int main(int argc, char** argv) {
         kUseSpecializedDeltaRadicands = true;
       } else if (option == "--specialized-delta-derivatives") {
         kUseSpecializedDeltaDerivatives = true;
+      } else if (option == "--specialized-delta-dihedral-chains") {
+        kUseSpecializedDeltaDihedralChains = true;
       } else if (option == "--count-fixed-quotients") {
         kCountFixedQuotients = true;
       } else if (option == "--rounding-profile") {
@@ -6707,12 +6836,19 @@ int main(int argc, char** argv) {
           "prepared polynomial pair requires the dense baseline evaluator");
     }
     if ((kUseSpecializedDeltaRadicands ||
-         kUseSpecializedDeltaDerivatives) &&
+         kUseSpecializedDeltaDerivatives ||
+         kUseSpecializedDeltaDihedralChains) &&
         (kUseCompactSupportJets || polynomial_mode != PolynomialMode::kBaseline ||
          fused_polynomial_outer_index >= 0 ||
          fused_polynomial_max_steps >= 0)) {
       throw std::runtime_error(
           "specialized delta radicands require the dense baseline graph");
+    }
+    if (kUseSpecializedDeltaDihedralChains &&
+        (!kUseSpecializedDeltaRadicands ||
+         !kUseSpecializedDeltaDerivatives)) {
+      throw std::runtime_error(
+          "specialized delta chains require both authenticated pair lanes");
     }
     if (kNormalizeFusedPolynomialProducts &&
         polynomial_mode == PolynomialMode::kBaseline &&
@@ -6998,8 +7134,12 @@ int main(int argc, char** argv) {
     if (kUseSpecializedDeltaDerivatives) {
       prepare_specialized_delta_derivatives(program);
     }
+    if (kUseSpecializedDeltaDihedralChains) {
+      prepare_specialized_delta_dihedral_chains(program);
+    }
     std::vector<Job> jobs = read_jobs(argv[2]);
-    if (kUseFixedSqrtInverseKernels) {
+    if (kUseFixedSqrtInverseKernels ||
+        kUseSpecializedDeltaDihedralChains) {
       prepare_fixed_sqrt_certificates(jobs);
     }
     if (kPrecomputeTightSqrtCertificates) {
@@ -7048,6 +7188,11 @@ int main(int argc, char** argv) {
     for (const int coordinate :
          program.specialized_delta_derivative_coordinates) {
       if (coordinate >= 0) ++specialized_delta_derivative_count;
+    }
+    std::size_t specialized_delta_dihedral_chain_count = 0;
+    for (const Program::DeltaDihedralChain& chain :
+         program.specialized_delta_dihedral_chains) {
+      if (chain.active) ++specialized_delta_dihedral_chain_count;
     }
 
     Counters total;
@@ -7310,6 +7455,10 @@ int main(int argc, char** argv) {
               << (kUseSpecializedDeltaDerivatives ? 1 : 0)
               << " specialized_delta_derivative_count="
               << specialized_delta_derivative_count
+              << " specialized_delta_dihedral_chains="
+              << (kUseSpecializedDeltaDihedralChains ? 1 : 0)
+              << " specialized_delta_dihedral_chain_count="
+              << specialized_delta_dihedral_chain_count
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
               << " mixed_wide_taylor_completions="
