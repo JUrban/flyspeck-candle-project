@@ -1105,3 +1105,13 @@ specialized primitive, while preserving the complete acceptance and bound-
 tightness gates.  The current rejected dihedral composition remains closed,
 and neither hardware-seeded untrusted preparation nor unchecked arithmetic is
 a proof backend.
+
+A bounded source-surface review also confirms that the genuine historical
+primitive is not the small identity substitution already rejected.  Its
+optimized `U126`/`U135`, `setDeltaFull`, `setDeltaX4`, `Dsqrt`, and
+`setDihedral` path spans roughly 430 lines of sign-directed value, gradient,
+and Hessian range code before shared interval machinery.  Porting and proving
+that path could still be worthwhile at Flyspeck scale, but it is a substantial
+reusable numerical-library project.  It should first be reproduced as a
+complete native prototype; the existing dense specialization should not grow
+through more isolated formula patches.
