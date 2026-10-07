@@ -694,3 +694,24 @@ fixed-width/sparse-plan discriminator because changing representation,
 rounding, and algorithm simultaneously would not identify which improvement
 matters.  The deciding result remains total accepted-certificate throughput,
 with preparation and theorem handoff visible and amortized honestly.
+
+The immediate decision sequence is therefore concrete and bounded:
+
+1. implement one compact upper-triangular sparse-plan lane over the present
+   128 genuine boxes, using the checked `10^10` arithmetic result as its native
+   control and preserving complete-box acceptance;
+2. stop extending that representation if it gives only another local gain,
+   and instead port the historical complete-dihedral numerical structure into
+   the native harness with explicit outward rounding and the same box inputs;
+3. record bound width, acceptance, complete-batch preparation/evaluation time,
+   and operation counts for generic compact and specialized-dihedral lanes;
+4. only after a native specialized lane demonstrates a material end-to-end
+   win, prove one general instruction soundness theorem and authenticate its
+   source-expression/parameter correspondence; and
+5. then measure the encoded instruction in `Kernel.compute`, treating the
+   approximately 15-times encoded/native execution gap as a separate problem
+   from the still approximately 25-times native-specialized numerical gap.
+
+The complete 4,173-box fixture remains the architecture gate.  The current
+128-box family is sufficient to reject weak ideas cheaply, but not to claim a
+certificate-wide speedup or to select a production scale/range contract.
