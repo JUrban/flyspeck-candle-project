@@ -2561,3 +2561,24 @@ commit changes the compute datatype or claims fast execution.
 Complete timings, enclosure comparisons, rejection evidence, and hashes are
 in
 `docs/progress/2026-10-07-v3.76-nl-case16594-factorial-and-bounded-operation-contracts.md`.
+
+## Update: first actual word operations refine the exact contracts
+
+The bounded side lane has crossed from specification to implementation for
+addition.  Two- and three-limb Word64 carry chains now return explicit
+overflow and are proved extensionally equal to the exact 128- and 192-bit
+option-valued natural additions.  The proofs cover every limb value; closed
+tests additionally exercise no carry, low carry, a three-limb carry chain,
+and final overflow.
+
+This is not yet a `Kernel.compute` speed result.  The compute value datatype,
+characteristic-equation contract, and correctness proof remain unchanged.
+The next bounded gate is a single experimental executor node and a closed
+repeated benchmark with exact fallback, not wholesale addition of multiply,
+shift, signed intervals, and certificate logic.  Only a measured win advances
+that larger surface.
+
+The implementation is in isolated CakeML commits `6b1c5d85c` and
+`385689347`; clean-build evidence and the integration boundary are recorded
+in
+`docs/progress/2026-10-07-v3.77-nl-word-add-refinement-boundary.md`.
