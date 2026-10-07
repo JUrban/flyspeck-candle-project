@@ -1853,3 +1853,43 @@ graph to the complete pinned specialized historical data flow. That isolates
 the cost of generic derivative/enclosure work. Complete-batch time, all-box
 acceptance, charged preparation, and a second certificate family—not a faster
 micro-operation—remain the gates for substantial reusable proof work.
+
+## Update: reflected sign rejection and matched arithmetic-width cost
+
+The sign-classified product did not pass its bounded `Kernel.compute` gate.
+Eight balanced 4,096-call repetitions returned exactly equal, assumption-free
+results. Warm medians give the candidate only a 3--5% advantage, while its
+allocation/GC behavior makes the fully charged repetitions 4--8 total
+1.660839838 seconds versus 1.481961502 seconds for the existing definition.
+The candidate is 1.121 times slower at the throughput boundary. No proof or
+production integration will follow; the negative benchmark is committed as
+`d4c8fc8e` on its isolated Candle branch.
+
+The broader same-graph arithmetic factorial is also complete. On all 4,173
+genuine boxes, the prepared direct graph takes 0.110726515 seconds with exact
+outward `int128`/dyadic arithmetic and 0.068002711 seconds with padded outward
+`double`, a 1.628-times recurring difference. Charging preparation reduces
+the complete-batch difference to 1.215 times. Both lanes accept every box.
+
+The hardware lane is wider on every box: its mean upper-bound increase is
+`2.086525365599562e-05`, and the minimum acceptance margin falls from
+`4.971027374267578e-05` to `3.826618194580078e-05`. It remains an untrusted
+diagnostic. The effect is spread across roots, tangent, Hessian, scaling, and
+completion rather than identifying one dominant arithmetic primitive.
+
+This keeps the two original gaps explicit while refining their cause. The
+approximately 15-times Candle/native encoded boundary is not repaired by
+source-level product dispatch. The approximately 340-times starting gap still
+describes the current generic formal architecture versus specialized C++, but
+the untrusted direct native plan has removed much of it on this fixture. Within
+that optimized plan, scalar representation and rounding account for only
+1.628 times, not orders of magnitude.
+
+The complementary next factorial will hold padded `double`, scale, boxes, and
+conversion placement fixed while comparing the best generic graph with the
+direct authenticated data flow. It will deliberately disable the direct
+lane's extra reusable-input preparation so the algorithm comparison is not a
+preparation comparison. Complete acceptance, bounds, operation counts, and
+fully charged batch time decide the result. A material winner must generalize
+to a second certificate family before receiving one universal complete-box
+instruction theorem and an in-`Kernel.compute` integration measurement.
