@@ -1307,5 +1307,50 @@ In parallel, the approximately 15-fold encoded-Candle/native gap remains an
 independent target.  The current generic fixed graph is still the native
 winner and remains the baseline for compact instruction representation,
 one-time evaluator setup, and machine-word/overflow experiments.  It will be
-remeasured on complete batches; the 4.406 and approximately 15 factors remain
+remeasured on complete batches; the 4.409 and approximately 15 factors remain
 separate and are not multiplied as if they were one controlled benchmark.
+
+## Update: rounding-boundary count and exact quotient seed
+
+The fixed evaluator now has an opt-in diagnostic counter around every exact
+fixed quotient.  On the full 4,173-box fixture it reports:
+
+| Lane | Preparation quotients | Evaluation quotients | Quotients/cell |
+|---|---:|---:|---:|
+| Current generic fixed graph | 759,486 | 5,691,972 | 1,364 |
+| Historical block graph | 759,486 | 7,344,480 | 1,760 |
+
+Thus the historical block graph crosses 29.0% more exact rounding boundaries
+than the generic winner.  This explains why tighter local formulas do not
+translate into native throughput.  The count table has SHA-256
+`45e6df7379191933d0c60b5c6c057f78b2be0094ebd5765e02f8208996b7a526`
+in `nl-native-case10173-rounding-counts-v2-dev-001`.
+
+A second experiment tested whether individual signed-`int128` divisions could
+be accelerated without changing their exact result.  An untrusted
+`long double` quotient supplies an initial floor/ceiling estimate; exact
+integer multiplication comparisons then correct it to the true quotient.
+Overflow or unsupported denominator cases fall back to ordinary integer
+division.  All 4,173 outputs are byte-identical to the normal lane.
+
+Twenty warmed, order-balanced pairs gave:
+
+| Quotient implementation | Preparation | Evaluation | Complete batch |
+|---|---:|---:|---:|
+| Native integer division | 0.331863378 s | 0.337879698 s | 0.669743076 s |
+| Hardware seed plus exact correction | 0.357526351 s | 0.475566127 s | 0.833092478 s |
+
+The seeded implementation is 40.7% slower in recurring evaluation and 24.4%
+slower for the complete batch.  It is rejected and receives no proof or
+integration work.  The paired timing-table SHA-256 is
+`6251536eade496363c9213a3ac3b0138cfdd66215c876dc176b9dc9f30db7022`
+in `nl-native-case10173-full4173-quotient-seed-paired-v1-dev-001`.
+
+The architectural consequence is more specific than “division is slow.”
+There are millions of rounding boundaries, but accelerating each one in
+isolation loses.  The next numerical prototype must remove or amortize them
+across a whole proved block.  It should start with the current generic winner,
+not the slower historical graph, and must account for complete-batch
+acceptance and theorem handoff.  The direct-rounded historical C++ result
+continues to show the attainable scale, while this experiment prevents an
+unproductive per-division optimization branch.

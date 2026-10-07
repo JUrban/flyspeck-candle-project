@@ -68,6 +68,10 @@ bool kUseOptimizedDihedralUBounds = false;
 bool kUseComputedTightSqrtCertificates = false;
 bool kPrecomputeTightSqrtCertificates = false;
 bool kUseHardwareSeededIntegerSqrt = false;
+bool kUseHardwareSeededFixedQuotient = false;
+bool kCountFixedQuotients = false;
+std::uint64_t kFloorFixedQuotientCalls = 0;
+std::uint64_t kCeilFixedQuotientCalls = 0;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -401,6 +405,7 @@ Fixed fixed_of_integer(const Integer& value) {
 }
 
 Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
+  if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
   if (denominator == 0) {
     throw std::runtime_error("long-double fixed division by zero");
   }
@@ -412,6 +417,7 @@ Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
 }
 
 Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
+  if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
   if (denominator == 0) {
     throw std::runtime_error("long-double fixed division by zero");
   }
@@ -459,18 +465,100 @@ Fixed fixed_of_integer(const Integer& value) {
   return -static_cast<Fixed>(magnitude);
 }
 
-Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
+Fixed native_floor_fixed_quotient(Fixed numerator, Fixed denominator) {
   Fixed quotient = numerator / denominator;
   const Fixed remainder = numerator % denominator;
   if (remainder != 0 && ((remainder < 0) != (denominator < 0))) --quotient;
   return quotient;
 }
 
-Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
+Fixed native_ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
   Fixed quotient = numerator / denominator;
   const Fixed remainder = numerator % denominator;
   if (remainder != 0 && ((remainder < 0) == (denominator < 0))) ++quotient;
   return quotient;
+}
+
+Fixed hardware_seeded_floor_fixed_quotient(Fixed numerator,
+                                           Fixed denominator) {
+  if (denominator == 0) {
+    throw std::runtime_error("hardware-seeded fixed division by zero");
+  }
+  if (denominator < 0) {
+    return native_floor_fixed_quotient(numerator, denominator);
+  }
+  const long double estimate = std::floor(
+      static_cast<long double>(numerator) /
+      static_cast<long double>(denominator));
+  const long double conversion_limit = std::ldexp(1.0L, 126);
+  if (!std::isfinite(estimate) || estimate <= -conversion_limit ||
+      estimate >= conversion_limit) {
+    throw std::overflow_error("hardware fixed quotient seed overflow");
+  }
+  Fixed result = static_cast<Fixed>(estimate);
+  Fixed product;
+  while (true) {
+    if (__builtin_mul_overflow(result, denominator, &product)) {
+      return native_floor_fixed_quotient(numerator, denominator);
+    }
+    if (product <= numerator) break;
+    --result;
+  }
+  while (true) {
+    if (__builtin_mul_overflow(result + 1, denominator, &product)) break;
+    if (product > numerator) break;
+    ++result;
+  }
+  return result;
+}
+
+Fixed hardware_seeded_ceil_fixed_quotient(Fixed numerator,
+                                          Fixed denominator) {
+  if (denominator == 0) {
+    throw std::runtime_error("hardware-seeded fixed division by zero");
+  }
+  if (denominator < 0) {
+    return native_ceil_fixed_quotient(numerator, denominator);
+  }
+  const long double estimate = std::ceil(
+      static_cast<long double>(numerator) /
+      static_cast<long double>(denominator));
+  const long double conversion_limit = std::ldexp(1.0L, 126);
+  if (!std::isfinite(estimate) || estimate <= -conversion_limit ||
+      estimate >= conversion_limit) {
+    throw std::overflow_error("hardware fixed quotient seed overflow");
+  }
+  Fixed result = static_cast<Fixed>(estimate);
+  Fixed product;
+  while (true) {
+    if (__builtin_mul_overflow(result - 1, denominator, &product)) break;
+    if (product < numerator) break;
+    --result;
+  }
+  while (true) {
+    if (__builtin_mul_overflow(result, denominator, &product)) {
+      return native_ceil_fixed_quotient(numerator, denominator);
+    }
+    if (product >= numerator) break;
+    ++result;
+  }
+  return result;
+}
+
+Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
+  if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
+  if (kUseHardwareSeededFixedQuotient) {
+    return hardware_seeded_floor_fixed_quotient(numerator, denominator);
+  }
+  return native_floor_fixed_quotient(numerator, denominator);
+}
+
+Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
+  if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
+  if (kUseHardwareSeededFixedQuotient) {
+    return hardware_seeded_ceil_fixed_quotient(numerator, denominator);
+  }
+  return native_ceil_fixed_quotient(numerator, denominator);
 }
 #elif defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128)
 Integer integer_of_fixed(const Fixed& value) {
@@ -482,6 +570,7 @@ Fixed fixed_of_integer(const Integer& value) {
 }
 
 Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
+  if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
   Fixed quotient = numerator / denominator;
   const Fixed remainder = numerator % denominator;
   if (remainder != 0 && ((remainder < 0) != (denominator < 0))) --quotient;
@@ -489,6 +578,7 @@ Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
 }
 
 Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
+  if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
   Fixed quotient = numerator / denominator;
   const Fixed remainder = numerator % denominator;
   if (remainder != 0 && ((remainder < 0) == (denominator < 0))) ++quotient;
@@ -498,9 +588,11 @@ Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
 Integer integer_of_fixed(const Fixed& value) { return value; }
 Fixed fixed_of_integer(const Integer& value) { return value; }
 Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
+  if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
   return floor_quotient(numerator, denominator);
 }
 Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
+  if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
   return ceil_quotient(numerator, denominator);
 }
 #endif
@@ -4220,7 +4312,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 26) {
+    if (argc < 4 || argc > 28) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -4246,6 +4338,8 @@ int main(int argc, char** argv) {
                 << " [--computed-tight-sqrt-certificates]"
                 << " [--precompute-tight-sqrt-certificates]"
                 << " [--hardware-seeded-integer-sqrt]"
+                << " [--hardware-seeded-fixed-quotient]"
+                << " [--count-fixed-quotients]"
                 << " [--dihedral-identity-diagnostics]"
                 << " [--delta-full-diagnostics]"
                 << " [--decimal-scale=N]"
@@ -4322,6 +4416,10 @@ int main(int argc, char** argv) {
         kPrecomputeTightSqrtCertificates = true;
       } else if (option == "--hardware-seeded-integer-sqrt") {
         kUseHardwareSeededIntegerSqrt = true;
+      } else if (option == "--hardware-seeded-fixed-quotient") {
+        kUseHardwareSeededFixedQuotient = true;
+      } else if (option == "--count-fixed-quotients") {
+        kCountFixedQuotients = true;
       } else if (option == "--dihedral-identity-diagnostics") {
         dihedral_identity_diagnostics = true;
       } else if (option == "--delta-full-diagnostics") {
@@ -4465,6 +4563,11 @@ int main(int argc, char** argv) {
           "hardware-seeded integer square root is a native int128 "
           "diagnostic only");
     }
+    if (kUseHardwareSeededFixedQuotient) {
+      throw std::runtime_error(
+          "hardware-seeded fixed quotient is a native int128 diagnostic "
+          "only");
+    }
 #endif
     if (dyadic_scale) {
       kScale = fixed_of_integer(
@@ -4475,6 +4578,10 @@ int main(int argc, char** argv) {
       kTwoScaleSquared = 2 * kScale * kScale;
     }
 
+    const std::uint64_t preparation_floor_begin =
+        kFloorFixedQuotientCalls;
+    const std::uint64_t preparation_ceil_begin =
+        kCeilFixedQuotientCalls;
     const auto preparation_begin = std::chrono::steady_clock::now();
     Program program = read_program(argv[1]);
     if (kUsePreparedSimplePolynomials) {
@@ -4499,6 +4606,10 @@ int main(int argc, char** argv) {
       throw std::runtime_error("expected-bound count drift");
     }
     const auto preparation_end = std::chrono::steady_clock::now();
+    const std::uint64_t preparation_floor_calls =
+        kFloorFixedQuotientCalls - preparation_floor_begin;
+    const std::uint64_t preparation_ceil_calls =
+        kCeilFixedQuotientCalls - preparation_ceil_begin;
 
     std::size_t prepared_simple_polynomial_count = 0;
     for (const Program::SimplePolynomial& polynomial :
@@ -4525,6 +4636,10 @@ int main(int argc, char** argv) {
     std::size_t wider = 0;
     Rat maximum_upper_minus_expected;
     bool have_difference = false;
+    const std::uint64_t evaluation_floor_begin =
+        kFloorFixedQuotientCalls;
+    const std::uint64_t evaluation_ceil_begin =
+        kCeilFixedQuotientCalls;
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
       const Evaluation evaluation = kUseCompactSupportJets
@@ -4554,6 +4669,10 @@ int main(int argc, char** argv) {
       }
     }
     const auto evaluation_end = std::chrono::steady_clock::now();
+    const std::uint64_t evaluation_floor_calls =
+        kFloorFixedQuotientCalls - evaluation_floor_begin;
+    const std::uint64_t evaluation_ceil_calls =
+        kCeilFixedQuotientCalls - evaluation_ceil_begin;
 
     const double preparation_seconds =
         std::chrono::duration<double>(preparation_end - preparation_begin).count();
@@ -4617,6 +4736,10 @@ int main(int argc, char** argv) {
               << (kPrecomputeTightSqrtCertificates ? 1 : 0)
               << " hardware_seeded_integer_sqrt="
               << (kUseHardwareSeededIntegerSqrt ? 1 : 0)
+              << " hardware_seeded_fixed_quotient="
+              << (kUseHardwareSeededFixedQuotient ? 1 : 0)
+              << " count_fixed_quotients="
+              << (kCountFixedQuotients ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
@@ -4627,6 +4750,14 @@ int main(int argc, char** argv) {
               << maximum_upper_minus_expected.get_str()
               << " preparation_seconds=" << preparation_seconds
               << " evaluation_seconds=" << evaluation_seconds
+              << " preparation_floor_quotients="
+              << preparation_floor_calls
+              << " preparation_ceil_quotients="
+              << preparation_ceil_calls
+              << " evaluation_floor_quotients="
+              << evaluation_floor_calls
+              << " evaluation_ceil_quotients="
+              << evaluation_ceil_calls
               << " interval_products=" << total.interval_products
               << " skipped_zero_products=" << total.skipped_zero_products
               << " completed_results=" << total.completed_results
