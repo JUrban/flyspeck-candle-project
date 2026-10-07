@@ -167,6 +167,7 @@ struct InstructionProfile {
 struct RoundingProfile {
   std::uint64_t floor_quotients = 0;
   std::uint64_t ceil_quotients = 0;
+  std::uint64_t nanoseconds = 0;
   std::size_t observations = 0;
   std::string label;
 };
@@ -3944,7 +3945,8 @@ void record_rounding_profile(std::vector<RoundingProfile>* profiles,
                              std::size_t profile_index,
                              const std::string& label,
                              std::uint64_t floor_before,
-                             std::uint64_t ceil_before) {
+                             std::uint64_t ceil_before,
+                             std::chrono::steady_clock::time_point begin) {
   if (profiles == nullptr) return;
   RoundingProfile& profile = profiles->at(profile_index);
   if (profile.observations == 0) {
@@ -3954,6 +3956,9 @@ void record_rounding_profile(std::vector<RoundingProfile>* profiles,
   }
   profile.floor_quotients += kFloorFixedQuotientCalls - floor_before;
   profile.ceil_quotients += kCeilFixedQuotientCalls - ceil_before;
+  profile.nanoseconds += static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          std::chrono::steady_clock::now() - begin).count());
   ++profile.observations;
 }
 
@@ -3989,8 +3994,14 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                         bool direct_delta_x4,
                         std::vector<InstructionProfile>* profiles,
                         std::vector<RoundingProfile>* rounding_profiles) {
-  const std::uint64_t setup_floor_before = kFloorFixedQuotientCalls;
-  const std::uint64_t setup_ceil_before = kCeilFixedQuotientCalls;
+  std::uint64_t setup_floor_before = 0;
+  std::uint64_t setup_ceil_before = 0;
+  std::chrono::steady_clock::time_point setup_begin;
+  if (rounding_profiles != nullptr) {
+    setup_floor_before = kFloorFixedQuotientCalls;
+    setup_ceil_before = kCeilFixedQuotientCalls;
+    setup_begin = std::chrono::steady_clock::now();
+  }
   IntervalVector center_environment;
   IntervalVector box_environment;
   IntegerVector radii;
@@ -4002,8 +4013,10 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         {job.lower[coordinate], job.upper[coordinate]});
     radii[coordinate] = ceil_scaled(radius);
   }
-  record_rounding_profile(rounding_profiles, 0, "job_setup",
-                          setup_floor_before, setup_ceil_before);
+  if (rounding_profiles != nullptr) {
+    record_rounding_profile(rounding_profiles, 0, "job_setup",
+                            setup_floor_before, setup_ceil_before, setup_begin);
+  }
 
   Counters counters;
   std::vector<TaylorResult> stack;
@@ -4011,8 +4024,16 @@ Evaluation evaluate_job(const Program& program, const Job& job,
   bool direct_delta_x4_used = false;
   for (std::size_t outer_index = 0;
        outer_index < program.instructions.size(); ++outer_index) {
-    const std::uint64_t rounding_floor_before = kFloorFixedQuotientCalls;
-    const std::uint64_t rounding_ceil_before = kCeilFixedQuotientCalls;
+    const std::size_t profile_outer_index = outer_index;
+    std::uint64_t rounding_floor_before = 0;
+    std::uint64_t rounding_ceil_before = 0;
+    std::chrono::steady_clock::time_point rounding_begin;
+    if (rounding_profiles != nullptr) {
+      rounding_floor_before = kFloorFixedQuotientCalls;
+      rounding_ceil_before = kCeilFixedQuotientCalls;
+      rounding_begin = std::chrono::steady_clock::now();
+    }
+    std::string rounding_label;
     const Program::CoordinateSqrtTerm* coordinate_sqrt_term =
         program.prepared_coordinate_sqrt_terms.empty()
             ? nullptr
@@ -4046,9 +4067,12 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       stack.push_back(candidate);
       ++sqrt_slot;
       counters.outer_steps += 4;
-      record_rounding_profile(rounding_profiles, outer_index + 1,
-                              "prepared_coordinate_sqrt",
-                              rounding_floor_before, rounding_ceil_before);
+      if (rounding_profiles != nullptr) {
+        record_rounding_profile(rounding_profiles, outer_index + 1,
+                                "prepared_coordinate_sqrt",
+                                rounding_floor_before, rounding_ceil_before,
+                                rounding_begin);
+      }
       outer_index += 3;
       continue;
     }
@@ -4062,9 +4086,12 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       ++sqrt_slot;
       counters.outer_steps += 8;
       direct_delta_x4_used = true;
-      record_rounding_profile(rounding_profiles, outer_index + 1,
-                              "historical_dihedral",
-                              rounding_floor_before, rounding_ceil_before);
+      if (rounding_profiles != nullptr) {
+        record_rounding_profile(rounding_profiles, outer_index + 1,
+                                "historical_dihedral",
+                                rounding_floor_before, rounding_ceil_before,
+                                rounding_begin);
+      }
       outer_index += 7;
       continue;
     }
@@ -4081,9 +4108,12 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       ++sqrt_slot;
       counters.outer_steps += 8;
       direct_delta_x4_used = true;
-      record_rounding_profile(rounding_profiles, outer_index + 1,
-                              "specialized_dihedral",
-                              rounding_floor_before, rounding_ceil_before);
+      if (rounding_profiles != nullptr) {
+        record_rounding_profile(rounding_profiles, outer_index + 1,
+                                "specialized_dihedral",
+                                rounding_floor_before, rounding_ceil_before,
+                                rounding_begin);
+      }
       outer_index += 7;
       continue;
     }
@@ -4122,9 +4152,12 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       ++sqrt_slot;
       counters.outer_steps += 8;
       direct_delta_x4_used = true;
-      record_rounding_profile(rounding_profiles, outer_index + 1,
-                              "prepared_dihedral_chain",
-                              rounding_floor_before, rounding_ceil_before);
+      if (rounding_profiles != nullptr) {
+        record_rounding_profile(rounding_profiles, outer_index + 1,
+                                "prepared_dihedral_chain",
+                                rounding_floor_before, rounding_ceil_before,
+                                rounding_begin);
+      }
       outer_index += 7;
       continue;
     }
@@ -4278,6 +4311,9 @@ Evaluation evaluate_job(const Program& program, const Job& job,
               radii, sum.domain, sum.center, sum.hessian, counters));
           counters.outer_steps += add_count - 1;
           outer_index += add_count - 1;
+          if (rounding_profiles != nullptr) {
+            rounding_label = "fused_add:" + std::to_string(add_count);
+          }
         } else {
           TaylorResult right = stack.back();
           stack.pop_back();
@@ -4314,10 +4350,15 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       add_counters(profile.counters,
                    subtract_counters(counters, counters_before));
     }
-    record_rounding_profile(
-        rounding_profiles, outer_index + 1,
-        instruction_label(program, program.instructions[outer_index]),
-        rounding_floor_before, rounding_ceil_before);
+    if (rounding_profiles != nullptr) {
+      if (rounding_label.empty()) {
+        rounding_label = instruction_label(
+            program, program.instructions[profile_outer_index]);
+      }
+      record_rounding_profile(
+          rounding_profiles, profile_outer_index + 1, rounding_label,
+          rounding_floor_before, rounding_ceil_before, rounding_begin);
+    }
   }
   if (direct_delta_x4 && !direct_delta_x4_used) {
     throw std::runtime_error("negated delta_x4 source position drift");
@@ -4637,10 +4678,9 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "timing and rounding profiles cannot be combined");
     }
-    if (kFuseConsecutiveAdds &&
-        (profile_enabled || rounding_profile_enabled)) {
+    if (kFuseConsecutiveAdds && profile_enabled) {
       throw std::runtime_error(
-          "fused add runs cannot be combined with per-instruction profiles");
+          "fused add runs cannot be combined with the legacy timing profile");
     }
     if (rounding_profile_enabled && kUseCompactSupportJets) {
       throw std::runtime_error(
@@ -5061,6 +5101,7 @@ int main(int argc, char** argv) {
                           : static_cast<long long>(profile_index - 1))
                   << " label=" << profile.label
                   << " observations=" << profile.observations
+                  << " nanoseconds=" << profile.nanoseconds
                   << " floor_quotients=" << profile.floor_quotients
                   << " ceil_quotients=" << profile.ceil_quotients
                   << " total_quotients="

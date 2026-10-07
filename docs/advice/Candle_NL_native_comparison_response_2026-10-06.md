@@ -1358,7 +1358,11 @@ unproductive per-division optimization branch.
 ## Update: rounding attribution and controlled separation
 
 The broader investigation remains active; the exact-bound specialization is
-not being treated as the final architecture. A new profile reconciles all
+not being treated as the final architecture. A measurement correction is
+important: the first committed profiler constructed labels even when disabled.
+That changed timing only; numerical outputs, counts, and acceptance were
+unchanged. All figures below come from corrected exact-source reruns with no
+disabled-profile work. A new profile reconciles all
 5,691,972 exact evaluation quotients on the 4,173 genuine boxes with their
 outer source stages. The largest individual consumers are arctangent
 (901,368), the 85-step angle polynomial (759,486), inverse (676,026), and
@@ -1373,8 +1377,8 @@ First, fusing only consecutive additions leaves the center jet and Hessian
 calculation unchanged and delays completion until the result is next
 observable. It removes 701,064 quotients, produces byte-identical final
 bounds, accepts all 4,173 boxes, and improves 20-pair recurring evaluation
-from 0.357365047 to 0.324128037 seconds (1.103 times). The cold complete batch
-improves only 1.054 times. This is useful general lazy-completion machinery,
+from 0.346915612 to 0.315135187 seconds (1.101 times). The cold complete batch
+improves only 1.048 times. This is useful general lazy-completion machinery,
 not an orders-of-magnitude result.
 
 Second, both lanes used the same signed-128 graph and the same `2^23` scale.
@@ -1383,19 +1387,19 @@ power-of-two scale denominators; arbitrary inverse and other denominators
 still use division. Startup edge tests cross-check the signed shift formulas
 against exact division. The candidate covers 95.60% of evaluation quotients,
 produces byte-identical lane outputs, and retains 4,173/4,173 acceptance.
-Twenty paired runs improve evaluation from 0.357324618 to 0.292199660 seconds
-(1.223 times) and the cold complete batch from 0.693836957 to 0.618422802
-seconds (1.122 times).
+Twenty paired runs improve evaluation from 0.345876875 to 0.281755697 seconds
+(1.228 times) and the cold complete batch from 0.693301632 to 0.620105444
+seconds (1.118 times).
 
 The profile, fused-add, and dyadic phase-table SHA-256 values are respectively
-`9217082eeaa58350fdc147f5606ff7e63da28f1ab424195e6ff82c4cf030c8d0`,
-`d9a178b5ba4c06ed90523bacba0febdb17ca5496ea4d28fa11c122d70391851b`,
+`c7119f2ab85a638fa05a0f99bb7cf3acbe13c2b0aff3950c3fba431e1f8b3076`,
+`2f210939d9b2aef9a4b101838e94acb21d271118ac95921e673aac282cea2a41`,
 and
-`0e1fadb5ef4d2165c285377b88962a0a327e4832b834c28cede452513442269c`.
+`9d6640d3dbf273c12df730e95343e0718ac1fcae9369f98b6ea18e2918e42a34`.
 The development runs are
-`nl-native-case10173-rounding-profile-v3-dev-001`,
-`nl-native-case10173-fused-add-paired-v3-dev-001`, and
-`nl-native-case10173-dyadic-shift-paired-v3-dev-001`.
+`nl-native-case10173-rounding-profile-v4-dev-001`,
+`nl-native-case10173-fused-add-paired-v4-dev-001`, and
+`nl-native-case10173-dyadic-shift-paired-v4-dev-001`.
 
 ### Larger-gap decision
 
@@ -1404,19 +1408,19 @@ the exact-output-matched native equations to encoded Candle, and about 341
 times from the original generic native fixed-scale equations to historical
 specialized C++. The latter is a historical starting gap, not the residual
 ratio of every later native candidate. The dyadic-shift candidate is now
-3.542 times the 0.082490265-second historical specialized batch on this
+3.416 times the 0.082490265-second historical specialized batch on this
 fixture. It is still an unproved native diagnostic and therefore has not yet
 reduced the end-to-end formal cost.
 
 The composition gate is now complete. Twenty rotated full-batch repetitions
-put decimal division at 0.357756189 seconds of evaluation, dyadic shifts at
-0.290814191 seconds, and dyadic shifts plus fused additions at 0.267904467
+put decimal division at 0.346125667 seconds of evaluation, dyadic shifts at
+0.278252326 seconds, and dyadic shifts plus fused additions at 0.256804446
 seconds. The two dyadic result streams are byte-identical; every lane accepts
-4,173/4,173. The composition improves recurring evaluation by 1.335 times and
-the cold complete batch by 1.173 times over decimal division, but remains
-3.248 times the historical specialized batch. The phase-table SHA-256 is
-`8c42b1b7a17a1c95b7d0883fb051a0a200a520e9d945e664551d5713e5ab26d2`
-in `nl-native-case10173-rounding-composed-paired-v1-dev-001`.
+4,173/4,173. The composition improves recurring evaluation by 1.348 times and
+the cold complete batch by 1.166 times over decimal division, but remains
+3.113 times the historical specialized batch. The phase-table SHA-256 is
+`5c24cb1eb8e8241d4130edc5e1e1063c484ab8e60847a46fc84340920c2c7545`
+in `nl-native-case10173-rounding-composed-paired-v2-dev-001`.
 
 Their proof work stays bounded: reuse the general lazy-completion result for
 addition runs and prove one general signed dyadic-rounding theorem with the
@@ -1433,3 +1437,34 @@ square-root/dihedral or complete low-work box instruction. It must be judged
 on the complete 4,173-box batch, acceptance, enclosure quality, preparation,
 recurring time, and memory. Only a material winner earns a reusable general
 instruction theorem and a new Candle/native measurement.
+
+## Update: corrected winning-lane stage profile
+
+The corrected composition measurement is 0.346125667 seconds for decimal
+evaluation, 0.278252326 seconds for dyadic shifts, and 0.256804446 seconds for
+dyadic shifts plus fused additions. The last lane is 1.348 times faster than
+the decimal control, while cold preparation plus evaluation improves 1.166
+times. All lanes still accept 4,173/4,173, and the same-arithmetic dyadic
+streams remain byte-identical. The residual to the 0.082490265-second
+historical specialized batch is 3.113 times.
+
+An elapsed-time profile of that exact winning lane attributes 98.03% of its
+instrumented evaluation. Exact rational-to-fixed job geometry is 23.50%, the
+complete source indices 31--38 dihedral subgraph is 31.93%, the six prepared
+coordinate-root blocks are 14.39%, five-step polynomials are 10.44%, and the
+final source tail is 10.70%. Within the dihedral subgraph, no single operation
+exceeds 6.45% of profiled time. The instruction and aggregate table hashes are
+`2f526baf90582dbe6c0abd0d7035aa34f159cf77d84fdba92e6deac0b8bf73f3`
+and
+`48413ab306df793dc2f1e68a3de5f8266d94bed57b8374c9411cc72298059251`
+in `nl-native-case10173-composed-stage-profile-v1-dev-001`.
+
+This rules out treating another isolated nonlinear primitive as the large
+architecture. The next cheap native discriminator is a whole-graph range
+audit followed, if the range permits, by signed-64 normalized endpoints with
+signed-128 raw products and accumulators. It holds the authenticated
+derivative/Taylor graph and rounding choices fixed while testing the
+distributed representation cost. Exact job-geometry conversion is tracked as
+reusable preparation but is not credited as a cold-batch speedup merely by
+moving it between phases. A generally proved complete-box checker remains the
+larger target.
