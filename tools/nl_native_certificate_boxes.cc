@@ -120,14 +120,57 @@ static Function benchmark_function(bool generic) {
 struct Result {
   std::vector<double> upper;
   double wall_seconds;
+  double domain_seconds;
+  double evalf_seconds;
+  double upper_bound_seconds;
   double checksum;
   std::size_t accepted;
   std::size_t unstable_boxes;
 };
 
+struct TaylorUpperBreakdown {
+  double center_upper;
+  double linear;
+  double quadratic;
+  double recomposed_upper;
+};
+
+static double interval_abs_upper(const interval& value) {
+  return interMath::sup(interMath::max(value, -value));
+}
+
+static TaylorUpperBreakdown upper_breakdown(const taylorData& data) {
+  interMath::up();
+  double diagonal = 0.0;
+  for (int coordinate = 0; coordinate < 6; ++coordinate) {
+    const double width = data.w.getValue(coordinate);
+    diagonal += width * width * data.DD[coordinate][coordinate];
+  }
+  double quadratic = diagonal / 2.0;
+  for (int row = 0; row < 6; ++row) {
+    for (int column = row + 1; column < 6; ++column) {
+      quadratic += data.w.getValue(row) * data.w.getValue(column) *
+                   data.DD[row][column];
+    }
+  }
+  const double center_upper = data.tangentVector.f.hi;
+  double recomposed_upper = center_upper + quadratic;
+  double linear = 0.0;
+  for (int coordinate = 0; coordinate < 6; ++coordinate) {
+    const double contribution = data.w.getValue(coordinate) *
+      interval_abs_upper(data.tangentVector.Df[coordinate]);
+    linear += contribution;
+    recomposed_upper += contribution;
+  }
+  return {center_upper, linear, quadratic, recomposed_upper};
+}
+
 static Result evaluate(const Function& function, const std::vector<Box>& boxes) {
   Result result;
   result.checksum = 0.0;
+  result.domain_seconds = 0.0;
+  result.evalf_seconds = 0.0;
+  result.upper_bound_seconds = 0.0;
   result.accepted = 0;
   result.unstable_boxes = 0;
   result.upper.reserve(boxes.size());
@@ -136,8 +179,25 @@ static Result evaluate(const Function& function, const std::vector<Box>& boxes) 
   for (std::vector<Box>::const_iterator box = boxes.begin(); box != boxes.end(); ++box) {
     double upper = std::numeric_limits<double>::infinity();
     try {
-      const taylorData data = function.evalf(domain(box->lower), domain(box->upper));
+      const std::chrono::steady_clock::time_point domain_start =
+        std::chrono::steady_clock::now();
+      const domain lower_domain(box->lower);
+      const domain upper_domain(box->upper);
+      const std::chrono::steady_clock::time_point domain_finish =
+        std::chrono::steady_clock::now();
+      const std::chrono::steady_clock::time_point evalf_start = domain_finish;
+      const taylorData data = function.evalf(lower_domain, upper_domain);
+      const std::chrono::steady_clock::time_point evalf_finish =
+        std::chrono::steady_clock::now();
       upper = data.upperBound();
+      const std::chrono::steady_clock::time_point upper_bound_finish =
+        std::chrono::steady_clock::now();
+      result.domain_seconds += std::chrono::duration<double>(
+        domain_finish - domain_start).count();
+      result.evalf_seconds += std::chrono::duration<double>(
+        evalf_finish - evalf_start).count();
+      result.upper_bound_seconds += std::chrono::duration<double>(
+        upper_bound_finish - evalf_finish).count();
     } catch (unstable) {
       ++result.unstable_boxes;
     }
@@ -182,39 +242,108 @@ static void print_angle_diagnostics(const Function& angle,
   }
 }
 
+static void print_full_diagnostics(const Function& function,
+                                   const std::vector<Box>& boxes) {
+  for (std::vector<Box>::const_iterator box = boxes.begin();
+       box != boxes.end(); ++box) {
+    const taylorData data = function.evalf(
+        domain(box->lower), domain(box->upper));
+    const lineInterval tangent = data.tangentVectorOf();
+    const TaylorUpperBreakdown breakdown = upper_breakdown(data);
+    const double upper = data.upperBound();
+    std::cout << "CANDLE_NL_NATIVE_SPECIALIZED_STAGE"
+              << " index=" << box->index
+              << " center=" << tangent.f.lo << ":" << tangent.f.hi
+              << " widths=";
+    for (int coordinate = 0; coordinate < 6; ++coordinate) {
+      if (coordinate != 0) std::cout << ",";
+      std::cout << data.w.getValue(coordinate);
+    }
+    std::cout << " center_gradient=";
+    for (int coordinate = 0; coordinate < 6; ++coordinate) {
+      if (coordinate != 0) std::cout << ",";
+      std::cout << tangent.Df[coordinate].lo << ":"
+                << tangent.Df[coordinate].hi;
+    }
+    std::cout << " hessian_abs=";
+    bool first = true;
+    for (int row = 0; row < 6; ++row) {
+      for (int column = row; column < 6; ++column) {
+        if (!first) std::cout << ",";
+        first = false;
+        std::cout << data.DD[row][column];
+      }
+    }
+    std::cout << " linear=" << breakdown.linear
+              << " quadratic=" << breakdown.quadratic
+              << " recomposed_upper=" << breakdown.recomposed_upper
+              << " upper=" << upper
+              << " upper_match=" << (breakdown.recomposed_upper == upper ? 1 : 0)
+              << " accept=" << (upper < 0.0 ? 1 : 0)
+              << "\n";
+  }
+}
+
 int main(int argc, char** argv) {
   try {
-    if (argc < 2 || argc > 4) {
+    if (argc < 2 || argc > 5) {
       std::cerr << "usage: " << argv[0]
-                << " BOXES.tsv [LIMIT] [--angle-diagnostics]\n";
+                << " BOXES.tsv [LIMIT] [--angle-diagnostics]"
+                << " [--full-diagnostics]\n";
       return 2;
     }
     std::size_t limit = std::numeric_limits<std::size_t>::max();
     bool angle_diagnostics = false;
+    bool full_diagnostics = false;
     for (int index = 2; index < argc; ++index) {
       const std::string option(argv[index]);
       if (option == "--angle-diagnostics") {
         angle_diagnostics = true;
+      } else if (option == "--full-diagnostics") {
+        full_diagnostics = true;
       } else {
         limit = static_cast<std::size_t>(std::stoul(option));
       }
     }
     const std::vector<Box> boxes = read_boxes(argv[1], limit);
     const Function angle = Lib::dih_x;
+    const std::chrono::steady_clock::time_point specialized_prepare_start =
+      std::chrono::steady_clock::now();
     const Function specialized = benchmark_function(false);
+    const std::chrono::steady_clock::time_point specialized_prepare_finish =
+      std::chrono::steady_clock::now();
+    const std::chrono::steady_clock::time_point generic_prepare_start =
+      specialized_prepare_finish;
     const Function generic = benchmark_function(true);
+    const std::chrono::steady_clock::time_point generic_prepare_finish =
+      std::chrono::steady_clock::now();
+    const double specialized_preparation_seconds =
+      std::chrono::duration<double>(specialized_prepare_finish -
+                                    specialized_prepare_start).count();
+    const double generic_preparation_seconds =
+      std::chrono::duration<double>(generic_prepare_finish -
+                                    generic_prepare_start).count();
     const Result specialized_result = evaluate(specialized, boxes);
     const Result generic_result = evaluate(generic, boxes);
     std::cout << std::setprecision(17);
     std::cout << "CANDLE_NL_NATIVE_BOX_SUMMARY mode=specialized boxes=" << boxes.size()
               << " accepted=" << specialized_result.accepted
               << " unstable=" << specialized_result.unstable_boxes
+              << " preparation_seconds=" << specialized_preparation_seconds
               << " wall_seconds=" << specialized_result.wall_seconds
+              << " domain_seconds=" << specialized_result.domain_seconds
+              << " evalf_seconds=" << specialized_result.evalf_seconds
+              << " upper_bound_seconds="
+              << specialized_result.upper_bound_seconds
               << " checksum=" << specialized_result.checksum << "\n";
     std::cout << "CANDLE_NL_NATIVE_BOX_SUMMARY mode=generic boxes=" << boxes.size()
               << " accepted=" << generic_result.accepted
               << " unstable=" << generic_result.unstable_boxes
+              << " preparation_seconds=" << generic_preparation_seconds
               << " wall_seconds=" << generic_result.wall_seconds
+              << " domain_seconds=" << generic_result.domain_seconds
+              << " evalf_seconds=" << generic_result.evalf_seconds
+              << " upper_bound_seconds=" << generic_result.upper_bound_seconds
               << " checksum=" << generic_result.checksum << "\n";
     for (std::size_t index = 0; index < boxes.size(); ++index) {
       std::cout << "CANDLE_NL_NATIVE_BOX_RESULT index=" << boxes[index].index
@@ -227,6 +356,7 @@ int main(int argc, char** argv) {
                 << "\n";
     }
     if (angle_diagnostics) print_angle_diagnostics(angle, boxes);
+    if (full_diagnostics) print_full_diagnostics(specialized, boxes);
     std::cout << "CANDLE_NL_NATIVE_CERTIFICATE_BOX_COMPARE_OK"
               << " DEVELOPMENT_NON_RELEASE boxes=" << boxes.size()
               << " errors=" << error::get_error_count() << "\n";

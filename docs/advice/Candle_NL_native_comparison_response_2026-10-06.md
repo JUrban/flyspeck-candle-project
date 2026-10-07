@@ -1680,3 +1680,51 @@ acceptances remain mandatory gates. Only a material full-batch winner earns
 one authenticated complete-box instruction theorem; the dyadic-rounding and
 deferred-completion proofs remain bounded candidate components rather than
 independent projects.
+
+## Update: matched Taylor-stage and cost-boundary factorial
+
+The first complete-box bridge measurement is now available in
+`nl-native-stage-factorial-v4-dev-001`.  Seven runs of the pinned historical
+C++ implementation separate domain construction, `evalf`, and final
+`upperBound` work:
+
+| Route | Complete evaluation | `evalf` | Final bound | Accepted |
+|---|---:|---:|---:|---:|
+| Specialized C++ | 0.083159749 s | 0.080885290 s | 0.001299143 s | 4,173/4,173 |
+| Generic C++ composition | 0.324105190 s | 0.321779319 s | 0.001333550 s | 52/4,173 |
+
+Thus 97.27% of specialized evaluation is in `evalf`, generic `evalf` is 3.978
+times slower, and the final Taylor aggregation is only 1.56% of specialized
+evaluation.  The principal historical advantage is construction of the
+derivative/enclosure data, not the final sum.
+
+The matching first-16 stage records also change the interpretation of bound
+quality.  The current exact fixed-scale generic graph accepts all 16 and has a
+mean quadratic term 0.0001130003 smaller than the specialized C++ route.  Its
+mean final upper bound is 0.0001096317 more negative.  The old specialized
+algorithm is therefore faster despite slightly looser final bounds on this
+sample.  Replacing only the current dihedral subgraph with the source-derived
+historical formula makes the mean quadratic term 3.3% larger and the final
+bound 0.0000407098 less negative, while prior full-batch evidence makes that
+lane slightly slower.  That shim is rejected as the bridge.
+
+The next bounded native prototype will reproduce the pinned specialized
+center/gradient/Hessian data flow as a small POD hardware-double path and
+match the exported 16-box stages before running all 4,173 boxes.  Only a
+full-batch winner with complete acceptance, bound containment, and measured
+preparation/recurring/memory costs advances to the same-algorithm exact-dyadic
+crossing.  Only that successful crossing advances to one generally proved
+complete-box instruction in `Kernel.compute`.
+
+This keeps both original gaps visible.  The roughly 341-fold value is the
+starting generic-native/specialized-C++ baseline; later untrusted native work
+has reduced its numerical portion to roughly 3.9 times with exact `int128` and
+2.1 times with unsafe hardware `double`.  The separate roughly 15-fold
+encoded-Candle/exact-native gap has not been eliminated.  A formal speedup
+claim requires crossing both boundaries rather than reporting the improved
+native diagnostic as if it were already a Candle result.
+
+The current exact-bound specialization proof remains limited to its small
+reusable lemma and one integration test.  It may close if cheap, but it will
+not grow into another per-expression proof layer before the full-batch native
+gate demonstrates the recurring benefit.

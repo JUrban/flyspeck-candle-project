@@ -4156,6 +4156,65 @@ void print_dihedral_identity_diagnostic(std::size_t index,
   std::cout << "\n";
 }
 
+void print_full_stage_diagnostic(const Job& job,
+                                 const TaylorResult& result) {
+  IntegerVector radii;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    radii[coordinate] = ceil_scaled(
+        (job.upper[coordinate] - job.lower[coordinate]) / 2);
+  }
+  const Fixed linear_raw = dot_abs_upper(radii, result.center.gradient);
+  const Fixed quadratic_raw = weighted_rows_abs_upper(radii, result.hessian);
+  const Integer scale = integer_of_fixed(kScale);
+  const Rat center_upper = normalized_rat(
+      integer_of_fixed(result.center.value.upper), scale);
+  const Rat linear = normalized_rat(
+      integer_of_fixed(linear_raw), scale * scale);
+  const Rat quadratic = normalized_rat(
+      integer_of_fixed(quadratic_raw), 2 * scale * scale * scale);
+  const Rat recomposed_upper = center_upper + linear + quadratic;
+  const Rat upper = normalized_rat(
+      integer_of_fixed(result.value_bound.upper), scale);
+
+  const RationalInterval center = fixed_to_q(result.center.value);
+  std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_STAGE"
+            << " index=" << job.index
+            << " center=" << center.lower.get_str() << ":"
+            << center.upper.get_str()
+            << " widths=";
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    if (coordinate != 0) std::cout << ",";
+    std::cout << normalized_rat(
+        integer_of_fixed(radii[coordinate]), scale).get_str();
+  }
+  std::cout << " center_gradient=";
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    if (coordinate != 0) std::cout << ",";
+    const RationalInterval entry = fixed_to_q(
+        result.center.gradient[coordinate]);
+    std::cout << entry.lower.get_str() << ":" << entry.upper.get_str();
+  }
+  std::cout << " hessian_abs=";
+  bool first = true;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      if (!first) std::cout << ",";
+      first = false;
+      std::cout << normalized_rat(
+          integer_of_fixed(interval_abs_upper(result.hessian[row][column])),
+          scale).get_str();
+    }
+  }
+  std::cout << " linear=" << linear.get_str()
+            << " quadratic=" << quadratic.get_str()
+            << " recomposed_upper=" << recomposed_upper.get_str()
+            << " upper=" << upper.get_str()
+            << " upper_rounding_gap="
+            << Rat(upper - recomposed_upper).get_str()
+            << " accept=" << (upper < 0 ? 1 : 0)
+            << "\n";
+}
+
 void precompute_tight_sqrt_certificates(
     const Program& program, std::vector<Job>& jobs) {
   if (!program.prepared_dihedral_chain) {
@@ -4290,7 +4349,8 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                         int fused_polynomial_max_steps,
                         bool direct_delta_x4,
                         std::vector<InstructionProfile>* profiles,
-                        std::vector<RoundingProfile>* rounding_profiles) {
+                        std::vector<RoundingProfile>* rounding_profiles,
+                        TaylorResult* final_result = nullptr) {
   std::uint64_t setup_floor_before = 0;
   std::uint64_t setup_ceil_before = 0;
   std::chrono::steady_clock::time_point setup_begin;
@@ -4681,6 +4741,7 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       !stack.back().completed) {
     throw std::runtime_error("final analytic result shape/domain drift");
   }
+  if (final_result != nullptr) *final_result = stack.back();
   return {normalized_rat(integer_of_fixed(stack.back().value_bound.upper),
                          integer_of_fixed(kScale)),
           counters};
@@ -4829,7 +4890,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 30) {
+    if (argc < 4 || argc > 31) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -4867,6 +4928,7 @@ int main(int argc, char** argv) {
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
                 << " [--delta-full-diagnostics]"
+                << " [--full-stage-diagnostics]"
                 << " [--decimal-scale=N]"
                 << " [--binary-scale-bits=N]"
                 << " [--dyadic-scale]\n";
@@ -4880,6 +4942,7 @@ int main(int argc, char** argv) {
     bool direct_delta_x4 = false;
     bool dihedral_identity_diagnostics = false;
     bool delta_full_diagnostics = false;
+    bool full_stage_diagnostics = false;
     bool custom_decimal_scale = false;
     bool custom_binary_scale = false;
     int requested_binary_scale_bits = 40;
@@ -4971,6 +5034,8 @@ int main(int argc, char** argv) {
         dihedral_identity_diagnostics = true;
       } else if (option == "--delta-full-diagnostics") {
         delta_full_diagnostics = true;
+      } else if (option == "--full-stage-diagnostics") {
+        full_stage_diagnostics = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -5019,6 +5084,11 @@ int main(int argc, char** argv) {
     if (rounding_profile_enabled && kUseCompactSupportJets) {
       throw std::runtime_error(
           "rounding profiling is not implemented for compact support jets");
+    }
+    if (full_stage_diagnostics && kUseCompactSupportJets) {
+      throw std::runtime_error(
+          "full stage diagnostics are not implemented for compact support "
+          "jets");
     }
     if (kUsePreparedCoordinateSqrtTerms) {
       kUsePreparedSimplePolynomials = true;
@@ -5267,6 +5337,8 @@ int main(int argc, char** argv) {
     // slot i + 1 so the sum can be reconciled with the evaluation total.
     std::vector<RoundingProfile> rounding_profiles(
         rounding_profile_enabled ? program.instructions.size() + 1 : 0);
+    std::vector<TaylorResult> stage_results(
+        full_stage_diagnostics ? jobs.size() : 0);
     std::size_t mismatches = 0;
     std::size_t accepted = 0;
     std::size_t tighter = 0;
@@ -5293,7 +5365,8 @@ int main(int argc, char** argv) {
                 program, jobs[index], polynomial_mode,
                 fused_polynomial_outer_index, fused_polynomial_max_steps,
                 direct_delta_x4, profile_enabled ? &profiles : nullptr,
-                rounding_profile_enabled ? &rounding_profiles : nullptr);
+                rounding_profile_enabled ? &rounding_profiles : nullptr,
+                full_stage_diagnostics ? &stage_results[index] : nullptr);
       results.push_back(evaluation.upper);
       add_counters(total, evaluation.counters);
       if (evaluation.upper != expected[index]) ++mismatches;
@@ -5525,6 +5598,11 @@ int main(int argc, char** argv) {
                 << Rat(results[index] - expected[index]).get_str()
                 << " match=" << (results[index] == expected[index] ? 1 : 0)
                 << "\n";
+    }
+    if (full_stage_diagnostics) {
+      for (std::size_t index = 0; index < jobs.size(); ++index) {
+        print_full_stage_diagnostic(jobs[index], stage_results[index]);
+      }
     }
     if (delta_full_diagnostics) {
       run_delta_full_diagnostics(jobs);
