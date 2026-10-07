@@ -2012,3 +2012,60 @@ Accepted Candle evidence is
 `cv-case10173-historical-first-prefix128-v1-dev-001` on isolated commit
 `1e701c16`. The full measurement and concrete gate are in
 `docs/progress/2026-10-07-v3.61-nl-historical-tangent-kernel-factorial.md`.
+
+## Update: exact historical Hessian transfer and bounded integration gate
+
+The full historical box derivative stage is now inside `Kernel.compute`.
+On all 128 genuine prefix boxes it exactly reproduces the native value, six
+gradient intervals, and 21 independent symmetric Hessian intervals.  The
+fixture supplies only the box and the two prevalidated square-root intervals;
+delta, delta-X4, U126/U135, inverse, atan, gradient, and Hessian calculations
+remain in the computed term.  The resulting theorems are closed, assumption-
+free, and add no axioms.
+
+The reflected second-order batch takes 0.639529955 seconds to compute and
+0.085475917 seconds for exact-output theorem handoff.  A 1,000-repeat native
+control of the identical supplied-root graph takes 0.045974702392 seconds per
+batch.  The encoded boundary is therefore 13.910 times for computation and
+15.770 times including handoff.  A separate 100-repeat native run measured
+0.045722694830 seconds and confirms the denominator.
+
+Adding the independently measured first- and second-order stages gives a
+diagnostic 1.129820 seconds of reflected computation and 1.226236 seconds with
+handoff, versus 0.060560 seconds in native execution.  That is 18.656 and
+20.248 times respectively, not yet a fused complete-checker result.  The
+second-order graph amortizes encoded evaluator overhead much better than the
+lighter first-order graph, whose compute ratio was 33.615 times.
+
+This sharpens rather than collapses the two-gap model.  The optimized native
+direct work has already removed most of the original approximately 340-times
+generic-native/specialized-C++ starting gap on this fixture; the controlled
+arithmetic and graph factors were only 1.628 and 1.087.  The remaining
+proof-producing transfer still costs roughly one order of magnitude for the
+substantial Hessian graph.  The next high-value experiment is therefore not
+another native micro-optimization.  It is a whole-checker integration that can
+show whether one compact operation removes enough encoded traversal,
+allocation, and intermediate theorem-shaped work to matter end to end.
+
+The specialization proof remains bounded behind that integration gate.  The
+next candidate keeps the authenticated roots sealed, inserts the complete
+historical angle operation into the existing case-10173 checker, and measures
+all 128 boxes with preparation, compute, handoff, bounds, and certificate
+acceptance charged.  It will also record program size and GC/allocation
+behavior.  A non-material whole-checker result stops the case-specific proof.
+A material result advances roots into the computed operation, the complete
+4,173-box batch, a second certificate family, and only then one universal
+source-authenticated complete-box soundness theorem.
+
+The larger objective remains an orders-of-magnitude end-to-end improvement.
+The concrete architecture is to batch compact numerical instructions, retain
+intermediate intervals as ordinary computed data, and hand a small accepted
+verdict/bound to a reusable soundness theorem.  Native experiments continue to
+guard enclosure quality and numerical work; full-certificate Candle time and
+acceptance decide what earns proof effort.
+
+Accepted Candle evidence is
+`cv-case10173-historical-second-prefix128-v1-dev-001` on isolated commit
+`9ad3438a`.  The native benchmark is project commit `1ea5ceb`.  Full timings,
+hashes, and the bounded integration plan are in
+`docs/progress/2026-10-07-v3.62-nl-historical-hessian-kernel-factorial.md`.
