@@ -2185,3 +2185,42 @@ case-specific formulas.
 Complete evidence is in
 `docs/progress/2026-10-07-v3.65-nl-compact-stage-profile.md` and isolated
 Candle commit `6a840969`.
+
+## Update: coordinate hypotheses and equation dispatch closed
+
+The remaining coordinate-root hypotheses have now been tested on the same 128
+genuine jobs.  Replacing rational-normalized derivative intervals with the
+existing outward fixed-scale operations changed the two-run mean from
+4.285864436 to 4.264778648 seconds, only 1.005 times.  Bypassing the mandatory
+domain predicate in an untrusted upper-bound diagnostic improved the noisy
+mean by only 1.178 times.  Exact result digests were preserved, but neither
+factor is remotely large enough to justify a new soundness layer.  The domain
+check remains required.
+
+Reachability-slicing the complete `Kernel.compute` equation bundle from 539 to
+236 equations also preserved the exact closed `Cexp_num 1` theorem.  Its
+balanced two-run mean improved from 6.836172793 to 6.218206833 seconds, about
+1.099 times.  This is useful routine hygiene, not the missing architecture.
+
+These negative factorials bound the case-specific specialization effort.  No
+standalone coordinate-root proof or complete-family run follows.  The broader
+investigation instead uses two gates: a genuine second-family native 2-by-2
+factorial (generic/direct data flow crossed with exact/hardware endpoint
+arithmetic), and a matched Candle evaluator experiment that changes compact
+batch representation/execution while retaining exact outputs and the closed
+kernel theorem.  Full batch acceptance, enclosure quality, preparation at its
+actual reuse scope, theorem handoff, memory, and total elapsed cost remain the
+decision measures.
+
+It is important to keep the two historical numbers correctly scoped.  The
+approximately 340-times observation describes the starting generic native
+architecture versus specialized C++; controlled case-10173 native work has
+already reduced the residual optimized-native gap to about 1.35 times.  The
+current large measured boundary is instead approximately 14--34 times for
+matched derivative computations inside Candle.  The next architecture packet
+therefore targets that verified execution boundary without treating native
+output as proof or enlarging the trusted base casually.
+
+Implementation and evidence are recorded in
+`docs/progress/2026-10-07-v3.66-nl-coordinate-and-equation-boundary.md` and
+isolated Candle commit `17f1adb3`.
