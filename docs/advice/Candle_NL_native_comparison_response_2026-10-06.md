@@ -967,6 +967,31 @@ inputs and acceptance remain required before it becomes a certificate-wide
 claim.  The result nevertheless clears the bounded native gate and makes the
 complete specialized dihedral plan the next measured algorithmic target.
 
+The first whole-dihedral candidate has also been run and rejected.  It kept
+the authenticated specialized numerator/radicand, fixed certificates,
+checked `int128`, and outward rounding, but combined inverse square root,
+quotient, and arctangent through a single box jet before the final Taylor
+completion.  It reduced one observed evaluation from 0.025484 to 0.024236
+seconds, but accepted only **1 / 128** cells.  Every bound widened, with
+maximum widening about 0.01317.  A side-by-side validation established that
+the candidate full jet enclosed the exact-rational generic full jet, so the
+failure is enclosure quality rather than an observed containment defect.
+
+This candidate is not a proof target and its speed does not count as progress.
+The failure rules out generic whole-chain fusion as the intended specialized
+dihedral plan.  The next implementation must faithfully port the historical
+specialized derivative identities--in particular its `U126`/`U135`-based
+gradient and Hessian route--under the same checked fixed arithmetic.  That is
+the controlled way to test whether specialized mathematics, rather than
+fewer completion boundaries alone, closes the remaining gap.
+
+The rejected run is
+`nl-native-case10173-dihedral-chain-rejected-v1-dev-001`; its summary and
+cross-check logs have SHA-256
+`a1df5f2950ace1517ec179631ac2c24ed2fa91bbd54fb7f46303843ffeff24a0`
+and
+`ef3bc68733dee2581650bf1d5ab306f0f60b209246536495fe5e7e9c7e1f9548`.
+
 If the specialized dihedral lane also materially wins, the native-input
 capture will be extended to all 4,173 boxes
 and the same comparisons will charge shared preparation once.
