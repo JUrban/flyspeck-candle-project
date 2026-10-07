@@ -151,16 +151,56 @@ static Result evaluate(const Function& function, const std::vector<Box>& boxes) 
   return result;
 }
 
+static void print_angle_diagnostics(const Function& angle,
+                                    const std::vector<Box>& boxes) {
+  for (std::vector<Box>::const_iterator box = boxes.begin();
+       box != boxes.end(); ++box) {
+    const taylorData data = angle.evalf(
+        domain(box->lower), domain(box->upper));
+    const lineInterval tangent = data.tangentVectorOf();
+    std::cout << "CANDLE_NL_NATIVE_ANGLE_DIAGNOSTIC"
+              << " index=" << box->index
+              << " lower=" << data.lowerBound()
+              << " upper=" << data.upperBound()
+              << " center=" << tangent.f.lo << ":" << tangent.f.hi
+              << " center_gradient=";
+    for (int coordinate = 0; coordinate < 6; ++coordinate) {
+      if (coordinate != 0) std::cout << ",";
+      std::cout << tangent.Df[coordinate].lo << ":"
+                << tangent.Df[coordinate].hi;
+    }
+    std::cout << " hessian_abs=";
+    bool first = true;
+    for (int row = 0; row < 6; ++row) {
+      for (int column = row; column < 6; ++column) {
+        if (!first) std::cout << ",";
+        first = false;
+        std::cout << data.DD[row][column];
+      }
+    }
+    std::cout << "\n";
+  }
+}
+
 int main(int argc, char** argv) {
   try {
-    if (argc < 2 || argc > 3) {
-      std::cerr << "usage: " << argv[0] << " BOXES.tsv [LIMIT]\n";
+    if (argc < 2 || argc > 4) {
+      std::cerr << "usage: " << argv[0]
+                << " BOXES.tsv [LIMIT] [--angle-diagnostics]\n";
       return 2;
     }
-    const std::size_t limit = argc == 3
-      ? static_cast<std::size_t>(std::stoul(argv[2]))
-      : std::numeric_limits<std::size_t>::max();
+    std::size_t limit = std::numeric_limits<std::size_t>::max();
+    bool angle_diagnostics = false;
+    for (int index = 2; index < argc; ++index) {
+      const std::string option(argv[index]);
+      if (option == "--angle-diagnostics") {
+        angle_diagnostics = true;
+      } else {
+        limit = static_cast<std::size_t>(std::stoul(option));
+      }
+    }
     const std::vector<Box> boxes = read_boxes(argv[1], limit);
+    const Function angle = Lib::dih_x;
     const Function specialized = benchmark_function(false);
     const Function generic = benchmark_function(true);
     const Result specialized_result = evaluate(specialized, boxes);
@@ -186,6 +226,7 @@ int main(int argc, char** argv) {
                 << " generic_accept=" << (generic_result.upper[index] < 0.0 ? 1 : 0)
                 << "\n";
     }
+    if (angle_diagnostics) print_angle_diagnostics(angle, boxes);
     std::cout << "CANDLE_NL_NATIVE_CERTIFICATE_BOX_COMPARE_OK"
               << " DEVELOPMENT_NON_RELEASE boxes=" << boxes.size()
               << " errors=" << error::get_error_count() << "\n";

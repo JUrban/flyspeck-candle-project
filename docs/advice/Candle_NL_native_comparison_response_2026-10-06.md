@@ -992,47 +992,74 @@ cross-check logs have SHA-256
 and
 `ef3bc68733dee2581650bf1d5ab306f0f60b209246536495fe5e7e9c7e1f9548`.
 
-A second bounded candidate ported the historical denominator identity and its
-exact opposite-edge derivative.  In fixed form it uses
-`4*x0*delta = U126*U135`, the specialized derivative quotient, and
-`d(dih)/dx3 = 2*x0/sqrt(4*x0*delta)`.  Adding a sign-certified monotonic range
-for `-delta_x4` improved coverage from the generic fusion's 1/128 to
-**89/128**, but it still fails the certificate gate.  It produced 51 tighter
-and 77 wider bounds; maximum widening remained about 0.00196.  In the
-preserved single comparison it was not faster than the accepted control.
+A matched historical/fixed diagnostic later invalidated the reported 89/128
+interpretation.  The development candidate had used the false identity
+`4*x0*delta = U126*U135`.  The correct identity is
 
-This narrows the missing ingredient.  The formulas alone are insufficient;
-the historical verifier also uses specialized range algorithms for
-`setDeltaX4`, `setDeltaFull`, `setSqrtDelta`, `setU126`, and `setU135` instead
-of generic interval evaluation of those expressions.  The next work packet is
-therefore a matched fixed-point port of those optimized range primitives,
-tested against the historical outputs on the captured boxes before they are
-composed into the dihedral Hessian.  The 89/128 partial candidate remains
-rejected and receives no proof work.
+`U126*U135 = 4*x0*delta + delta_x4^2`.
 
-Evidence run:
-`nl-native-case10173-dihedral-identities-partial-v1-rejected-dev-001`.
-Summary SHA-256:
-`8b0d632eceaa349dfc54f7142e2562e882a0fa5d91d029b0fb1a97ac4e0b4fcc`.
+Its center-gradient intervals consequently did not always overlap the
+historical derivative values.  The candidate was already rejected,
+development-only, and received no proof work, but its 89/128 coverage and
+timing must not be used as evidence.  The preserved failed run remains useful
+only as an audit trail of the defect.
 
-If the specialized dihedral lane also materially wins, the native-input
-capture will be extended to all 4,173 boxes
-and the same comparisons will charge shared preparation once.
-Only after the full batch passes will the specialized algorithm be held fixed
-while endpoint representation is varied, including a checked fixed-width
-lane and an outward-rounded hardware lane as an attainable-time diagnostic.
-That ordering separates generic analytic work from representation/rounding
-instead of changing both at once.
+The corrected formula was then tested at the exact angle boundary on the same
+128 genuine boxes.  With the supplied square-root certificates it accepted
+28/128; computing scale-`10^10` square-root enclosures internally raised this
+to 99/128.  Adding fixed-point versions of the historical sign-directed
+`U126` and `U135` range bounds reached 128/128.  At that point the mean angle
+width was 1.00167 times the historical width.  Center and linear Taylor terms
+agreed to approximately `10^-8`; the remaining difference was Hessian range.
+This identifies certificate precision and specialized range evaluation as
+enclosure-quality issues, not evidence that the specialized composition is
+faster.
 
-Formal work stays bounded in parallel.  The current angle specialization may
-receive its one general analytic-containment theorem and exact authenticated
-dispatch/fallback theorem; it will not grow into fixture-specific rewrites.
-The simple-program preparation result suggests a small general proof obligation
-for exact constant/coordinate classification and plan correspondence, not 20
-individual expression lemmas.
-The fixed nonlinear kernels are also plausible reusable proof targets--their
-contracts reduce to general integer rounding, square-root certificate, and
-alternating-series lemmas--but integration waits for the complete numerical
-plan decision.  No proof effort will target unchecked arithmetic.  The
-complete 4,173-box accepted time, including reusable preparation and theorem
-handoff, remains the architecture-selection gate.
+The decisive complete-batch gate then rejected the corrected specialization
+as an integration/proof target.  In 20 order-balanced runs over all 4,173
+boxes, both the generic fixed-native lane and the corrected specialized lane
+accepted every box:
+
+| Fixed-native lane | Preparation | Evaluation | Complete batch |
+|---|---:|---:|---:|
+| Generic derivative composition | 0.191086213 s | 0.939053166 s | 1.130139379 s |
+| Corrected specialized identities | 0.188424105 s | 0.950126066 s | 1.138550171 s |
+
+The specialization was 1.18% slower in evaluation and 0.74% slower including
+preparation.  It produced a wider final bound on 3,863/4,173 boxes and reduced
+the smallest acceptance margin from `8.5845e-5` to `4.00273e-5`.  It therefore
+receives no analytic-containment or dispatch proof.  Boundary-analysis hashes
+for supplied certificates, tight certificates, and optimized U bounds are
+`7cf7853395e2ddf3817f62b972d1d87f374eb7f61a31a5c7c912f00af3fff52c`,
+`bf63f8fe150df286be3988b268a495e16821c6d0c081d19e38e4230c64725ce1`,
+and `293e622a1eb8a2692d36049f61c779008dc98ddd9f0890689b2751cff0fc12b4`.
+The full phase table and bound comparison have hashes
+`6f9b2d02697702c3da32ec51614cadba38a223b4b56136f4abd6dddf5193b111`
+and `a073ff37f7a5ea56eca95d33e25663317a110531770449d1a75c88fd7a1e9845`.
+
+The broader arithmetic investigation remains active.  Holding the accepted
+generic algorithm, scale, rounding, and all 4,173 outputs fixed, 20 paired
+runs gave 0.939891708 seconds for checked `int128` evaluation and 0.632799861
+seconds for native unchecked `int128`.  The bounds were byte-identical.  Thus
+overflow checks account for a measured factor of 1.485 in evaluation, but the
+unchecked diagnostic remains 7.671 times slower than the 0.082490265-second
+historical specialized batch.  It is not a proposed proof backend.
+
+Holding that unchecked algorithm fixed and varying only fixed precision gave
+another material diagnostic.  Scale `10^7` accepted 4,173/4,173 in 0.407803029
+seconds, versus 0.638215640 seconds at scale `10^10`, a factor of 1.565.
+Scale `10^6` was faster in one run but accepted only 4,149/4,173 and is
+rejected.  The accepted `10^7` diagnostic is still 4.944 times slower than
+historical specialized C++.  Its paired phase-table SHA-256 is
+`e399df6206ec7ab66ed8ef09152ed595fbc23ab8a49644b645371d3c25844bc6`.
+
+These results separate three issues.  Checked arithmetic is material;
+fixed-point magnitude/precision is material; and a roughly fivefold native
+gap remains even after removing both costs as far as this accepted experiment
+allows.  The next cheap native experiment should therefore hold the accepted
+operation graph fixed while replacing integer square-root and/or endpoint
+arithmetic with a hardware-rounded diagnostic implementation.  It must keep
+all 4,173 boxes accepted and report complete-batch time.  Only a material
+winner will justify reusable rounding/square-root proofs and Candle dispatch.
+No unchecked lane, rejected scale, or current dihedral specialization will
+receive proof work.
