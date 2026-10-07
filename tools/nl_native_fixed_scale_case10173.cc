@@ -72,11 +72,96 @@ bool kUseHardwareSeededFixedQuotient = false;
 bool kUseDyadicShiftFixedQuotient = false;
 int kDyadicScaleBits = -1;
 bool kFuseConsecutiveAdds = false;
+bool kUseNarrowFixedProducts = false;
+bool kUseUncheckedNarrowFixedProducts = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
 std::uint64_t kDyadicShiftFixedQuotientCalls = 0;
 std::uint64_t kDyadicFallbackFixedQuotientCalls = 0;
+
+Fixed fixed_product(Fixed left, Fixed right) {
+#if defined(CANDLE_NL_FIXED_INT128)
+  if (kUseNarrowFixedProducts || kUseUncheckedNarrowFixedProducts) {
+    const Fixed minimum =
+        static_cast<Fixed>(std::numeric_limits<std::int64_t>::min());
+    const Fixed maximum =
+        static_cast<Fixed>(std::numeric_limits<std::int64_t>::max());
+    if (kUseNarrowFixedProducts &&
+        (left < minimum || left > maximum ||
+         right < minimum || right > maximum)) {
+      throw std::overflow_error("narrow fixed product operand overflow");
+    }
+    return static_cast<Fixed>(static_cast<std::int64_t>(left)) *
+           static_cast<Fixed>(static_cast<std::int64_t>(right));
+  }
+#endif
+  return left * right;
+}
+
+#if defined(CANDLE_NL_FIXED_INT128) && \
+    defined(CANDLE_NL_FIXED_RANGE_PROFILE)
+struct FixedRangeProfile {
+  unsigned quotient_numerator_bits = 0;
+  unsigned quotient_denominator_bits = 0;
+  unsigned quotient_result_bits = 0;
+  unsigned multiplication_operand_bits = 0;
+  unsigned multiplication_product_bits = 0;
+  unsigned addition_result_bits = 0;
+  unsigned scaled_input_bits = 0;
+  std::uint64_t quotient_results_outside_int64 = 0;
+  std::uint64_t multiplication_operands_outside_int64 = 0;
+  std::uint64_t addition_results_outside_int64 = 0;
+  std::uint64_t scaled_inputs_outside_int64 = 0;
+};
+
+FixedRangeProfile kFixedRangeProfile;
+
+unsigned fixed_magnitude_bits(Fixed value) {
+  const unsigned __int128 magnitude = value < 0
+      ? static_cast<unsigned __int128>(-(value + 1)) + 1
+      : static_cast<unsigned __int128>(value);
+  if (magnitude == 0) return 0;
+  const std::uint64_t upper = static_cast<std::uint64_t>(magnitude >> 64);
+  if (upper != 0) {
+    return 128U - static_cast<unsigned>(__builtin_clzll(upper));
+  }
+  return 64U - static_cast<unsigned>(
+      __builtin_clzll(static_cast<std::uint64_t>(magnitude)));
+}
+
+bool fixed_fits_int64(Fixed value) {
+  return value >= static_cast<Fixed>(std::numeric_limits<std::int64_t>::min()) &&
+         value <= static_cast<Fixed>(std::numeric_limits<std::int64_t>::max());
+}
+
+void update_fixed_bits(unsigned& maximum, Fixed value) {
+  maximum = std::max(maximum, fixed_magnitude_bits(value));
+}
+
+Fixed range_profile_quotient(Fixed numerator, Fixed denominator,
+                             Fixed result) {
+  update_fixed_bits(kFixedRangeProfile.quotient_numerator_bits, numerator);
+  update_fixed_bits(kFixedRangeProfile.quotient_denominator_bits, denominator);
+  update_fixed_bits(kFixedRangeProfile.quotient_result_bits, result);
+  if (!fixed_fits_int64(result)) {
+    ++kFixedRangeProfile.quotient_results_outside_int64;
+  }
+  return result;
+}
+
+Fixed range_profile_scaled_input(Fixed value) {
+  update_fixed_bits(kFixedRangeProfile.scaled_input_bits, value);
+  if (!fixed_fits_int64(value)) {
+    ++kFixedRangeProfile.scaled_inputs_outside_int64;
+  }
+  return value;
+}
+#else
+[[maybe_unused]] Fixed range_profile_quotient(
+    Fixed, Fixed, Fixed result) { return result; }
+Fixed range_profile_scaled_input(Fixed value) { return value; }
+#endif
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -88,6 +173,38 @@ struct Interval {
   Fixed lower;
   Fixed upper;
 };
+
+#if defined(CANDLE_NL_FIXED_INT128) && \
+    defined(CANDLE_NL_FIXED_RANGE_PROFILE)
+void range_profile_multiplication(const Interval& left,
+                                  const Interval& right,
+                                  const Interval& product) {
+  for (const Fixed value : {left.lower, left.upper,
+                            right.lower, right.upper}) {
+    update_fixed_bits(kFixedRangeProfile.multiplication_operand_bits, value);
+    if (!fixed_fits_int64(value)) {
+      ++kFixedRangeProfile.multiplication_operands_outside_int64;
+    }
+  }
+  update_fixed_bits(kFixedRangeProfile.multiplication_product_bits,
+                    product.lower);
+  update_fixed_bits(kFixedRangeProfile.multiplication_product_bits,
+                    product.upper);
+}
+
+void range_profile_addition(const Interval& result) {
+  for (const Fixed value : {result.lower, result.upper}) {
+    update_fixed_bits(kFixedRangeProfile.addition_result_bits, value);
+    if (!fixed_fits_int64(value)) {
+      ++kFixedRangeProfile.addition_results_outside_int64;
+    }
+  }
+}
+#else
+void range_profile_multiplication(const Interval&, const Interval&,
+                                  const Interval&) {}
+void range_profile_addition(const Interval&) {}
+#endif
 
 struct RationalInterval {
   Rat lower;
@@ -625,15 +742,21 @@ Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
     const int shift = fixed_dyadic_denominator_shift(denominator);
     if (shift >= 0) {
       ++kDyadicShiftFixedQuotientCalls;
-      return floor_power_of_two_quotient(
-          numerator, static_cast<unsigned>(shift));
+      return range_profile_quotient(
+          numerator, denominator,
+          floor_power_of_two_quotient(
+              numerator, static_cast<unsigned>(shift)));
     }
     ++kDyadicFallbackFixedQuotientCalls;
   }
   if (kUseHardwareSeededFixedQuotient) {
-    return hardware_seeded_floor_fixed_quotient(numerator, denominator);
+    return range_profile_quotient(
+        numerator, denominator,
+        hardware_seeded_floor_fixed_quotient(numerator, denominator));
   }
-  return native_floor_fixed_quotient(numerator, denominator);
+  return range_profile_quotient(
+      numerator, denominator,
+      native_floor_fixed_quotient(numerator, denominator));
 }
 
 Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
@@ -642,15 +765,21 @@ Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
     const int shift = fixed_dyadic_denominator_shift(denominator);
     if (shift >= 0) {
       ++kDyadicShiftFixedQuotientCalls;
-      return ceil_power_of_two_quotient(
-          numerator, static_cast<unsigned>(shift));
+      return range_profile_quotient(
+          numerator, denominator,
+          ceil_power_of_two_quotient(
+              numerator, static_cast<unsigned>(shift)));
     }
     ++kDyadicFallbackFixedQuotientCalls;
   }
   if (kUseHardwareSeededFixedQuotient) {
-    return hardware_seeded_ceil_fixed_quotient(numerator, denominator);
+    return range_profile_quotient(
+        numerator, denominator,
+        hardware_seeded_ceil_fixed_quotient(numerator, denominator));
   }
-  return native_ceil_fixed_quotient(numerator, denominator);
+  return range_profile_quotient(
+      numerator, denominator,
+      native_ceil_fixed_quotient(numerator, denominator));
 }
 #elif defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128)
 Integer integer_of_fixed(const Fixed& value) {
@@ -690,13 +819,13 @@ Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
 #endif
 
 Fixed floor_scaled(const Rat& value) {
-  return fixed_of_integer(floor_quotient(
-      value.get_num() * integer_of_fixed(kScale), value.get_den()));
+  return range_profile_scaled_input(fixed_of_integer(floor_quotient(
+      value.get_num() * integer_of_fixed(kScale), value.get_den())));
 }
 
 Fixed ceil_scaled(const Rat& value) {
-  return fixed_of_integer(ceil_quotient(
-      value.get_num() * integer_of_fixed(kScale), value.get_den()));
+  return range_profile_scaled_input(fixed_of_integer(ceil_quotient(
+      value.get_num() * integer_of_fixed(kScale), value.get_den())));
 }
 
 Fixed absolute(const Fixed& value) { return value < 0 ? -value : value; }
@@ -729,14 +858,21 @@ Interval interval_neg(const Interval& value) {
 }
 
 Interval interval_add(const Interval& left, const Interval& right) {
-  return {left.lower + right.lower, left.upper + right.upper};
+  const Interval result = {
+      left.lower + right.lower, left.upper + right.upper};
+  range_profile_addition(result);
+  return result;
 }
 
 Interval interval_integer_scale(long coefficient, const Interval& value) {
+  Interval result;
   if (coefficient >= 0) {
-    return {coefficient * value.lower, coefficient * value.upper};
+    result = {coefficient * value.lower, coefficient * value.upper};
+  } else {
+    result = {coefficient * value.upper, coefficient * value.lower};
   }
-  return {coefficient * value.upper, coefficient * value.lower};
+  range_profile_addition(result);
+  return result;
 }
 
 Interval interval_sum(std::initializer_list<Interval> values) {
@@ -754,10 +890,10 @@ Interval raw_interval_mul(const Interval& left, const Interval& right,
     return zero_interval();
   }
   ++counters.interval_products;
-  const Fixed ll = left.lower * right.lower;
-  const Fixed lu = left.lower * right.upper;
-  const Fixed ul = left.upper * right.lower;
-  const Fixed uu = left.upper * right.upper;
+  const Fixed ll = fixed_product(left.lower, right.lower);
+  const Fixed lu = fixed_product(left.lower, right.upper);
+  const Fixed ul = fixed_product(left.upper, right.lower);
+  const Fixed uu = fixed_product(left.upper, right.upper);
   Fixed lower = ll;
   if (lu < lower) lower = lu;
   if (ul < lower) lower = ul;
@@ -766,7 +902,9 @@ Interval raw_interval_mul(const Interval& left, const Interval& right,
   if (lu > upper) upper = lu;
   if (ul > upper) upper = ul;
   if (uu > upper) upper = uu;
-  return {lower, upper};
+  const Interval result = {lower, upper};
+  range_profile_multiplication(left, right, result);
+  return result;
 }
 
 Interval raw_interval_round(const Fixed& denominator,
@@ -4514,7 +4652,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 29) {
+    if (argc < 4 || argc > 30) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -4543,6 +4681,8 @@ int main(int argc, char** argv) {
                 << " [--hardware-seeded-fixed-quotient]"
                 << " [--dyadic-shift-fixed-quotient]"
                 << " [--fuse-consecutive-adds]"
+                << " [--narrow-fixed-products]"
+                << " [--unchecked-narrow-fixed-products]"
                 << " [--count-fixed-quotients]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
@@ -4631,6 +4771,10 @@ int main(int argc, char** argv) {
         kUseDyadicShiftFixedQuotient = true;
       } else if (option == "--fuse-consecutive-adds") {
         kFuseConsecutiveAdds = true;
+      } else if (option == "--narrow-fixed-products") {
+        kUseNarrowFixedProducts = true;
+      } else if (option == "--unchecked-narrow-fixed-products") {
+        kUseUncheckedNarrowFixedProducts = true;
       } else if (option == "--count-fixed-quotients") {
         kCountFixedQuotients = true;
       } else if (option == "--rounding-profile") {
@@ -4673,6 +4817,9 @@ int main(int argc, char** argv) {
     if (kUseDyadicShiftFixedQuotient &&
         kUseHardwareSeededFixedQuotient) {
       throw std::runtime_error("conflicting fixed quotient diagnostics");
+    }
+    if (kUseNarrowFixedProducts && kUseUncheckedNarrowFixedProducts) {
+      throw std::runtime_error("conflicting narrow product diagnostics");
     }
     if (profile_enabled && rounding_profile_enabled) {
       throw std::runtime_error(
@@ -4819,6 +4966,15 @@ int main(int argc, char** argv) {
     if (kUseDyadicShiftFixedQuotient) {
       throw std::runtime_error(
           "dyadic shift fixed quotient is a native int128 diagnostic only");
+    }
+    if (kUseNarrowFixedProducts) {
+      throw std::runtime_error(
+          "narrow fixed products are a native int128 diagnostic only");
+    }
+    if (kUseUncheckedNarrowFixedProducts) {
+      throw std::runtime_error(
+          "unchecked narrow fixed products are a native int128 diagnostic "
+          "only");
     }
 #endif
     if (dyadic_scale) {
@@ -5025,6 +5181,10 @@ int main(int argc, char** argv) {
               << (kUseDyadicShiftFixedQuotient ? 1 : 0)
               << " fuse_consecutive_adds="
               << (kFuseConsecutiveAdds ? 1 : 0)
+              << " narrow_fixed_products="
+              << (kUseNarrowFixedProducts ? 1 : 0)
+              << " unchecked_narrow_fixed_products="
+              << (kUseUncheckedNarrowFixedProducts ? 1 : 0)
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
@@ -5053,6 +5213,32 @@ int main(int argc, char** argv) {
               << evaluation_dyadic_shift_calls
               << " evaluation_dyadic_fallback_quotients="
               << evaluation_dyadic_fallback_calls
+#if defined(CANDLE_NL_FIXED_INT128) && \
+    defined(CANDLE_NL_FIXED_RANGE_PROFILE)
+              << " fixed_range_profile=1"
+              << " range_quotient_numerator_bits="
+              << kFixedRangeProfile.quotient_numerator_bits
+              << " range_quotient_denominator_bits="
+              << kFixedRangeProfile.quotient_denominator_bits
+              << " range_quotient_result_bits="
+              << kFixedRangeProfile.quotient_result_bits
+              << " range_quotient_results_outside_int64="
+              << kFixedRangeProfile.quotient_results_outside_int64
+              << " range_multiplication_operand_bits="
+              << kFixedRangeProfile.multiplication_operand_bits
+              << " range_multiplication_operands_outside_int64="
+              << kFixedRangeProfile.multiplication_operands_outside_int64
+              << " range_multiplication_product_bits="
+              << kFixedRangeProfile.multiplication_product_bits
+              << " range_addition_result_bits="
+              << kFixedRangeProfile.addition_result_bits
+              << " range_addition_results_outside_int64="
+              << kFixedRangeProfile.addition_results_outside_int64
+              << " range_scaled_input_bits="
+              << kFixedRangeProfile.scaled_input_bits
+              << " range_scaled_inputs_outside_int64="
+              << kFixedRangeProfile.scaled_inputs_outside_int64
+#endif
               << " interval_products=" << total.interval_products
               << " skipped_zero_products=" << total.skipped_zero_products
               << " completed_results=" << total.completed_results

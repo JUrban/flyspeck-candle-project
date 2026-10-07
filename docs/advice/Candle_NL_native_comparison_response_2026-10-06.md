@@ -1468,3 +1468,33 @@ distributed representation cost. Exact job-geometry conversion is tracked as
 reusable preparation but is not credited as a cold-batch speedup merely by
 moving it between phases. A generally proved complete-box checker remains the
 larger target.
+
+## Update: fixed range and narrow-product gate
+
+The complete 4,173-box composed lane was range-profiled without changing its
+mathematics. Rounded quotient results and interval multiplication operands
+reach at most 45 magnitude bits; interval additions reach 44 bits and scaled
+exact inputs 26 bits. None exceeds signed 64 bits. Raw products reach 68 bits
+and Taylor/quotient numerators 83 bits, so wide raw accumulators remain
+necessary. The range summary has SHA-256
+`59029a58357522eab6ace97c2fd57f3e0787cb590e724ea4177418cf457f2405`
+in `nl-native-case10173-fixed-range-profile-v1-dev-001`.
+
+A bounded proxy then performed interval endpoint multiplication through
+signed-64 operands into exact signed-128 products while leaving storage and
+all other operations unchanged. Twenty rotated complete-batch repetitions
+gave 0.278570053 seconds for wide products, 0.282200035 seconds with dynamic
+narrow range checks, and 0.274445421 seconds for an explicitly untrusted
+unchecked narrow diagnostic. Every output is byte-identical and every lane
+accepts 4,173/4,173.
+
+The unchecked recurring gain is only 1.015 times; checked execution is 1.3%
+slower. The phase-table SHA-256 is
+`f114fc7069929d166bf44b294c6eb5106104276db77f7b4f63f6763fe08e06cf`
+in `nl-native-case10173-narrow-products-paired-v1-dev-001`.
+
+This rejects a split-width container refactor and range proof as the next
+investment. The residual cost is distributed whole-graph work, not ordinary
+endpoint multiplication width. The next native gate must remove work across a
+substantial authenticated source block or the complete box while retaining
+certificate coverage and charging reusable geometry preparation honestly.
