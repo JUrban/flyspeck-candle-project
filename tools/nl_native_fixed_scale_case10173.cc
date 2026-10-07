@@ -2118,6 +2118,52 @@ const Rat kPiHalfLower =
 const Rat kPiHalfUpper =
     normalized_rat(Integer(6746518853), Integer(4294967296));
 
+// Development-only fixed counterpart of atan_range_lower/upper.  The center
+// interval may leave (-1,1), while the polynomial kernel itself remains on
+// that range after the standard reciprocal identities.  Endpoints exactly at
+// +/-1 remain fail-closed until a proved pi/4 enclosure is supplied.
+Fixed fixed_atan_range_lower_point(Fixed x, Counters& counters) {
+  if (x < -kScale) {
+    const Interval reciprocal = interval_neg(fixed_interval_inv({x, x}));
+    const Interval pi_half = interval_of_q(
+        {kPiHalfLower, kPiHalfUpper});
+    return fixed_atan_lower_point(reciprocal.lower, counters) -
+           pi_half.upper;
+  }
+  if (x > kScale) {
+    const Interval reciprocal = fixed_interval_inv({x, x});
+    const Interval pi_half = interval_of_q(
+        {kPiHalfLower, kPiHalfUpper});
+    return pi_half.lower -
+           fixed_atan_upper_point(reciprocal.upper, counters);
+  }
+  return fixed_atan_lower_point(x, counters);
+}
+
+Fixed fixed_atan_range_upper_point(Fixed x, Counters& counters) {
+  if (x < -kScale) {
+    const Interval reciprocal = interval_neg(fixed_interval_inv({x, x}));
+    const Interval pi_half = interval_of_q(
+        {kPiHalfLower, kPiHalfUpper});
+    return fixed_atan_upper_point(reciprocal.upper, counters) -
+           pi_half.lower;
+  }
+  if (x > kScale) {
+    const Interval reciprocal = fixed_interval_inv({x, x});
+    const Interval pi_half = interval_of_q(
+        {kPiHalfLower, kPiHalfUpper});
+    return pi_half.upper -
+           fixed_atan_lower_point(reciprocal.lower, counters);
+  }
+  return fixed_atan_upper_point(x, counters);
+}
+
+Interval fixed_atan_range_interval(const Interval& input,
+                                   Counters& counters) {
+  return {fixed_atan_range_lower_point(input.lower, counters),
+          fixed_atan_range_upper_point(input.upper, counters)};
+}
+
 bool atan_range_domain(const Rat& x) { return x != -1 && x != 1; }
 
 Rat atan_range_lower(const Rat& x) {
@@ -5126,48 +5172,59 @@ TaylorResult evaluate_delta_dihedral_chain_specialized(
   const PolynomialJet inverse_root = {
       inverse_root_center, box_inverse_root, inverse_root_box_gradient,
       inverse_root_hessian};
-  const PolynomialJet numerator_jet = {
-      numerator.center, numerator.value_bound, numerator.gradient_bounds,
-      numerator.hessian};
-  const PolynomialJet quotient = polynomial_mul(
-      numerator_jet, inverse_root, counters);
+  // Preserve the source evaluator's useful Taylor tightening at both of the
+  // late composition boundaries. Raw box composition can cross the fixed
+  // atan kernel's (-1,1) contract even when the completed quotient is safely
+  // inside it.  The authenticated numerator and radicand preparation above
+  // remains shared.
+  const TaylorResult completed_inverse_root = complete_result(
+      radii, true, inverse_root.center, inverse_root.box_hessian, counters);
+  const TaylorResult completed_quotient = result_mul(
+      radii, numerator, completed_inverse_root, counters);
 
   ++counters.atan_steps;
   const bool atan_domain =
-      absolute(quotient.center.value.lower) < kScale &&
-      absolute(quotient.center.value.upper) < kScale &&
-      absolute(quotient.box_value.lower) < kScale &&
-      absolute(quotient.box_value.upper) < kScale;
+      absolute(completed_quotient.center.value.lower) != kScale &&
+      absolute(completed_quotient.center.value.upper) != kScale;
   if (!atan_domain) {
     throw std::runtime_error(
         "prepared dihedral arctangent domain failure center=" +
-        integer_of_fixed(quotient.center.value.lower).get_str() + ":" +
-        integer_of_fixed(quotient.center.value.upper).get_str() +
-        " box=" + integer_of_fixed(quotient.box_value.lower).get_str() +
-        ":" + integer_of_fixed(quotient.box_value.upper).get_str() +
+        integer_of_fixed(completed_quotient.center.value.lower).get_str() +
+        ":" +
+        integer_of_fixed(completed_quotient.center.value.upper).get_str() +
+        " box=" +
+        integer_of_fixed(completed_quotient.value_bound.lower).get_str() +
+        ":" +
+        integer_of_fixed(completed_quotient.value_bound.upper).get_str() +
         " scale=" + integer_of_fixed(kScale).get_str());
   }
   const Interval center_denominator = interval_add(
-      one_interval(), fixed_interval_square(quotient.center.value, counters));
+      one_interval(),
+      fixed_interval_square(completed_quotient.center.value, counters));
   const Interval box_denominator = interval_add(
-      one_interval(), fixed_interval_square(quotient.box_value, counters));
+      one_interval(),
+      fixed_interval_square(completed_quotient.value_bound, counters));
   const Interval center_atan_d = fixed_interval_inv(center_denominator);
   const Interval box_atan_d = fixed_interval_inv(box_denominator);
   const Interval box_atan_d2 = interval_mul(
       box_atan_d, box_atan_d, counters);
   const Interval box_atan_dd = interval_neg(interval_mul(
-      interval_add(quotient.box_value, quotient.box_value),
+      interval_add(completed_quotient.value_bound,
+                   completed_quotient.value_bound),
       box_atan_d2, counters));
   const FirstJet center = {
       interval_add(interval_of_q({kPiHalfLower, kPiHalfUpper}),
-                   fixed_atan_interval(quotient.center.value, counters)),
+                   fixed_atan_range_interval(
+                       completed_quotient.center.value, counters)),
       interval_vector_scale(
-          center_atan_d, quotient.center.gradient, counters)};
+          center_atan_d, completed_quotient.center.gradient, counters)};
   const IntervalMatrix hessian = matrix_add(
       interval_matrix_scale(
           box_atan_dd,
-          interval_self_outer(quotient.box_gradient, counters), counters),
-      interval_matrix_scale(box_atan_d, quotient.box_hessian, counters));
+          interval_self_outer(
+              completed_quotient.gradient_bounds, counters), counters),
+      interval_matrix_scale(
+          box_atan_d, completed_quotient.hessian, counters));
   return complete_result(radii, true, center, hessian, counters);
 }
 
