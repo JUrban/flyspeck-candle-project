@@ -2359,3 +2359,29 @@ roughly 12--34-times matched Candle/native verified-execution boundary and the
 independent 6.25-times case16594 checked-256/hardware arithmetic boundary.
 Complete timings, range tables, scope limits, and hashes are in
 `docs/progress/2026-10-07-v3.70-nl-preparation-gate-and-width-contract.md`.
+
+## Update: checked width alone does not close the arithmetic gap
+
+The exact-width control is also complete.  Holding the entire case16594
+graph, `2^40` grid, outward rounding sequence, boxes, and acceptance fixed,
+checked 192-bit execution takes 4.954267034 seconds and checked 256-bit
+execution 4.934760291 seconds in five rotated full-batch runs.  Their 875
+result records are byte-identical and peak memory is unchanged.  Moving from
+four limbs to three therefore supplies no speedup.
+
+A local checked-128 endpoint/checked-192 Taylor-completion smoke probe then
+failed closed on job 0.  Widening the known `2 * scale * linear` product
+exposed a second checked scalar-addition overflow before any result.  This
+shows that the earlier range profiler did not cover every scalar accumulation;
+isolated widening would repeat the same design error.  The probe was removed.
+
+The next arithmetic step is consequently a complete mechanical operation and
+narrowing ledger, followed by at most one explicitly typed mixed-width native
+prototype with a total overflow result and exact fallback.  Its gate is a
+substantial complete-batch win across multiple real families.  Meanwhile the
+larger proof-safe target remains the 12--34-times matched Candle/native
+execution boundary.  The historical 340-times number remains a starting
+case10173 architecture comparison; after native algorithm specialization its
+residual on that fixture is about 1.35 times.  Complete evidence and the
+bounded forward plan are in
+`docs/progress/2026-10-07-v3.71-nl-checked-width-discriminator.md`.

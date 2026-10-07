@@ -16,7 +16,7 @@
 #include <vector>
 
 #if defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
-    defined(CANDLE_NL_CHECKED_INT256)
+    defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256)
 #include <boost/multiprecision/cpp_int.hpp>
 #endif
 #include <gmpxx.h>
@@ -45,10 +45,19 @@ using Integer = mpz_class;
 using Fixed = boost::multiprecision::checked_int128_t;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
 constexpr const char* kFixedBackend = "checked-int128";
+#elif defined(CANDLE_NL_CHECKED_INT192)
+using CheckedInt192Backend = boost::multiprecision::cpp_int_backend<
+    192, 192, boost::multiprecision::signed_magnitude,
+    boost::multiprecision::checked, void>;
+using Fixed = boost::multiprecision::number<CheckedInt192Backend>;
+Fixed kScale = static_cast<Fixed>(1000000000000LL);
+constexpr const char* kFixedBackend = "checked-int192";
+constexpr unsigned kCheckedFixedBits = 192;
 #elif defined(CANDLE_NL_CHECKED_INT256)
 using Fixed = boost::multiprecision::checked_int256_t;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
 constexpr const char* kFixedBackend = "checked-int256";
+constexpr unsigned kCheckedFixedBits = 256;
 #elif defined(CANDLE_NL_FIXED_LONG_DOUBLE)
 using Fixed = long double;
 Fixed kScale = 1000000000000.0L;
@@ -126,6 +135,7 @@ Fixed fixed_product(Fixed left, Fixed right) {
 }
 
 #if (defined(CANDLE_NL_FIXED_INT128) || \
+     defined(CANDLE_NL_CHECKED_INT192) || \
      defined(CANDLE_NL_CHECKED_INT256)) && \
     defined(CANDLE_NL_FIXED_RANGE_PROFILE)
 struct FixedRangeProfile {
@@ -156,7 +166,8 @@ unsigned fixed_magnitude_bits(Fixed value) {
   }
   return 64U - static_cast<unsigned>(
       __builtin_clzll(static_cast<std::uint64_t>(magnitude)));
-#elif defined(CANDLE_NL_CHECKED_INT256)
+#elif defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_CHECKED_INT256)
   const Fixed magnitude = value < 0 ? -value : value;
   return magnitude == 0
       ? 0
@@ -209,6 +220,7 @@ struct Interval {
 };
 
 #if (defined(CANDLE_NL_FIXED_INT128) || \
+     defined(CANDLE_NL_CHECKED_INT192) || \
      defined(CANDLE_NL_CHECKED_INT256)) && \
     defined(CANDLE_NL_FIXED_RANGE_PROFILE)
 void range_profile_multiplication(const Interval& left,
@@ -925,7 +937,7 @@ Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
       native_ceil_fixed_quotient(numerator, denominator));
 }
 #elif defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
-    defined(CANDLE_NL_CHECKED_INT256)
+    defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256)
 Integer integer_of_fixed(const Fixed& value) {
   return Integer(value.convert_to<std::string>());
 }
@@ -934,10 +946,11 @@ Fixed fixed_of_integer(const Integer& value) {
   return Fixed(value.get_str());
 }
 
-#if defined(CANDLE_NL_CHECKED_INT256)
+#if defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_CHECKED_INT256)
 Fixed checked_floor_power_of_two_quotient(const Fixed& numerator,
                                           unsigned shift) {
-  if (shift == 0 || shift >= 256) {
+  if (shift == 0 || shift >= kCheckedFixedBits) {
     throw std::runtime_error("invalid checked floor power-of-two shift");
   }
   const bool negative = numerator < 0;
@@ -950,7 +963,7 @@ Fixed checked_floor_power_of_two_quotient(const Fixed& numerator,
 
 Fixed checked_ceil_power_of_two_quotient(const Fixed& numerator,
                                          unsigned shift) {
-  if (shift == 0 || shift >= 256) {
+  if (shift == 0 || shift >= kCheckedFixedBits) {
     throw std::runtime_error("invalid checked ceil power-of-two shift");
   }
   const bool negative = numerator < 0;
@@ -970,12 +983,13 @@ int checked_fixed_dyadic_denominator_shift(const Fixed& denominator) {
 }
 
 void verify_checked_dyadic_shift_quotient_samples() {
-  const Fixed large = (Fixed(1) << 250) - 1;
+  const Fixed large = (Fixed(1) << (kCheckedFixedBits - 2)) - 1;
   const std::array<Fixed, 15> samples = {
       -large, -large + 1, -1001, -1000, -999, -2, -1,
       0, 1, 2, 999, 1000, 1001, large - 1, large};
   const std::array<unsigned, 9> shifts = {
-      1, 2, 7, 23, 40, 80, 126, 200, 250};
+      1, 2, 7, 23, 40, 80, 126, kCheckedFixedBits / 2,
+      kCheckedFixedBits - 2};
   for (const unsigned shift : shifts) {
     const Fixed denominator = Fixed(1) << shift;
     for (const Fixed& numerator : samples) {
@@ -996,7 +1010,8 @@ void verify_checked_dyadic_shift_quotient_samples() {
 
 Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
-#if defined(CANDLE_NL_CHECKED_INT256)
+#if defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_CHECKED_INT256)
   if (kUseDyadicShiftFixedQuotient) {
     const int shift = checked_fixed_dyadic_denominator_shift(denominator);
     if (shift >= 0) {
@@ -1017,7 +1032,8 @@ Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
 
 Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
-#if defined(CANDLE_NL_CHECKED_INT256)
+#if defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_CHECKED_INT256)
   if (kUseDyadicShiftFixedQuotient) {
     const int shift = checked_fixed_dyadic_denominator_shift(denominator);
     if (shift >= 0) {
@@ -6244,11 +6260,12 @@ int main(int argc, char** argv) {
           "hardware-seeded fixed quotient is a native int128 diagnostic "
           "only");
     }
-#if !defined(CANDLE_NL_CHECKED_INT256)
+#if !defined(CANDLE_NL_CHECKED_INT192) && \
+    !defined(CANDLE_NL_CHECKED_INT256)
     if (kUseDyadicShiftFixedQuotient) {
       throw std::runtime_error(
           "dyadic shift fixed quotient requires native int128 or checked "
-          "int256 arithmetic");
+          "int192 or int256 arithmetic");
     }
 #endif
     if (kUseNarrowFixedProducts) {
@@ -6283,7 +6300,8 @@ int main(int argc, char** argv) {
     if (kUseDyadicShiftFixedQuotient) {
       verify_dyadic_shift_quotient_samples();
     }
-#elif defined(CANDLE_NL_CHECKED_INT256)
+#elif defined(CANDLE_NL_CHECKED_INT192) || \
+    defined(CANDLE_NL_CHECKED_INT256)
     if (kUseDyadicShiftFixedQuotient) {
       verify_checked_dyadic_shift_quotient_samples();
     }
@@ -6646,6 +6664,7 @@ int main(int argc, char** argv) {
               << " evaluation_dyadic_fallback_quotients="
               << evaluation_dyadic_fallback_calls
 #if (defined(CANDLE_NL_FIXED_INT128) || \
+     defined(CANDLE_NL_CHECKED_INT192) || \
      defined(CANDLE_NL_CHECKED_INT256)) && \
     defined(CANDLE_NL_FIXED_RANGE_PROFILE)
               << " fixed_range_profile=1"
