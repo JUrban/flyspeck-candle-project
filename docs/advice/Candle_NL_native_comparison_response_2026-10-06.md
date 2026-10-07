@@ -1609,12 +1609,16 @@ in `nl-native-case10173-double-rounding-paired-v1-dev-001`.
 
 The width/layout effect is real, while the remaining approximately 2.1-times
 unsafe-native gap is whole-checker/dataflow rather than quotient rounding or
-the tested historical formula graph. Before implementing any formal
-hardware-width design, the next bounded gate will measure a closed,
-assumption-free word endpoint and wide-product microkernel in the actual
-`Kernel.compute` path. The observed contract requires at most 45-bit rounded
-values, 68-bit products, and 83-bit Taylor/quotient numerators. Only a
-material reflected win advances to one generally proved outward dyadic engine
-and complete-box checker; otherwise effort returns to whole-checker layout and
-control. The unsafe floating lanes remain diagnostics and can never support a
-formal claim.
+the tested historical formula graph. A source audit then ruled out treating
+CakeML runtime words as an existing reflected primitive: the proof-producing
+compute language contains only unbounded `Cexp_num` values and pairs, with no
+word node or word multiplication.
+
+The next bounded gate will therefore measure a closed, assumption-free
+two/three-limb multiply/shift/round microkernel using the current compute
+contract. The observed range requires at most 45-bit rounded values, 68-bit
+products, and 83-bit Taylor/quotient numerators. Only a material reflected
+win advances to one generally proved outward dyadic engine and complete-box
+checker. A loss redirects work to whole-checker layout/control; it does not
+justify extending the trusted compute datatype. The unsafe floating lanes
+remain diagnostics and can never support a formal claim.
