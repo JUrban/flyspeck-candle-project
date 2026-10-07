@@ -19,7 +19,8 @@
 #if defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
     defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256) || \
     defined(CANDLE_NL_MIXED_INT128_192) || \
-    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
+    defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
 #include <boost/multiprecision/cpp_int.hpp>
 #endif
 #include <gmpxx.h>
@@ -66,6 +67,14 @@ using MixedWide = boost::multiprecision::number<MixedWideBackend>;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
 constexpr const char* kFixedBackend = "mixed-unchecked-int128-192";
 constexpr unsigned kCheckedFixedBits = 128;
+#elif defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
+using Fixed = __int128;
+using MixedWideBackend = boost::multiprecision::cpp_int_backend<
+    192, 192, boost::multiprecision::signed_magnitude,
+    boost::multiprecision::checked, void>;
+using MixedWide = boost::multiprecision::number<MixedWideBackend>;
+Fixed kScale = static_cast<Fixed>(1000000000000LL);
+constexpr const char* kFixedBackend = "mixed-native-int128-checked-int192";
 #elif defined(CANDLE_NL_CHECKED_INT192)
 using CheckedInt192Backend = boost::multiprecision::cpp_int_backend<
     192, 192, boost::multiprecision::signed_magnitude,
@@ -101,7 +110,8 @@ Fixed kScale("1000000000000");
 constexpr const char* kFixedBackend = "mpz";
 #endif
 #if defined(CANDLE_NL_MIXED_INT128_192) || \
-    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
+    defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
 using TaylorAccumulator = MixedWide;
 #else
 using TaylorAccumulator = Fixed;
@@ -1382,7 +1392,8 @@ Interval raw_interval_round(const Fixed& denominator,
 }
 
 #if defined(CANDLE_NL_MIXED_INT128_192) || \
-    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
+    defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
 TaylorAccumulator floor_mixed_wide_quotient(
     const TaylorAccumulator& numerator,
     const TaylorAccumulator& denominator) {
@@ -1423,7 +1434,11 @@ TaylorAccumulator ceil_mixed_wide_power_of_two(
 
 Fixed narrow_mixed_wide(const TaylorAccumulator& value) {
   ++kMixedWideNarrowings;
+#if defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
+  return value.convert_to<Fixed>();
+#else
   return Fixed(value);
+#endif
 }
 
 Interval round_mixed_wide_taylor(
@@ -1752,7 +1767,8 @@ TaylorAccumulator weighted_rows_abs_upper(const IntegerVector& radii,
   for (std::size_t i = 0; i < kDimensions; ++i) {
     const Fixed dot = dot_abs_upper(radii, matrix[i]);
 #if defined(CANDLE_NL_MIXED_INT128_192) || \
-    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
+    defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
     const TaylorAccumulator product =
         TaylorAccumulator(radii[i]) * TaylorAccumulator(dot);
     result += product;
@@ -1774,7 +1790,8 @@ TaylorResult complete_result(const IntegerVector& radii, bool domain,
   const TaylorAccumulator quadratic =
       weighted_rows_abs_upper(radii, hessian);
 #if defined(CANDLE_NL_MIXED_INT128_192) || \
-    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
+    defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
   const TaylorAccumulator error =
       TaylorAccumulator(2) * TaylorAccumulator(kScale) *
           TaylorAccumulator(linear) +
@@ -2799,7 +2816,8 @@ TaylorAccumulator compact_weighted_abs_upper(
     for (std::size_t column = row; column < kDimensions; ++column) {
       if (!compact_matrix_has(matrix, row, column)) continue;
 #if defined(CANDLE_NL_MIXED_INT128_192) || \
-    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
+    defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
       const TaylorAccumulator radius_product =
           TaylorAccumulator(radii[row]) * TaylorAccumulator(radii[column]);
       TaylorAccumulator contribution = radius_product * TaylorAccumulator(
@@ -2830,7 +2848,8 @@ CompactTaylorResult compact_complete_result(
   const TaylorAccumulator quadratic =
       compact_weighted_abs_upper(radii, hessian);
 #if defined(CANDLE_NL_MIXED_INT128_192) || \
-    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
+    defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
   const TaylorAccumulator error =
       TaylorAccumulator(2) * TaylorAccumulator(kScale) *
           TaylorAccumulator(linear) +
