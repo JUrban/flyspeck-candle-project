@@ -61,6 +61,8 @@ bool kUsePreparedSimplePolynomials = false;
 bool kUsePreparedCoordinateSqrtTerms = false;
 bool kUsePreparedDihedralChain = false;
 bool kUseSpecializedDihedralIdentities = false;
+bool kUseHistoricalDihedral = false;
+bool kUseHistoricalBlockRounding = false;
 bool kUseTightDihedralSqrtCertificates = false;
 bool kUseOptimizedDihedralUBounds = false;
 bool kUseComputedTightSqrtCertificates = false;
@@ -2574,6 +2576,99 @@ Interval delta_gradient_component(std::size_t coordinate,
   }
 }
 
+Interval delta_gradient_component_block_rounded(
+    std::size_t coordinate, const IntervalVector& x, Counters& counters) {
+  const auto product = [&counters](const Interval& left,
+                                    const Interval& right) {
+    return raw_interval_mul(left, right, counters);
+  };
+  Interval raw;
+  switch (coordinate) {
+    case 0:
+      raw = interval_sum({
+          interval_integer_scale(-2, product(x[0], x[3])),
+          product(x[1], x[3]), product(x[1], x[4]),
+          interval_neg(product(x[1], x[5])), product(x[2], x[3]),
+          interval_neg(product(x[2], x[4])), product(x[2], x[5]),
+          interval_neg(product(x[3], x[3])), product(x[3], x[4]),
+          product(x[3], x[5])});
+      break;
+    case 1:
+      raw = interval_sum({
+          product(x[0], x[3]), product(x[0], x[4]),
+          interval_neg(product(x[0], x[5])),
+          interval_integer_scale(-2, product(x[1], x[4])),
+          interval_neg(product(x[2], x[3])), product(x[2], x[4]),
+          product(x[2], x[5]), product(x[3], x[4]),
+          interval_neg(product(x[4], x[4])), product(x[4], x[5])});
+      break;
+    case 2:
+      raw = interval_sum({
+          product(x[0], x[3]), interval_neg(product(x[0], x[4])),
+          product(x[0], x[5]), interval_neg(product(x[1], x[3])),
+          product(x[1], x[4]), product(x[1], x[5]),
+          interval_integer_scale(-2, product(x[2], x[5])),
+          product(x[3], x[5]), product(x[4], x[5]),
+          interval_neg(product(x[5], x[5]))});
+      break;
+    case 3:
+      raw = interval_sum({
+          interval_neg(product(x[0], x[0])), product(x[0], x[1]),
+          product(x[0], x[2]),
+          interval_integer_scale(-2, product(x[0], x[3])),
+          product(x[0], x[4]), product(x[0], x[5]),
+          interval_neg(product(x[1], x[2])), product(x[1], x[4]),
+          product(x[2], x[5]), interval_neg(product(x[4], x[5]))});
+      break;
+    case 4:
+      raw = interval_sum({
+          product(x[0], x[1]), interval_neg(product(x[0], x[2])),
+          product(x[0], x[3]), interval_neg(product(x[1], x[1])),
+          product(x[1], x[2]), product(x[1], x[3]),
+          interval_integer_scale(-2, product(x[1], x[4])),
+          product(x[1], x[5]), product(x[2], x[5]),
+          interval_neg(product(x[3], x[5]))});
+      break;
+    case 5:
+      raw = interval_sum({
+          interval_neg(product(x[0], x[1])), product(x[0], x[2]),
+          product(x[0], x[3]), product(x[1], x[2]),
+          product(x[1], x[4]), interval_neg(product(x[2], x[2])),
+          product(x[2], x[3]), product(x[2], x[4]),
+          interval_integer_scale(-2, product(x[2], x[5])),
+          interval_neg(product(x[3], x[4]))});
+      break;
+    default:
+      throw std::runtime_error("delta gradient coordinate out of range");
+  }
+  return raw_interval_round(kScale, raw);
+}
+
+Interval delta_value_block_rounded(const IntervalVector& x,
+                                   Counters& counters) {
+  const Interval first_linear = interval_sum({
+      interval_neg(x[0]), x[1], x[2], interval_neg(x[3]), x[4], x[5]});
+  const Interval second_linear = interval_sum({
+      x[0], interval_neg(x[1]), x[2], x[3], interval_neg(x[4]), x[5]});
+  const Interval third_linear = interval_sum({
+      x[0], x[1], interval_neg(x[2]), x[3], x[4], interval_neg(x[5])});
+  const auto cubic = [&counters](const Interval& first,
+                                  const Interval& second,
+                                  const Interval& third) {
+    return raw_interval_mul(
+        raw_interval_mul(first, second, counters), third, counters);
+  };
+  const Interval raw = interval_sum({
+      cubic(x[0], x[3], first_linear),
+      cubic(x[1], x[4], second_linear),
+      cubic(x[2], x[5], third_linear),
+      interval_neg(cubic(x[1], x[2], x[3])),
+      interval_neg(cubic(x[0], x[2], x[4])),
+      interval_neg(cubic(x[0], x[1], x[5])),
+      interval_neg(cubic(x[3], x[4], x[5]))});
+  return raw_interval_round(kScale * kScale, raw);
+}
+
 IntervalVector monotone_extremum_environment(
     const IntervalVector& box, const IntervalVector& derivatives,
     bool upper) {
@@ -2593,7 +2688,8 @@ IntervalVector monotone_extremum_environment(
 }
 
 SecondOrderBox delta_full_sign_directed(const IntervalVector& box,
-                                        Counters& counters) {
+                                        Counters& counters,
+                                        bool block_rounding = false) {
   SecondOrderBox result;
   result.hessian = delta_hessian(box);
   for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
@@ -2601,10 +2697,16 @@ SecondOrderBox delta_full_sign_directed(const IntervalVector& box,
         box, result.hessian[coordinate], false);
     const IntervalVector upper_environment = monotone_extremum_environment(
         box, result.hessian[coordinate], true);
-    const Interval lower = delta_gradient_component(
-        coordinate, lower_environment, counters);
-    const Interval upper = delta_gradient_component(
-        coordinate, upper_environment, counters);
+    const Interval lower = block_rounding
+        ? delta_gradient_component_block_rounded(
+              coordinate, lower_environment, counters)
+        : delta_gradient_component(
+              coordinate, lower_environment, counters);
+    const Interval upper = block_rounding
+        ? delta_gradient_component_block_rounded(
+              coordinate, upper_environment, counters)
+        : delta_gradient_component(
+              coordinate, upper_environment, counters);
     result.gradient[coordinate] = {lower.lower, upper.upper};
     if (result.gradient[coordinate].lower >
         result.gradient[coordinate].upper) {
@@ -2615,8 +2717,12 @@ SecondOrderBox delta_full_sign_directed(const IntervalVector& box,
       box, result.gradient, false);
   const IntervalVector upper_environment = monotone_extremum_environment(
       box, result.gradient, true);
-  const Interval lower = delta_value(lower_environment, counters);
-  const Interval upper = delta_value(upper_environment, counters);
+  const Interval lower = block_rounding
+      ? delta_value_block_rounded(lower_environment, counters)
+      : delta_value(lower_environment, counters);
+  const Interval upper = block_rounding
+      ? delta_value_block_rounded(upper_environment, counters)
+      : delta_value(upper_environment, counters);
   result.value = {lower.lower, upper.upper};
   if (result.value.lower > result.value.upper) {
     throw std::runtime_error("sign-directed delta value is empty");
@@ -2928,7 +3034,8 @@ struct ValueGradient {
 
 ValueGradient optimized_triangle_u(
     const IntervalVector& box_environment,
-    const std::array<std::size_t, 3>& variables, Counters& counters) {
+    const std::array<std::size_t, 3>& variables, Counters& counters,
+    bool block_rounding = false) {
   std::array<Interval, 3> x = {
       box_environment[variables[0]], box_environment[variables[1]],
       box_environment[variables[2]]};
@@ -2960,19 +3067,23 @@ ValueGradient optimized_triangle_u(
     }
   }
 
-  const auto value_formula = [&counters](
+  const auto value_formula = [&counters, block_rounding](
       const std::array<Interval, 3>& negative,
       const std::array<Interval, 3>& positive) {
-    return interval_sum({
-        interval_neg(interval_mul(negative[0], negative[0], counters)),
-        interval_neg(interval_mul(negative[1], negative[1], counters)),
-        interval_neg(interval_mul(negative[2], negative[2], counters)),
-        interval_integer_scale(
-            2, interval_mul(positive[0], positive[1], counters)),
-        interval_integer_scale(
-            2, interval_mul(positive[1], positive[2], counters)),
-        interval_integer_scale(
-            2, interval_mul(positive[2], positive[0], counters))});
+    const auto product = [&counters, block_rounding](
+        const Interval& left, const Interval& right) {
+      return block_rounding
+          ? raw_interval_mul(left, right, counters)
+          : interval_mul(left, right, counters);
+    };
+    const Interval value = interval_sum({
+        interval_neg(product(negative[0], negative[0])),
+        interval_neg(product(negative[1], negative[1])),
+        interval_neg(product(negative[2], negative[2])),
+        interval_integer_scale(2, product(positive[0], positive[1])),
+        interval_integer_scale(2, product(positive[1], positive[2])),
+        interval_integer_scale(2, product(positive[2], positive[0]))});
+    return block_rounding ? raw_interval_round(kScale, value) : value;
   };
   const Interval lower_value = value_formula(
       lower_negative, lower_positive);
@@ -2984,6 +3095,249 @@ ValueGradient optimized_triangle_u(
     gradient[variables[index]] = local_gradient[index];
   }
   return {{lower_value.lower, upper_value.upper}, gradient};
+}
+
+SecondOrderBox delta_x4_full_sign_directed(
+    const IntervalVector& box, Counters& counters,
+    bool block_rounding = false) {
+  SecondOrderBox result;
+  result.gradient = delta_x4_gradient(box);
+  result.hessian = delta_x4_hessian();
+  const IntervalVector lower_environment = monotone_extremum_environment(
+      box, result.gradient, false);
+  const IntervalVector upper_environment = monotone_extremum_environment(
+      box, result.gradient, true);
+  const auto value = [&counters, block_rounding](
+      const IntervalVector& environment) {
+    if (!block_rounding) {
+      return delta_x4_value(environment, counters);
+    }
+    const auto product = [&counters](const Interval& left,
+                                      const Interval& right) {
+      return raw_interval_mul(left, right, counters);
+    };
+    const Interval linear = interval_sum({
+        interval_neg(environment[0]), environment[1], environment[2],
+        interval_neg(environment[3]), environment[4], environment[5]});
+    const Interval raw = interval_sum({
+        interval_neg(product(environment[1], environment[2])),
+        interval_neg(product(environment[0], environment[3])),
+        product(environment[1], environment[4]),
+        product(environment[2], environment[5]),
+        interval_neg(product(environment[4], environment[5])),
+        product(environment[0], linear)});
+    return raw_interval_round(kScale, raw);
+  };
+  const Interval lower = value(lower_environment);
+  const Interval upper = value(upper_environment);
+  result.value = {lower.lower, upper.upper};
+  if (result.value.lower > result.value.upper) {
+    throw std::runtime_error("sign-directed delta-x4 value is empty");
+  }
+  return result;
+}
+
+SecondOrderBox delta_full_direct(const IntervalVector& environment,
+                                 Counters& counters) {
+  return {delta_value(environment, counters),
+          delta_gradient_from_products(
+              polynomial_pair_products(environment, counters)),
+          delta_hessian(environment)};
+}
+
+SecondOrderBox delta_x4_full_direct(const IntervalVector& environment,
+                                    Counters& counters) {
+  return {delta_x4_value(environment, counters),
+          delta_x4_gradient(environment), delta_x4_hessian()};
+}
+
+SecondOrderBox second_order_sqrt(const SecondOrderBox& input,
+                                 Counters& counters) {
+  if (input.value.lower <= 0) {
+    throw std::runtime_error("second-order square-root domain failure");
+  }
+  ++counters.sqrt_steps;
+  SecondOrderBox result;
+  result.value = fixed_sqrt_enclosure(input.value);
+  const Interval derivative = fixed_interval_inv(
+      interval_integer_scale(2, result.value));
+  result.gradient = interval_vector_scale(
+      derivative, input.gradient, counters);
+  const Interval logarithmic_derivative = interval_neg(
+      fixed_interval_inv(interval_integer_scale(2, input.value)));
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    const Interval scaled_row = interval_mul(
+        logarithmic_derivative, input.gradient[row], counters);
+    for (std::size_t column = row;
+         column < kDimensions; ++column) {
+      const Interval inside = interval_add(
+          interval_mul(input.gradient[column], scaled_row, counters),
+          input.hessian[row][column]);
+      const Interval value = interval_mul(derivative, inside, counters);
+      result.hessian[row][column] = value;
+      result.hessian[column][row] = value;
+    }
+  }
+  return result;
+}
+
+SecondOrderBox historical_dihedral_second_order(
+    const IntervalVector& environment, bool use_sign_directed_bounds,
+    Counters& counters) {
+  const SecondOrderBox delta = use_sign_directed_bounds
+      ? delta_full_sign_directed(
+            environment, counters, kUseHistoricalBlockRounding)
+      : delta_full_direct(environment, counters);
+  const SecondOrderBox root_delta = second_order_sqrt(delta, counters);
+  const SecondOrderBox delta_x4 = use_sign_directed_bounds
+      ? delta_x4_full_sign_directed(
+            environment, counters, kUseHistoricalBlockRounding)
+      : delta_x4_full_direct(environment, counters);
+  const ValueGradient u126 = optimized_triangle_u(
+      environment, std::array<std::size_t, 3>{{0, 1, 5}}, counters,
+      kUseHistoricalBlockRounding);
+  const ValueGradient u135 = optimized_triangle_u(
+      environment, std::array<std::size_t, 3>{{0, 2, 4}}, counters,
+      kUseHistoricalBlockRounding);
+  if (u126.value.lower <= 0 || u135.value.lower <= 0) {
+    throw std::runtime_error("historical dihedral U domain failure");
+  }
+
+  ++counters.sqrt_steps;
+  const Interval root_four_x0 = fixed_sqrt_enclosure(
+      interval_integer_scale(4, environment[0]));
+  const Interval b = interval_mul(
+      root_delta.value, root_four_x0, counters);
+  if (!fixed_interval_not_zero(b)) {
+    throw std::runtime_error("historical dihedral denominator failure");
+  }
+  const Interval two_over_root_four_x0 = interval_mul(
+      interval_integer_scale(2, one_interval()),
+      fixed_interval_inv(root_four_x0), counters);
+
+  IntervalVector b_gradient = interval_vector_scale(
+      root_four_x0, root_delta.gradient, counters);
+  b_gradient[0] = interval_add(
+      b_gradient[0],
+      interval_mul(root_delta.value, two_over_root_four_x0, counters));
+
+  IntervalMatrix b_hessian = interval_matrix_scale(
+      root_four_x0, root_delta.hessian, counters);
+  for (std::size_t coordinate = 1;
+       coordinate < kDimensions; ++coordinate) {
+    const Interval correction = interval_mul(
+        root_delta.gradient[coordinate], two_over_root_four_x0, counters);
+    b_hessian[0][coordinate] = interval_add(
+        b_hessian[0][coordinate], correction);
+    b_hessian[coordinate][0] = b_hessian[0][coordinate];
+  }
+  const Interval twice_first_correction = interval_integer_scale(
+      2, interval_mul(root_delta.gradient[0],
+                      two_over_root_four_x0, counters));
+  const Interval diagonal_denominator = interval_integer_scale(
+      2, environment[0]);
+  if (!fixed_interval_not_zero(diagonal_denominator)) {
+    throw std::runtime_error(
+        "historical dihedral first-coordinate domain failure");
+  }
+  const Interval diagonal_subtraction = interval_mul(
+      interval_mul(root_delta.value, two_over_root_four_x0, counters),
+      fixed_interval_inv(diagonal_denominator), counters);
+  b_hessian[0][0] = interval_add(
+      b_hessian[0][0],
+      interval_add(twice_first_correction,
+                   interval_neg(diagonal_subtraction)));
+
+  IntervalVector c;
+  for (std::size_t coordinate = 0;
+       coordinate < kDimensions; ++coordinate) {
+    c[coordinate] = interval_add(
+        interval_neg(interval_mul(
+            delta_x4.gradient[coordinate], b, counters)),
+        interval_mul(delta_x4.value, b_gradient[coordinate], counters));
+  }
+  const Interval u_product = interval_mul(
+      u126.value, u135.value, counters);
+  if (!fixed_interval_not_zero(u_product)) {
+    throw std::runtime_error("historical dihedral U product failure");
+  }
+  const Interval reciprocal_u = fixed_interval_inv(u_product);
+
+  SecondOrderBox result;
+  result.gradient = interval_vector_scale(reciprocal_u, c, counters);
+  const Interval two_root_delta = interval_integer_scale(
+      2, root_delta.value);
+  if (!fixed_interval_not_zero(two_root_delta)) {
+    throw std::runtime_error("historical dihedral delta root failure");
+  }
+  result.gradient[3] = interval_mul(
+      root_four_x0, fixed_interval_inv(two_root_delta), counters);
+
+  IntervalVector logarithmic_u_gradient;
+  const Interval reciprocal_u126 = fixed_interval_inv(u126.value);
+  const Interval reciprocal_u135 = fixed_interval_inv(u135.value);
+  for (std::size_t coordinate = 0;
+       coordinate < kDimensions; ++coordinate) {
+    logarithmic_u_gradient[coordinate] = interval_add(
+        interval_mul(u126.gradient[coordinate], reciprocal_u126, counters),
+        interval_mul(u135.gradient[coordinate], reciprocal_u135, counters));
+  }
+
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row;
+         column < kDimensions; ++column) {
+      Interval identity;
+      if (row == column) {
+        identity = interval_add(
+            interval_neg(interval_mul(
+                b, delta_x4.hessian[row][column], counters)),
+            interval_mul(delta_x4.value,
+                         b_hessian[row][column], counters));
+      } else {
+        identity = interval_sum({
+            interval_neg(interval_mul(
+                b, delta_x4.hessian[row][column], counters)),
+            interval_neg(interval_mul(
+                delta_x4.gradient[row], b_gradient[column], counters)),
+            interval_mul(delta_x4.gradient[column],
+                         b_gradient[row], counters),
+            interval_mul(delta_x4.value,
+                         b_hessian[row][column], counters)});
+      }
+      const Interval value = interval_add(
+          interval_mul(reciprocal_u, identity, counters),
+          interval_neg(interval_mul(
+              result.gradient[row],
+              logarithmic_u_gradient[column], counters)));
+      result.hessian[row][column] = value;
+      result.hessian[column][row] = value;
+    }
+  }
+
+  const Interval quotient = interval_mul(
+      interval_neg(delta_x4.value), fixed_interval_inv(b), counters);
+  if (absolute(quotient.lower) >= kScale ||
+      absolute(quotient.upper) >= kScale) {
+    throw std::runtime_error("historical dihedral atan domain failure");
+  }
+  ++counters.atan_steps;
+  result.value = interval_add(
+      interval_of_q({kPiHalfLower, kPiHalfUpper}),
+      fixed_atan_interval(quotient, counters));
+  return result;
+}
+
+TaylorResult evaluate_historical_dihedral(
+    const IntegerVector& radii,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment,
+    Counters& counters) {
+  const SecondOrderBox center = historical_dihedral_second_order(
+      center_environment, false, counters);
+  const SecondOrderBox box = historical_dihedral_second_order(
+      box_environment, true, counters);
+  return complete_result(
+      radii, true, {center.value, center.gradient}, box.hessian, counters);
 }
 
 TaylorResult evaluate_dihedral_chain_specialized(
@@ -3281,6 +3635,10 @@ TaylorResult evaluate_dihedral_identity_diagnostic(const Job& job) {
     radii[coordinate] = ceil_scaled(radius);
   }
   Counters counters;
+  if (kUseHistoricalDihedral) {
+    return evaluate_historical_dihedral(
+        radii, center_environment, box_environment, counters);
+  }
   return evaluate_dihedral_identities_specialized(
       radii, center_environment, box_environment,
       job.fixed_center_certificates[6], job.fixed_box_certificates[6],
@@ -3482,6 +3840,19 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       ++sqrt_slot;
       counters.outer_steps += 4;
       outer_index += 3;
+      continue;
+    }
+    if (kUseHistoricalDihedral && outer_index == 31) {
+      if (!program.prepared_dihedral_chain || sqrt_slot != 6 ||
+          sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error("historical dihedral source/slot drift");
+      }
+      stack.push_back(evaluate_historical_dihedral(
+          radii, center_environment, box_environment, counters));
+      ++sqrt_slot;
+      counters.outer_steps += 8;
+      direct_delta_x4_used = true;
+      outer_index += 7;
       continue;
     }
     if (kUseSpecializedDihedralIdentities && outer_index == 31) {
@@ -3849,7 +4220,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 24) {
+    if (argc < 4 || argc > 26) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -3868,6 +4239,8 @@ int main(int argc, char** argv) {
                 << " [--prepared-coordinate-sqrt-terms]"
                 << " [--prepared-dihedral-chain]"
                 << " [--specialized-dihedral-identities]"
+                << " [--historical-dihedral]"
+                << " [--historical-block-rounding]"
                 << " [--tight-dihedral-sqrt-certificates]"
                 << " [--optimized-dihedral-u-bounds]"
                 << " [--computed-tight-sqrt-certificates]"
@@ -3935,6 +4308,10 @@ int main(int argc, char** argv) {
         kUsePreparedDihedralChain = true;
       } else if (option == "--specialized-dihedral-identities") {
         kUseSpecializedDihedralIdentities = true;
+      } else if (option == "--historical-dihedral") {
+        kUseHistoricalDihedral = true;
+      } else if (option == "--historical-block-rounding") {
+        kUseHistoricalBlockRounding = true;
       } else if (option == "--tight-dihedral-sqrt-certificates") {
         kUseTightDihedralSqrtCertificates = true;
       } else if (option == "--optimized-dihedral-u-bounds") {
@@ -3985,10 +4362,15 @@ int main(int argc, char** argv) {
           "instruction profiling is not implemented for specialized "
           "dihedral identities");
     }
+    if (profile_enabled && kUseHistoricalDihedral) {
+      throw std::runtime_error(
+          "instruction profiling is not implemented for the historical "
+          "dihedral path");
+    }
     if (kUseCompactSupportJets &&
         (kUseFixedSqrtInverseKernels || kUseFixedAtanKernel ||
          kUsePreparedSimplePolynomials || kUsePreparedDihedralChain ||
-         kUseSpecializedDihedralIdentities)) {
+         kUseSpecializedDihedralIdentities || kUseHistoricalDihedral)) {
       throw std::runtime_error(
           "compact support jets do not yet implement fixed nonlinear kernels "
           "or prepared simple polynomials");
@@ -4011,7 +4393,10 @@ int main(int argc, char** argv) {
           "prepared dihedral chain requires fixed nonlinear kernels and "
           "both authenticated angle polynomial modes");
     }
-    if (kUsePreparedDihedralChain && kUseSpecializedDihedralIdentities) {
+    if (static_cast<int>(kUsePreparedDihedralChain) +
+            static_cast<int>(kUseSpecializedDihedralIdentities) +
+            static_cast<int>(kUseHistoricalDihedral) >
+        1) {
       throw std::runtime_error("conflicting prepared dihedral modes");
     }
     if (kUseSpecializedDihedralIdentities &&
@@ -4027,10 +4412,22 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "specialized dihedral identity cross-check is not yet implemented");
     }
-    if (dihedral_identity_diagnostics &&
-        !kUseSpecializedDihedralIdentities) {
+    if (kUseHistoricalDihedral &&
+        (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
+         polynomial_mode != PolynomialMode::kSpecializedAngle ||
+         !direct_delta_x4)) {
       throw std::runtime_error(
-          "dihedral identity diagnostics require specialized identities");
+          "historical dihedral requires fixed nonlinear kernels and both "
+          "authenticated angle polynomial modes");
+    }
+    if (kUseHistoricalBlockRounding && !kUseHistoricalDihedral) {
+      throw std::runtime_error(
+          "historical block rounding requires the historical dihedral path");
+    }
+    if (dihedral_identity_diagnostics &&
+        !kUseSpecializedDihedralIdentities && !kUseHistoricalDihedral) {
+      throw std::runtime_error(
+          "dihedral diagnostics require a specialized dihedral path");
     }
     if (kUseTightDihedralSqrtCertificates &&
         !kUseSpecializedDihedralIdentities) {
@@ -4087,7 +4484,7 @@ int main(int argc, char** argv) {
       prepare_coordinate_sqrt_terms(program);
     }
     if (kUsePreparedDihedralChain || kUseSpecializedDihedralIdentities ||
-        kPrecomputeTightSqrtCertificates) {
+        kUseHistoricalDihedral || kPrecomputeTightSqrtCertificates) {
       prepare_dihedral_chain(program);
     }
     std::vector<Job> jobs = read_jobs(argv[2]);
@@ -4206,6 +4603,10 @@ int main(int argc, char** argv) {
               << (kUsePreparedDihedralChain ? 1 : 0)
               << " specialized_dihedral_identities="
               << (kUseSpecializedDihedralIdentities ? 1 : 0)
+              << " historical_dihedral="
+              << (kUseHistoricalDihedral ? 1 : 0)
+              << " historical_block_rounding="
+              << (kUseHistoricalBlockRounding ? 1 : 0)
               << " tight_dihedral_sqrt_certificates="
               << (kUseTightDihedralSqrtCertificates ? 1 : 0)
               << " optimized_dihedral_u_bounds="

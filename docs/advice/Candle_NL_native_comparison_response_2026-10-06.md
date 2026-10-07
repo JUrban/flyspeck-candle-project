@@ -1226,3 +1226,86 @@ historical derivative-square-root and `setDeltaX4` data.  Only the complete
 dihedral replacement can answer the performance gate; the intermediate
 1.542-times delta cost is explicitly carried into that total rather than
 reported as a speedup.
+
+## Update: complete low-work gate
+
+The bounded complete port is now executable through the authenticated source
+operation: sign-directed delta and delta-X4 enclosures, derivative square root,
+optimized U126/U135 data, the historical dihedral gradient/Hessian identities,
+fixed arctangent, and final Taylor handoff.  A block-rounding variant retains
+raw fixed-point numerators across each delta/U polynomial and rounds once per
+polynomial result rather than after every multiplication.
+
+Twenty warmed, rotation-balanced runs over all 4,173 boxes gave:
+
+| Numerical lane | Preparation | Evaluation | Complete batch | Accepted |
+|---|---:|---:|---:|---:|
+| Current generic fixed graph, native `int128` | 0.333467640 s | 0.320894934 s | 0.654362575 s | 4,173/4,173 |
+| Historical formulas, native `int128` | 0.336173574 s | 0.384837947 s | 0.721011521 s | 4,173/4,173 |
+| Historical formulas with block rounding, native `int128` | 0.333579927 s | 0.363728468 s | 0.697308395 s | 4,173/4,173 |
+| Same block graph, padded `long double` endpoints | 0.295859555 s | 0.367438752 s | 0.663298307 s | 4,173/4,173 |
+
+The unblocked historical port is 1.199 times slower than the generic fixed
+graph.  Block rounding improves it by 1.058 times but leaves it 1.134 times
+slower.  On the same block graph, padded hardware endpoints are 1.0% slower
+than native integer endpoints in recurring execution.  Their cheaper
+preparation happens to make the cold complete batch nearly equal to the
+generic integer batch, but that untrusted lane widens every final bound and is
+not a material winner.
+
+The block historical integer lane has a smallest acceptance margin of
+`5.23e-5`, versus `7.94e-5` for the generic fixed lane.  It is tighter on 1,334
+final bounds, wider on 2,834, and equal on five.  The padded hardware lane
+contains all 4,173 block-integer final bounds and reduces the smallest margin
+to `4.27e-5`.
+
+A separate full-fixture boundary diagnostic compares the port with the
+historical C++ angle data.  At scale `10^7`, the fixed/historical mean angle
+width ratio is 0.99858, the median is 0.99923, and the maximum is 1.00016.  All
+4,173 full inequalities remain accepted.  The fixed result is allowed to be
+tighter than the floating implementation; this is matched development
+evidence, not a substitute for the general soundness proof.
+
+The paired timing, generic-bound comparison, and hardware-containment hashes
+are respectively
+`ee98e27bb79ebfac1bba80c197541d5e5f83fe37ee1be7c3fd5e9aa0bef26741`,
+`01df9faa14ec15e40a07dad3365a79e6704a77805599e3521a08e8760b92312a`,
+and
+`3c9bf65de653730e4e06611a4849fb4e02732c54d176994eaee59060b78ae7ac`
+in run
+`nl-native-case10173-historical-dihedral-paired-v3-dev-001`.  The boundary
+analysis has SHA-256
+`82ea757364d0f36bdf441c40eb9991a7e6e94746f94857442232211cb40fbdeb`.
+
+### Revised larger-gap plan
+
+This complete gate closes the current formula-specialization proof branch.
+Neither the corrected dense specialization nor the source-derived historical
+fixed port beats the accepted generic fixed graph, so neither receives a new
+Candle instruction theorem.  The 6% block-rounding gain is retained as useful
+machinery, not promoted as the architecture.
+
+The original historical specialized C++ batch is still 4.409 times faster
+than the best source-derived fixed port.  Because hardware endpoints did not
+help while retaining fixed-scale division/floor at every interval operation,
+the next bounded native discriminator is a genuinely whole-block,
+directed-rounding implementation of the same compact historical data flow--not
+another endpoint typedef.  It must report the same full acceptance and angle
+boundary diagnostics.  Its purpose is to separate:
+
+1. global/direct rounding and absence of repeated scale division;
+2. compact data layout and control flow;
+3. the remaining mathematical work.
+
+If that direct-rounded lane approaches the 0.08249-second reference, the proof
+design target becomes a compact whole-instruction checker with a small
+rounding certificate or word-level implementation, rather than thousands of
+individually normalized interval operations.  If it does not, the port/data
+flow difference is inspected before any proof investment.
+
+In parallel, the approximately 15-fold encoded-Candle/native gap remains an
+independent target.  The current generic fixed graph is still the native
+winner and remains the baseline for compact instruction representation,
+one-time evaluator setup, and machine-word/overflow experiments.  It will be
+remeasured on complete batches; the 4.406 and approximately 15 factors remain
+separate and are not multiplied as if they were one controlled benchmark.
