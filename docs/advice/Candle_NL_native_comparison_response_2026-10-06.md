@@ -2476,3 +2476,45 @@ The implementation, accepted focused run, evidence hashes, and explicit
 scope limit are recorded in
 `docs/progress/2026-10-07-v3.74-nl-bounded-fallback-contract.md` and isolated
 Candle commit `662193d7`.
+
+## Update: verified limb boundary and the next independent factorial
+
+The first executor-side refinement packet is now proved in CakeML commit
+`ff1067b92`.  Two- and three-`word64` representations have exact `2^128` and
+`2^192` limits, total overflow-rejecting natural conversions, range theorems,
+and successful-conversion reconstruction theorems.  A clean isolated HOL4
+build succeeds.  This is deliberately only a representation boundary: it
+does not yet extend `cv`/`cval`, change the compute contract, or claim fast
+execution.
+
+The broader performance investigation remains independent and active.  The
+original approximately 15-times encoded/native and 340-times initial
+generic-native/specialized-C++ gaps stay explicit, but the latter must not be
+mistaken for the residual after later native work.  The controlled
+case10173 factorial already changed arithmetic with the graph fixed (1.628
+times exact versus padded hardware) and changed the graph with padded
+hardware arithmetic fixed (1.087 times); its optimized exact native residual
+is about 1.35 times.  Repeating that factorial on the same fixture is not the
+next informative experiment.
+
+The independent case16594 family already supplies its arithmetic leg: on the
+same generic 167-instruction graph, mixed exact 128/192 execution takes about
+2.447 seconds and padded hardware about 0.77--0.79 seconds.  Preparing the
+same 39/85-step instruction pair without reducing mathematical work did not
+help.  The missing leg is therefore an authenticated lower-work derivative
+plan.
+
+The next native discriminator will lower one genuine repeated 39/85-step
+pair to a common-subexpression-shared straight-line value/center-tangent/box-
+Hessian plan.  It will cross generic versus lowered work with mixed exact
+versus padded-hardware arithmetic.  A genuine prefix is only a rejection
+screen; the decision gate is the complete 875-cell batch with preparation,
+recurring time, cold total, RSS, enclosure differences, and acceptance all
+reported.  Only a material 875/875 winner that then generalizes to a second
+real family earns a source-to-plan proof.  The current bounded limb work
+continues only through total checked operations and exact fallback, so a
+local specialization cannot grow into an unmeasured proof project.
+
+The implementation boundary, clean-build evidence, and full factorial plan
+are recorded in
+`docs/progress/2026-10-07-v3.75-nl-bounded-limb-refinement-and-broader-factorial.md`.
