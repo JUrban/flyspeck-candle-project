@@ -2152,3 +2152,36 @@ generic-versus-direct have already been isolated on all 4173 case-10173 boxes.
 Complete evidence is in
 `docs/progress/2026-10-07-v3.64-nl-compact-whole-expression-gate.md` and
 isolated Candle commit `4edec7ab`.
+
+## Update: coordinate stage isolated; sparse derivative construction rejected
+
+The matched computed stage profile localizes the largest current stage to the
+seven constants plus six coordinate-square-root terms.  Two generic runs take
+5.087689250 and 5.066981246 seconds.  The combined historical angle stage is
+stable at 1.160366137 and 1.160729752 seconds, while structural/canonical/root
+shape checking takes 0.159911920 and 0.298695609 seconds.  Separate digest
+calls are diagnostic and not additive complete-verdict timings, but the
+relative concentration is clear.
+
+A general direct `sqrt(x_i)` prototype then removed dense zero propagation:
+it constructs only derivative coordinate `i` and Hessian entry `(i,i)` while
+retaining the original certificates, derivative intervals, coefficients, and
+fixed-scale result operations.  Its compact digest exactly matches the generic
+coordinate digest on all 128 jobs.  It takes 3.970887149 and 5.534251763
+seconds, only a noisy 1.068-times mean improvement.  This rejects dense zero
+matrices as the main explanation and stops the sparse candidate before a
+soundness proof.
+
+The next factorial changes only derivative arithmetic.  It will retain the
+direct sparse graph and current rational certificate/domain validation, but
+compute `d` and `dd` with existing outward fixed primitives rather than the
+normalized rational round-trip.  A separate lane can then test a fixed
+certificate predicate.  This distinguishes numerical normalization from
+domain validation while preserving genuine boxes and full acceptance as the
+eventual gate.  If neither gives a large recurring win, the evidence points to
+broad evaluator overhead and a compiled-computation project rather than more
+case-specific formulas.
+
+Complete evidence is in
+`docs/progress/2026-10-07-v3.65-nl-compact-stage-profile.md` and isolated
+Candle commit `6a840969`.
