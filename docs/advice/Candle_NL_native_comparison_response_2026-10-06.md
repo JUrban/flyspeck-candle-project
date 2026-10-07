@@ -992,6 +992,29 @@ cross-check logs have SHA-256
 and
 `ef3bc68733dee2581650bf1d5ab306f0f60b209246536495fe5e7e9c7e1f9548`.
 
+A second bounded candidate ported the historical denominator identity and its
+exact opposite-edge derivative.  In fixed form it uses
+`4*x0*delta = U126*U135`, the specialized derivative quotient, and
+`d(dih)/dx3 = 2*x0/sqrt(4*x0*delta)`.  Adding a sign-certified monotonic range
+for `-delta_x4` improved coverage from the generic fusion's 1/128 to
+**89/128**, but it still fails the certificate gate.  It produced 51 tighter
+and 77 wider bounds; maximum widening remained about 0.00196.  In the
+preserved single comparison it was not faster than the accepted control.
+
+This narrows the missing ingredient.  The formulas alone are insufficient;
+the historical verifier also uses specialized range algorithms for
+`setDeltaX4`, `setDeltaFull`, `setSqrtDelta`, `setU126`, and `setU135` instead
+of generic interval evaluation of those expressions.  The next work packet is
+therefore a matched fixed-point port of those optimized range primitives,
+tested against the historical outputs on the captured boxes before they are
+composed into the dihedral Hessian.  The 89/128 partial candidate remains
+rejected and receives no proof work.
+
+Evidence run:
+`nl-native-case10173-dihedral-identities-partial-v1-rejected-dev-001`.
+Summary SHA-256:
+`8b0d632eceaa349dfc54f7142e2562e882a0fa5d91d029b0fb1a97ac4e0b4fcc`.
+
 If the specialized dihedral lane also materially wins, the native-input
 capture will be extended to all 4,173 boxes
 and the same comparisons will charge shared preparation once.

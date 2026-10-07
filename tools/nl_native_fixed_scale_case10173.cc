@@ -55,6 +55,7 @@ bool kVerifyFixedKernelEnclosures = false;
 bool kUsePreparedSimplePolynomials = false;
 bool kUsePreparedCoordinateSqrtTerms = false;
 bool kUsePreparedDihedralChain = false;
+bool kUseSpecializedDihedralIdentities = false;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -2506,6 +2507,39 @@ TaylorResult evaluate_four_x1_delta_specialized(
   return complete_result(radii, true, center, hessian, counters);
 }
 
+Interval neg_delta_x4_monotone_box_value(
+    const IntervalVector& box_environment, const Interval& fallback,
+    Counters& counters) {
+  const IntervalVector gradient = vector_neg(
+      delta_x4_gradient(box_environment));
+  IntervalVector minimum_point;
+  IntervalVector maximum_point;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    if (gradient[coordinate].lower >= 0) {
+      minimum_point[coordinate] = {
+          box_environment[coordinate].lower,
+          box_environment[coordinate].lower};
+      maximum_point[coordinate] = {
+          box_environment[coordinate].upper,
+          box_environment[coordinate].upper};
+    } else if (gradient[coordinate].upper <= 0) {
+      minimum_point[coordinate] = {
+          box_environment[coordinate].upper,
+          box_environment[coordinate].upper};
+      maximum_point[coordinate] = {
+          box_environment[coordinate].lower,
+          box_environment[coordinate].lower};
+    } else {
+      return fallback;
+    }
+  }
+  const Interval minimum = interval_neg(
+      delta_x4_value(minimum_point, counters));
+  const Interval maximum = interval_neg(
+      delta_x4_value(maximum_point, counters));
+  return {minimum.lower, maximum.upper};
+}
+
 TaylorResult evaluate_dihedral_chain_specialized(
     const IntegerVector& radii, const IntervalVector& center_environment,
     const IntervalVector& box_environment,
@@ -2601,6 +2635,143 @@ TaylorResult evaluate_dihedral_chain_specialized(
           box_atan_dd,
           interval_self_outer(quotient.box_gradient, counters), counters),
       interval_matrix_scale(box_atan_d, quotient.box_hessian, counters));
+  return complete_result(radii, true, center, hessian, counters);
+}
+
+TaylorResult evaluate_dihedral_identities_specialized(
+    const IntegerVector& radii, const IntervalVector& center_environment,
+    const IntervalVector& box_environment,
+    const Interval& center_sqrt_certificate,
+    const Interval& box_sqrt_certificate, Counters& counters) {
+  const TaylorResult numerator = evaluate_neg_delta_x4_specialized(
+      radii, center_environment, counters);
+  const TaylorResult radicand = evaluate_four_x1_delta_specialized(
+      radii, center_environment, box_environment, counters);
+  const Interval numerator_box_value = neg_delta_x4_monotone_box_value(
+      box_environment, numerator.value_bound, counters);
+  const IntervalVector numerator_box_gradient = vector_neg(
+      delta_x4_gradient(box_environment));
+  ++counters.sqrt_steps;
+  ++counters.inverse_steps;
+  ++counters.atan_steps;
+  const bool sqrt_domain =
+      fixed_sqrt_certificate(radicand.center.value,
+                             center_sqrt_certificate) &&
+      fixed_sqrt_certificate(radicand.value_bound,
+                             box_sqrt_certificate) &&
+      fixed_interval_not_zero(center_sqrt_certificate) &&
+      fixed_interval_not_zero(box_sqrt_certificate);
+  if (!sqrt_domain) {
+    throw std::runtime_error(
+        "specialized dihedral square-root domain failure");
+  }
+
+  const Interval center_sqrt_d = fixed_interval_inv(
+      interval_integer_scale(2, center_sqrt_certificate));
+  const Interval box_sqrt_d = fixed_interval_inv(
+      interval_integer_scale(2, box_sqrt_certificate));
+  const Interval box_sqrt_dd_denominator = interval_mul(
+      interval_integer_scale(2, box_sqrt_certificate),
+      interval_integer_scale(2, radicand.value_bound), counters);
+  if (!fixed_interval_not_zero(box_sqrt_dd_denominator)) {
+    throw std::runtime_error(
+        "specialized dihedral sqrt Hessian domain failure");
+  }
+  const Interval box_sqrt_dd = interval_neg(
+      fixed_interval_inv(box_sqrt_dd_denominator));
+  const IntervalVector center_sqrt_gradient = interval_vector_scale(
+      center_sqrt_d, radicand.center.gradient, counters);
+  const IntervalVector box_sqrt_gradient = interval_vector_scale(
+      box_sqrt_d, radicand.gradient_bounds, counters);
+  const IntervalMatrix box_sqrt_hessian = matrix_add(
+      interval_matrix_scale(
+          box_sqrt_dd,
+          interval_self_outer(radicand.gradient_bounds, counters), counters),
+      interval_matrix_scale(box_sqrt_d, radicand.hessian, counters));
+
+  if (!fixed_interval_not_zero(radicand.center.value) ||
+      !fixed_interval_not_zero(radicand.value_bound)) {
+    throw std::runtime_error("specialized dihedral radicand domain failure");
+  }
+  // The historical route uses 1 / (U126 * U135).  The authenticated
+  // radicand is exactly 4*x0*delta = U126*U135, so using its already tight
+  // Taylor enclosure preserves that identity without reintroducing interval
+  // dependency in two separately evaluated triangle polynomials.
+  const Interval center_ru = fixed_interval_inv(radicand.center.value);
+  const Interval box_ru = fixed_interval_inv(radicand.value_bound);
+
+  IntervalVector center_c;
+  IntervalVector box_c;
+  IntervalVector center_gradient;
+  IntervalVector box_gradient;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    center_c[coordinate] = interval_add(
+        interval_mul(numerator.center.gradient[coordinate],
+                     center_sqrt_certificate, counters),
+        interval_neg(interval_mul(numerator.center.value,
+                                  center_sqrt_gradient[coordinate],
+                                  counters)));
+    box_c[coordinate] = interval_add(
+        interval_mul(numerator_box_gradient[coordinate],
+                     box_sqrt_certificate, counters),
+        interval_neg(interval_mul(numerator_box_value,
+                                  box_sqrt_gradient[coordinate],
+                                  counters)));
+    center_gradient[coordinate] = interval_mul(
+        center_c[coordinate], center_ru, counters);
+    box_gradient[coordinate] = interval_mul(
+        box_c[coordinate], box_ru, counters);
+  }
+  // Historical setDihedral uses the exact opposite-edge identity
+  // d(dih)/dx3 = sqrt(4*x0)/(2*sqrt(delta)) = 2*x0/sqrt(4*x0*delta).
+  center_gradient[3] = interval_mul(
+      interval_integer_scale(2, center_environment[0]),
+      fixed_interval_inv(center_sqrt_certificate), counters);
+  box_gradient[3] = interval_mul(
+      interval_integer_scale(2, box_environment[0]),
+      fixed_interval_inv(box_sqrt_certificate), counters);
+
+  IntervalVector logarithmic_u_gradient;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    logarithmic_u_gradient[coordinate] = interval_mul(
+        radicand.gradient_bounds[coordinate], box_ru, counters);
+  }
+
+  IntervalMatrix hessian = zero_matrix();
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      const Interval identity_numerator = interval_sum({
+          interval_mul(box_sqrt_certificate,
+                       numerator.hessian[row][column], counters),
+          interval_mul(numerator_box_gradient[row],
+                       box_sqrt_gradient[column], counters),
+          interval_neg(interval_mul(numerator_box_gradient[column],
+                                    box_sqrt_gradient[row], counters)),
+          interval_neg(interval_mul(numerator_box_value,
+                                    box_sqrt_hessian[row][column],
+                                    counters))});
+      const Interval value = interval_add(
+          interval_mul(box_ru, identity_numerator, counters),
+          interval_neg(interval_mul(box_gradient[row],
+                                    logarithmic_u_gradient[column],
+                                    counters)));
+      hessian[row][column] = value;
+      hessian[column][row] = value;
+    }
+  }
+
+  const Interval center_quotient = interval_mul(
+      numerator.center.value,
+      fixed_interval_inv(center_sqrt_certificate), counters);
+  if (absolute(center_quotient.lower) >= kScale ||
+      absolute(center_quotient.upper) >= kScale) {
+    throw std::runtime_error(
+        "specialized dihedral arctangent domain failure");
+  }
+  const FirstJet center = {
+      interval_add(interval_of_q({kPiHalfLower, kPiHalfUpper}),
+                   fixed_atan_interval(center_quotient, counters)),
+      center_gradient};
   return complete_result(radii, true, center, hessian, counters);
 }
 
@@ -2714,6 +2885,22 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       ++sqrt_slot;
       counters.outer_steps += 4;
       outer_index += 3;
+      continue;
+    }
+    if (kUseSpecializedDihedralIdentities && outer_index == 31) {
+      if (!program.prepared_dihedral_chain || sqrt_slot != 6 ||
+          sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error("specialized dihedral source/slot drift");
+      }
+      const TaylorResult candidate = evaluate_dihedral_identities_specialized(
+          radii, center_environment, box_environment,
+          job.fixed_center_certificates[sqrt_slot],
+          job.fixed_box_certificates[sqrt_slot], counters);
+      stack.push_back(candidate);
+      ++sqrt_slot;
+      counters.outer_steps += 8;
+      direct_delta_x4_used = true;
+      outer_index += 7;
       continue;
     }
     if (kUsePreparedDihedralChain && outer_index == 31) {
@@ -3065,7 +3252,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 16) {
+    if (argc < 4 || argc > 17) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -3083,6 +3270,7 @@ int main(int argc, char** argv) {
                 << " [--prepared-simple-polynomials]"
                 << " [--prepared-coordinate-sqrt-terms]"
                 << " [--prepared-dihedral-chain]"
+                << " [--specialized-dihedral-identities]"
                 << " [--decimal-scale=N]"
                 << " [--dyadic-scale]\n";
       return 2;
@@ -3139,6 +3327,8 @@ int main(int argc, char** argv) {
         kUsePreparedCoordinateSqrtTerms = true;
       } else if (option == "--prepared-dihedral-chain") {
         kUsePreparedDihedralChain = true;
+      } else if (option == "--specialized-dihedral-identities") {
+        kUseSpecializedDihedralIdentities = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -3170,9 +3360,15 @@ int main(int argc, char** argv) {
           "instruction profiling is not implemented for the prepared "
           "dihedral chain");
     }
+    if (profile_enabled && kUseSpecializedDihedralIdentities) {
+      throw std::runtime_error(
+          "instruction profiling is not implemented for specialized "
+          "dihedral identities");
+    }
     if (kUseCompactSupportJets &&
         (kUseFixedSqrtInverseKernels || kUseFixedAtanKernel ||
-         kUsePreparedSimplePolynomials || kUsePreparedDihedralChain)) {
+         kUsePreparedSimplePolynomials || kUsePreparedDihedralChain ||
+         kUseSpecializedDihedralIdentities)) {
       throw std::runtime_error(
           "compact support jets do not yet implement fixed nonlinear kernels "
           "or prepared simple polynomials");
@@ -3195,6 +3391,22 @@ int main(int argc, char** argv) {
           "prepared dihedral chain requires fixed nonlinear kernels and "
           "both authenticated angle polynomial modes");
     }
+    if (kUsePreparedDihedralChain && kUseSpecializedDihedralIdentities) {
+      throw std::runtime_error("conflicting prepared dihedral modes");
+    }
+    if (kUseSpecializedDihedralIdentities &&
+        (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
+         polynomial_mode != PolynomialMode::kSpecializedAngle ||
+         !direct_delta_x4)) {
+      throw std::runtime_error(
+          "specialized dihedral identities require fixed nonlinear kernels "
+          "and both authenticated angle polynomial modes");
+    }
+    if (kUseSpecializedDihedralIdentities &&
+        kVerifyFixedKernelEnclosures) {
+      throw std::runtime_error(
+          "specialized dihedral identity cross-check is not yet implemented");
+    }
     if (dyadic_scale) {
       kScale = fixed_of_integer(
           Integer("1099511627776"));  // 2^40, close to decimal 10^12.
@@ -3212,7 +3424,7 @@ int main(int argc, char** argv) {
     if (kUsePreparedCoordinateSqrtTerms) {
       prepare_coordinate_sqrt_terms(program);
     }
-    if (kUsePreparedDihedralChain) {
+    if (kUsePreparedDihedralChain || kUseSpecializedDihedralIdentities) {
       prepare_dihedral_chain(program);
     }
     std::vector<Job> jobs = read_jobs(argv[2]);
@@ -3326,6 +3538,8 @@ int main(int argc, char** argv) {
               << prepared_coordinate_sqrt_term_count
               << " prepared_dihedral_chain="
               << (kUsePreparedDihedralChain ? 1 : 0)
+              << " specialized_dihedral_identities="
+              << (kUseSpecializedDihedralIdentities ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
