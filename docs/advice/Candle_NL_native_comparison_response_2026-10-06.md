@@ -1934,3 +1934,44 @@ boxes are attempted. Only a full-batch win that generalizes to a second
 certificate family earns one universal source-authenticated complete-box
 soundness theorem. No per-expression calculus proof or production dispatch is
 authorized by the single-fixture prototype.
+
+## Update: direct-Taylor Kernel lower bound and next transfer boundary
+
+The first direct-plan transfer measurement is complete, but intentionally at
+the late boundary. Native preparation supplied complete center, radius,
+gradient, and Hessian bounds for 128 genuine boxes. `Kernel.compute` performed
+the final rounded Taylor completion and returned closed theorems whose 128
+upper bounds match the exact native direct stages byte-for-byte. The success
+marker explicitly records `dihedral_inside_compute=0`; this is a lower bound,
+not the direct reflected checker.
+
+The existing complete-result evaluator takes 0.234718213 seconds and theorem
+handoff takes 0.138595007 seconds. A handwritten minimal final-upper
+expression is 6.71 times slower in computation and is rejected. Authenticated
+checkpoint restore costs 112 seconds end to end, while post-restore input
+construction reaches the first compute marker in 7.016 seconds. These costs
+are reported separately because restoration is reusable development setup,
+input construction is prototype preparation, and compute/handoff is recurring
+proof work.
+
+This makes another final-Taylor specialization a poor target. Linear scaling
+would place the accepted late computation at about 7.65 seconds for 4,173
+boxes, compared with 434.36 seconds in the current complete computed verdict.
+The comparison is diagnostic, not a full-batch claim, but it places the large
+remaining formal cost before this boundary. The small exact-bound proof effort
+therefore remains bounded.
+
+The next controlled transfer holds exact decimal representation, rounding,
+genuine inputs, and the historical direct formula fixed while moving the
+dihedral tangent/Hessian into the encoded evaluator. One and then 16 boxes
+will initially use sealed prevalidated square-root enclosures to isolate the
+angle/derivative engine. The matched exact native stage provides the
+same-algorithm control, separating evaluator overhead from mathematical work.
+Only a promising exact stage result brings roots inside and advances to the
+complete 128-box call. The full 4,173-box and second-family gates remain in
+force before a universal proof is attempted.
+
+Accepted Candle evidence is
+`cv-case10173-direct-taylor-prefix128-v17-dev-001` on isolated commit
+`c725e0f3`; the complete report is
+`docs/progress/2026-10-07-v3.60-nl-direct-taylor-kernel-lower-bound.md`.

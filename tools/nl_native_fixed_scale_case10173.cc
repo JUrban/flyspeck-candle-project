@@ -4319,7 +4319,8 @@ struct Evaluation {
 
 Evaluation evaluate_direct_specialized_function(
     const Program& program, const Job& job,
-    DirectStageProfiles* profiles = nullptr) {
+    DirectStageProfiles* profiles = nullptr,
+    TaylorResult* captured_result = nullptr) {
   constexpr std::array<std::size_t, 6> kRootIndices =
       {{1, 6, 11, 16, 21, 26}};
   constexpr std::array<std::size_t, 7> kConstantIndices =
@@ -4444,6 +4445,7 @@ Evaluation evaluate_direct_specialized_function(
   const DirectStageSnapshot completion_snapshot = begin_stage(6);
   const TaylorResult result = complete_result(
       radii, true, center, hessian, counters);
+  if (captured_result != nullptr) *captured_result = result;
   counters.outer_steps += program.instructions.size();
   finish_stage(6, completion_snapshot);
   return {normalized_rat(integer_of_fixed(result.value_bound.upper),
@@ -5579,8 +5581,7 @@ int main(int argc, char** argv) {
     }
     if (kUseDirectSpecializedFunction &&
         (profile_enabled || rounding_profile_enabled ||
-         full_stage_diagnostics || kFuseConsecutiveAdds ||
-         kDeferAdditiveLeafCompletion)) {
+         kFuseConsecutiveAdds || kDeferAdditiveLeafCompletion)) {
       throw std::runtime_error(
           "direct specialized function cannot be combined with interpreter "
           "profiles, stage capture, or interpreter fusion modes");
@@ -5777,7 +5778,8 @@ int main(int argc, char** argv) {
           ? evaluate_direct_specialized_function(
                 program, jobs[index],
                 direct_stage_profile_enabled ? &direct_stage_profiles
-                                             : nullptr)
+                                             : nullptr,
+                full_stage_diagnostics ? &stage_results[index] : nullptr)
           : kUseCompactSupportJets
               ? evaluate_job_compact(
                 program, jobs[index], polynomial_mode,
