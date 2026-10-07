@@ -252,6 +252,16 @@ struct SecondOrderBox {
   IntervalMatrix hessian;
 };
 
+// Development-only handoff for the reflected historical-dihedral
+// discriminator.  Square roots are the one scalar operation which the first
+// encoded prototype deliberately receives as sealed certificates.  All
+// derivative, inverse, U-polynomial, and atan work remains on the measured
+// side of that boundary.
+struct HistoricalDihedralRootTrace {
+  Interval root_delta;
+  Interval root_four_x0;
+};
+
 using GradientMask = std::uint8_t;
 using HessianMask = std::uint32_t;
 
@@ -3786,7 +3796,7 @@ SecondOrderBox second_order_sqrt(const SecondOrderBox& input,
 
 SecondOrderBox historical_dihedral_second_order(
     const IntervalVector& environment, bool use_sign_directed_bounds,
-    Counters& counters) {
+    Counters& counters, HistoricalDihedralRootTrace* trace = nullptr) {
   const SecondOrderBox delta = use_sign_directed_bounds
       ? delta_full_sign_directed(
             environment, counters, kUseHistoricalBlockRounding)
@@ -3809,6 +3819,10 @@ SecondOrderBox historical_dihedral_second_order(
   ++counters.sqrt_steps;
   const Interval root_four_x0 = fixed_sqrt_enclosure(
       interval_integer_scale(4, environment[0]));
+  if (trace != nullptr) {
+    trace->root_delta = root_delta.value;
+    trace->root_four_x0 = root_four_x0;
+  }
   const Interval b = interval_mul(
       root_delta.value, root_four_x0, counters);
   if (!fixed_interval_not_zero(b)) {
@@ -3931,7 +3945,9 @@ SecondOrderBox historical_dihedral_second_order(
 }
 
 FirstJet historical_dihedral_first_order(
-    const IntervalVector& environment, Counters& counters) {
+    const IntervalVector& environment, Counters& counters,
+    HistoricalDihedralRootTrace* trace = nullptr,
+    const HistoricalDihedralRootTrace* supplied_roots = nullptr) {
   const Interval delta_value_at_center = delta_value(environment, counters);
   const IntervalVector delta_gradient_at_center =
       delta_gradient_from_products(
@@ -3941,8 +3957,13 @@ FirstJet historical_dihedral_first_order(
         "historical dihedral center square-root domain failure");
   }
 
-  ++counters.sqrt_steps;
-  const Interval root_delta = fixed_sqrt_enclosure(delta_value_at_center);
+  Interval root_delta;
+  if (supplied_roots == nullptr) {
+    ++counters.sqrt_steps;
+    root_delta = fixed_sqrt_enclosure(delta_value_at_center);
+  } else {
+    root_delta = supplied_roots->root_delta;
+  }
   const Interval root_delta_derivative = fixed_interval_inv(
       interval_integer_scale(2, root_delta));
   const IntervalVector root_delta_gradient = interval_vector_scale(
@@ -3961,9 +3982,18 @@ FirstJet historical_dihedral_first_order(
     throw std::runtime_error("historical dihedral center U domain failure");
   }
 
-  ++counters.sqrt_steps;
-  const Interval root_four_x0 = fixed_sqrt_enclosure(
-      interval_integer_scale(4, environment[0]));
+  Interval root_four_x0;
+  if (supplied_roots == nullptr) {
+    ++counters.sqrt_steps;
+    root_four_x0 = fixed_sqrt_enclosure(
+        interval_integer_scale(4, environment[0]));
+  } else {
+    root_four_x0 = supplied_roots->root_four_x0;
+  }
+  if (trace != nullptr) {
+    trace->root_delta = root_delta;
+    trace->root_four_x0 = root_four_x0;
+  }
   const Interval b = interval_mul(root_delta, root_four_x0, counters);
   if (!fixed_interval_not_zero(b)) {
     throw std::runtime_error(
@@ -4504,6 +4534,132 @@ void print_dihedral_identity_diagnostic(std::size_t index,
     }
   }
   std::cout << "\n";
+}
+
+void print_historical_dihedral_kernel_diagnostic(
+    std::size_t index, const Job& job) {
+  IntervalVector center_environment;
+  IntervalVector box_environment;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const Rat midpoint =
+        (job.lower[coordinate] + job.upper[coordinate]) / 2;
+    center_environment[coordinate] = interval_constant(midpoint);
+    box_environment[coordinate] = interval_of_q(
+        {job.lower[coordinate], job.upper[coordinate]});
+  }
+
+  Counters counters;
+  HistoricalDihedralRootTrace center_roots;
+  HistoricalDihedralRootTrace box_roots;
+  const FirstJet center = historical_dihedral_first_order(
+      center_environment, counters, &center_roots);
+  const SecondOrderBox box = historical_dihedral_second_order(
+      box_environment, true, counters, &box_roots);
+
+  const auto print_interval = [](const Interval& value) {
+    std::cout << integer_of_fixed(value.lower).get_str() << ":"
+              << integer_of_fixed(value.upper).get_str();
+  };
+  const auto print_vector = [&print_interval](const IntervalVector& values) {
+    for (std::size_t coordinate = 0;
+         coordinate < kDimensions; ++coordinate) {
+      if (coordinate != 0) std::cout << ",";
+      print_interval(values[coordinate]);
+    }
+  };
+
+  std::cout << "CANDLE_NL_NATIVE_HISTORICAL_DIHEDRAL_KERNEL"
+            << " index=" << index << " center_environment=";
+  print_vector(center_environment);
+  std::cout << " box_environment=";
+  print_vector(box_environment);
+  std::cout << " center_root_delta=";
+  print_interval(center_roots.root_delta);
+  std::cout << " center_root_four_x0=";
+  print_interval(center_roots.root_four_x0);
+  std::cout << " box_root_delta=";
+  print_interval(box_roots.root_delta);
+  std::cout << " box_root_four_x0=";
+  print_interval(box_roots.root_four_x0);
+  std::cout << " center_value=";
+  print_interval(center.value);
+  std::cout << " center_gradient=";
+  print_vector(center.gradient);
+  std::cout << " box_value=";
+  print_interval(box.value);
+  std::cout << " box_gradient=";
+  print_vector(box.gradient);
+  std::cout << " hessian=";
+  bool first = true;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row;
+         column < kDimensions; ++column) {
+      if (!first) std::cout << ",";
+      first = false;
+      print_interval(box.hessian[row][column]);
+    }
+  }
+  std::cout << " interval_products=" << counters.interval_products
+            << " endpoint_products=" << counters.interval_endpoint_products
+            << " sqrt_steps=" << counters.sqrt_steps
+            << " atan_steps=" << counters.atan_steps << "\n";
+}
+
+void benchmark_historical_dihedral_first_order(
+    const std::vector<Job>& jobs, std::size_t repetitions) {
+  std::vector<IntervalVector> environments(jobs.size());
+  std::vector<HistoricalDihedralRootTrace> roots(jobs.size());
+  Counters preparation_counters;
+  const auto preparation_begin = std::chrono::steady_clock::now();
+  for (std::size_t index = 0; index < jobs.size(); ++index) {
+    for (std::size_t coordinate = 0;
+         coordinate < kDimensions; ++coordinate) {
+      const Rat midpoint =
+          (jobs[index].lower[coordinate] + jobs[index].upper[coordinate]) / 2;
+      environments[index][coordinate] = interval_constant(midpoint);
+    }
+    (void)historical_dihedral_first_order(
+        environments[index], preparation_counters, &roots[index]);
+  }
+  const auto preparation_end = std::chrono::steady_clock::now();
+
+  Counters evaluation_counters;
+  Integer checksum = 0;
+  const auto evaluation_begin = std::chrono::steady_clock::now();
+  for (std::size_t repetition = 0; repetition < repetitions; ++repetition) {
+    for (std::size_t index = 0; index < jobs.size(); ++index) {
+      const FirstJet result = historical_dihedral_first_order(
+          environments[index], evaluation_counters, nullptr, &roots[index]);
+      checksum += integer_of_fixed(result.value.lower);
+      checksum += integer_of_fixed(result.value.upper);
+      for (std::size_t coordinate = 0;
+           coordinate < kDimensions; ++coordinate) {
+        checksum += integer_of_fixed(result.gradient[coordinate].lower);
+        checksum += integer_of_fixed(result.gradient[coordinate].upper);
+      }
+    }
+  }
+  const auto evaluation_end = std::chrono::steady_clock::now();
+  const double preparation_seconds = std::chrono::duration<double>(
+      preparation_end - preparation_begin).count();
+  const double evaluation_seconds = std::chrono::duration<double>(
+      evaluation_end - evaluation_begin).count();
+  std::cout << "CANDLE_NL_NATIVE_HISTORICAL_FIRST_BENCHMARK"
+            << " cells=" << jobs.size()
+            << " repetitions=" << repetitions
+            << " preparation_seconds=" << preparation_seconds
+            << " evaluation_seconds=" << evaluation_seconds
+            << " seconds_per_batch="
+            << evaluation_seconds / static_cast<double>(repetitions)
+            << " preparation_sqrt_steps="
+            << preparation_counters.sqrt_steps
+            << " evaluation_sqrt_steps=" << evaluation_counters.sqrt_steps
+            << " evaluation_interval_products="
+            << evaluation_counters.interval_products
+            << " evaluation_endpoint_products="
+            << evaluation_counters.interval_endpoint_products
+            << " evaluation_atan_steps=" << evaluation_counters.atan_steps
+            << " checksum=" << checksum.get_str() << "\n";
 }
 
 void print_full_stage_diagnostic(const Job& job,
@@ -5256,7 +5412,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 33) {
+    if (argc < 4 || argc > 35) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -5297,6 +5453,8 @@ int main(int argc, char** argv) {
                 << " [--count-fixed-quotients]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
+                << " [--historical-kernel-diagnostics]"
+                << " [--historical-first-benchmark-repetitions=N]"
                 << " [--delta-full-diagnostics]"
                 << " [--full-stage-diagnostics]"
                 << " [--decimal-scale=N]"
@@ -5312,6 +5470,8 @@ int main(int argc, char** argv) {
     int fused_polynomial_max_steps = -1;
     bool direct_delta_x4 = false;
     bool dihedral_identity_diagnostics = false;
+    bool historical_kernel_diagnostics = false;
+    std::size_t historical_first_benchmark_repetitions = 0;
     bool delta_full_diagnostics = false;
     bool full_stage_diagnostics = false;
     bool custom_decimal_scale = false;
@@ -5412,6 +5572,18 @@ int main(int argc, char** argv) {
         kCountFixedQuotients = true;
       } else if (option == "--dihedral-identity-diagnostics") {
         dihedral_identity_diagnostics = true;
+      } else if (option == "--historical-kernel-diagnostics") {
+        historical_kernel_diagnostics = true;
+      } else if (option.rfind(
+                     "--historical-first-benchmark-repetitions=", 0) == 0) {
+        historical_first_benchmark_repetitions =
+            static_cast<std::size_t>(std::stoull(option.substr(
+                std::string("--historical-first-benchmark-repetitions=")
+                    .size())));
+        if (historical_first_benchmark_repetitions == 0) {
+          throw std::runtime_error(
+              "zero historical first-order benchmark repetitions");
+        }
       } else if (option == "--delta-full-diagnostics") {
         delta_full_diagnostics = true;
       } else if (option == "--full-stage-diagnostics") {
@@ -5599,6 +5771,17 @@ int main(int argc, char** argv) {
         !kUseSpecializedDihedralIdentities && !kUseHistoricalDihedral) {
       throw std::runtime_error(
           "dihedral diagnostics require a specialized dihedral path");
+    }
+    if (historical_kernel_diagnostics && !kUseHistoricalDihedral) {
+      throw std::runtime_error(
+          "historical kernel diagnostics require the historical dihedral "
+          "path");
+    }
+    if (historical_first_benchmark_repetitions != 0 &&
+        !kUseHistoricalDihedral) {
+      throw std::runtime_error(
+          "historical first-order benchmark requires the historical "
+          "dihedral path");
     }
     if (kUseTightDihedralSqrtCertificates &&
         !kUseSpecializedDihedralIdentities) {
@@ -6160,6 +6343,15 @@ int main(int argc, char** argv) {
         print_dihedral_identity_diagnostic(
             index, evaluate_dihedral_identity_diagnostic(jobs[index]));
       }
+    }
+    if (historical_kernel_diagnostics) {
+      for (std::size_t index = 0; index < jobs.size(); ++index) {
+        print_historical_dihedral_kernel_diagnostic(index, jobs[index]);
+      }
+    }
+    if (historical_first_benchmark_repetitions != 0) {
+      benchmark_historical_dihedral_first_order(
+          jobs, historical_first_benchmark_repetitions);
     }
     if (!dyadic_scale && polynomial_mode == PolynomialMode::kBaseline &&
         mismatches != 0) {

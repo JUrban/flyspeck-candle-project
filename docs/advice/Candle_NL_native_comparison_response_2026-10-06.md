@@ -1975,3 +1975,40 @@ Accepted Candle evidence is
 `cv-case10173-direct-taylor-prefix128-v17-dev-001` on isolated commit
 `c725e0f3`; the complete report is
 `docs/progress/2026-10-07-v3.60-nl-direct-taylor-kernel-lower-bound.md`.
+
+## Update: matched historical tangent inside `Kernel.compute`
+
+The next transfer boundary is now measured on all 128 genuine prefix boxes.
+Holding the historical first-order formulas, decimal fixed scale, rounding,
+sealed native root intervals, and exact outputs fixed, `Kernel.compute`
+reproduces every value and six-gradient endpoint exactly. The theorem is
+closed, has no assumptions, and adds no axioms.
+
+The reflected batch takes 0.490290195 seconds to compute and 0.010940123
+seconds to validate/hand off. A 1,000-repeat native control of the identical
+root-supplied first-order graph takes 0.014585436 seconds per batch. The
+encoded evaluator boundary is therefore 33.615 times for computation and
+34.365 times including handoff. This is specific to the first-order graph,
+but it is stronger evidence than extrapolating the old approximately
+15-times ratio to the derivative engine.
+
+This does not erase the separate historical gap. The earlier controlled
+native factorials assign 1.628 times to endpoint representation/rounding and
+1.087 times to the tested derivative-data-flow change on the optimized direct
+graph. The original approximately 340-times starting observation remains a
+description of the generic formal architecture; the native prototypes have
+reduced its numerical component on this fixture, but none is authoritative
+inside Candle yet.
+
+The current specialization remains bounded. The next exact test is the 21
+symmetric historical Hessian entries, first on 16 and then 128 boxes, followed
+by the existing Taylor completion and certificate-acceptance gate. Only a
+material complete-box win advances roots inside, all 4,173 boxes, a second
+certificate family, and one reusable compact-instruction/checker theorem.
+Failure at the complete boundary redirects the representation/evaluator plan
+before more soundness proof is attempted.
+
+Accepted Candle evidence is
+`cv-case10173-historical-first-prefix128-v1-dev-001` on isolated commit
+`1e701c16`. The full measurement and concrete gate are in
+`docs/progress/2026-10-07-v3.61-nl-historical-tangent-kernel-factorial.md`.
