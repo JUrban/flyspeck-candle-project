@@ -1354,3 +1354,82 @@ not the slower historical graph, and must account for complete-batch
 acceptance and theorem handoff.  The direct-rounded historical C++ result
 continues to show the attainable scale, while this experiment prevents an
 unproductive per-division optimization branch.
+
+## Update: rounding attribution and controlled separation
+
+The broader investigation remains active; the exact-bound specialization is
+not being treated as the final architecture. A new profile reconciles all
+5,691,972 exact evaluation quotients on the 4,173 genuine boxes with their
+outer source stages. The largest individual consumers are arctangent
+(901,368), the 85-step angle polynomial (759,486), inverse (676,026), and
+square root (667,680). All outer additions together consume 817,908 because
+each intermediate addition performs another theorem-shaped Taylor
+completion.
+
+This led to two controlled experiments which separate generic mathematical
+work from arithmetic implementation.
+
+First, fusing only consecutive additions leaves the center jet and Hessian
+calculation unchanged and delays completion until the result is next
+observable. It removes 701,064 quotients, produces byte-identical final
+bounds, accepts all 4,173 boxes, and improves 20-pair recurring evaluation
+from 0.357365047 to 0.324128037 seconds (1.103 times). The cold complete batch
+improves only 1.054 times. This is useful general lazy-completion machinery,
+not an orders-of-magnitude result.
+
+Second, both lanes used the same signed-128 graph and the same `2^23` scale.
+The candidate replaced exact division by exact signed directed shifts only at
+power-of-two scale denominators; arbitrary inverse and other denominators
+still use division. Startup edge tests cross-check the signed shift formulas
+against exact division. The candidate covers 95.60% of evaluation quotients,
+produces byte-identical lane outputs, and retains 4,173/4,173 acceptance.
+Twenty paired runs improve evaluation from 0.357324618 to 0.292199660 seconds
+(1.223 times) and the cold complete batch from 0.693836957 to 0.618422802
+seconds (1.122 times).
+
+The profile, fused-add, and dyadic phase-table SHA-256 values are respectively
+`9217082eeaa58350fdc147f5606ff7e63da28f1ab424195e6ff82c4cf030c8d0`,
+`d9a178b5ba4c06ed90523bacba0febdb17ca5496ea4d28fa11c122d70391851b`,
+and
+`0e1fadb5ef4d2165c285377b88962a0a327e4832b834c28cede452513442269c`.
+The development runs are
+`nl-native-case10173-rounding-profile-v3-dev-001`,
+`nl-native-case10173-fused-add-paired-v3-dev-001`, and
+`nl-native-case10173-dyadic-shift-paired-v3-dev-001`.
+
+### Larger-gap decision
+
+The original measured decomposition remains explicit: about 15 times from
+the exact-output-matched native equations to encoded Candle, and about 341
+times from the original generic native fixed-scale equations to historical
+specialized C++. The latter is a historical starting gap, not the residual
+ratio of every later native candidate. The dyadic-shift candidate is now
+3.542 times the 0.082490265-second historical specialized batch on this
+fixture. It is still an unproved native diagnostic and therefore has not yet
+reduced the end-to-end formal cost.
+
+The composition gate is now complete. Twenty rotated full-batch repetitions
+put decimal division at 0.357756189 seconds of evaluation, dyadic shifts at
+0.290814191 seconds, and dyadic shifts plus fused additions at 0.267904467
+seconds. The two dyadic result streams are byte-identical; every lane accepts
+4,173/4,173. The composition improves recurring evaluation by 1.335 times and
+the cold complete batch by 1.173 times over decimal division, but remains
+3.248 times the historical specialized batch. The phase-table SHA-256 is
+`8c42b1b7a17a1c95b7d0883fb051a0a200a520e9d945e664551d5713e5ab26d2`
+in `nl-native-case10173-rounding-composed-paired-v1-dev-001`.
+
+Their proof work stays bounded: reuse the general lazy-completion result for
+addition runs and prove one general signed dyadic-rounding theorem with the
+required range/scale argument. Neither should delay the next native
+large-gap experiment.
+
+A complementary spot check held dyadic shifts fixed and substituted the
+source-derived historical derivative/dihedral graph. It remained slower at
+about 0.335 seconds, so extra exact division was not the only reason that
+graph lost. That branch remains rejected. The next large-gap native experiment
+should hold the winning dyadic arithmetic fixed while reducing the complete
+derivative/Taylor work per box through a compact specialized
+square-root/dihedral or complete low-work box instruction. It must be judged
+on the complete 4,173-box batch, acceptance, enclosure quality, preparation,
+recurring time, and memory. Only a material winner earns a reusable general
+instruction theorem and a new Candle/native measurement.

@@ -69,9 +69,14 @@ bool kUseComputedTightSqrtCertificates = false;
 bool kPrecomputeTightSqrtCertificates = false;
 bool kUseHardwareSeededIntegerSqrt = false;
 bool kUseHardwareSeededFixedQuotient = false;
+bool kUseDyadicShiftFixedQuotient = false;
+int kDyadicScaleBits = -1;
+bool kFuseConsecutiveAdds = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
+std::uint64_t kDyadicShiftFixedQuotientCalls = 0;
+std::uint64_t kDyadicFallbackFixedQuotientCalls = 0;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -157,6 +162,13 @@ struct InstructionProfile {
   std::size_t stack_after = 0;
   std::size_t sqrt_slot_before = 0;
   std::size_t sqrt_slot_after = 0;
+};
+
+struct RoundingProfile {
+  std::uint64_t floor_quotients = 0;
+  std::uint64_t ceil_quotients = 0;
+  std::size_t observations = 0;
+  std::string label;
 };
 
 enum class PolynomialMode {
@@ -479,6 +491,67 @@ Fixed native_ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
   return quotient;
 }
 
+Fixed floor_power_of_two_quotient(Fixed numerator, unsigned shift) {
+  if (shift == 0 || shift >= 127) {
+    throw std::runtime_error("invalid floor power-of-two shift");
+  }
+  const bool negative = numerator < 0;
+  const unsigned __int128 magnitude = negative
+      ? static_cast<unsigned __int128>(-(numerator + 1)) + 1
+      : static_cast<unsigned __int128>(numerator);
+  const unsigned __int128 mask =
+      (static_cast<unsigned __int128>(1) << shift) - 1;
+  const Fixed quotient = static_cast<Fixed>(magnitude >> shift);
+  if (!negative) return quotient;
+  return (magnitude & mask) == 0 ? -quotient : -quotient - 1;
+}
+
+Fixed ceil_power_of_two_quotient(Fixed numerator, unsigned shift) {
+  if (shift == 0 || shift >= 127) {
+    throw std::runtime_error("invalid ceil power-of-two shift");
+  }
+  const bool negative = numerator < 0;
+  const unsigned __int128 magnitude = negative
+      ? static_cast<unsigned __int128>(-(numerator + 1)) + 1
+      : static_cast<unsigned __int128>(numerator);
+  const unsigned __int128 mask =
+      (static_cast<unsigned __int128>(1) << shift) - 1;
+  const Fixed quotient = static_cast<Fixed>(magnitude >> shift);
+  if (negative) return -quotient;
+  return (magnitude & mask) == 0 ? quotient : quotient + 1;
+}
+
+int fixed_dyadic_denominator_shift(Fixed denominator) {
+  if (kDyadicScaleBits <= 0) return -1;
+  if (denominator == kScale) return kDyadicScaleBits;
+  if (denominator == kScale * kScale) return 2 * kDyadicScaleBits;
+  if (denominator == kTwoScaleSquared) return 2 * kDyadicScaleBits + 1;
+  return -1;
+}
+
+void verify_dyadic_shift_quotient_samples() {
+  const unsigned __int128 positive_limit =
+      (~static_cast<unsigned __int128>(0)) >> 1;
+  const Fixed maximum = static_cast<Fixed>(positive_limit);
+  const Fixed minimum = -maximum - 1;
+  const std::array<Fixed, 13> samples = {
+      minimum, minimum + 1, -1001, -1000, -999, -2, -1,
+      0, 1, 2, 999, 1000, maximum};
+  const std::array<unsigned, 7> shifts = {1, 2, 7, 23, 46, 62, 126};
+  for (const unsigned shift : shifts) {
+    const Fixed denominator =
+        static_cast<Fixed>(static_cast<unsigned __int128>(1) << shift);
+    for (const Fixed numerator : samples) {
+      if (floor_power_of_two_quotient(numerator, shift) !=
+              native_floor_fixed_quotient(numerator, denominator) ||
+          ceil_power_of_two_quotient(numerator, shift) !=
+              native_ceil_fixed_quotient(numerator, denominator)) {
+        throw std::runtime_error("dyadic shift quotient self-check failure");
+      }
+    }
+  }
+}
+
 Fixed hardware_seeded_floor_fixed_quotient(Fixed numerator,
                                            Fixed denominator) {
   if (denominator == 0) {
@@ -547,6 +620,15 @@ Fixed hardware_seeded_ceil_fixed_quotient(Fixed numerator,
 
 Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
   if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
+  if (kUseDyadicShiftFixedQuotient) {
+    const int shift = fixed_dyadic_denominator_shift(denominator);
+    if (shift >= 0) {
+      ++kDyadicShiftFixedQuotientCalls;
+      return floor_power_of_two_quotient(
+          numerator, static_cast<unsigned>(shift));
+    }
+    ++kDyadicFallbackFixedQuotientCalls;
+  }
   if (kUseHardwareSeededFixedQuotient) {
     return hardware_seeded_floor_fixed_quotient(numerator, denominator);
   }
@@ -555,6 +637,15 @@ Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
 
 Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
   if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
+  if (kUseDyadicShiftFixedQuotient) {
+    const int shift = fixed_dyadic_denominator_shift(denominator);
+    if (shift >= 0) {
+      ++kDyadicShiftFixedQuotientCalls;
+      return ceil_power_of_two_quotient(
+          numerator, static_cast<unsigned>(shift));
+    }
+    ++kDyadicFallbackFixedQuotientCalls;
+  }
   if (kUseHardwareSeededFixedQuotient) {
     return hardware_seeded_ceil_fixed_quotient(numerator, denominator);
   }
@@ -3849,6 +3940,23 @@ Counters subtract_counters(const Counters& value, const Counters& baseline) {
           value.atan_steps - baseline.atan_steps};
 }
 
+void record_rounding_profile(std::vector<RoundingProfile>* profiles,
+                             std::size_t profile_index,
+                             const std::string& label,
+                             std::uint64_t floor_before,
+                             std::uint64_t ceil_before) {
+  if (profiles == nullptr) return;
+  RoundingProfile& profile = profiles->at(profile_index);
+  if (profile.observations == 0) {
+    profile.label = label;
+  } else if (profile.label != label) {
+    throw std::runtime_error("rounding profile label drift");
+  }
+  profile.floor_quotients += kFloorFixedQuotientCalls - floor_before;
+  profile.ceil_quotients += kCeilFixedQuotientCalls - ceil_before;
+  ++profile.observations;
+}
+
 std::string instruction_label(const Program& program,
                               std::size_t instruction_index) {
   const Node& instruction = node_at(program, instruction_index);
@@ -3879,7 +3987,10 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                         int fused_polynomial_outer_index,
                         int fused_polynomial_max_steps,
                         bool direct_delta_x4,
-                        std::vector<InstructionProfile>* profiles) {
+                        std::vector<InstructionProfile>* profiles,
+                        std::vector<RoundingProfile>* rounding_profiles) {
+  const std::uint64_t setup_floor_before = kFloorFixedQuotientCalls;
+  const std::uint64_t setup_ceil_before = kCeilFixedQuotientCalls;
   IntervalVector center_environment;
   IntervalVector box_environment;
   IntegerVector radii;
@@ -3891,6 +4002,8 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         {job.lower[coordinate], job.upper[coordinate]});
     radii[coordinate] = ceil_scaled(radius);
   }
+  record_rounding_profile(rounding_profiles, 0, "job_setup",
+                          setup_floor_before, setup_ceil_before);
 
   Counters counters;
   std::vector<TaylorResult> stack;
@@ -3898,6 +4011,8 @@ Evaluation evaluate_job(const Program& program, const Job& job,
   bool direct_delta_x4_used = false;
   for (std::size_t outer_index = 0;
        outer_index < program.instructions.size(); ++outer_index) {
+    const std::uint64_t rounding_floor_before = kFloorFixedQuotientCalls;
+    const std::uint64_t rounding_ceil_before = kCeilFixedQuotientCalls;
     const Program::CoordinateSqrtTerm* coordinate_sqrt_term =
         program.prepared_coordinate_sqrt_terms.empty()
             ? nullptr
@@ -3931,6 +4046,9 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       stack.push_back(candidate);
       ++sqrt_slot;
       counters.outer_steps += 4;
+      record_rounding_profile(rounding_profiles, outer_index + 1,
+                              "prepared_coordinate_sqrt",
+                              rounding_floor_before, rounding_ceil_before);
       outer_index += 3;
       continue;
     }
@@ -3944,6 +4062,9 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       ++sqrt_slot;
       counters.outer_steps += 8;
       direct_delta_x4_used = true;
+      record_rounding_profile(rounding_profiles, outer_index + 1,
+                              "historical_dihedral",
+                              rounding_floor_before, rounding_ceil_before);
       outer_index += 7;
       continue;
     }
@@ -3960,6 +4081,9 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       ++sqrt_slot;
       counters.outer_steps += 8;
       direct_delta_x4_used = true;
+      record_rounding_profile(rounding_profiles, outer_index + 1,
+                              "specialized_dihedral",
+                              rounding_floor_before, rounding_ceil_before);
       outer_index += 7;
       continue;
     }
@@ -3998,6 +4122,9 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       ++sqrt_slot;
       counters.outer_steps += 8;
       direct_delta_x4_used = true;
+      record_rounding_profile(rounding_profiles, outer_index + 1,
+                              "prepared_dihedral_chain",
+                              rounding_floor_before, rounding_ceil_before);
       outer_index += 7;
       continue;
     }
@@ -4124,12 +4251,42 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         }
       } else if (opcode == 3 || opcode == 4) {
         if (stack.size() < 2) throw std::runtime_error("analytic stack underflow");
-        TaylorResult right = stack.back();
-        stack.pop_back();
-        TaylorResult left = stack.back();
-        stack.pop_back();
-        stack.push_back(opcode == 3 ? result_add(radii, left, right, counters)
-                                    : result_mul(radii, left, right, counters));
+        if (opcode == 3 && kFuseConsecutiveAdds) {
+          std::size_t add_count = 1;
+          while (outer_index + add_count < program.instructions.size()) {
+            const Node& next = node_at(
+                program, program.instructions[outer_index + add_count]);
+            if (next.is_pair || next.numeral.get_ui() != 3) break;
+            ++add_count;
+          }
+          if (stack.size() < add_count + 1) {
+            throw std::runtime_error("fused add stack underflow");
+          }
+          TaylorResult sum = stack.back();
+          stack.pop_back();
+          for (std::size_t add_index = 0; add_index < add_count;
+               ++add_index) {
+            const TaylorResult left = stack.back();
+            stack.pop_back();
+            sum.domain = left.domain && sum.domain;
+            sum.center = {
+                interval_add(left.center.value, sum.center.value),
+                vector_add(left.center.gradient, sum.center.gradient)};
+            sum.hessian = matrix_add(left.hessian, sum.hessian);
+          }
+          stack.push_back(complete_result(
+              radii, sum.domain, sum.center, sum.hessian, counters));
+          counters.outer_steps += add_count - 1;
+          outer_index += add_count - 1;
+        } else {
+          TaylorResult right = stack.back();
+          stack.pop_back();
+          TaylorResult left = stack.back();
+          stack.pop_back();
+          stack.push_back(opcode == 3
+                              ? result_add(radii, left, right, counters)
+                              : result_mul(radii, left, right, counters));
+        }
       } else if (opcode == 8) {
         stack.push_back(result_pi_half(radii, counters));
       } else {
@@ -4157,6 +4314,10 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       add_counters(profile.counters,
                    subtract_counters(counters, counters_before));
     }
+    record_rounding_profile(
+        rounding_profiles, outer_index + 1,
+        instruction_label(program, program.instructions[outer_index]),
+        rounding_floor_before, rounding_ceil_before);
   }
   if (direct_delta_x4 && !direct_delta_x4_used) {
     throw std::runtime_error("negated delta_x4 source position drift");
@@ -4312,7 +4473,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 28) {
+    if (argc < 4 || argc > 29) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -4339,14 +4500,19 @@ int main(int argc, char** argv) {
                 << " [--precompute-tight-sqrt-certificates]"
                 << " [--hardware-seeded-integer-sqrt]"
                 << " [--hardware-seeded-fixed-quotient]"
+                << " [--dyadic-shift-fixed-quotient]"
+                << " [--fuse-consecutive-adds]"
                 << " [--count-fixed-quotients]"
+                << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
                 << " [--delta-full-diagnostics]"
                 << " [--decimal-scale=N]"
+                << " [--binary-scale-bits=N]"
                 << " [--dyadic-scale]\n";
       return 2;
     }
     bool profile_enabled = false;
+    bool rounding_profile_enabled = false;
     bool dyadic_scale = false;
     int fused_polynomial_outer_index = -1;
     int fused_polynomial_max_steps = -1;
@@ -4354,6 +4520,8 @@ int main(int argc, char** argv) {
     bool dihedral_identity_diagnostics = false;
     bool delta_full_diagnostics = false;
     bool custom_decimal_scale = false;
+    bool custom_binary_scale = false;
+    int requested_binary_scale_bits = 40;
     Integer requested_decimal_scale("1000000000000");
     PolynomialMode polynomial_mode = PolynomialMode::kBaseline;
     for (int index = 4; index < argc; ++index) {
@@ -4418,7 +4586,14 @@ int main(int argc, char** argv) {
         kUseHardwareSeededIntegerSqrt = true;
       } else if (option == "--hardware-seeded-fixed-quotient") {
         kUseHardwareSeededFixedQuotient = true;
+      } else if (option == "--dyadic-shift-fixed-quotient") {
+        kUseDyadicShiftFixedQuotient = true;
+      } else if (option == "--fuse-consecutive-adds") {
+        kFuseConsecutiveAdds = true;
       } else if (option == "--count-fixed-quotients") {
+        kCountFixedQuotients = true;
+      } else if (option == "--rounding-profile") {
+        rounding_profile_enabled = true;
         kCountFixedQuotients = true;
       } else if (option == "--dihedral-identity-diagnostics") {
         dihedral_identity_diagnostics = true;
@@ -4431,12 +4606,45 @@ int main(int argc, char** argv) {
           throw std::runtime_error("nonpositive decimal scale");
         }
         custom_decimal_scale = true;
+      } else if (option.rfind("--binary-scale-bits=", 0) == 0) {
+        requested_binary_scale_bits = std::stoi(option.substr(
+            std::string("--binary-scale-bits=").size()));
+        if (requested_binary_scale_bits <= 0 ||
+            requested_binary_scale_bits >= 63) {
+          throw std::runtime_error("invalid binary scale bit count");
+        }
+        dyadic_scale = true;
+        custom_binary_scale = true;
       } else {
         throw std::runtime_error("unknown optional argument: " + option);
       }
     }
     if (dyadic_scale && custom_decimal_scale) {
       throw std::runtime_error("conflicting scale selections");
+    }
+    if (custom_binary_scale && custom_decimal_scale) {
+      throw std::runtime_error("conflicting custom scale selections");
+    }
+    if (kUseDyadicShiftFixedQuotient && !dyadic_scale) {
+      throw std::runtime_error(
+          "dyadic shift quotients require a binary scale");
+    }
+    if (kUseDyadicShiftFixedQuotient &&
+        kUseHardwareSeededFixedQuotient) {
+      throw std::runtime_error("conflicting fixed quotient diagnostics");
+    }
+    if (profile_enabled && rounding_profile_enabled) {
+      throw std::runtime_error(
+          "timing and rounding profiles cannot be combined");
+    }
+    if (kFuseConsecutiveAdds &&
+        (profile_enabled || rounding_profile_enabled)) {
+      throw std::runtime_error(
+          "fused add runs cannot be combined with per-instruction profiles");
+    }
+    if (rounding_profile_enabled && kUseCompactSupportJets) {
+      throw std::runtime_error(
+          "rounding profiling is not implemented for compact support jets");
     }
     if (kUsePreparedCoordinateSqrtTerms) {
       kUsePreparedSimplePolynomials = true;
@@ -4568,20 +4776,36 @@ int main(int argc, char** argv) {
           "hardware-seeded fixed quotient is a native int128 diagnostic "
           "only");
     }
+    if (kUseDyadicShiftFixedQuotient) {
+      throw std::runtime_error(
+          "dyadic shift fixed quotient is a native int128 diagnostic only");
+    }
 #endif
     if (dyadic_scale) {
-      kScale = fixed_of_integer(
-          Integer("1099511627776"));  // 2^40, close to decimal 10^12.
+      Integer binary_scale = 1;
+      mpz_mul_2exp(binary_scale.get_mpz_t(), binary_scale.get_mpz_t(),
+                   static_cast<mp_bitcnt_t>(requested_binary_scale_bits));
+      kScale = fixed_of_integer(binary_scale);
       kTwoScaleSquared = 2 * kScale * kScale;
+      kDyadicScaleBits = requested_binary_scale_bits;
     } else if (custom_decimal_scale) {
       kScale = fixed_of_integer(requested_decimal_scale);
       kTwoScaleSquared = 2 * kScale * kScale;
     }
+#if defined(CANDLE_NL_FIXED_INT128)
+    if (kUseDyadicShiftFixedQuotient) {
+      verify_dyadic_shift_quotient_samples();
+    }
+#endif
 
     const std::uint64_t preparation_floor_begin =
         kFloorFixedQuotientCalls;
     const std::uint64_t preparation_ceil_begin =
         kCeilFixedQuotientCalls;
+    const std::uint64_t preparation_dyadic_shift_begin =
+        kDyadicShiftFixedQuotientCalls;
+    const std::uint64_t preparation_dyadic_fallback_begin =
+        kDyadicFallbackFixedQuotientCalls;
     const auto preparation_begin = std::chrono::steady_clock::now();
     Program program = read_program(argv[1]);
     if (kUsePreparedSimplePolynomials) {
@@ -4610,6 +4834,10 @@ int main(int argc, char** argv) {
         kFloorFixedQuotientCalls - preparation_floor_begin;
     const std::uint64_t preparation_ceil_calls =
         kCeilFixedQuotientCalls - preparation_ceil_begin;
+    const std::uint64_t preparation_dyadic_shift_calls =
+        kDyadicShiftFixedQuotientCalls - preparation_dyadic_shift_begin;
+    const std::uint64_t preparation_dyadic_fallback_calls =
+        kDyadicFallbackFixedQuotientCalls - preparation_dyadic_fallback_begin;
 
     std::size_t prepared_simple_polynomial_count = 0;
     for (const Program::SimplePolynomial& polynomial :
@@ -4629,6 +4857,10 @@ int main(int argc, char** argv) {
     results.reserve(jobs.size());
     std::vector<InstructionProfile> profiles(
         profile_enabled ? program.instructions.size() : 0);
+    // Slot zero covers per-job environment setup. Instruction i is stored in
+    // slot i + 1 so the sum can be reconciled with the evaluation total.
+    std::vector<RoundingProfile> rounding_profiles(
+        rounding_profile_enabled ? program.instructions.size() + 1 : 0);
     std::size_t mismatches = 0;
     std::size_t accepted = 0;
     std::size_t tighter = 0;
@@ -4640,6 +4872,10 @@ int main(int argc, char** argv) {
         kFloorFixedQuotientCalls;
     const std::uint64_t evaluation_ceil_begin =
         kCeilFixedQuotientCalls;
+    const std::uint64_t evaluation_dyadic_shift_begin =
+        kDyadicShiftFixedQuotientCalls;
+    const std::uint64_t evaluation_dyadic_fallback_begin =
+        kDyadicFallbackFixedQuotientCalls;
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
       const Evaluation evaluation = kUseCompactSupportJets
@@ -4650,7 +4886,8 @@ int main(int argc, char** argv) {
           : evaluate_job(
                 program, jobs[index], polynomial_mode,
                 fused_polynomial_outer_index, fused_polynomial_max_steps,
-                direct_delta_x4, profile_enabled ? &profiles : nullptr);
+                direct_delta_x4, profile_enabled ? &profiles : nullptr,
+                rounding_profile_enabled ? &rounding_profiles : nullptr);
       results.push_back(evaluation.upper);
       add_counters(total, evaluation.counters);
       if (evaluation.upper != expected[index]) ++mismatches;
@@ -4673,6 +4910,10 @@ int main(int argc, char** argv) {
         kFloorFixedQuotientCalls - evaluation_floor_begin;
     const std::uint64_t evaluation_ceil_calls =
         kCeilFixedQuotientCalls - evaluation_ceil_begin;
+    const std::uint64_t evaluation_dyadic_shift_calls =
+        kDyadicShiftFixedQuotientCalls - evaluation_dyadic_shift_begin;
+    const std::uint64_t evaluation_dyadic_fallback_calls =
+        kDyadicFallbackFixedQuotientCalls - evaluation_dyadic_fallback_begin;
 
     const double preparation_seconds =
         std::chrono::duration<double>(preparation_end - preparation_begin).count();
@@ -4683,9 +4924,11 @@ int main(int argc, char** argv) {
               << " cells=" << jobs.size()
               << " backend=" << kFixedBackend
               << " arithmetic="
-              << (dyadic_scale ? "dyadic-2^40"
+              << (dyadic_scale ? "dyadic"
                                : custom_decimal_scale ? "decimal-custom"
                                                       : "decimal-1e12")
+              << " binary_scale_bits="
+              << (dyadic_scale ? requested_binary_scale_bits : -1)
               << " scale=" << integer_of_fixed(kScale).get_str()
               << " mode="
               << (polynomial_mode == PolynomialMode::kFusedAll
@@ -4738,6 +4981,10 @@ int main(int argc, char** argv) {
               << (kUseHardwareSeededIntegerSqrt ? 1 : 0)
               << " hardware_seeded_fixed_quotient="
               << (kUseHardwareSeededFixedQuotient ? 1 : 0)
+              << " dyadic_shift_fixed_quotient="
+              << (kUseDyadicShiftFixedQuotient ? 1 : 0)
+              << " fuse_consecutive_adds="
+              << (kFuseConsecutiveAdds ? 1 : 0)
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
@@ -4754,10 +5001,18 @@ int main(int argc, char** argv) {
               << preparation_floor_calls
               << " preparation_ceil_quotients="
               << preparation_ceil_calls
+              << " preparation_dyadic_shift_quotients="
+              << preparation_dyadic_shift_calls
+              << " preparation_dyadic_fallback_quotients="
+              << preparation_dyadic_fallback_calls
               << " evaluation_floor_quotients="
               << evaluation_floor_calls
               << " evaluation_ceil_quotients="
               << evaluation_ceil_calls
+              << " evaluation_dyadic_shift_quotients="
+              << evaluation_dyadic_shift_calls
+              << " evaluation_dyadic_fallback_quotients="
+              << evaluation_dyadic_fallback_calls
               << " interval_products=" << total.interval_products
               << " skipped_zero_products=" << total.skipped_zero_products
               << " completed_results=" << total.completed_results
@@ -4788,6 +5043,34 @@ int main(int argc, char** argv) {
                   << " sqrt_steps=" << profile.counters.sqrt_steps
                   << " inverse_steps=" << profile.counters.inverse_steps
                   << " atan_steps=" << profile.counters.atan_steps << "\n";
+      }
+    }
+    if (rounding_profile_enabled) {
+      std::uint64_t profiled_floor_quotients = 0;
+      std::uint64_t profiled_ceil_quotients = 0;
+      for (std::size_t profile_index = 0;
+           profile_index < rounding_profiles.size(); ++profile_index) {
+        const RoundingProfile& profile = rounding_profiles[profile_index];
+        if (profile.observations == 0) continue;
+        profiled_floor_quotients += profile.floor_quotients;
+        profiled_ceil_quotients += profile.ceil_quotients;
+        std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_ROUNDING_PROFILE"
+                  << " index="
+                  << (profile_index == 0
+                          ? -1
+                          : static_cast<long long>(profile_index - 1))
+                  << " label=" << profile.label
+                  << " observations=" << profile.observations
+                  << " floor_quotients=" << profile.floor_quotients
+                  << " ceil_quotients=" << profile.ceil_quotients
+                  << " total_quotients="
+                  << profile.floor_quotients + profile.ceil_quotients
+                  << "\n";
+      }
+      if (profiled_floor_quotients != evaluation_floor_calls ||
+          profiled_ceil_quotients != evaluation_ceil_calls) {
+        throw std::runtime_error(
+            "rounding profile does not reconcile with evaluation total");
       }
     }
     for (std::size_t index = 0; index < results.size(); ++index) {
