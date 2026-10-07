@@ -1115,3 +1115,70 @@ that path could still be worthwhile at Flyspeck scale, but it is a substantial
 reusable numerical-library project.  It should first be reproduced as a
 complete native prototype; the existing dense specialization should not grow
 through more isolated formula patches.
+
+## Update: endpoint arithmetic is not the remaining large lever
+
+The proposed hardware-endpoint discriminator is complete on the full 4,173-box
+fixture.  It holds the accepted operation graph, scale `10^7`, prepared square
+roots, and Taylor completion fixed.  The candidate stores integral fixed-scale
+endpoints in `long double`, pads every quotient outwards by one fixed-scale
+unit, and then converts only the final upper bound to the exact comparison
+type.  This is an untrusted attainable-time experiment, not a sound rounding
+backend.  The gate requires every candidate upper bound to contain the native
+`int128` upper bound and requires the complete certificate to remain accepted.
+
+Twenty warmed, order-balanced pairs gave:
+
+| Endpoint lane | Preparation | Evaluation | Complete batch | Accepted |
+|---|---:|---:|---:|---:|
+| Native `int128` | 0.343606176 s | 0.324682706 s | 0.668288882 s | 4,173/4,173 |
+| Padded `long double` | 0.303689110 s | 0.329609298 s | 0.633298407 s | 4,173/4,173 |
+
+The hardware lane is **1.5% slower** in recurring evaluation and only **1.055
+times faster** for a cold complete batch because its preparation happens to be
+cheaper.  All 4,173 final bounds are wider than the exact native bounds; none
+is tighter.  The median widening is `8.26e-5`, the maximum is `5.979e-4`, and
+the smallest acceptance margin falls from `7.94e-5` to `6.31e-5` while still
+remaining positive.  Its evaluation remains **3.996 times** the historical
+specialized C++ batch.
+
+The paired timing and containment files have SHA-256
+`ff560c24e5b8ad5840c462584f6b2ec3c0de301ba896f7ab56dd904640985725`
+and
+`052849188f6859893c73017333aa5f4447872cac177f19f0416e4fc1ae370dd5`
+in run
+`nl-native-case10173-full4173-long-double-paired-v3-dev-001`.
+
+This separates the two remaining questions more sharply.  Native integer
+representation and division rounding are not responsible for the roughly
+fourfold current native/specialized gap on this fixture.  The original
+approximately 341-fold native/specialized result remains important as the
+starting architectural diagnosis, but the accepted scale, compiled-source,
+support-aware, fixed-kernel, and reusable-preparation changes have already
+reduced that particular native ratio to approximately four.  The independent
+encoded-Candle/native ratio must still be remeasured after a winning operation
+graph is chosen; the old approximately 15-fold figure must not be multiplied
+by the current native ratio as though all measurements used the same program.
+
+The next experiment will therefore change mathematical work while holding the
+accepted fixed endpoint representation and complete-batch gate fixed.  It is a
+bounded native port of the historical sign-directed route, staged as follows:
+
+1. port the source-derived `setDeltaFull` value/gradient/Hessian enclosure as
+   one fixed-scale primitive, retaining the current surrounding graph;
+2. add `setDeltaX4` and the derivative-square-root handoff, checking every
+   intermediate enclosure against the historical diagnostic fixture;
+3. complete `setU126`/`setU135` and `setDihedral`, then measure all 4,173 boxes;
+4. record preparation, recurring execution, complete-batch time, operation
+   counts, peak memory, acceptance, and final-bound differences at each stage;
+5. stop before proof integration unless the complete low-work route preserves
+   4,173/4,173 acceptance and produces a material end-to-end win.
+
+The previously corrected dense `U126`/`U135` composition remains rejected and
+will receive no bespoke proof.  General interval/Taylor lemmas that the
+low-work port needs may be reused, but proof work for a new primitive remains
+bounded behind the native complete-batch gate.  If the low-work port wins, its
+proof target is one reusable instruction theorem over all valid expressions
+and boxes, followed by a fresh Candle/native measurement and a representative
+multi-certificate batch.  That preserves the orders-of-magnitude objective
+without treating another small arithmetic improvement as the architecture.

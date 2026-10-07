@@ -33,6 +33,10 @@ using Integer = mpz_class;
 using Fixed = boost::multiprecision::checked_int128_t;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
 constexpr const char* kFixedBackend = "checked-int128";
+#elif defined(CANDLE_NL_FIXED_LONG_DOUBLE)
+using Fixed = long double;
+Fixed kScale = 1000000000000.0L;
+constexpr const char* kFixedBackend = "long-double-integer";
 #elif defined(CANDLE_NL_FIXED_INT128)
 using Fixed = __int128;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
@@ -373,7 +377,39 @@ Integer ceil_quotient(const Integer& numerator, const Integer& denominator) {
   return result;
 }
 
-#if defined(CANDLE_NL_FIXED_INT128)
+#if defined(CANDLE_NL_FIXED_LONG_DOUBLE)
+Integer integer_of_fixed(const Fixed& value) {
+  constexpr Fixed kLongLongExclusiveUpper = 9223372036854775808.0L;
+  if (!std::isfinite(value) || std::trunc(value) != value ||
+      value < -kLongLongExclusiveUpper ||
+      value >= kLongLongExclusiveUpper) {
+    throw std::runtime_error("invalid long-double fixed conversion");
+  }
+  return Integer(std::to_string(static_cast<long long>(value)));
+}
+
+Fixed fixed_of_integer(const Integer& value) {
+  return std::stold(value.get_str());
+}
+
+Fixed floor_fixed_quotient(Fixed numerator, Fixed denominator) {
+  if (denominator == 0) {
+    throw std::runtime_error("long-double fixed division by zero");
+  }
+  // This backend is an untrusted performance discriminator.  Padding every
+  // quotient by one fixed-scale unit makes its final bounds suitable for the
+  // fixture containment gate; it is not a replacement for a proved rounding
+  // implementation.
+  return std::floor(numerator / denominator) - 1.0L;
+}
+
+Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
+  if (denominator == 0) {
+    throw std::runtime_error("long-double fixed division by zero");
+  }
+  return std::ceil(numerator / denominator) + 1.0L;
+}
+#elif defined(CANDLE_NL_FIXED_INT128)
 std::string fixed_string(Fixed value) {
   if (value == 0) return "0";
   const bool negative = value < 0;
