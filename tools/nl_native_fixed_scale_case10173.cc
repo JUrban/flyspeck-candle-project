@@ -41,6 +41,7 @@ constexpr const char* kFixedBackend = "mpz";
 #endif
 Fixed kTwoScaleSquared = 2 * kScale * kScale;
 bool kSkipExactZeroProducts = false;
+bool kUseSymmetricHessianOps = false;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -527,6 +528,15 @@ IntervalVector vector_add(const IntervalVector& left,
 
 IntervalMatrix matrix_neg(const IntervalMatrix& value) {
   IntervalMatrix result;
+  if (kUseSymmetricHessianOps) {
+    for (std::size_t row = 0; row < kDimensions; ++row) {
+      for (std::size_t column = row; column < kDimensions; ++column) {
+        result[row][column] = interval_neg(value[row][column]);
+        result[column][row] = result[row][column];
+      }
+    }
+    return result;
+  }
   for (std::size_t i = 0; i < kDimensions; ++i) {
     result[i] = vector_neg(value[i]);
   }
@@ -536,6 +546,16 @@ IntervalMatrix matrix_neg(const IntervalMatrix& value) {
 IntervalMatrix matrix_add(const IntervalMatrix& left,
                           const IntervalMatrix& right) {
   IntervalMatrix result;
+  if (kUseSymmetricHessianOps) {
+    for (std::size_t row = 0; row < kDimensions; ++row) {
+      for (std::size_t column = row; column < kDimensions; ++column) {
+        result[row][column] =
+            interval_add(left[row][column], right[row][column]);
+        result[column][row] = result[row][column];
+      }
+    }
+    return result;
+  }
   for (std::size_t i = 0; i < kDimensions; ++i) {
     result[i] = vector_add(left[i], right[i]);
   }
@@ -556,6 +576,16 @@ IntervalMatrix raw_matrix_scale(const Interval& scalar,
                                 const IntervalMatrix& value,
                                 Counters& counters) {
   IntervalMatrix result;
+  if (kUseSymmetricHessianOps) {
+    for (std::size_t row = 0; row < kDimensions; ++row) {
+      for (std::size_t column = row; column < kDimensions; ++column) {
+        result[row][column] =
+            raw_interval_mul(scalar, value[row][column], counters);
+        result[column][row] = result[row][column];
+      }
+    }
+    return result;
+  }
   for (std::size_t i = 0; i < kDimensions; ++i) {
     result[i] = raw_vector_scale(scalar, value[i], counters);
   }
@@ -584,6 +614,16 @@ IntervalVector raw_vector_round(const IntervalVector& value,
 IntervalMatrix raw_matrix_round(const IntervalMatrix& value,
                                 const Fixed& denominator) {
   IntervalMatrix result;
+  if (kUseSymmetricHessianOps) {
+    for (std::size_t row = 0; row < kDimensions; ++row) {
+      for (std::size_t column = row; column < kDimensions; ++column) {
+        result[row][column] =
+            raw_interval_round(denominator, value[row][column]);
+        result[column][row] = result[row][column];
+      }
+    }
+    return result;
+  }
   for (std::size_t i = 0; i < kDimensions; ++i) {
     result[i] = raw_vector_round(value[i], denominator);
   }
@@ -606,6 +646,55 @@ IntervalMatrix interval_outer(const IntervalVector& left,
                               const IntervalVector& right,
                               Counters& counters) {
   return raw_matrix_round(raw_outer(left, right, counters), kScale);
+}
+
+IntervalMatrix interval_self_outer(const IntervalVector& value,
+                                   Counters& counters) {
+  if (!kUseSymmetricHessianOps) {
+    return interval_outer(value, value, counters);
+  }
+  IntervalMatrix result;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      result[row][column] = raw_interval_round(
+          kScale, raw_interval_mul(value[row], value[column], counters));
+      result[column][row] = result[row][column];
+    }
+  }
+  return result;
+}
+
+IntervalMatrix raw_product_hessian(
+    const Interval& right_value, const IntervalMatrix& left_hessian,
+    const IntervalVector& left_gradient,
+    const IntervalVector& right_gradient, const Interval& left_value,
+    const IntervalMatrix& right_hessian, Counters& counters) {
+  if (!kUseSymmetricHessianOps) {
+    return matrix_add(
+        matrix_add(raw_matrix_scale(right_value, left_hessian, counters),
+                   raw_outer(left_gradient, right_gradient, counters)),
+        matrix_add(raw_outer(right_gradient, left_gradient, counters),
+                   raw_matrix_scale(left_value, right_hessian, counters)));
+  }
+  IntervalMatrix result;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    for (std::size_t column = row; column < kDimensions; ++column) {
+      const Interval value = interval_add(
+          interval_add(
+              raw_interval_mul(right_value, left_hessian[row][column],
+                               counters),
+              raw_interval_mul(left_gradient[row], right_gradient[column],
+                               counters)),
+          interval_add(
+              raw_interval_mul(right_gradient[row], left_gradient[column],
+                               counters),
+              raw_interval_mul(left_value, right_hessian[row][column],
+                               counters)));
+      result[row][column] = value;
+      result[column][row] = value;
+    }
+  }
+  return result;
 }
 
 PolynomialJet polynomial_constant(const Rat& value) {
@@ -657,11 +746,9 @@ PolynomialJet polynomial_mul(const PolynomialJet& left,
   const IntervalVector raw_box_gradient = vector_add(
       raw_vector_scale(right.box_value, left.box_gradient, counters),
       raw_vector_scale(left.box_value, right.box_gradient, counters));
-  const IntervalMatrix raw_box_hessian = matrix_add(
-      matrix_add(raw_matrix_scale(right.box_value, left.box_hessian, counters),
-                 raw_outer(left.box_gradient, right.box_gradient, counters)),
-      matrix_add(raw_outer(right.box_gradient, left.box_gradient, counters),
-                 raw_matrix_scale(left.box_value, right.box_hessian, counters)));
+  const IntervalMatrix raw_box_hessian = raw_product_hessian(
+      right.box_value, left.box_hessian, left.box_gradient,
+      right.box_gradient, left.box_value, right.box_hessian, counters);
   return {{raw_interval_round(kScale, raw_center.value),
            raw_vector_round(raw_center.gradient, kScale)},
           raw_interval_round(kScale, raw_box_value),
@@ -769,13 +856,9 @@ TaylorResult result_mul(const IntegerVector& radii,
                                   counters),
                  raw_vector_scale(left.center.value, right.center.gradient,
                                   counters))};
-  const IntervalMatrix raw_hessian = matrix_add(
-      matrix_add(raw_matrix_scale(right.value_bound, left.hessian, counters),
-                 raw_outer(left.gradient_bounds, right.gradient_bounds,
-                           counters)),
-      matrix_add(raw_outer(right.gradient_bounds, left.gradient_bounds,
-                           counters),
-                 raw_matrix_scale(left.value_bound, right.hessian, counters)));
+  const IntervalMatrix raw_hessian = raw_product_hessian(
+      right.value_bound, left.hessian, left.gradient_bounds,
+      right.gradient_bounds, left.value_bound, right.hessian, counters);
   return complete_raw_result(radii, left.domain && right.domain, raw_center,
                              raw_hessian, counters);
 }
@@ -917,8 +1000,8 @@ TaylorResult result_inverse(const IntegerVector& radii,
   const IntervalMatrix hessian = matrix_add(
       interval_matrix_scale(interval_neg(box_r2), value.hessian, counters),
       interval_matrix_scale(interval_add(box_r3, box_r3),
-                            interval_outer(value.gradient_bounds,
-                                           value.gradient_bounds, counters),
+                            interval_self_outer(value.gradient_bounds,
+                                                counters),
                             counters));
   return complete_result(radii, domain, center, hessian, counters);
 }
@@ -954,8 +1037,7 @@ TaylorResult result_sqrt(const IntegerVector& radii,
   const IntervalMatrix hessian = matrix_add(
       interval_matrix_scale(
           box_dd,
-          interval_outer(value.gradient_bounds, value.gradient_bounds,
-                         counters),
+          interval_self_outer(value.gradient_bounds, counters),
           counters),
       interval_matrix_scale(box_d, value.hessian, counters));
   return complete_result(radii, domain, center, hessian, counters);
@@ -993,8 +1075,7 @@ TaylorResult result_atan(const IntegerVector& radii,
   const IntervalMatrix hessian = matrix_add(
       interval_matrix_scale(
           box_dd,
-          interval_outer(value.gradient_bounds, value.gradient_bounds,
-                         counters),
+          interval_self_outer(value.gradient_bounds, counters),
           counters),
       interval_matrix_scale(box_d, value.hessian, counters));
   return complete_result(radii, domain, center, hessian, counters);
@@ -1582,6 +1663,7 @@ int main(int argc, char** argv) {
                 << " [--fused-polynomial-max-steps=N]"
                 << " [--direct-delta-x4]"
                 << " [--skip-exact-zero-products]"
+                << " [--symmetric-hessian-ops]"
                 << " [--dyadic-scale]\n";
       return 2;
     }
@@ -1619,6 +1701,8 @@ int main(int argc, char** argv) {
         direct_delta_x4 = true;
       } else if (option == "--skip-exact-zero-products") {
         kSkipExactZeroProducts = true;
+      } else if (option == "--symmetric-hessian-ops") {
+        kUseSymmetricHessianOps = true;
       } else {
         throw std::runtime_error("unknown optional argument: " + option);
       }
@@ -1697,6 +1781,8 @@ int main(int argc, char** argv) {
               << " direct_delta_x4=" << (direct_delta_x4 ? 1 : 0)
               << " skip_exact_zero_products="
               << (kSkipExactZeroProducts ? 1 : 0)
+              << " symmetric_hessian_ops="
+              << (kUseSymmetricHessianOps ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted

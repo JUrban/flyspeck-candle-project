@@ -499,7 +499,7 @@ performance gaps as separate architectural targets.
 
 ## Arithmetic/algorithm separation after the angle specialization
 
-Four further native experiments use the same 128 genuine case-10173 boxes.
+Five further native experiments use the same 128 genuine case-10173 boxes.
 They preserve complete-program acceptance and charge parsing/preparation
 separately from evaluation.  These are untrusted development discriminators,
 not theorem evidence.
@@ -578,13 +578,37 @@ rounding still occur.  A useful sparse experiment must therefore use a compact
 representation and omit absent gradient/Hessian entries end to end.  Merely
 adding zero tests to the dense checker is not a serious architecture.
 
+Fifth, a symmetric-Hessian discriminator kept fixed-256 arithmetic, decimal
+rounding, direct `delta_x4`, and exact-zero bypass fixed.  It computed only the
+upper triangle of every known-symmetric Hessian operation and mirrored the
+result, while deliberately retaining the existing dense in-memory object.  In
+21 warmed, order-balanced pairs:
+
+| Fixed-256 zero-bypass lane | Mean evaluation time |
+|---|---:|
+| Dense Hessian operations | 0.134538433 s |
+| Upper-triangle Hessian operations | 0.111261425 s |
+
+This is a **1.209-times** speedup and a **17.30%** reduction.  The 128-result
+streams were byte-identical and all cells remained accepted.  Semantic
+interval products fell from 84,608 to 58,496; bypassed zero products fell from
+479,872 to 292,864 because the duplicate lower-triangle operations no longer
+occurred.  The paired phase table has SHA-256
+`19623196c0097d239eeac86dc5716c23986d17220d3a580e9d46bec3cfdf5946`;
+both result streams again have SHA-256
+`ec685c4db6d5780af36893470d65c880ca9243c0bd072d9db3c3fdd55ca30200`.
+This isolates useful generic derivative/Taylor redundancy while holding
+arithmetic and rounding fixed, but its size rules out symmetry alone as the
+large-gap explanation.
+
 These results keep the performance layers explicit.  Relative to the
 historical specialized-C++ per-cell time, the original exact native
 fixed-scale lane was about **341 times** slower, the centered-angle GMP lane
 about **207 times** slower, the centered-angle fixed-256 lane about **67
 times** slower, and the direct-`delta_x4` fixed-256 lane about **56 times**
 slower.  The dense exact-zero bypass diagnostic lowers the last figure only to
-about **50 times**.  Separately, executing the exact-output-matched original
+about **50 times**, and upper-triangle Hessian execution lowers it to about
+**43 times**.  Separately, executing the exact-output-matched original
 equations in `Kernel.compute` was about **15 times** slower than executing them
 in native C++.  Fixed-width arithmetic substantially reduces the much larger native
 algorithm/arithmetic gap, but it does not remove it and says nothing yet about
@@ -598,16 +622,27 @@ plus authenticated exact-payload dispatch with fallback to the generic proved
 path.  It will not grow into a collection of fixture-specific arithmetic
 proofs merely because the first instruction passed its benchmark.
 
-The zero-skip discriminator confirms that the next native experiment should
-hold the now-promising fixed-256 arithmetic constant while replacing the dense
-generic value/gradient/Hessian interpreter with a genuinely compact compiled
-sparse symmetric-jet plan.  The plan should carry coordinate dependency masks,
-store only used gradient and upper-triangular Hessian entries, and avoid
-rounding or traversing absent entries.  Running that plan over the same genuine
-boxes separates generic derivative/Taylor work from arithmetic representation
-without changing both at once.  A specialized complete-dihedral instruction
-is the next candidate only after the compact sparse-plan result identifies how
-much generic machinery remains.
+The zero-skip and upper-triangle discriminators confirm that the next
+representation experiment should hold fixed-256 arithmetic constant while
+replacing the dense generic value/gradient/Hessian interpreter with a genuinely
+compact compiled sparse symmetric-jet plan.  The plan should carry coordinate
+dependency masks, store only used gradient and upper-triangular Hessian
+entries, and avoid rounding or traversing absent entries.  Running that plan
+over the same genuine boxes separates the remaining generic derivative/Taylor
+work from arithmetic representation without changing both at once.
+
+In parallel, the cheapest arithmetic-only discriminator is to run the same
+algorithm and symmetric plan with a narrower checked fixed-width backend at
+the largest scale that does not overflow, recording both acceptance and bound
+degradation.  The previous signed-128-bit failure at scale `10^12` establishes
+that range cannot be assumed; a bounded scale sweep with explicit overflow
+detection can determine whether 128-bit arithmetic is viable at all.  These
+two native tests bracket the causes: compact fixed-256 measures generic
+derivative/representation cost, while unchanged-plan narrow arithmetic
+measures endpoint cost.  If neither closes most of the roughly 43-times
+residual, the next prototype should be a complete specialized-dihedral
+instruction modeled on the historical algorithm rather than another local
+jet micro-optimization.
 
 The staged route is:
 
