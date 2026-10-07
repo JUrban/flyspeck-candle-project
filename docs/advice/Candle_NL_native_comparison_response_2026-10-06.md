@@ -2582,3 +2582,23 @@ The implementation is in isolated CakeML commits `6b1c5d85c` and
 `385689347`; clean-build evidence and the integration boundary are recorded
 in
 `docs/progress/2026-10-07-v3.77-nl-word-add-refinement-boundary.md`.
+
+## Update: dynamic width checks are not the remaining arithmetic cost
+
+A complete case16594 control now holds the 128/192-bit representation,
+dyadic rounding, generic graph, and all 875 genuine boxes fixed while changing
+only Boost's checked versus unchecked fixed-width policies.  Five warmed,
+order-balanced pairs measured 2.421546 seconds checked and 2.393463 seconds
+unchecked in recurring evaluation: only a 1.0117-times difference.  Fully
+charged batches differ by 1.0126 times.  Both lanes accept 875/875 and emit
+byte-identical result records.
+
+This rejects removal of dynamic checks as a large performance project.  The
+unchecked lane is diagnostic only; its finite equality is not a general
+overflow proof.  More importantly, even deleting every such check leaves the
+large same-graph arithmetic and reflected-execution gaps essentially intact.
+The next bounded gate therefore remains an actually word-executed operation
+with a total overflow result and exact fallback, not a broad static proof
+whose measured purpose would be a one-percent gain.  Full measurements and
+hashes are in
+`docs/progress/2026-10-07-v3.78-nl-check-cost-discriminator.md`.

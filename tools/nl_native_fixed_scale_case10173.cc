@@ -17,7 +17,8 @@
 
 #if defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
     defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256) || \
-    defined(CANDLE_NL_MIXED_INT128_192)
+    defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
 #include <boost/multiprecision/cpp_int.hpp>
 #endif
 #include <gmpxx.h>
@@ -55,6 +56,15 @@ using MixedWide = boost::multiprecision::number<MixedWideBackend>;
 Fixed kScale = static_cast<Fixed>(1000000000000LL);
 constexpr const char* kFixedBackend = "mixed-checked-int128-192";
 constexpr unsigned kCheckedFixedBits = 128;
+#elif defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
+using Fixed = boost::multiprecision::int128_t;
+using MixedWideBackend = boost::multiprecision::cpp_int_backend<
+    192, 192, boost::multiprecision::signed_magnitude,
+    boost::multiprecision::unchecked, void>;
+using MixedWide = boost::multiprecision::number<MixedWideBackend>;
+Fixed kScale = static_cast<Fixed>(1000000000000LL);
+constexpr const char* kFixedBackend = "mixed-unchecked-int128-192";
+constexpr unsigned kCheckedFixedBits = 128;
 #elif defined(CANDLE_NL_CHECKED_INT192)
 using CheckedInt192Backend = boost::multiprecision::cpp_int_backend<
     192, 192, boost::multiprecision::signed_magnitude,
@@ -89,7 +99,8 @@ using Fixed = mpz_class;
 Fixed kScale("1000000000000");
 constexpr const char* kFixedBackend = "mpz";
 #endif
-#if defined(CANDLE_NL_MIXED_INT128_192)
+#if defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
 using TaylorAccumulator = MixedWide;
 #else
 using TaylorAccumulator = Fixed;
@@ -1029,7 +1040,8 @@ Fixed ceil_fixed_quotient(Fixed numerator, Fixed denominator) {
 }
 #elif defined(CANDLE_NL_FIXED_INT256) || defined(CANDLE_NL_CHECKED_INT128) || \
     defined(CANDLE_NL_CHECKED_INT192) || defined(CANDLE_NL_CHECKED_INT256) || \
-    defined(CANDLE_NL_MIXED_INT128_192)
+    defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
 Integer integer_of_fixed(const Fixed& value) {
   return Integer(value.convert_to<std::string>());
 }
@@ -1040,6 +1052,7 @@ Fixed fixed_of_integer(const Integer& value) {
 
 #if defined(CANDLE_NL_CHECKED_INT192) || \
     defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
     defined(CANDLE_NL_CHECKED_INT256)
 Fixed checked_floor_power_of_two_quotient(const Fixed& numerator,
                                           unsigned shift) {
@@ -1105,6 +1118,7 @@ Fixed floor_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   if (kCountFixedQuotients) ++kFloorFixedQuotientCalls;
 #if defined(CANDLE_NL_CHECKED_INT192) || \
     defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
     defined(CANDLE_NL_CHECKED_INT256)
   if (kUseDyadicShiftFixedQuotient) {
     const int shift = checked_fixed_dyadic_denominator_shift(denominator);
@@ -1128,6 +1142,7 @@ Fixed ceil_fixed_quotient(const Fixed& numerator, const Fixed& denominator) {
   if (kCountFixedQuotients) ++kCeilFixedQuotientCalls;
 #if defined(CANDLE_NL_CHECKED_INT192) || \
     defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
     defined(CANDLE_NL_CHECKED_INT256)
   if (kUseDyadicShiftFixedQuotient) {
     const int shift = checked_fixed_dyadic_denominator_shift(denominator);
@@ -1332,7 +1347,8 @@ Interval raw_interval_round(const Fixed& denominator,
           ceil_fixed_quotient(value.upper, denominator)};
 }
 
-#if defined(CANDLE_NL_MIXED_INT128_192)
+#if defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
 TaylorAccumulator floor_mixed_wide_quotient(
     const TaylorAccumulator& numerator,
     const TaylorAccumulator& denominator) {
@@ -1701,7 +1717,8 @@ TaylorAccumulator weighted_rows_abs_upper(const IntegerVector& radii,
   TaylorAccumulator result = 0;
   for (std::size_t i = 0; i < kDimensions; ++i) {
     const Fixed dot = dot_abs_upper(radii, matrix[i]);
-#if defined(CANDLE_NL_MIXED_INT128_192)
+#if defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
     const TaylorAccumulator product =
         TaylorAccumulator(radii[i]) * TaylorAccumulator(dot);
     result += product;
@@ -1722,7 +1739,8 @@ TaylorResult complete_result(const IntegerVector& radii, bool domain,
   const Fixed linear = dot_abs_upper(radii, center.gradient);
   const TaylorAccumulator quadratic =
       weighted_rows_abs_upper(radii, hessian);
-#if defined(CANDLE_NL_MIXED_INT128_192)
+#if defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
   const TaylorAccumulator error =
       TaylorAccumulator(2) * TaylorAccumulator(kScale) *
           TaylorAccumulator(linear) +
@@ -2700,7 +2718,8 @@ TaylorAccumulator compact_weighted_abs_upper(
   for (std::size_t row = 0; row < kDimensions; ++row) {
     for (std::size_t column = row; column < kDimensions; ++column) {
       if (!compact_matrix_has(matrix, row, column)) continue;
-#if defined(CANDLE_NL_MIXED_INT128_192)
+#if defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
       const TaylorAccumulator radius_product =
           TaylorAccumulator(radii[row]) * TaylorAccumulator(radii[column]);
       TaylorAccumulator contribution = radius_product * TaylorAccumulator(
@@ -2730,7 +2749,8 @@ CompactTaylorResult compact_complete_result(
       radii, center_gradient, center_gradient_mask);
   const TaylorAccumulator quadratic =
       compact_weighted_abs_upper(radii, hessian);
-#if defined(CANDLE_NL_MIXED_INT128_192)
+#if defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED)
   const TaylorAccumulator error =
       TaylorAccumulator(2) * TaylorAccumulator(kScale) *
           TaylorAccumulator(linear) +
@@ -6540,6 +6560,7 @@ int main(int argc, char** argv) {
     }
 #if !defined(CANDLE_NL_CHECKED_INT192) && \
     !defined(CANDLE_NL_MIXED_INT128_192) && \
+    !defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) && \
     !defined(CANDLE_NL_CHECKED_INT256)
     if (kUseDyadicShiftFixedQuotient) {
       throw std::runtime_error(
@@ -6581,6 +6602,7 @@ int main(int argc, char** argv) {
     }
 #elif defined(CANDLE_NL_CHECKED_INT192) || \
     defined(CANDLE_NL_MIXED_INT128_192) || \
+    defined(CANDLE_NL_MIXED_INT128_192_UNCHECKED) || \
     defined(CANDLE_NL_CHECKED_INT256)
     if (kUseDyadicShiftFixedQuotient) {
       verify_checked_dyadic_shift_quotient_samples();
