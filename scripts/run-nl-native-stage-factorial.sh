@@ -54,12 +54,17 @@ for ((repetition = 1; repetition <= repetitions; ++repetition)); do
   /usr/bin/time -f 'elapsed_seconds=%e peak_rss_kb=%M' \
     -o "$output_dir/specialized-time-$repetition.txt" \
     "$output_dir/certificate-box-benchmark" "$boxes" \
+    --direct-specialized \
     >"$output_dir/specialized-results-$repetition.txt" \
     2>"$output_dir/specialized-stderr-$repetition.txt"
 done
 "$output_dir/certificate-box-benchmark" "$boxes" 16 \
-  --full-diagnostics >"$output_dir/specialized-stage-prefix16.txt" \
+  --direct-specialized --full-diagnostics \
+  >"$output_dir/specialized-stage-prefix16.txt" \
   2>"$output_dir/specialized-stage-prefix16-stderr.txt"
+"$output_dir/certificate-box-benchmark" "$boxes" --direct-profile \
+  >"$output_dir/direct-profile.txt" \
+  2>"$output_dir/direct-profile-stderr.txt"
 
 common_options=(
   --specialized-angle-polynomials
@@ -109,8 +114,8 @@ awk '
   }
   END {
     print "mode\trepetitions\tmean_preparation_seconds\tmean_wall_seconds\tmean_domain_seconds\tmean_evalf_seconds\tmean_upper_bound_seconds\tminimum_accepted";
-    for (mode_index = 1; mode_index <= 2; ++mode_index) {
-      mode = mode_index == 1 ? "specialized" : "generic";
+    for (mode_index = 1; mode_index <= 3; ++mode_index) {
+      mode = mode_index == 1 ? "specialized" : mode_index == 2 ? "generic" : "direct-specialized";
       printf "%s\t%d\t%.9f\t%.9f\t%.9f\t%.9f\t%.9f\t%d\n", mode, count[mode], preparation_sum[mode] / count[mode], wall_sum[mode] / count[mode], domain_sum[mode] / count[mode], evalf_sum[mode] / count[mode], upper_sum[mode] / count[mode], minimum_accepted[mode];
     }
   }
@@ -119,12 +124,19 @@ awk '
 "$analyzer" "$output_dir/specialized-stage-prefix16.txt" \
   "$output_dir/generic-stage-prefix16.txt" \
   "$output_dir/historical-stage-prefix16.txt" \
+  "$output_dir/specialized-stage-prefix16.txt" \
   >"$output_dir/stage-comparison.json"
 
 rg -q "specialized[[:space:]]+$repetitions.*4173$" \
   "$output_dir/phase-times.tsv"
 rg -q "generic[[:space:]]+$repetitions.*52$" \
   "$output_dir/phase-times.tsv"
+rg -q "direct-specialized[[:space:]]+$repetitions.*4173$" \
+  "$output_dir/phase-times.tsv"
+rg -q 'CANDLE_NL_NATIVE_DIRECT_COMPARE boxes=4173' \
+  "$output_dir/specialized-results-1.txt"
+rg -q 'CANDLE_NL_NATIVE_DIRECT_PROFILE observations=4173' \
+  "$output_dir/direct-profile.txt"
 rg -q 'accepted=16' "$output_dir/generic-stage-prefix16.txt"
 rg -q 'accepted=16' "$output_dir/historical-stage-prefix16.txt"
 
@@ -137,6 +149,8 @@ sha256sum "$archive" "$specialized_driver" "$fixed_driver" "$analyzer" \
   "$output_dir"/specialized-time-*.txt \
   "$output_dir/specialized-stage-prefix16.txt" \
   "$output_dir/specialized-stage-prefix16-stderr.txt" \
+  "$output_dir/direct-profile.txt" \
+  "$output_dir/direct-profile-stderr.txt" \
   "$output_dir/generic-stage-prefix16.txt" \
   "$output_dir/generic-stage-prefix16-stderr.txt" \
   "$output_dir/historical-stage-prefix16.txt" \

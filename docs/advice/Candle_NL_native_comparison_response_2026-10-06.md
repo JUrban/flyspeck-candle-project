@@ -1728,3 +1728,50 @@ The current exact-bound specialization proof remains limited to its small
 reusable lemma and one integration test.  It may close if cheap, but it will
 not grow into another per-expression proof layer before the full-batch native
 gate demonstrates the recurring benefit.
+
+## Update: direct-plan algorithm/arithmetic factorial
+
+The faithful direct-plan experiment is now complete. A source-authenticated
+native plan sums the seven exact constants and six coordinate-square-root
+terms, invokes the historical dihedral primitive with its exact source
+coefficient, and performs one final Taylor completion. With outward-double
+intervals it accepts 4,173/4,173 boxes in 0.060959726 seconds, versus
+0.082313180 seconds for the old specialized object path. Its final bounds
+differ by at most about `1.44e-15`. After replacing the generic square-root
+dispatcher with explicit value/first-/second-derivative formulas, the direct
+profile is dominated by the dihedral Hessian (0.024959 seconds) and the six
+root leaves (0.021750 seconds), not final assembly (0.002711 seconds).
+
+The exact crossing is semantically stronger but performance-bounded. At both
+decimal scale and dyadic scale, the direct and historical result streams are
+byte-identical on all 4,173 boxes. Direct assembly removes 116,844
+intermediate Taylor completions and 1,635,816 rounding calls. Twenty balanced
+runs reduce dyadic evaluation from 0.322744257 to 0.244316630 seconds.
+Changing the same direct graph from decimal division to dyadic shifts gives a
+further 1.165-times recurring speedup.
+
+Against the actual best exact generic dyadic/deferred lane, however, direct
+dyadic execution wins by only 1.053 times recurrently and 1.021 times for the
+complete cold batch. Both accept every box, while the direct historical
+algorithm is wider on 2,772 boxes and has a smaller minimum acceptance margin.
+The candidate therefore fails the material proof gate. No standalone
+case-specific instruction proof will be started; the authenticator and direct
+assembly remain reusable prototype machinery.
+
+The controlled comparison sharpens the next target. The same direct formula
+still costs 4.008 times more with exact dyadic endpoints than with outward
+hardware doubles. A matched exact direct-stage profile will select between
+root and dihedral arithmetic, followed by a modern outward-endpoint control
+and, only where measured, a division-reduced dyadic primitive. Any candidate
+must retain complete-batch acceptance and then pass a second certificate
+family before receiving a general instruction theorem. Only a native winner
+will be crossed into `Kernel.compute`, where the separate approximately
+15-times encoded-execution gap can finally be remeasured on the new graph.
+
+The accepted exact factorial is
+`nl-native-case10173-direct-specialized-factorial-v2-dev-001`; its timing table
+has SHA-256
+`70f8a3ea2887b26e83217b8c4bbe5402db76d7f282abe7ccff921be2f0f295dc`.
+The accepted outward-double factorial is
+`nl-native-stage-factorial-v7-dev-001`; its timing table has SHA-256
+`b4c6feea57a0e583a10ddafa818d23a43de99f84c30db7d3dd5fafedaa3a36be`.

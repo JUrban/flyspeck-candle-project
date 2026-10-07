@@ -68,6 +68,7 @@ bool kUseSpecializedDihedralIdentities = false;
 bool kUseHistoricalDihedral = false;
 bool kUseHistoricalBlockRounding = false;
 bool kUseHistoricalCenterTangent = false;
+bool kUseDirectSpecializedFunction = false;
 bool kUseTightDihedralSqrtCertificates = false;
 bool kUseOptimizedDihedralUBounds = false;
 bool kUseComputedTightSqrtCertificates = false;
@@ -2687,6 +2688,51 @@ void validate_deferred_additive_source(const Program& program) {
   }
 }
 
+void validate_direct_specialized_source(const Program& program) {
+  using Kind = Program::SimplePolynomialKind;
+  validate_deferred_additive_source(program);
+  constexpr std::array<std::size_t, 6> kRootIndices =
+      {{1, 6, 11, 16, 21, 26}};
+  constexpr std::array<std::size_t, 7> kConstantIndices =
+      {{0, 5, 10, 15, 20, 25, 30}};
+  std::array<bool, kDimensions> variables{};
+  for (std::size_t slot = 0; slot < kRootIndices.size(); ++slot) {
+    const Program::CoordinateSqrtTerm& term =
+        program.prepared_coordinate_sqrt_terms.at(kRootIndices[slot]);
+    if (!term.active || term.sqrt_slot != slot ||
+        term.variable >= kDimensions || variables[term.variable]) {
+      throw std::runtime_error(
+          "direct specialized coordinate-root source drift at outer " +
+          std::to_string(kRootIndices[slot]) + " active=" +
+          std::to_string(term.active ? 1 : 0) + " slot=" +
+          std::to_string(term.sqrt_slot) + " variable=" +
+          std::to_string(term.variable));
+    }
+    variables[term.variable] = true;
+  }
+  if (std::find(variables.begin(), variables.end(), false) !=
+      variables.end()) {
+    throw std::runtime_error(
+        "direct specialized coordinate-root coverage drift");
+  }
+  for (const std::size_t index : kConstantIndices) {
+    if (program.prepared_simple_polynomials.at(index).kind !=
+        Kind::kConstant) {
+      throw std::runtime_error(
+          "direct specialized additive constant source drift");
+    }
+  }
+  if (program.prepared_simple_polynomials.at(39).kind != Kind::kConstant) {
+    throw std::runtime_error(
+        "direct specialized constant source drift");
+  }
+  const Node& multiply = node_at(program, program.instructions.at(40));
+  if (multiply.is_pair || multiply.numeral != 4) {
+    throw std::runtime_error(
+        "direct specialized angle-scale source drift");
+  }
+}
+
 TaylorResult evaluate_polynomial(const Program& program,
                                  std::size_t payload,
                                  const IntegerVector& radii,
@@ -3807,7 +3853,7 @@ TaylorResult evaluate_historical_dihedral(
     const IntegerVector& radii,
     const IntervalVector& center_environment,
     const IntervalVector& box_environment,
-    Counters& counters) {
+    Counters& counters, bool defer_completion = false) {
   const FirstJet center = kUseHistoricalCenterTangent
       ? historical_dihedral_first_order(center_environment, counters)
       : [&center_environment, &counters]() {
@@ -3817,8 +3863,9 @@ TaylorResult evaluate_historical_dihedral(
         }();
   const SecondOrderBox box = historical_dihedral_second_order(
       box_environment, true, counters);
-  return complete_result(
-      radii, true, center, box.hessian, counters);
+  return defer_completion
+      ? deferred_additive_result(true, center, box.hessian)
+      : complete_result(radii, true, center, box.hessian, counters);
 }
 
 TaylorResult evaluate_dihedral_chain_specialized(
@@ -4102,6 +4149,75 @@ struct Evaluation {
   Rat upper;
   Counters counters;
 };
+
+Evaluation evaluate_direct_specialized_function(
+    const Program& program, const Job& job) {
+  constexpr std::array<std::size_t, 6> kRootIndices =
+      {{1, 6, 11, 16, 21, 26}};
+  constexpr std::array<std::size_t, 7> kConstantIndices =
+      {{0, 5, 10, 15, 20, 25, 30}};
+  IntervalVector center_environment;
+  IntervalVector box_environment;
+  IntegerVector radii;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const Rat midpoint =
+        (job.lower[coordinate] + job.upper[coordinate]) / 2;
+    const Rat radius =
+        (job.upper[coordinate] - job.lower[coordinate]) / 2;
+    center_environment[coordinate] = interval_constant(midpoint);
+    box_environment[coordinate] = interval_of_q(
+        {job.lower[coordinate], job.upper[coordinate]});
+    radii[coordinate] = ceil_scaled(radius);
+  }
+
+  Counters counters;
+  FirstJet center = {zero_interval(), zero_vector()};
+  IntervalMatrix hessian = zero_matrix();
+  const auto add_deferred = [&center, &hessian](const TaylorResult& term) {
+    if (!term.domain || term.completed) {
+      throw std::runtime_error(
+          "direct specialized term is not a valid deferred result");
+    }
+    center.value = interval_add(center.value, term.center.value);
+    center.gradient = vector_add(center.gradient, term.center.gradient);
+    hessian = matrix_add(hessian, term.hessian);
+  };
+
+  for (const std::size_t outer_index : kRootIndices) {
+    const Program::CoordinateSqrtTerm& term =
+        program.prepared_coordinate_sqrt_terms.at(outer_index);
+    add_deferred(result_scaled_coordinate_sqrt_fixed(
+        radii, job.fixed_center_certificates.at(term.sqrt_slot),
+        job.fixed_box_certificates.at(term.sqrt_slot), center_environment,
+        box_environment, term.variable, term.coefficient, counters, true));
+  }
+
+  for (const std::size_t outer_index : kConstantIndices) {
+    center.value = interval_add(
+        center.value,
+        interval_constant(
+            program.prepared_simple_polynomials.at(outer_index).constant));
+  }
+
+  TaylorResult angle = evaluate_historical_dihedral(
+      radii, center_environment, box_environment, counters, true);
+  const Interval angle_coefficient = interval_constant(
+      program.prepared_simple_polynomials.at(39).constant);
+  angle.center.value = interval_mul(
+      angle_coefficient, angle.center.value, counters);
+  angle.center.gradient = interval_vector_scale(
+      angle_coefficient, angle.center.gradient, counters);
+  angle.hessian = interval_matrix_scale(
+      angle_coefficient, angle.hessian, counters);
+  add_deferred(angle);
+
+  const TaylorResult result = complete_result(
+      radii, true, center, hessian, counters);
+  counters.outer_steps += program.instructions.size();
+  return {normalized_rat(integer_of_fixed(result.value_bound.upper),
+                         integer_of_fixed(kScale)),
+          counters};
+}
 
 TaylorResult evaluate_dihedral_identity_diagnostic(const Job& job) {
   IntervalVector center_environment;
@@ -4890,7 +5006,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 31) {
+    if (argc < 4 || argc > 32) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -4912,6 +5028,7 @@ int main(int argc, char** argv) {
                 << " [--historical-dihedral]"
                 << " [--historical-block-rounding]"
                 << " [--historical-center-tangent]"
+                << " [--direct-specialized-function]"
                 << " [--tight-dihedral-sqrt-certificates]"
                 << " [--optimized-dihedral-u-bounds]"
                 << " [--computed-tight-sqrt-certificates]"
@@ -5000,6 +5117,8 @@ int main(int argc, char** argv) {
         kUseHistoricalBlockRounding = true;
       } else if (option == "--historical-center-tangent") {
         kUseHistoricalCenterTangent = true;
+      } else if (option == "--direct-specialized-function") {
+        kUseDirectSpecializedFunction = true;
       } else if (option == "--tight-dihedral-sqrt-certificates") {
         kUseTightDihedralSqrtCertificates = true;
       } else if (option == "--optimized-dihedral-u-bounds") {
@@ -5178,6 +5297,26 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "historical center tangent requires the historical dihedral path");
     }
+    if (kUseDirectSpecializedFunction &&
+        (!kUseHistoricalDihedral || !kUseHistoricalBlockRounding ||
+         !kUseHistoricalCenterTangent ||
+         !kUsePreparedSimplePolynomials ||
+         !kUsePreparedCoordinateSqrtTerms ||
+         !kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
+         polynomial_mode != PolynomialMode::kSpecializedAngle ||
+         !direct_delta_x4)) {
+      throw std::runtime_error(
+          "direct specialized function requires the authenticated prepared "
+          "coordinate-root and historical-dihedral configuration");
+    }
+    if (kUseDirectSpecializedFunction &&
+        (profile_enabled || rounding_profile_enabled ||
+         full_stage_diagnostics || kFuseConsecutiveAdds ||
+         kDeferAdditiveLeafCompletion)) {
+      throw std::runtime_error(
+          "direct specialized function cannot be combined with interpreter "
+          "profiles, stage capture, or interpreter fusion modes");
+    }
     if (kDeferAdditiveLeafCompletion &&
         (!kFuseConsecutiveAdds || !kUsePreparedSimplePolynomials ||
          !kUsePreparedCoordinateSqrtTerms ||
@@ -5294,6 +5433,9 @@ int main(int argc, char** argv) {
         kUseHistoricalDihedral || kPrecomputeTightSqrtCertificates) {
       prepare_dihedral_chain(program);
     }
+    if (kUseDirectSpecializedFunction) {
+      validate_direct_specialized_source(program);
+    }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels) {
       prepare_fixed_sqrt_certificates(jobs);
@@ -5356,12 +5498,14 @@ int main(int argc, char** argv) {
         kDyadicFallbackFixedQuotientCalls;
     const auto evaluation_begin = std::chrono::steady_clock::now();
     for (std::size_t index = 0; index < jobs.size(); ++index) {
-      const Evaluation evaluation = kUseCompactSupportJets
-          ? evaluate_job_compact(
+      const Evaluation evaluation = kUseDirectSpecializedFunction
+          ? evaluate_direct_specialized_function(program, jobs[index])
+          : kUseCompactSupportJets
+              ? evaluate_job_compact(
                 program, jobs[index], polynomial_mode,
                 fused_polynomial_outer_index, fused_polynomial_max_steps,
                 direct_delta_x4)
-          : evaluate_job(
+              : evaluate_job(
                 program, jobs[index], polynomial_mode,
                 fused_polynomial_outer_index, fused_polynomial_max_steps,
                 direct_delta_x4, profile_enabled ? &profiles : nullptr,
@@ -5399,6 +5543,54 @@ int main(int argc, char** argv) {
     const double evaluation_seconds =
         std::chrono::duration<double>(evaluation_end - evaluation_begin).count();
     std::cout << std::setprecision(17);
+    if (kUseDirectSpecializedFunction) {
+      constexpr std::array<std::size_t, 6> kRootIndices =
+          {{1, 6, 11, 16, 21, 26}};
+      constexpr std::array<std::size_t, 7> kConstantIndices =
+          {{0, 5, 10, 15, 20, 25, 30}};
+      Rat source_constant = 0;
+      for (const std::size_t outer_index : kConstantIndices) {
+        source_constant +=
+            program.prepared_simple_polynomials.at(outer_index).constant;
+      }
+      std::cout << "CANDLE_NL_NATIVE_DIRECT_SOURCE"
+                << " constant="
+                << source_constant.get_str()
+                << " angle_coefficient="
+                << program.prepared_simple_polynomials.at(39).constant.get_str()
+                << " roots=";
+      for (std::size_t slot = 0; slot < kRootIndices.size(); ++slot) {
+        if (slot != 0) std::cout << ",";
+        const Program::CoordinateSqrtTerm& term =
+            program.prepared_coordinate_sqrt_terms.at(kRootIndices[slot]);
+        std::cout << term.variable << ":" << term.coefficient.get_str();
+      }
+      std::cout << "\n";
+      for (std::size_t outer_index = 0; outer_index <= 40; ++outer_index) {
+        const Program::SimplePolynomial& polynomial =
+            program.prepared_simple_polynomials.at(outer_index);
+        const Program::CoordinateSqrtTerm& root =
+            program.prepared_coordinate_sqrt_terms.at(outer_index);
+        if (polynomial.kind == Program::SimplePolynomialKind::kUnknown &&
+            !root.active) {
+          continue;
+        }
+        std::cout << "CANDLE_NL_NATIVE_DIRECT_SOURCE_NODE"
+                  << " index=" << outer_index;
+        if (polynomial.kind == Program::SimplePolynomialKind::kConstant) {
+          std::cout << " polynomial=constant:"
+                    << polynomial.constant.get_str();
+        } else if (polynomial.kind ==
+                   Program::SimplePolynomialKind::kVariable) {
+          std::cout << " polynomial=variable:" << polynomial.variable;
+        }
+        if (root.active) {
+          std::cout << " root=" << root.sqrt_slot << ":" << root.variable
+                    << ":" << root.coefficient.get_str();
+        }
+        std::cout << "\n";
+      }
+    }
     std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY"
               << " cells=" << jobs.size()
               << " backend=" << kFixedBackend
@@ -5450,6 +5642,8 @@ int main(int argc, char** argv) {
               << (kUseHistoricalBlockRounding ? 1 : 0)
               << " historical_center_tangent="
               << (kUseHistoricalCenterTangent ? 1 : 0)
+              << " direct_specialized_function="
+              << (kUseDirectSpecializedFunction ? 1 : 0)
               << " tight_dihedral_sqrt_certificates="
               << (kUseTightDihedralSqrtCertificates ? 1 : 0)
               << " optimized_dihedral_u_bounds="

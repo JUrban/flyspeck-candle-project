@@ -9,6 +9,7 @@ from pathlib import Path
 
 SPECIALIZED_PREFIX = "CANDLE_NL_NATIVE_SPECIALIZED_STAGE "
 FIXED_PREFIX = "CANDLE_NL_NATIVE_FIXED_SCALE_STAGE "
+DIRECT_PREFIX = "CANDLE_NL_NATIVE_DIRECT_STAGE "
 SCALARS = ("center", "linear", "quadratic", "recomposed_upper", "upper")
 
 
@@ -87,6 +88,7 @@ def main() -> None:
     parser.add_argument("specialized")
     parser.add_argument("generic")
     parser.add_argument("historical")
+    parser.add_argument("direct", nargs="?")
     args = parser.parse_args()
 
     specialized = read_stages(Path(args.specialized), SPECIALIZED_PREFIX)
@@ -98,6 +100,9 @@ def main() -> None:
         "historical_vs_specialized": summarize(historical, specialized),
         "historical_vs_generic": summarize(historical, generic),
     }
+    if args.direct is not None:
+        direct = read_stages(Path(args.direct), DIRECT_PREFIX)
+        output["direct_vs_specialized"] = summarize(direct, specialized)
     print(json.dumps(output, indent=2, sort_keys=True))
 
 
