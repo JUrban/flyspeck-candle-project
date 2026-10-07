@@ -2224,3 +2224,48 @@ output as proof or enlarging the trusted base casually.
 Implementation and evidence are recorded in
 `docs/progress/2026-10-07-v3.66-nl-coordinate-and-equation-boundary.md` and
 isolated Candle commit `17f1adb3`.
+
+## Update: second-family factorial exposes arithmetic as a first-order cost
+
+The complete genuine case-16594 certificate now supplies the independent
+control.  Its exact 167-instruction program and 875 jobs were exported from
+the already accepted reflected state without repeating certificate search.
+On the identical generic Taylor graph, exact unbounded fixed-point evaluation
+takes 18.721409 seconds and padded hardware endpoints take 0.804026 seconds:
+a **23.285-times** arithmetic-representation difference.  Both accept all
+875 cells.  Every hardware upper bound is conservatively wider in this run;
+the maximum widening is `1.36114e-7`, against a minimum remaining negative
+margin of `0.001090266810`.  The hardware lane is still an untrusted
+discriminator, not a proof.
+
+The attempted `int128` control failed first and usefully: generic
+scale-squared Taylor recomposition overflowed even though the source value and
+certificates were correct.  Any bounded-word design must therefore check or
+prove the ranges of its lowered intermediates and fail over to exact
+arithmetic.  A type substitution without that invariant is ruled out.
+
+Holding padded hardware arithmetic fixed, the existing support-aware compact
+jet path removes about 18% of directed quotients and 20% of interval products
+but is 2.09% slower than dense propagation in a balanced five-run batch.  A
+fused-polynomial probe is faster but loses 17 of the 875 certificate cells.
+Thus the current compact masks and looser fused bounds do not earn proof work.
+
+The comparison also sharpens the two remaining targets.  The current proved
+reflected fixed-nonlinear call took 225.806 seconds on the same 875 cells,
+about 12.06 times the native exact-fixed graph and 280.84 times the hardware
+discriminator.  The next reusable prototypes therefore separate:
+
+1. a flat exact fixed-point `Kernel.compute` batch, targeting the measured
+   reflected/native-exact evaluator gap; and
+2. checked bounded-word outward arithmetic with an explicit overflow result
+   and exact fallback, targeting the much larger arithmetic gap.
+
+A hardware-fixed algorithm experiment will lower one repeated case-16594
+analytic block into straight-line centered-jet data flow.  It must retain all
+875 acceptances and comparable enclosure quality before any general
+instruction theorem is attempted.  The existing exact-angle specialization
+remains bounded at its present proof boundary.
+
+Complete measurements, hashes, rejected controls, and the staged proof gates
+are recorded in
+`docs/progress/2026-10-07-v3.67-nl-second-family-arithmetic-factorial.md`.
