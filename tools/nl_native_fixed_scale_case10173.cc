@@ -52,6 +52,7 @@ bool kUseCompactSupportJets = false;
 bool kUseFixedSqrtInverseKernels = false;
 bool kUseFixedAtanKernel = false;
 bool kVerifyFixedKernelEnclosures = false;
+bool kUsePreparedSimplePolynomials = false;
 
 Rat normalized_rat(const Integer& numerator, const Integer& denominator) {
   Rat result(numerator, denominator);
@@ -222,6 +223,13 @@ class CvalParser {
 struct Program {
   std::vector<Node> nodes;
   std::vector<std::size_t> instructions;
+  enum class SimplePolynomialKind { kUnknown, kConstant, kVariable };
+  struct SimplePolynomial {
+    SimplePolynomialKind kind = SimplePolynomialKind::kUnknown;
+    Rat constant = 0;
+    std::size_t variable = 0;
+  };
+  std::vector<SimplePolynomial> prepared_simple_polynomials;
 };
 
 struct Job {
@@ -1946,6 +1954,99 @@ std::vector<std::size_t> decode_list(const Program& program,
   return result;
 }
 
+Program::SimplePolynomial classify_simple_polynomial(
+    const Program& program, std::size_t payload) {
+  using Kind = Program::SimplePolynomialKind;
+  std::vector<Program::SimplePolynomial> stack;
+  const std::vector<std::size_t> instructions =
+      decode_list(program, payload, "simple polynomial preparation");
+  for (const std::size_t instruction_index : instructions) {
+    const Node& instruction = node_at(program, instruction_index);
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "simple polynomial tag");
+      Program::SimplePolynomial value;
+      if (tag == 0) {
+        value.kind = Kind::kConstant;
+        value.constant = decode_q(program, instruction.right);
+      } else if (tag == 1) {
+        const Integer variable = require_numeral(
+            program, instruction.right, "simple polynomial variable");
+        if (variable >= 0 && variable < static_cast<long>(kDimensions)) {
+          value.kind = Kind::kVariable;
+          value.variable = variable.get_ui();
+        }
+      } else {
+        throw std::runtime_error(
+            "unknown simple polynomial pair instruction");
+      }
+      stack.push_back(value);
+      continue;
+    }
+
+    const unsigned long opcode = instruction.numeral.get_ui();
+    if (opcode == 2 || opcode == 5) {
+      if (stack.empty()) {
+        throw std::runtime_error("simple polynomial stack underflow");
+      }
+      Program::SimplePolynomial value = stack.back();
+      stack.pop_back();
+      if (value.kind == Kind::kConstant) {
+        if (opcode == 2) {
+          value.constant = -value.constant;
+        } else {
+          value.constant *= value.constant;
+        }
+      } else {
+        value.kind = Kind::kUnknown;
+      }
+      stack.push_back(value);
+    } else if (opcode == 3 || opcode == 4) {
+      if (stack.size() < 2) {
+        throw std::runtime_error("simple polynomial stack underflow");
+      }
+      const Program::SimplePolynomial right = stack.back();
+      stack.pop_back();
+      Program::SimplePolynomial left = stack.back();
+      stack.pop_back();
+      if (left.kind == Kind::kConstant && right.kind == Kind::kConstant) {
+        if (opcode == 3) {
+          left.constant += right.constant;
+        } else {
+          left.constant *= right.constant;
+        }
+      } else {
+        left.kind = Kind::kUnknown;
+      }
+      stack.push_back(left);
+    } else {
+      throw std::runtime_error(
+          "unknown simple polynomial scalar instruction");
+    }
+  }
+  if (stack.size() != 1) {
+    throw std::runtime_error("simple polynomial result stack drift");
+  }
+  return stack.back();
+}
+
+void prepare_simple_polynomials(Program& program) {
+  program.prepared_simple_polynomials.assign(
+      program.instructions.size(), Program::SimplePolynomial());
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    if (!instruction.is_pair) continue;
+    const Integer tag = require_numeral(
+        program, instruction.left, "analytic preparation tag");
+    if (tag == 0) {
+      program.prepared_simple_polynomials[outer_index] =
+          classify_simple_polynomial(program, instruction.right);
+    }
+  }
+}
+
 TaylorResult evaluate_polynomial(const Program& program,
                                  std::size_t payload,
                                  const IntegerVector& radii,
@@ -2357,6 +2458,10 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       if (tag == 0) {
         const std::size_t polynomial_steps = decode_list(
             program, instruction.right, "polynomial mode selection").size();
+        const Program::SimplePolynomial* prepared =
+            program.prepared_simple_polynomials.empty()
+                ? nullptr
+                : &program.prepared_simple_polynomials.at(outer_index);
         const bool use_fused_polynomial =
             polynomial_mode == PolynomialMode::kFusedAll ||
             ((polynomial_mode == PolynomialMode::kFusedDeltaX4 ||
@@ -2368,7 +2473,16 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                  static_cast<std::size_t>(fused_polynomial_max_steps));
         // The pinned case-10173 source payload at outer index 32 is
         // -delta_x4, not delta_x4.  Do not dispatch merely by program length.
-        if (direct_delta_x4 && outer_index == 32 && polynomial_steps == 39) {
+        if (kUsePreparedSimplePolynomials && prepared != nullptr &&
+            prepared->kind == Program::SimplePolynomialKind::kConstant) {
+          stack.push_back(result_constant(
+              radii, prepared->constant, counters));
+        } else if (kUsePreparedSimplePolynomials && prepared != nullptr &&
+                   prepared->kind == Program::SimplePolynomialKind::kVariable) {
+          stack.push_back(result_variable(
+              radii, center_environment, prepared->variable, counters));
+        } else if (direct_delta_x4 && outer_index == 32 &&
+                   polynomial_steps == 39) {
           stack.push_back(evaluate_neg_delta_x4_specialized(
               radii, center_environment, counters));
           direct_delta_x4_used = true;
@@ -2640,7 +2754,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 13) {
+    if (argc < 4 || argc > 14) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -2655,6 +2769,7 @@ int main(int argc, char** argv) {
                 << " [--fixed-sqrt-inverse-kernels]"
                 << " [--fixed-atan-kernel]"
                 << " [--verify-fixed-kernel-enclosures]"
+                << " [--prepared-simple-polynomials]"
                 << " [--decimal-scale=N]"
                 << " [--dyadic-scale]\n";
       return 2;
@@ -2705,6 +2820,8 @@ int main(int argc, char** argv) {
         kUseFixedAtanKernel = true;
       } else if (option == "--verify-fixed-kernel-enclosures") {
         kVerifyFixedKernelEnclosures = true;
+      } else if (option == "--prepared-simple-polynomials") {
+        kUsePreparedSimplePolynomials = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -2724,9 +2841,11 @@ int main(int argc, char** argv) {
           "instruction profiling is not implemented for compact support jets");
     }
     if (kUseCompactSupportJets &&
-        (kUseFixedSqrtInverseKernels || kUseFixedAtanKernel)) {
+        (kUseFixedSqrtInverseKernels || kUseFixedAtanKernel ||
+         kUsePreparedSimplePolynomials)) {
       throw std::runtime_error(
-          "compact support jets do not yet implement fixed nonlinear kernels");
+          "compact support jets do not yet implement fixed nonlinear kernels "
+          "or prepared simple polynomials");
     }
     if (kVerifyFixedKernelEnclosures &&
         !(kUseFixedSqrtInverseKernels || kUseFixedAtanKernel)) {
@@ -2743,7 +2862,10 @@ int main(int argc, char** argv) {
     }
 
     const auto preparation_begin = std::chrono::steady_clock::now();
-    const Program program = read_program(argv[1]);
+    Program program = read_program(argv[1]);
+    if (kUsePreparedSimplePolynomials) {
+      prepare_simple_polynomials(program);
+    }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels) {
       prepare_fixed_sqrt_certificates(jobs);
@@ -2753,6 +2875,14 @@ int main(int argc, char** argv) {
       throw std::runtime_error("expected-bound count drift");
     }
     const auto preparation_end = std::chrono::steady_clock::now();
+
+    std::size_t prepared_simple_polynomial_count = 0;
+    for (const Program::SimplePolynomial& polynomial :
+         program.prepared_simple_polynomials) {
+      if (polynomial.kind != Program::SimplePolynomialKind::kUnknown) {
+        ++prepared_simple_polynomial_count;
+      }
+    }
 
     Counters total;
     std::vector<Rat> results;
@@ -2832,6 +2962,10 @@ int main(int argc, char** argv) {
               << " fixed_atan_kernel=" << (kUseFixedAtanKernel ? 1 : 0)
               << " verify_fixed_kernel_enclosures="
               << (kVerifyFixedKernelEnclosures ? 1 : 0)
+              << " prepared_simple_polynomials="
+              << (kUsePreparedSimplePolynomials ? 1 : 0)
+              << " prepared_simple_polynomial_count="
+              << prepared_simple_polynomial_count
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted

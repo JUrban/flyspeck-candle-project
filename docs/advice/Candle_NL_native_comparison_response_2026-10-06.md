@@ -886,17 +886,57 @@ combined arithmetically with these native ratios.
 
 ### Next controlled discriminator and proof boundary
 
-The next native lane will keep checked `int128`, scale `10^10`, fixed nonlinear
-kernels, outward rounding, and the genuine boxes fixed.  It will change only
-the generic derivative/Taylor work by replacing the complete dihedral
-subgraph with a faithful specialized value/gradient/Hessian plan.  The 128-box
-gate will require complete acceptance, report bound widening, preparation,
-evaluation, memory, and operation counts, and compare against the checked
-fixed-kernel control above.  A fast lane that loses any current cell does not
-pass.
+One further cheap profile changed the order of this work.  In the checked
+fixed-kernel lane, outer instructions 31--38--the complete dihedral subgraph--
+used 0.009772 seconds of a 0.049766-second mean evaluation over 15 runs.  Even
+deleting the subgraph entirely would be capped at about **1.244 times**.  In
+contrast, instructions 0--30 used 0.032302 seconds.  Most of that prelude is
+repeated interpretation of semantically constant polynomials and six
+coordinate-square-root terms.  The profile-mean and dihedral-share files have
+SHA-256
+`634907a57abee50077d1f35af97ebbefe95d747341d0a09101f1130de0f07426`
+and
+`afef2faaf780ddae214934faf1df41d2aef6b23b1636397e86641ae506d2faa5`.
 
-If that lane materially wins, the native-input capture will be extended to
-all 4,173 boxes and the same comparison will charge shared preparation once.
+The first preparation experiment is therefore already complete.  A general
+exact-rational source pass recognizes constant-only polynomial programs and
+direct coordinate projections from their actual instruction payloads.  It
+prepared 20 of the 22 ordinary polynomial payloads once; the two nonlinear
+angle polynomials retained their separately authenticated implementations.
+At evaluation time the prepared constants and projections enter the unchanged
+Taylor operations directly.  This is semantic classification of the supplied
+program, not a basename, outer-index, or fixture-value whitelist.
+
+Fifty warmed, order-balanced checked-`int128` pairs gave:
+
+| Source execution | Preparation | Evaluation | Complete batch | Accepted |
+|---|---:|---:|---:|---:|
+| Reinterpret simple polynomials per box | 0.010694550 s | 0.047929378 s | 0.058623928 s | 128/128 |
+| Prepare 20 simple polynomials once | 0.009617546 s | 0.032469574 s | 0.042087120 s | 128/128 |
+
+Every final result is byte-identical.  The evaluation gain is **1.476 times**
+and the full measured batch gain, including preparation, is **1.393 times**.
+The phase table has SHA-256
+`a9a48fa4c6130ce38a4cf1cf605292c6c54f66ad16d50134033f4c08f03d7225`
+in run `nl-native-case10173-prepared-simple-v1-dev-001`.  The result stream is
+the same fixed-kernel stream with SHA-256
+`82d86f072427c309ccb1c9038445358fa28c9464b0dd3e51e6e00d6901e10ba9`.
+
+The prepared profile moves the remaining cost rather than hiding it:
+instructions 0--30 still use 53.3% of profiled instruction time, now primarily
+the six generic coordinate-square-root and scaling paths; the dihedral uses
+31.6%, final additions 11.5%, and final scale/multiply 3.6%.  The next native
+lane will therefore keep checked `int128`, scale `10^10`, fixed nonlinear
+kernels, outward rounding, and genuine boxes fixed while compiling the six
+repeated `coefficient * sqrt(coordinate)` paths into a general sparse unary
+operation.  It will preserve the source-derived constants and square-root
+certificates and compare exact bounds, acceptance, preparation, evaluation,
+memory, and operation counts.  The complete specialized dihedral plan follows
+that larger measured target rather than preceding it.
+
+If the prepared coordinate/unary lane and then the specialized dihedral lane
+materially win, the native-input capture will be extended to all 4,173 boxes
+and the same comparisons will charge shared preparation once.
 Only after the full batch passes will the specialized algorithm be held fixed
 while endpoint representation is varied, including a checked fixed-width
 lane and an outward-rounded hardware lane as an attainable-time diagnostic.
@@ -906,6 +946,9 @@ instead of changing both at once.
 Formal work stays bounded in parallel.  The current angle specialization may
 receive its one general analytic-containment theorem and exact authenticated
 dispatch/fallback theorem; it will not grow into fixture-specific rewrites.
+The simple-program preparation result suggests a small general proof obligation
+for exact constant/coordinate classification and plan correspondence, not 20
+individual expression lemmas.
 The fixed nonlinear kernels are also plausible reusable proof targets--their
 contracts reduce to general integer rounding, square-root certificate, and
 alternating-series lemmas--but integration waits for the complete numerical
