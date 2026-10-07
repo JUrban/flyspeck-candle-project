@@ -2069,3 +2069,48 @@ Accepted Candle evidence is
 `9ad3438a`.  The native benchmark is project commit `1ea5ceb`.  Full timings,
 hashes, and the bounded integration plan are in
 `docs/progress/2026-10-07-v3.62-nl-historical-hessian-kernel-factorial.md`.
+
+## Update: whole-checker splice and broader-gap decision
+
+The historical angle operation now runs inside the complete 128-job
+case-10173 development checker.  Both consecutive computed calls accept all
+jobs with closed, assumption-free theorems and no axiom growth.  Against the
+prior exact fixed-nonlinear candidates, the two repetition pairs improve by
+1.539 to 2.419 times; comparing the two-run means gives 1.919 times.  Setup
+and run order were not matched, so this is deliberately reported as a
+material approximately two-times result rather than a precise end-to-end
+speedup.
+
+The result keeps the specialization useful but bounded.  Four additional
+root intervals per job are supplied as development data and are not yet
+independently validated inside the candidate.  No release claim or universal
+soundness proof follows until roots are checked or computed in the compact
+operation, the full family wins, and a second certificate family confirms the
+architecture.
+
+The broader investigation remains active, with an important refinement to
+the two-gap description.  Same-box native factorials already hold the direct
+graph fixed while changing exact endpoints to outward `double` (1.628 times),
+and hold `double` fixed while changing the generic graph to the direct data
+flow (1.087 times).  Both accept all 4173 boxes.  The optimized exact native
+direct path is now about 1.35 times from the specialized C++ control on this
+fixture, so the original approximately 340-times number is a starting
+architecture gap, not the residual optimized-native gap.  By contrast,
+matched reflected components still expose approximately 16--34-times encoded
+execution/proof overhead.
+
+The next controlled experiment therefore compacts the whole authenticated
+expression plan into one direct computed operation while keeping exact
+fixed-scale arithmetic, rounding, source identity, boxes, and acceptance
+fixed.  It will compare the generic checker, the eight-instruction splice,
+and the whole-expression operation under matched ordering, with reusable
+preparation separated from recurring compute and theorem handoff.  All roots
+must be validated within the operation.  Only a material 128-box win advances
+to all 4173 boxes and a second family; only those results justify the reusable
+source-correspondence and soundness proof.  This targets the much larger
+remaining boundary without abandoning enclosure quality or complete-batch
+acceptance as the decision criteria.
+
+Implementation and complete evidence are recorded in
+`docs/progress/2026-10-07-v3.63-nl-whole-checker-historical-splice.md` and
+isolated Candle commit `25cb33e1`.
