@@ -2518,3 +2518,46 @@ local specialization cannot grow into an unmeasured proof project.
 The implementation boundary, clean-build evidence, and full factorial plan
 are recorded in
 `docs/progress/2026-10-07-v3.75-nl-bounded-limb-refinement-and-broader-factorial.md`.
+
+## Update: independent two-axis factorial is complete
+
+The requested independent factorial has now run on all 875 genuine
+case16594 cells.  Lowering every polynomial of at most 39 steps while leaving
+the enclosure-sensitive 85-step blocks unchanged improves exact mixed
+128/192 evaluation from 2.409491 to 2.306154 seconds (1.045 times) and padded
+hardware evaluation from 0.733521 to 0.715674 seconds (1.025 times).  Exact
+outputs are byte-identical and all four lanes accept 875/875.  The hardware
+lowering is tighter on 838 cells, equal on 37, and wider on none.
+
+This cleanly holds each axis fixed.  Exact versus hardware arithmetic costs
+3.285 times on the baseline graph and 3.222 times on the lowered graph;
+generic versus safely lowered derivative/Taylor work costs only 1.045 times
+under exact arithmetic.  The latter is not the missing architecture.
+
+The larger 85-step blocks cannot simply be folded into the same design.
+Fusing them individually loses 5--9 certificate cells.  Recomputing Taylor
+value and gradient bounds after every fused product still accepts only 867,
+872, and 869 cells at the three sites; applying it through all 85-step blocks
+accepts 859/875.  That normalization branch is rejected without proof work.
+A future large-block primitive must improve the enclosure algorithm, not just
+change normalization cadence.
+
+The broader conclusion is now sharper.  The original approximately
+340-times number remains the starting case10173 architecture comparison, not
+the optimized native residual.  On case16594, safe graph lowering and
+arithmetic together leave the much larger boundary at proof-producing
+execution: about 225.8 seconds reflected versus 2.31 seconds for the matched
+exact native candidate, or roughly 98 times.  The next high-value packet is
+therefore an actual checked word operation refining the new total 128/192
+contracts, followed by a closed computed microbenchmark and then the complete
+875-cell gate.  More generic native decoder or normalization variants stop
+here.
+
+The bounded contracts now cover add, 128-to-192 multiply, narrowing, and
+directed dyadic shifts with exact success and overflow theorems at CakeML
+commits `395f35356` and `05b42fa4a`.  They remain specifications; neither
+commit changes the compute datatype or claims fast execution.
+
+Complete timings, enclosure comparisons, rejection evidence, and hashes are
+in
+`docs/progress/2026-10-07-v3.76-nl-case16594-factorial-and-bounded-operation-contracts.md`.
