@@ -138,6 +138,7 @@ bool kUseUncheckedNarrowFixedProducts = false;
 bool kUseUnsafeUnroundedHardware = false;
 bool kUseSignSpecializedIntervalProducts = false;
 bool kUseSpecializedDeltaRadicands = false;
+bool kUseSpecializedDeltaDerivatives = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
@@ -625,6 +626,7 @@ struct Program {
   // form 4 * x[coordinate] * delta(x).  Authentication is semantic over the
   // exact rational polynomial, not by outer index or program basename.
   std::vector<int> specialized_delta_radicand_coordinates;
+  std::vector<int> specialized_delta_derivative_coordinates;
   enum class SimplePolynomialKind { kUnknown, kConstant, kVariable };
   struct SimplePolynomial {
     SimplePolynomialKind kind = SimplePolynomialKind::kUnknown;
@@ -3234,6 +3236,23 @@ SymbolicPolynomial symbolic_mul(const SymbolicPolynomial& left,
   return result;
 }
 
+SymbolicPolynomial symbolic_derivative(const SymbolicPolynomial& value,
+                                       std::size_t coordinate) {
+  if (coordinate >= kDimensions) {
+    throw std::runtime_error("symbolic derivative coordinate out of range");
+  }
+  SymbolicPolynomial result;
+  for (const auto& [monomial, coefficient] : value) {
+    if (monomial[coordinate] == 0) continue;
+    SymbolicMonomial derivative = monomial;
+    const unsigned degree = derivative[coordinate];
+    --derivative[coordinate];
+    result[derivative] += coefficient * degree;
+    result[derivative].canonicalize();
+  }
+  return result;
+}
+
 SymbolicPolynomial decode_symbolic_polynomial(const Program& program,
                                               std::size_t payload) {
   std::vector<SymbolicPolynomial> stack;
@@ -3374,6 +3393,53 @@ void prepare_specialized_delta_radicands(Program& program) {
        coordinate_counts[5] != 0)) {
     throw std::runtime_error(
         "case16594 specialized delta-radicand source coverage drift");
+  }
+}
+
+void prepare_specialized_delta_derivatives(Program& program) {
+  program.specialized_delta_derivative_coordinates.assign(
+      program.instructions.size(), -1);
+  const SymbolicPolynomial delta = symbolic_delta_polynomial();
+  std::array<std::size_t, kDimensions> coordinate_counts{};
+  std::size_t match_count = 0;
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    if (!instruction.is_pair ||
+        require_numeral(program, instruction.left,
+                        "specialized derivative outer tag") != 0) {
+      continue;
+    }
+    const std::vector<std::size_t> instructions = decode_list(
+        program, instruction.right, "specialized derivative program");
+    if (instructions.size() != 39) continue;
+    const SymbolicPolynomial actual = decode_symbolic_polynomial(
+        program, instruction.right);
+    for (std::size_t coordinate = 0; coordinate < kDimensions;
+         ++coordinate) {
+      const SymbolicPolynomial expected = symbolic_neg(
+          symbolic_derivative(delta, coordinate));
+      if (actual == expected) {
+        program.specialized_delta_derivative_coordinates[outer_index] =
+            static_cast<int>(coordinate);
+        ++coordinate_counts[coordinate];
+        ++match_count;
+        break;
+      }
+    }
+  }
+  if (match_count == 0) {
+    throw std::runtime_error(
+        "no source-authenticated negated delta derivatives");
+  }
+  if (kCaseId == 16594 &&
+      (match_count != 3 || coordinate_counts[0] != 0 ||
+       coordinate_counts[1] != 0 || coordinate_counts[2] != 0 ||
+       coordinate_counts[3] != 1 || coordinate_counts[4] != 1 ||
+       coordinate_counts[5] != 1)) {
+    throw std::runtime_error(
+        "case16594 specialized delta-derivative source coverage drift");
   }
 }
 
@@ -4360,6 +4426,29 @@ TaylorResult evaluate_neg_delta_x4_specialized(
       vector_neg(delta_x4_gradient(center_environment))};
   return complete_result(radii, true, center,
                          matrix_neg(delta_x4_hessian()), counters);
+}
+
+TaylorResult evaluate_neg_delta_derivative_specialized(
+    const IntegerVector& radii,
+    const IntervalVector& center_environment, std::size_t coordinate,
+    Counters& counters) {
+  if (coordinate >= kDimensions) {
+    throw std::runtime_error("negative delta derivative coordinate out of range");
+  }
+  const IntervalMatrix center_hessian = delta_hessian(center_environment);
+  FirstJet center;
+  center.value = interval_neg(
+      delta_gradient_component(coordinate, center_environment, counters));
+  for (std::size_t gradient_coordinate = 0;
+       gradient_coordinate < kDimensions; ++gradient_coordinate) {
+    center.gradient[gradient_coordinate] = interval_neg(
+        center_hessian[coordinate][gradient_coordinate]);
+  }
+  IntervalVector coordinate_basis = zero_vector();
+  coordinate_basis[coordinate] = one_interval();
+  return complete_result(
+      radii, true, center,
+      matrix_neg(delta_hessian(coordinate_basis)), counters);
 }
 
 TaylorResult evaluate_four_coordinate_delta_specialized(
@@ -6010,6 +6099,16 @@ Evaluation evaluate_job(const Program& program, const Job& job,
           stack.push_back(evaluate_neg_delta_x4_specialized(
               radii, center_environment, counters));
           direct_delta_x4_used = true;
+        } else if (kUseSpecializedDeltaDerivatives &&
+                   !program.specialized_delta_derivative_coordinates.empty() &&
+                   program.specialized_delta_derivative_coordinates.at(
+                       outer_index) >= 0) {
+          stack.push_back(evaluate_neg_delta_derivative_specialized(
+              radii, center_environment,
+              static_cast<std::size_t>(
+                  program.specialized_delta_derivative_coordinates.at(
+                      outer_index)),
+              counters));
         } else if (kUseSpecializedDeltaRadicands &&
                    !program.specialized_delta_radicand_coordinates.empty() &&
                    program.specialized_delta_radicand_coordinates.at(
@@ -6380,6 +6479,7 @@ int main(int argc, char** argv) {
                 << " [--unsafe-unrounded-hardware]"
                 << " [--sign-specialized-interval-products]"
                 << " [--specialized-delta-radicands]"
+                << " [--specialized-delta-derivatives]"
                 << " [--count-fixed-quotients]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
@@ -6511,6 +6611,8 @@ int main(int argc, char** argv) {
         kUseSignSpecializedIntervalProducts = true;
       } else if (option == "--specialized-delta-radicands") {
         kUseSpecializedDeltaRadicands = true;
+      } else if (option == "--specialized-delta-derivatives") {
+        kUseSpecializedDeltaDerivatives = true;
       } else if (option == "--count-fixed-quotients") {
         kCountFixedQuotients = true;
       } else if (option == "--rounding-profile") {
@@ -6604,7 +6706,8 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "prepared polynomial pair requires the dense baseline evaluator");
     }
-    if (kUseSpecializedDeltaRadicands &&
+    if ((kUseSpecializedDeltaRadicands ||
+         kUseSpecializedDeltaDerivatives) &&
         (kUseCompactSupportJets || polynomial_mode != PolynomialMode::kBaseline ||
          fused_polynomial_outer_index >= 0 ||
          fused_polynomial_max_steps >= 0)) {
@@ -6892,6 +6995,9 @@ int main(int argc, char** argv) {
     if (kUseSpecializedDeltaRadicands) {
       prepare_specialized_delta_radicands(program);
     }
+    if (kUseSpecializedDeltaDerivatives) {
+      prepare_specialized_delta_derivatives(program);
+    }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels) {
       prepare_fixed_sqrt_certificates(jobs);
@@ -6937,6 +7043,11 @@ int main(int argc, char** argv) {
     for (const int coordinate :
          program.specialized_delta_radicand_coordinates) {
       if (coordinate >= 0) ++specialized_delta_radicand_count;
+    }
+    std::size_t specialized_delta_derivative_count = 0;
+    for (const int coordinate :
+         program.specialized_delta_derivative_coordinates) {
+      if (coordinate >= 0) ++specialized_delta_derivative_count;
     }
 
     Counters total;
@@ -7195,6 +7306,10 @@ int main(int argc, char** argv) {
               << (kUseSpecializedDeltaRadicands ? 1 : 0)
               << " specialized_delta_radicand_count="
               << specialized_delta_radicand_count
+              << " specialized_delta_derivatives="
+              << (kUseSpecializedDeltaDerivatives ? 1 : 0)
+              << " specialized_delta_derivative_count="
+              << specialized_delta_derivative_count
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
               << " mixed_wide_taylor_completions="
