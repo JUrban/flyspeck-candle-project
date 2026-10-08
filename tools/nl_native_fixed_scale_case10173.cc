@@ -151,6 +151,7 @@ bool kUseUnsafeUnroundedHardware = false;
 bool kUseSignSpecializedIntervalProducts = false;
 bool kUseSpecializedDeltaRadicands = false;
 bool kUseSpecializedDeltaDerivatives = false;
+bool kUseSharedDeltaData = false;
 bool kUseSpecializedDeltaInverseRoots = false;
 bool kUseSpecializedDeltaDihedralChains = false;
 bool kUseSpecializedDeltaDihedralIdentities = false;
@@ -455,6 +456,14 @@ struct SecondOrderBox {
   Interval value;
   IntervalVector gradient;
   IntervalMatrix hessian;
+};
+
+struct SharedDeltaData {
+  Interval center_value;
+  IntervalVector center_gradient;
+  IntervalMatrix center_hessian;
+  IntervalMatrix box_hessian;
+  IntervalVector box_gradient;
 };
 
 // Development-only handoff for the reflected historical-dihedral
@@ -4588,6 +4597,27 @@ IntervalMatrix delta_hessian(const IntervalVector& x) {
   return hessian;
 }
 
+SharedDeltaData prepare_shared_delta_data(
+    const IntegerVector& radii,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, Counters& counters) {
+  SharedDeltaData shared;
+  shared.center_value = delta_value(center_environment, counters);
+  shared.center_gradient = delta_gradient_from_products(
+      polynomial_pair_products(center_environment, counters));
+  shared.center_hessian = delta_hessian(center_environment);
+  shared.box_hessian = delta_hessian(box_environment);
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const Fixed variation = dot_abs_upper(
+        radii, shared.box_hessian[coordinate]);
+    shared.box_gradient[coordinate] = raw_interval_round(
+        kScale,
+        {kScale * shared.center_gradient[coordinate].lower - variation,
+         kScale * shared.center_gradient[coordinate].upper + variation});
+  }
+  return shared;
+}
+
 Interval delta_gradient_component(std::size_t coordinate,
                                   const IntervalVector& x,
                                   Counters& counters) {
@@ -5091,11 +5121,13 @@ TaylorResult evaluate_neg_delta_x4_specialized(
 TaylorResult evaluate_neg_delta_derivative_specialized(
     const IntegerVector& radii,
     const IntervalVector& center_environment, std::size_t coordinate,
-    Counters& counters) {
+    Counters& counters, const SharedDeltaData* shared = nullptr) {
   if (coordinate >= kDimensions) {
     throw std::runtime_error("negative delta derivative coordinate out of range");
   }
-  const IntervalMatrix center_hessian = delta_hessian(center_environment);
+  const IntervalMatrix center_hessian = shared == nullptr
+      ? delta_hessian(center_environment)
+      : shared->center_hessian;
   FirstJet center;
   center.value = interval_neg(
       delta_gradient_component(coordinate, center_environment, counters));
@@ -5115,22 +5147,35 @@ TaylorResult evaluate_four_coordinate_delta_specialized(
     const IntegerVector& radii,
     const IntervalVector& center_environment,
     const IntervalVector& box_environment, std::size_t coordinate,
-    Counters& counters) {
+    Counters& counters, const SharedDeltaData* shared = nullptr) {
   if (coordinate >= kDimensions) {
     throw std::runtime_error("four-coordinate-delta coordinate out of range");
   }
-  const Interval center_delta = delta_value(center_environment, counters);
-  const IntervalVector center_delta_gradient = delta_gradient_from_products(
-      polynomial_pair_products(center_environment, counters));
-  const IntervalMatrix box_delta_hessian = delta_hessian(box_environment);
+  const Interval center_delta = shared == nullptr
+      ? delta_value(center_environment, counters)
+      : shared->center_value;
+  const IntervalVector center_delta_gradient = shared == nullptr
+      ? delta_gradient_from_products(
+            polynomial_pair_products(center_environment, counters))
+      : shared->center_gradient;
+  const IntervalMatrix box_delta_hessian = shared == nullptr
+      ? delta_hessian(box_environment)
+      : shared->box_hessian;
   IntervalVector box_delta_gradient;
-  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
-    const Fixed variation = dot_abs_upper(
-        radii, box_delta_hessian[coordinate]);
-    box_delta_gradient[coordinate] = raw_interval_round(
-        kScale,
-        {kScale * center_delta_gradient[coordinate].lower - variation,
-         kScale * center_delta_gradient[coordinate].upper + variation});
+  if (shared == nullptr) {
+    for (std::size_t gradient_coordinate = 0;
+         gradient_coordinate < kDimensions; ++gradient_coordinate) {
+      const Fixed variation = dot_abs_upper(
+          radii, box_delta_hessian[gradient_coordinate]);
+      box_delta_gradient[gradient_coordinate] = raw_interval_round(
+          kScale,
+          {kScale * center_delta_gradient[gradient_coordinate].lower -
+               variation,
+           kScale * center_delta_gradient[gradient_coordinate].upper +
+               variation});
+    }
+  } else {
+    box_delta_gradient = shared->box_gradient;
   }
 
   FirstJet center;
@@ -6660,6 +6705,13 @@ Evaluation evaluate_job(const Program& program, const Job& job,
   }
 
   Counters counters;
+  SharedDeltaData shared_delta_data;
+  const SharedDeltaData* shared_delta = nullptr;
+  if (kUseSharedDeltaData) {
+    shared_delta_data = prepare_shared_delta_data(
+        radii, center_environment, box_environment, counters);
+    shared_delta = &shared_delta_data;
+  }
   std::vector<TaylorResult> stack;
   if (kUseSourceDagCache &&
       (program.source_dag_expression_ids.size() !=
@@ -7118,7 +7170,7 @@ Evaluation evaluate_job(const Program& program, const Job& job,
               static_cast<std::size_t>(
                   program.specialized_delta_derivative_coordinates.at(
                       outer_index)),
-              counters));
+              counters, shared_delta));
         } else if (kUseSpecializedDeltaRadicands &&
                    !program.specialized_delta_radicand_coordinates.empty() &&
                    program.specialized_delta_radicand_coordinates.at(
@@ -7128,7 +7180,7 @@ Evaluation evaluate_job(const Program& program, const Job& job,
               static_cast<std::size_t>(
                   program.specialized_delta_radicand_coordinates.at(
                       outer_index)),
-              counters));
+              counters, shared_delta));
         } else if (polynomial_mode == PolynomialMode::kSpecializedAngle &&
                    outer_index == 33 && polynomial_steps == 85) {
           stack.push_back(evaluate_four_x1_delta_specialized(
@@ -7502,7 +7554,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 47) {
+    if (argc < 4 || argc > 48) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -7546,6 +7598,7 @@ int main(int argc, char** argv) {
                 << " [--sign-specialized-interval-products]"
                 << " [--specialized-delta-radicands]"
                 << " [--specialized-delta-derivatives]"
+                << " [--shared-delta-data]"
                 << " [--specialized-delta-inverse-roots]"
                 << " [--specialized-delta-dihedral-chains]"
                 << " [--taylor-reconstructed-box]"
@@ -7696,6 +7749,8 @@ int main(int argc, char** argv) {
         kUseSpecializedDeltaRadicands = true;
       } else if (option == "--specialized-delta-derivatives") {
         kUseSpecializedDeltaDerivatives = true;
+      } else if (option == "--shared-delta-data") {
+        kUseSharedDeltaData = true;
       } else if (option == "--specialized-delta-inverse-roots") {
         kUseSpecializedDeltaInverseRoots = true;
       } else if (option == "--specialized-delta-dihedral-chains") {
@@ -7866,6 +7921,13 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "specialized delta chain operations require both authenticated "
           "pair lanes");
+    }
+    if (kUseSharedDeltaData &&
+        (!kUseSourceDagCache || !kUseSpecializedDeltaRadicands ||
+         !kUseSpecializedDeltaDerivatives || kCaseId != 16594)) {
+      throw std::runtime_error(
+          "shared delta data requires the case16594 exact source DAG and "
+          "both authenticated delta-role lanes");
     }
     if (static_cast<int>(kUseSpecializedDeltaInverseRoots) +
             static_cast<int>(kUseSpecializedDeltaDihedralChains) +
@@ -8584,6 +8646,8 @@ int main(int argc, char** argv) {
               << (kUseSpecializedDeltaDerivatives ? 1 : 0)
               << " specialized_delta_derivative_count="
               << specialized_delta_derivative_count
+              << " shared_delta_data="
+              << (kUseSharedDeltaData ? 1 : 0)
               << " specialized_delta_inverse_roots="
               << (kUseSpecializedDeltaInverseRoots ? 1 : 0)
               << " specialized_delta_dihedral_chains="
