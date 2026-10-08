@@ -295,6 +295,17 @@ struct ReciprocalCertificateRecord {
   Interval output;
 };
 
+enum class AnalyticCertificateKind { kSqrt, kInverse, kAtan };
+
+struct AnalyticCertificateRecord {
+  std::size_t job_index;
+  std::size_t ordinal;
+  AnalyticCertificateKind kind;
+  bool lower_range_present;
+  bool upper_range_present;
+  std::array<Interval, 5> values;
+};
+
 bool kCaptureReciprocalCertificates = false;
 bool kUseReciprocalCertificates = false;
 bool kReciprocalCertificateEvaluationActive = false;
@@ -302,6 +313,9 @@ std::size_t kReciprocalCertificateJob = 0;
 std::size_t kReciprocalCertificateOrdinal = 0;
 std::size_t kReciprocalCertificateCursor = 0;
 std::vector<ReciprocalCertificateRecord> kReciprocalCertificates;
+bool kCaptureAnalyticCertificates = false;
+std::size_t kAnalyticCertificateOrdinal = 0;
+std::vector<AnalyticCertificateRecord> kAnalyticCertificates;
 
 #if (defined(CANDLE_NL_FIXED_INT128) || \
      defined(CANDLE_NL_CHECKED_INT192) || \
@@ -2112,6 +2126,72 @@ void write_reciprocal_certificates(const std::string& path) {
   }
 }
 
+Interval zero_fixed_interval() { return {0, 0}; }
+
+void capture_sqrt_analytic_certificate(
+    const Interval& center_sqrt, const Interval& box_sqrt,
+    const Interval& center_derivative, const Interval& box_derivative,
+    const Interval& box_second_reciprocal) {
+  if (!kCaptureAnalyticCertificates) return;
+  kAnalyticCertificates.push_back(
+      {kReciprocalCertificateJob, kAnalyticCertificateOrdinal++,
+       AnalyticCertificateKind::kSqrt, false, false,
+       {center_sqrt, box_sqrt, center_derivative, box_derivative,
+        box_second_reciprocal}});
+}
+
+void capture_inverse_analytic_certificate(
+    const Interval& center_reciprocal,
+    const Interval& box_reciprocal) {
+  if (!kCaptureAnalyticCertificates) return;
+  const Interval zero = zero_fixed_interval();
+  kAnalyticCertificates.push_back(
+      {kReciprocalCertificateJob, kAnalyticCertificateOrdinal++,
+       AnalyticCertificateKind::kInverse, false, false,
+       {center_reciprocal, box_reciprocal, zero, zero, zero}});
+}
+
+void capture_atan_analytic_certificate(
+    bool lower_range_present, const Interval& lower_range_reciprocal,
+    bool upper_range_present, const Interval& upper_range_reciprocal,
+    const Interval& center_derivative, const Interval& box_derivative) {
+  if (!kCaptureAnalyticCertificates) return;
+  const Interval zero = zero_fixed_interval();
+  kAnalyticCertificates.push_back(
+      {kReciprocalCertificateJob, kAnalyticCertificateOrdinal++,
+       AnalyticCertificateKind::kAtan, lower_range_present,
+       upper_range_present,
+       {lower_range_reciprocal, upper_range_reciprocal,
+        center_derivative, box_derivative, zero}});
+}
+
+const char* analytic_certificate_kind_name(AnalyticCertificateKind kind) {
+  switch (kind) {
+    case AnalyticCertificateKind::kSqrt: return "sqrt";
+    case AnalyticCertificateKind::kInverse: return "inverse";
+    case AnalyticCertificateKind::kAtan: return "atan";
+  }
+  throw std::runtime_error("unknown analytic certificate kind");
+}
+
+void write_analytic_certificates(const std::string& path) {
+  std::ofstream output(path);
+  if (!output) {
+    throw std::runtime_error("cannot write analytic certificates: " + path);
+  }
+  for (const AnalyticCertificateRecord& record : kAnalyticCertificates) {
+    output << record.job_index << '\t' << record.ordinal << '\t'
+           << analytic_certificate_kind_name(record.kind) << '\t'
+           << (record.lower_range_present ? 1 : 0) << '\t'
+           << (record.upper_range_present ? 1 : 0);
+    for (const Interval& value : record.values) {
+      output << '\t' << integer_of_fixed(value.lower).get_str()
+             << '\t' << integer_of_fixed(value.upper).get_str();
+    }
+    output << '\n';
+  }
+}
+
 bool fixed_sqrt_certificate(const Interval& input,
                             const Interval& output) {
   return input.lower >= 0 && input.lower <= input.upper &&
@@ -2295,9 +2375,17 @@ const Rat kPiHalfUpper =
 // interval may leave (-1,1), while the polynomial kernel itself remains on
 // that range after the standard reciprocal identities.  Endpoints exactly at
 // +/-1 remain fail-closed until a proved pi/4 enclosure is supplied.
-Fixed fixed_atan_range_lower_point(Fixed x, Counters& counters) {
+Fixed fixed_atan_range_lower_point(
+    Fixed x, Counters& counters, bool* reciprocal_present = nullptr,
+    Interval* reciprocal_certificate = nullptr) {
+  if (reciprocal_present != nullptr) *reciprocal_present = false;
   if (x < -kScale) {
-    const Interval reciprocal = interval_neg(fixed_interval_inv({x, x}));
+    const Interval signed_reciprocal = fixed_interval_inv({x, x});
+    if (reciprocal_present != nullptr) *reciprocal_present = true;
+    if (reciprocal_certificate != nullptr) {
+      *reciprocal_certificate = signed_reciprocal;
+    }
+    const Interval reciprocal = interval_neg(signed_reciprocal);
     const Interval pi_half = interval_of_q(
         {kPiHalfLower, kPiHalfUpper});
     return fixed_atan_lower_point(reciprocal.lower, counters) -
@@ -2305,6 +2393,10 @@ Fixed fixed_atan_range_lower_point(Fixed x, Counters& counters) {
   }
   if (x > kScale) {
     const Interval reciprocal = fixed_interval_inv({x, x});
+    if (reciprocal_present != nullptr) *reciprocal_present = true;
+    if (reciprocal_certificate != nullptr) {
+      *reciprocal_certificate = reciprocal;
+    }
     const Interval pi_half = interval_of_q(
         {kPiHalfLower, kPiHalfUpper});
     return pi_half.lower -
@@ -2313,9 +2405,17 @@ Fixed fixed_atan_range_lower_point(Fixed x, Counters& counters) {
   return fixed_atan_lower_point(x, counters);
 }
 
-Fixed fixed_atan_range_upper_point(Fixed x, Counters& counters) {
+Fixed fixed_atan_range_upper_point(
+    Fixed x, Counters& counters, bool* reciprocal_present = nullptr,
+    Interval* reciprocal_certificate = nullptr) {
+  if (reciprocal_present != nullptr) *reciprocal_present = false;
   if (x < -kScale) {
-    const Interval reciprocal = interval_neg(fixed_interval_inv({x, x}));
+    const Interval signed_reciprocal = fixed_interval_inv({x, x});
+    if (reciprocal_present != nullptr) *reciprocal_present = true;
+    if (reciprocal_certificate != nullptr) {
+      *reciprocal_certificate = signed_reciprocal;
+    }
+    const Interval reciprocal = interval_neg(signed_reciprocal);
     const Interval pi_half = interval_of_q(
         {kPiHalfLower, kPiHalfUpper});
     return fixed_atan_upper_point(reciprocal.upper, counters) -
@@ -2323,6 +2423,10 @@ Fixed fixed_atan_range_upper_point(Fixed x, Counters& counters) {
   }
   if (x > kScale) {
     const Interval reciprocal = fixed_interval_inv({x, x});
+    if (reciprocal_present != nullptr) *reciprocal_present = true;
+    if (reciprocal_certificate != nullptr) {
+      *reciprocal_certificate = reciprocal;
+    }
     const Interval pi_half = interval_of_q(
         {kPiHalfLower, kPiHalfUpper});
     return pi_half.upper -
@@ -2332,9 +2436,17 @@ Fixed fixed_atan_range_upper_point(Fixed x, Counters& counters) {
 }
 
 Interval fixed_atan_range_interval(const Interval& input,
-                                   Counters& counters) {
-  return {fixed_atan_range_lower_point(input.lower, counters),
-          fixed_atan_range_upper_point(input.upper, counters)};
+                                   Counters& counters,
+                                   bool* lower_reciprocal_present = nullptr,
+                                   Interval* lower_reciprocal = nullptr,
+                                   bool* upper_reciprocal_present = nullptr,
+                                   Interval* upper_reciprocal = nullptr) {
+  return {fixed_atan_range_lower_point(
+              input.lower, counters, lower_reciprocal_present,
+              lower_reciprocal),
+          fixed_atan_range_upper_point(
+              input.upper, counters, upper_reciprocal_present,
+              upper_reciprocal)};
 }
 
 bool atan_range_domain(const Rat& x) { return x != -1 && x != 1; }
@@ -2462,6 +2574,7 @@ TaylorResult result_inverse_fixed(const IntegerVector& radii,
                                counters)};
 
   const Interval box_r = fixed_interval_inv(value.value_bound);
+  capture_inverse_analytic_certificate(r, box_r);
   const Interval box_r2 = interval_mul(box_r, box_r, counters);
   const Interval box_r3 = interval_mul(box_r2, box_r, counters);
   const IntervalMatrix hessian = matrix_add(
@@ -2507,7 +2620,11 @@ TaylorResult result_sqrt_fixed(
   if (!fixed_interval_not_zero(dd_denominator)) {
     throw std::runtime_error("fixed sqrt second derivative domain failure");
   }
-  const Interval box_dd = interval_neg(fixed_interval_inv(dd_denominator));
+  const Interval box_second_reciprocal =
+      fixed_interval_inv(dd_denominator);
+  capture_sqrt_analytic_certificate(
+      center_sqrt, box_sqrt, center_d, box_d, box_second_reciprocal);
+  const Interval box_dd = interval_neg(box_second_reciprocal);
   const IntervalMatrix hessian = matrix_add(
       interval_matrix_scale(
           box_dd, interval_self_outer(value.gradient_bounds, counters),
@@ -2644,11 +2761,22 @@ TaylorResult result_atan_fixed(const IntegerVector& radii,
   if (!domain) throw std::runtime_error("fixed atan domain failure");
 
   const Interval center_d = fixed_interval_inv(center_denominator);
+  bool lower_range_present = false;
+  bool upper_range_present = false;
+  Interval lower_range_reciprocal = zero_fixed_interval();
+  Interval upper_range_reciprocal = zero_fixed_interval();
   const FirstJet center = {
-      fixed_atan_range_interval(value.center.value, counters),
+      fixed_atan_range_interval(
+          value.center.value, counters,
+          &lower_range_present, &lower_range_reciprocal,
+          &upper_range_present, &upper_range_reciprocal),
       interval_vector_scale(center_d, value.center.gradient, counters)};
 
   const Interval box_d = fixed_interval_inv(box_denominator);
+  capture_atan_analytic_certificate(
+      lower_range_present, lower_range_reciprocal,
+      upper_range_present, upper_range_reciprocal,
+      center_d, box_d);
   const Interval box_d2 = interval_mul(box_d, box_d, counters);
   const Interval box_dd = interval_neg(interval_mul(
       interval_add(value.value_bound, value.value_bound), box_d2, counters));
@@ -6905,7 +7033,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 44) {
+    if (argc < 4 || argc > 45) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -6952,6 +7080,7 @@ int main(int argc, char** argv) {
                 << " [--count-fixed-quotients]"
                 << " [--capture-reciprocal-certificates=PATH]"
                 << " [--use-reciprocal-certificates=PATH]"
+                << " [--capture-analytic-certificates=PATH]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
                 << " [--historical-kernel-diagnostics]"
@@ -6984,6 +7113,7 @@ int main(int argc, char** argv) {
     bool accept_only = false;
     std::string capture_reciprocal_certificates_path;
     std::string use_reciprocal_certificates_path;
+    std::string capture_analytic_certificates_path;
     bool custom_decimal_scale = false;
     bool custom_binary_scale = false;
     int requested_binary_scale_bits = 40;
@@ -7110,6 +7240,14 @@ int main(int argc, char** argv) {
           throw std::runtime_error(
               "empty reciprocal certificate input path");
         }
+      } else if (option.rfind(
+                     "--capture-analytic-certificates=", 0) == 0) {
+        capture_analytic_certificates_path = option.substr(
+            std::string("--capture-analytic-certificates=").size());
+        if (capture_analytic_certificates_path.empty()) {
+          throw std::runtime_error(
+              "empty analytic certificate capture path");
+        }
       } else if (option == "--rounding-profile") {
         rounding_profile_enabled = true;
         kCountFixedQuotients = true;
@@ -7194,6 +7332,11 @@ int main(int argc, char** argv) {
         !use_reciprocal_certificates_path.empty()) {
       throw std::runtime_error(
           "conflicting reciprocal certificate capture/use modes");
+    }
+    if (!capture_analytic_certificates_path.empty() &&
+        (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel)) {
+      throw std::runtime_error(
+          "analytic certificate capture requires fixed scalar kernels");
     }
     if (profile_enabled && rounding_profile_enabled) {
       throw std::runtime_error(
@@ -7501,6 +7644,10 @@ int main(int argc, char** argv) {
       kReciprocalCertificates.clear();
       kCaptureReciprocalCertificates = true;
     }
+    if (!capture_analytic_certificates_path.empty()) {
+      kAnalyticCertificates.clear();
+      kCaptureAnalyticCertificates = true;
+    }
     Program program = read_program(argv[1]);
     if (prepared_polynomial_pair_index >= 0) {
       prepare_polynomial_pair(
@@ -7633,6 +7780,7 @@ int main(int argc, char** argv) {
     for (std::size_t index = 0; index < jobs.size(); ++index) {
       kReciprocalCertificateJob = index;
       kReciprocalCertificateOrdinal = 0;
+      kAnalyticCertificateOrdinal = 0;
       Evaluation evaluation;
       try {
         evaluation = kUseDirectSpecializedFunction
@@ -7685,6 +7833,15 @@ int main(int argc, char** argv) {
       }
       write_reciprocal_certificates(
           capture_reciprocal_certificates_path);
+    }
+    if (kCaptureAnalyticCertificates) {
+      if (kAnalyticCertificates.empty() ||
+          (kCaseId == 16594 &&
+           kAnalyticCertificates.size() != jobs.size() * 31)) {
+        throw std::runtime_error(
+            "analytic certificate record count drift");
+      }
+      write_analytic_certificates(capture_analytic_certificates_path);
     }
     const auto evaluation_end = std::chrono::steady_clock::now();
     const std::uint64_t evaluation_floor_calls =
@@ -7891,6 +8048,10 @@ int main(int argc, char** argv) {
                       : kCaptureReciprocalCertificates ? "capture" : "none")
               << " reciprocal_certificate_records="
               << kReciprocalCertificates.size()
+              << " analytic_certificate_capture="
+              << (kCaptureAnalyticCertificates ? 1 : 0)
+              << " analytic_certificate_records="
+              << kAnalyticCertificates.size()
               << " mixed_wide_taylor_completions="
               << kMixedWideTaylorCompletions
               << " mixed_wide_narrowings="
