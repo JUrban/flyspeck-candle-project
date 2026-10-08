@@ -8109,7 +8109,6 @@ int main(int argc, char** argv) {
          kUseSpecializedDeltaDihedralIdentities ||
          kFuseConsecutiveAdds || kDeferAdditiveLeafCompletion ||
          kVerifyFixedKernelEnclosures || kUseTightDihedralSqrtCertificates ||
-         kUseComputedTightSqrtCertificates ||
          kPrecomputeTightSqrtCertificates || profile_enabled ||
          rounding_profile_enabled || direct_stage_profile_enabled ||
          full_stage_diagnostics || !trace_first_state_path.empty() ||
