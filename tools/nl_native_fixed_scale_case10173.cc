@@ -8532,7 +8532,8 @@ int main(int argc, char** argv) {
           evaluation = Evaluation{};
           ++domain_failure_subdivisions;
         } else if (subdivide_representation_failures_development &&
-                   message == "invalid hardware fixed conversion") {
+                   (message == "invalid hardware fixed conversion" ||
+                    message == "computed square-root enclosure failure")) {
           // The padded hardware discriminator cannot represent this broad
           // ancestor.  Charge the limitation as a mandatory subdivision;
           // terminal representation failures are rejected by the forest
