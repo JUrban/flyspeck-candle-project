@@ -288,6 +288,21 @@ struct Interval {
   Fixed upper;
 };
 
+struct ReciprocalCertificateRecord {
+  std::size_t job_index;
+  std::size_t ordinal;
+  Interval input;
+  Interval output;
+};
+
+bool kCaptureReciprocalCertificates = false;
+bool kUseReciprocalCertificates = false;
+bool kReciprocalCertificateEvaluationActive = false;
+std::size_t kReciprocalCertificateJob = 0;
+std::size_t kReciprocalCertificateOrdinal = 0;
+std::size_t kReciprocalCertificateCursor = 0;
+std::vector<ReciprocalCertificateRecord> kReciprocalCertificates;
+
 #if (defined(CANDLE_NL_FIXED_INT128) || \
      defined(CANDLE_NL_CHECKED_INT192) || \
      defined(CANDLE_NL_CHECKED_INT256)) && \
@@ -1966,13 +1981,135 @@ bool fixed_interval_not_zero(const Interval& value) {
   return value.lower > 0 || value.upper < 0;
 }
 
+bool checked_reciprocal_product(Fixed left, Fixed right, Fixed& result) {
+#if defined(CANDLE_NL_FIXED_INT128) || \
+    defined(CANDLE_NL_MIXED_NATIVE_INT128_192)
+  return !__builtin_mul_overflow(left, right, &result);
+#elif defined(CANDLE_NL_FIXED_LONG_DOUBLE) || defined(CANDLE_NL_FIXED_DOUBLE)
+  result = left * right;
+  return std::isfinite(result);
+#else
+  try {
+    result = left * right;
+    return true;
+  } catch (const std::overflow_error&) {
+    return false;
+  }
+#endif
+}
+
+bool fixed_reciprocal_certificate(const Interval& input,
+                                  const Interval& output) {
+  if (input.lower > input.upper || output.lower > output.upper) return false;
+  const Fixed scale_squared = kScale * kScale;
+  Fixed lower_product;
+  Fixed upper_product;
+  if (input.lower > 0) {
+    if (!checked_reciprocal_product(
+            output.lower, input.upper, lower_product) ||
+        !checked_reciprocal_product(
+            output.upper, input.lower, upper_product)) {
+      return false;
+    }
+    return output.lower > 0 &&
+           lower_product <= scale_squared &&
+           scale_squared <= upper_product;
+  }
+  if (input.upper < 0) {
+    if (!checked_reciprocal_product(
+            output.lower, input.upper, lower_product) ||
+        !checked_reciprocal_product(
+            output.upper, input.lower, upper_product)) {
+      return false;
+    }
+    return output.upper < 0 &&
+           scale_squared <= lower_product &&
+           upper_product <= scale_squared;
+  }
+  return false;
+}
+
 Interval fixed_interval_inv(const Interval& value) {
   if (!fixed_interval_not_zero(value)) {
     throw std::runtime_error("fixed inverse interval contains zero");
   }
+  if (kReciprocalCertificateEvaluationActive &&
+      kUseReciprocalCertificates) {
+    if (kReciprocalCertificateCursor >= kReciprocalCertificates.size()) {
+      throw std::runtime_error("reciprocal certificate stream exhausted");
+    }
+    const ReciprocalCertificateRecord& record =
+        kReciprocalCertificates[kReciprocalCertificateCursor++];
+    if (record.job_index != kReciprocalCertificateJob ||
+        record.ordinal != kReciprocalCertificateOrdinal ||
+        record.input.lower != value.lower ||
+        record.input.upper != value.upper) {
+      throw std::runtime_error("reciprocal certificate input/order drift");
+    }
+    if (!fixed_reciprocal_certificate(value, record.output)) {
+      throw std::runtime_error("invalid supplied reciprocal certificate");
+    }
+    ++kReciprocalCertificateOrdinal;
+    return record.output;
+  }
   const Fixed scale_squared = kScale * kScale;
-  return {floor_fixed_quotient(scale_squared, value.upper),
-          ceil_fixed_quotient(scale_squared, value.lower)};
+  const Interval result = {
+      floor_fixed_quotient(scale_squared, value.upper),
+      ceil_fixed_quotient(scale_squared, value.lower)};
+  if (kReciprocalCertificateEvaluationActive &&
+      kCaptureReciprocalCertificates) {
+    if (!fixed_reciprocal_certificate(value, result)) {
+      throw std::runtime_error("computed reciprocal failed certificate");
+    }
+    kReciprocalCertificates.push_back(
+        {kReciprocalCertificateJob, kReciprocalCertificateOrdinal,
+         value, result});
+    ++kReciprocalCertificateOrdinal;
+  }
+  return result;
+}
+
+std::vector<ReciprocalCertificateRecord>
+read_reciprocal_certificates(const std::string& path) {
+  std::ifstream input(path);
+  if (!input) {
+    throw std::runtime_error("cannot open reciprocal certificates: " + path);
+  }
+  std::vector<ReciprocalCertificateRecord> records;
+  std::string line;
+  while (std::getline(input, line)) {
+    const std::vector<std::string> fields = split(line, '\t');
+    if (fields.size() != 6) {
+      throw std::runtime_error("reciprocal certificate row shape drift");
+    }
+    ReciprocalCertificateRecord record{
+        static_cast<std::size_t>(std::stoull(fields[0])),
+        static_cast<std::size_t>(std::stoull(fields[1])),
+        {fixed_of_integer(Integer(fields[2])),
+         fixed_of_integer(Integer(fields[3]))},
+        {fixed_of_integer(Integer(fields[4])),
+         fixed_of_integer(Integer(fields[5]))}};
+    records.push_back(record);
+  }
+  if (records.empty()) {
+    throw std::runtime_error("empty reciprocal certificate stream");
+  }
+  return records;
+}
+
+void write_reciprocal_certificates(const std::string& path) {
+  std::ofstream output(path);
+  if (!output) {
+    throw std::runtime_error("cannot write reciprocal certificates: " + path);
+  }
+  for (const ReciprocalCertificateRecord& record :
+       kReciprocalCertificates) {
+    output << record.job_index << '\t' << record.ordinal << '\t'
+           << integer_of_fixed(record.input.lower).get_str() << '\t'
+           << integer_of_fixed(record.input.upper).get_str() << '\t'
+           << integer_of_fixed(record.output.lower).get_str() << '\t'
+           << integer_of_fixed(record.output.upper).get_str() << '\n';
+  }
 }
 
 bool fixed_sqrt_certificate(const Interval& input,
@@ -2493,19 +2630,22 @@ TaylorResult result_atan_fixed(const IntegerVector& radii,
       one_interval(), fixed_interval_square(value.center.value, counters));
   const Interval box_denominator = interval_add(
       one_interval(), fixed_interval_square(value.value_bound, counters));
-  const bool arguments_in_range =
-      absolute(value.center.value.lower) < kScale &&
-      absolute(value.center.value.upper) < kScale &&
-      absolute(value.value_bound.lower) < kScale &&
-      absolute(value.value_bound.upper) < kScale;
-  const bool domain = value.domain && arguments_in_range &&
+  // fixed_atan_range_interval uses reciprocal range reduction outside
+  // (-1,1).  Exact +/-1 endpoints remain fail-closed because the polynomial
+  // boundary needs a separately authenticated pi/4 enclosure.
+  const bool arguments_supported =
+      absolute(value.center.value.lower) != kScale &&
+      absolute(value.center.value.upper) != kScale &&
+      absolute(value.value_bound.lower) != kScale &&
+      absolute(value.value_bound.upper) != kScale;
+  const bool domain = value.domain && arguments_supported &&
                       fixed_interval_not_zero(center_denominator) &&
                       fixed_interval_not_zero(box_denominator);
   if (!domain) throw std::runtime_error("fixed atan domain failure");
 
   const Interval center_d = fixed_interval_inv(center_denominator);
   const FirstJet center = {
-      fixed_atan_interval(value.center.value, counters),
+      fixed_atan_range_interval(value.center.value, counters),
       interval_vector_scale(center_d, value.center.gradient, counters)};
 
   const Interval box_d = fixed_interval_inv(box_denominator);
@@ -6765,7 +6905,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 43) {
+    if (argc < 4 || argc > 44) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -6810,6 +6950,8 @@ int main(int argc, char** argv) {
                 << " [--specialized-delta-inverse-roots]"
                 << " [--specialized-delta-dihedral-chains]"
                 << " [--count-fixed-quotients]"
+                << " [--capture-reciprocal-certificates=PATH]"
+                << " [--use-reciprocal-certificates=PATH]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
                 << " [--historical-kernel-diagnostics]"
@@ -6840,6 +6982,8 @@ int main(int argc, char** argv) {
     bool delta_full_diagnostics = false;
     bool full_stage_diagnostics = false;
     bool accept_only = false;
+    std::string capture_reciprocal_certificates_path;
+    std::string use_reciprocal_certificates_path;
     bool custom_decimal_scale = false;
     bool custom_binary_scale = false;
     int requested_binary_scale_bits = 40;
@@ -6950,6 +7094,22 @@ int main(int argc, char** argv) {
         kUseSpecializedDeltaDihedralChains = true;
       } else if (option == "--count-fixed-quotients") {
         kCountFixedQuotients = true;
+      } else if (option.rfind(
+                     "--capture-reciprocal-certificates=", 0) == 0) {
+        capture_reciprocal_certificates_path = option.substr(
+            std::string("--capture-reciprocal-certificates=").size());
+        if (capture_reciprocal_certificates_path.empty()) {
+          throw std::runtime_error(
+              "empty reciprocal certificate capture path");
+        }
+      } else if (option.rfind(
+                     "--use-reciprocal-certificates=", 0) == 0) {
+        use_reciprocal_certificates_path = option.substr(
+            std::string("--use-reciprocal-certificates=").size());
+        if (use_reciprocal_certificates_path.empty()) {
+          throw std::runtime_error(
+              "empty reciprocal certificate input path");
+        }
       } else if (option == "--rounding-profile") {
         rounding_profile_enabled = true;
         kCountFixedQuotients = true;
@@ -7029,6 +7189,11 @@ int main(int argc, char** argv) {
     }
     if (kUseNarrowFixedProducts && kUseUncheckedNarrowFixedProducts) {
       throw std::runtime_error("conflicting narrow product diagnostics");
+    }
+    if (!capture_reciprocal_certificates_path.empty() &&
+        !use_reciprocal_certificates_path.empty()) {
+      throw std::runtime_error(
+          "conflicting reciprocal certificate capture/use modes");
     }
     if (profile_enabled && rounding_profile_enabled) {
       throw std::runtime_error(
@@ -7327,6 +7492,15 @@ int main(int argc, char** argv) {
     const std::uint64_t preparation_dyadic_fallback_begin =
         kDyadicFallbackFixedQuotientCalls;
     const auto preparation_begin = std::chrono::steady_clock::now();
+    if (!use_reciprocal_certificates_path.empty()) {
+      kReciprocalCertificates = read_reciprocal_certificates(
+          use_reciprocal_certificates_path);
+      kUseReciprocalCertificates = true;
+      kReciprocalCertificateCursor = 0;
+    } else if (!capture_reciprocal_certificates_path.empty()) {
+      kReciprocalCertificates.clear();
+      kCaptureReciprocalCertificates = true;
+    }
     Program program = read_program(argv[1]);
     if (prepared_polynomial_pair_index >= 0) {
       prepare_polynomial_pair(
@@ -7454,7 +7628,11 @@ int main(int argc, char** argv) {
     const std::uint64_t evaluation_dyadic_fallback_begin =
         kDyadicFallbackFixedQuotientCalls;
     const auto evaluation_begin = std::chrono::steady_clock::now();
+    kReciprocalCertificateEvaluationActive =
+        kCaptureReciprocalCertificates || kUseReciprocalCertificates;
     for (std::size_t index = 0; index < jobs.size(); ++index) {
+      kReciprocalCertificateJob = index;
+      kReciprocalCertificateOrdinal = 0;
       Evaluation evaluation;
       try {
         evaluation = kUseDirectSpecializedFunction
@@ -7494,6 +7672,19 @@ int main(int argc, char** argv) {
         maximum_upper_minus_expected = difference;
         have_difference = true;
       }
+    }
+    kReciprocalCertificateEvaluationActive = false;
+    if (kUseReciprocalCertificates &&
+        kReciprocalCertificateCursor != kReciprocalCertificates.size()) {
+      throw std::runtime_error("unused reciprocal certificate records");
+    }
+    if (kCaptureReciprocalCertificates) {
+      if (kReciprocalCertificates.empty()) {
+        throw std::runtime_error(
+            "no reciprocal certificates were captured");
+      }
+      write_reciprocal_certificates(
+          capture_reciprocal_certificates_path);
     }
     const auto evaluation_end = std::chrono::steady_clock::now();
     const std::uint64_t evaluation_floor_calls =
@@ -7694,6 +7885,12 @@ int main(int argc, char** argv) {
               << specialized_delta_dihedral_chain_count
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
+              << " reciprocal_certificate_mode="
+              << (kUseReciprocalCertificates
+                      ? "use"
+                      : kCaptureReciprocalCertificates ? "capture" : "none")
+              << " reciprocal_certificate_records="
+              << kReciprocalCertificates.size()
               << " mixed_wide_taylor_completions="
               << kMixedWideTaylorCompletions
               << " mixed_wide_narrowings="
