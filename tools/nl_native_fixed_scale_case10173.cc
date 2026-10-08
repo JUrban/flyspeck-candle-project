@@ -7703,6 +7703,7 @@ int main(int argc, char** argv) {
                 << " [--delta-full-diagnostics]"
                 << " [--full-stage-diagnostics]"
                 << " [--accept-only]"
+                << " [--allow-rejected-development]"
                 << " [--decimal-scale=N]"
                 << " [--binary-scale-bits=N]"
                 << " [--dyadic-scale]\n";
@@ -7724,6 +7725,7 @@ int main(int argc, char** argv) {
     bool delta_full_diagnostics = false;
     bool full_stage_diagnostics = false;
     bool accept_only = false;
+    bool allow_rejected_development = false;
     std::string capture_reciprocal_certificates_path;
     std::string use_reciprocal_certificates_path;
     std::string capture_analytic_certificates_path;
@@ -7924,6 +7926,8 @@ int main(int argc, char** argv) {
         full_stage_diagnostics = true;
       } else if (option == "--accept-only") {
         accept_only = true;
+      } else if (option == "--allow-rejected-development") {
+        allow_rejected_development = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -8778,6 +8782,8 @@ int main(int argc, char** argv) {
               << kMixedWideNarrowings
               << " case_id=" << kCaseId
               << " reference_comparison=" << (accept_only ? 0 : 1)
+              << " allow_rejected_development="
+              << (allow_rejected_development ? 1 : 0)
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
@@ -9038,6 +9044,7 @@ int main(int argc, char** argv) {
     }
     if ((accept_only || dyadic_scale ||
          polynomial_mode != PolynomialMode::kBaseline) &&
+        !allow_rejected_development &&
         accepted != jobs.size()) {
       std::cerr << "development comparison accepted " << accepted
                 << " of " << jobs.size() << " jobs\n";
