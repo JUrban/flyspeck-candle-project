@@ -7705,6 +7705,7 @@ int main(int argc, char** argv) {
                 << " [--accept-only]"
                 << " [--allow-rejected-development]"
                 << " [--subdivide-domain-failures-development]"
+                << " [--subdivide-representation-failures-development]"
                 << " [--decimal-scale=N]"
                 << " [--binary-scale-bits=N]"
                 << " [--dyadic-scale]\n";
@@ -7728,6 +7729,7 @@ int main(int argc, char** argv) {
     bool accept_only = false;
     bool allow_rejected_development = false;
     bool subdivide_domain_failures_development = false;
+    bool subdivide_representation_failures_development = false;
     std::string capture_reciprocal_certificates_path;
     std::string use_reciprocal_certificates_path;
     std::string capture_analytic_certificates_path;
@@ -7932,6 +7934,8 @@ int main(int argc, char** argv) {
         allow_rejected_development = true;
       } else if (option == "--subdivide-domain-failures-development") {
         subdivide_domain_failures_development = true;
+      } else if (option == "--subdivide-representation-failures-development") {
+        subdivide_representation_failures_development = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -8474,6 +8478,7 @@ int main(int argc, char** argv) {
     std::size_t equal = 0;
     std::size_t wider = 0;
     std::size_t domain_failure_subdivisions = 0;
+    std::size_t representation_failure_subdivisions = 0;
     Rat maximum_upper_minus_expected;
     bool have_difference = false;
     const std::uint64_t evaluation_floor_begin =
@@ -8526,6 +8531,14 @@ int main(int argc, char** argv) {
           // and all other exceptions remain fatal.
           evaluation = Evaluation{};
           ++domain_failure_subdivisions;
+        } else if (subdivide_representation_failures_development &&
+                   message == "invalid hardware fixed conversion") {
+          // The padded hardware discriminator cannot represent this broad
+          // ancestor.  Charge the limitation as a mandatory subdivision;
+          // terminal representation failures are rejected by the forest
+          // analyzer, rather than borrowing an exact-arithmetic result.
+          evaluation = Evaluation{};
+          ++representation_failure_subdivisions;
         } else {
           throw std::runtime_error(
               "job " + std::to_string(index) + ": " + error.what());
@@ -8805,6 +8818,8 @@ int main(int argc, char** argv) {
               << (allow_rejected_development ? 1 : 0)
               << " domain_failure_subdivisions="
               << domain_failure_subdivisions
+              << " representation_failure_subdivisions="
+              << representation_failure_subdivisions
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
