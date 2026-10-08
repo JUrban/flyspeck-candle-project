@@ -11,8 +11,11 @@ Format (little endian):
 
 * 8-byte magic ``CNLCKR01``;
 * uint32 cell count and uint32 records per cell;
-* for each cell, 30 uint64 words: six box interval pairs, six center interval
-  pairs, then six upward radii;
+* for each cell, 30 uint64 words: six Taylor box interval pairs, six center
+  interval pairs, then six upward radii.  The Taylor box is reconstructed as
+  ``center + [-radius,+radius]``.  This is the (slightly wider) enclosure used
+  by the native complete-result path, rather than an independently rounded
+  copy of the source endpoints;
 * for each of 31 scalar records, one tag byte, one option-flag byte, then ten
   signed endpoints.  A signed endpoint is a sign byte followed by its uint64
   magnitude.  Unused endpoints remain zero and are rejected if they drift.
@@ -31,7 +34,7 @@ EXPECTED_JOBS_SHA256 = (
     "236c4ffa1773b92c80584defa24beeddfb20b59811bc287a4f4770da87ac8e80"
 )
 EXPECTED_CERTIFICATES_SHA256 = (
-    "bc933fc79ac5ee53aef823e3933f771965caf63465e96023763f5ac8139d8caa"
+    "a320e38824920816c44ff961c42fb3007369781bc2bc55521f1907aa7dbe1a86"
 )
 MAGIC = b"CNLCKR01"
 CELL_COUNT = 875
@@ -84,19 +87,25 @@ def pack_jobs(payload: bytes) -> list[bytes]:
                 raise ValueError(f"reversed box at {expected_index}[{coordinate}]")
             midpoint = (lo + hi) / 2
             radius = (hi - lo) / 2
-            box.extend(
-                [
-                    checked_word(floor_scaled(lo), "box lower"),
-                    checked_word(ceil_scaled(hi), "box upper"),
-                ]
+            source_lower = checked_word(floor_scaled(lo), "source box lower")
+            source_upper = checked_word(ceil_scaled(hi), "source box upper")
+            center_lower = checked_word(floor_scaled(midpoint), "center lower")
+            center_upper = checked_word(ceil_scaled(midpoint), "center upper")
+            radius_upper = checked_word(ceil_scaled(radius), "radius")
+            taylor_lower = checked_word(
+                center_lower - radius_upper, "Taylor box lower"
             )
-            centers.extend(
-                [
-                    checked_word(floor_scaled(midpoint), "center lower"),
-                    checked_word(ceil_scaled(midpoint), "center upper"),
-                ]
+            taylor_upper = checked_word(
+                center_upper + radius_upper, "Taylor box upper"
             )
-            radii.append(checked_word(ceil_scaled(radius), "radius"))
+            if taylor_lower > source_lower or taylor_upper < source_upper:
+                raise AssertionError(
+                    f"Taylor box does not enclose source at "
+                    f"{expected_index}[{coordinate}]"
+                )
+            box.extend([taylor_lower, taylor_upper])
+            centers.extend([center_lower, center_upper])
+            radii.append(radius_upper)
         result.append(struct.pack("<30Q", *(box + centers + radii)))
     return result
 

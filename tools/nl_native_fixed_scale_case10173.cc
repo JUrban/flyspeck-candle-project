@@ -6394,7 +6394,8 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                         bool direct_delta_x4,
                         std::vector<InstructionProfile>* profiles,
                         std::vector<RoundingProfile>* rounding_profiles,
-                        TaylorResult* final_result = nullptr) {
+                        TaylorResult* final_result = nullptr,
+                        std::ostream* state_trace = nullptr) {
   std::uint64_t setup_floor_before = 0;
   std::uint64_t setup_ceil_before = 0;
   std::chrono::steady_clock::time_point setup_begin;
@@ -6876,6 +6877,37 @@ Evaluation evaluate_job(const Program& program, const Job& job,
           rounding_profiles, profile_outer_index + 1, rounding_label,
           rounding_floor_before, rounding_ceil_before, rounding_begin);
     }
+    if (state_trace != nullptr) {
+      *state_trace << outer_index << '\t'
+                   << instruction_label(program, instruction_index) << '\t'
+                   << sqrt_slot << '\t' << stack.size();
+      for (const TaylorResult& value : stack) {
+        const auto write_interval = [state_trace](const Interval& interval) {
+          *state_trace << '\t'
+                       << integer_of_fixed(interval.lower).get_str()
+                       << '\t'
+                       << integer_of_fixed(interval.upper).get_str();
+        };
+        *state_trace << '\t' << (value.domain ? 1 : 0);
+        write_interval(value.center.value);
+        for (const Interval& entry : value.center.gradient) {
+          write_interval(entry);
+        }
+        write_interval(value.value_bound);
+        for (const Interval& entry : value.gradient_bounds) {
+          write_interval(entry);
+        }
+        for (std::size_t row = 0; row < kDimensions; ++row) {
+          for (std::size_t column = row; column < kDimensions; ++column) {
+            write_interval(value.hessian[row][column]);
+          }
+        }
+      }
+      *state_trace << '\n';
+      if (!*state_trace) {
+        throw std::runtime_error("failed to write first-cell state trace");
+      }
+    }
   }
   if (direct_delta_x4 && !direct_delta_x4_used) {
     throw std::runtime_error("negated delta_x4 source position drift");
@@ -7033,7 +7065,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 45) {
+    if (argc < 4 || argc > 46) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -7081,6 +7113,7 @@ int main(int argc, char** argv) {
                 << " [--capture-reciprocal-certificates=PATH]"
                 << " [--use-reciprocal-certificates=PATH]"
                 << " [--capture-analytic-certificates=PATH]"
+                << " [--trace-first-state=PATH]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
                 << " [--historical-kernel-diagnostics]"
@@ -7114,6 +7147,7 @@ int main(int argc, char** argv) {
     std::string capture_reciprocal_certificates_path;
     std::string use_reciprocal_certificates_path;
     std::string capture_analytic_certificates_path;
+    std::string trace_first_state_path;
     bool custom_decimal_scale = false;
     bool custom_binary_scale = false;
     int requested_binary_scale_bits = 40;
@@ -7247,6 +7281,12 @@ int main(int argc, char** argv) {
         if (capture_analytic_certificates_path.empty()) {
           throw std::runtime_error(
               "empty analytic certificate capture path");
+        }
+      } else if (option.rfind("--trace-first-state=", 0) == 0) {
+        trace_first_state_path = option.substr(
+            std::string("--trace-first-state=").size());
+        if (trace_first_state_path.empty()) {
+          throw std::runtime_error("empty first-cell state trace path");
         }
       } else if (option == "--rounding-profile") {
         rounding_profile_enabled = true;
@@ -7758,6 +7798,17 @@ int main(int argc, char** argv) {
         rounding_profile_enabled ? program.instructions.size() + 1 : 0);
     std::vector<TaylorResult> stage_results(
         full_stage_diagnostics ? jobs.size() : 0);
+    std::ofstream state_trace;
+    if (!trace_first_state_path.empty()) {
+      state_trace.open(trace_first_state_path);
+      if (!state_trace) {
+        throw std::runtime_error("cannot open first-cell state trace: " +
+                                 trace_first_state_path);
+      }
+      state_trace << "CANDLE_NL_NATIVE_STATE_TRACE_V1\t"
+                  << program.instructions.size() << '\t'
+                  << integer_of_fixed(kScale).get_str() << '\n';
+    }
     DirectStageProfiles direct_stage_profiles{};
     std::size_t mismatches = 0;
     std::size_t accepted = 0;
@@ -7799,7 +7850,10 @@ int main(int argc, char** argv) {
                   fused_polynomial_outer_index, fused_polynomial_max_steps,
                   direct_delta_x4, profile_enabled ? &profiles : nullptr,
                   rounding_profile_enabled ? &rounding_profiles : nullptr,
-                  full_stage_diagnostics ? &stage_results[index] : nullptr);
+                  full_stage_diagnostics ? &stage_results[index] : nullptr,
+                  !trace_first_state_path.empty() && index == 0
+                      ? &state_trace
+                      : nullptr);
       } catch (const std::exception& error) {
         throw std::runtime_error(
             "job " + std::to_string(index) + ": " + error.what());
