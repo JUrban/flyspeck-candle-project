@@ -7704,6 +7704,7 @@ int main(int argc, char** argv) {
                 << " [--full-stage-diagnostics]"
                 << " [--accept-only]"
                 << " [--allow-rejected-development]"
+                << " [--subdivide-invalid-fixed-sqrt-development]"
                 << " [--decimal-scale=N]"
                 << " [--binary-scale-bits=N]"
                 << " [--dyadic-scale]\n";
@@ -7726,6 +7727,7 @@ int main(int argc, char** argv) {
     bool full_stage_diagnostics = false;
     bool accept_only = false;
     bool allow_rejected_development = false;
+    bool subdivide_invalid_fixed_sqrt_development = false;
     std::string capture_reciprocal_certificates_path;
     std::string use_reciprocal_certificates_path;
     std::string capture_analytic_certificates_path;
@@ -7928,6 +7930,8 @@ int main(int argc, char** argv) {
         accept_only = true;
       } else if (option == "--allow-rejected-development") {
         allow_rejected_development = true;
+      } else if (option == "--subdivide-invalid-fixed-sqrt-development") {
+        subdivide_invalid_fixed_sqrt_development = true;
       } else if (option.rfind("--decimal-scale=", 0) == 0) {
         requested_decimal_scale = Integer(
             option.substr(std::string("--decimal-scale=").size()));
@@ -8469,6 +8473,7 @@ int main(int argc, char** argv) {
     std::size_t tighter = 0;
     std::size_t equal = 0;
     std::size_t wider = 0;
+    std::size_t invalid_fixed_sqrt_subdivisions = 0;
     Rat maximum_upper_minus_expected;
     bool have_difference = false;
     const std::uint64_t evaluation_floor_begin =
@@ -8509,8 +8514,19 @@ int main(int argc, char** argv) {
                       ? &state_trace
                       : nullptr);
       } catch (const std::exception& error) {
-        throw std::runtime_error(
-            "job " + std::to_string(index) + ": " + error.what());
+        if (subdivide_invalid_fixed_sqrt_development &&
+            std::string(error.what()) == "invalid fixed square-root input") {
+          // A broad ancestor whose interval does not establish a square-root
+          // domain cannot be accepted, but it can still be subdivided.  The
+          // adaptive-forest analyzer treats this neutral upper bound as a
+          // mandatory split and separately requires every reached leaf to
+          // obtain a strict negative bound.
+          evaluation = Evaluation{};
+          ++invalid_fixed_sqrt_subdivisions;
+        } else {
+          throw std::runtime_error(
+              "job " + std::to_string(index) + ": " + error.what());
+        }
       }
       results.push_back(evaluation.upper);
       add_counters(total, evaluation.counters);
@@ -8784,6 +8800,8 @@ int main(int argc, char** argv) {
               << " reference_comparison=" << (accept_only ? 0 : 1)
               << " allow_rejected_development="
               << (allow_rejected_development ? 1 : 0)
+              << " invalid_fixed_sqrt_subdivisions="
+              << invalid_fixed_sqrt_subdivisions
               << " matched=" << (jobs.size() - mismatches)
               << " mismatches=" << mismatches
               << " accepted=" << accepted
