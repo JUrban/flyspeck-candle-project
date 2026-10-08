@@ -33,9 +33,17 @@ import struct
 EXPECTED_JOBS_SHA256 = (
     "236c4ffa1773b92c80584defa24beeddfb20b59811bc287a4f4770da87ac8e80"
 )
-EXPECTED_CERTIFICATES_SHA256 = (
-    "a320e38824920816c44ff961c42fb3007369781bc2bc55521f1907aa7dbe1a86"
-)
+EXPECTED_CERTIFICATE_SHA256 = {
+    "generic": (
+        "a320e38824920816c44ff961c42fb3007369781bc2bc55521f1907aa7dbe1a86"
+    ),
+    "delta-specialized-source-box": (
+        "bc933fc79ac5ee53aef823e3933f771965caf63465e96023763f5ac8139d8caa"
+    ),
+    "delta-specialized-taylor-box": (
+        "307c5c699055c9fb147678b2a32c52320e1b84a1a5e2b288cbfcff3688b4849b"
+    ),
+}
 MAGIC = b"CNLCKR01"
 CELL_COUNT = 875
 RECORDS_PER_CELL = 31
@@ -166,12 +174,20 @@ def main() -> None:
     parser.add_argument("jobs", type=Path)
     parser.add_argument("certificates", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument(
+        "--certificate-profile",
+        choices=sorted(EXPECTED_CERTIFICATE_SHA256),
+        default="generic",
+        help="authenticated numerical graph that produced the certificates",
+    )
     args = parser.parse_args()
 
     jobs = pack_jobs(authenticated_bytes(args.jobs, EXPECTED_JOBS_SHA256, "jobs"))
     certificates = pack_certificates(
         authenticated_bytes(
-            args.certificates, EXPECTED_CERTIFICATES_SHA256, "certificates"
+            args.certificates,
+            EXPECTED_CERTIFICATE_SHA256[args.certificate_profile],
+            f"{args.certificate_profile} certificates",
         )
     )
     output = bytearray(MAGIC)

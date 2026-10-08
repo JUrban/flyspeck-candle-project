@@ -151,6 +151,7 @@ bool kUseSpecializedDeltaRadicands = false;
 bool kUseSpecializedDeltaDerivatives = false;
 bool kUseSpecializedDeltaInverseRoots = false;
 bool kUseSpecializedDeltaDihedralChains = false;
+bool kUseTaylorReconstructedBox = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
 std::uint64_t kCeilFixedQuotientCalls = 0;
@@ -5953,6 +5954,11 @@ TaylorResult evaluate_dihedral_identity_diagnostic(const Job& job) {
     box_environment[coordinate] = interval_of_q(
         {job.lower[coordinate], job.upper[coordinate]});
     radii[coordinate] = ceil_scaled(radius);
+    if (kUseTaylorReconstructedBox) {
+      box_environment[coordinate] = {
+          center_environment[coordinate].lower - radii[coordinate],
+          center_environment[coordinate].upper + radii[coordinate]};
+    }
   }
   Counters counters;
   if (kUseHistoricalDihedral) {
@@ -6414,6 +6420,11 @@ Evaluation evaluate_job(const Program& program, const Job& job,
     box_environment[coordinate] = interval_of_q(
         {job.lower[coordinate], job.upper[coordinate]});
     radii[coordinate] = ceil_scaled(radius);
+    if (kUseTaylorReconstructedBox) {
+      box_environment[coordinate] = {
+          center_environment[coordinate].lower - radii[coordinate],
+          center_environment[coordinate].upper + radii[coordinate]};
+    }
   }
   if (rounding_profiles != nullptr) {
     record_rounding_profile(rounding_profiles, 0, "job_setup",
@@ -7109,6 +7120,7 @@ int main(int argc, char** argv) {
                 << " [--specialized-delta-derivatives]"
                 << " [--specialized-delta-inverse-roots]"
                 << " [--specialized-delta-dihedral-chains]"
+                << " [--taylor-reconstructed-box]"
                 << " [--count-fixed-quotients]"
                 << " [--capture-reciprocal-certificates=PATH]"
                 << " [--use-reciprocal-certificates=PATH]"
@@ -7256,6 +7268,8 @@ int main(int argc, char** argv) {
         kUseSpecializedDeltaInverseRoots = true;
       } else if (option == "--specialized-delta-dihedral-chains") {
         kUseSpecializedDeltaDihedralChains = true;
+      } else if (option == "--taylor-reconstructed-box") {
+        kUseTaylorReconstructedBox = true;
       } else if (option == "--count-fixed-quotients") {
         kCountFixedQuotients = true;
       } else if (option.rfind(
@@ -8094,6 +8108,8 @@ int main(int argc, char** argv) {
               << (kUseSpecializedDeltaDihedralChains ? 1 : 0)
               << " specialized_delta_dihedral_chain_count="
               << specialized_delta_dihedral_chain_count
+              << " taylor_reconstructed_box="
+              << (kUseTaylorReconstructedBox ? 1 : 0)
               << " count_fixed_quotients="
               << (kCountFixedQuotients ? 1 : 0)
               << " reciprocal_certificate_mode="
