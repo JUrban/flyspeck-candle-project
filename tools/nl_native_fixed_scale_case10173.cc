@@ -125,6 +125,7 @@ bool kUseFixedAtanKernel = false;
 bool kVerifyFixedKernelEnclosures = false;
 bool kUsePreparedSimplePolynomials = false;
 bool kCacheSimpleLeafResults = false;
+bool kUseSourceDagCache = false;
 bool kUsePreparedCoordinateSqrtTerms = false;
 bool kUsePreparedDihedralChain = false;
 bool kUseSpecializedDihedralIdentities = false;
@@ -497,6 +498,8 @@ struct Counters {
   std::uint64_t atan_steps = 0;
   std::uint64_t simple_leaf_cache_hits = 0;
   std::uint64_t simple_leaf_cache_misses = 0;
+  std::uint64_t source_dag_cache_hits = 0;
+  std::uint64_t source_dag_cache_misses = 0;
 };
 
 void add_counters(Counters& total, const Counters& value);
@@ -704,6 +707,13 @@ struct Program {
     std::size_t variable = 0;
   };
   std::vector<SimplePolynomial> prepared_simple_polynomials;
+  // Exact structural identities for the authenticated outer source graph.
+  // Unlike the exploratory census, these identities do not normalize
+  // arbitrary polynomials: changing source evaluation order can change an
+  // outward-rounded result.  Specialized polynomial lanes are identified by
+  // their authenticated logical role and coordinate.
+  std::vector<std::size_t> source_dag_expression_ids;
+  std::size_t source_dag_expression_count = 0;
   struct CoordinateSqrtTerm {
     bool active = false;
     std::size_t variable = 0;
@@ -3903,6 +3913,130 @@ void prepare_specialized_delta_dihedral_chains(Program& program) {
   }
 }
 
+std::string exact_cval_key(
+    const Program& program, std::size_t index,
+    std::vector<std::string>& memo,
+    std::vector<bool>& memoized) {
+  if (index >= memo.size()) {
+    throw std::runtime_error("source DAG cval index drift");
+  }
+  if (memoized[index]) return memo[index];
+  const Node& node = node_at(program, index);
+  std::string result;
+  if (node.is_pair) {
+    result = "p(" + exact_cval_key(program, node.left, memo, memoized) +
+             "," + exact_cval_key(program, node.right, memo, memoized) +
+             ")";
+  } else {
+    result = "n" + node.numeral.get_str() + ";";
+  }
+  memoized[index] = true;
+  memo[index] = std::move(result);
+  return memo[index];
+}
+
+void prepare_source_dag_cache(Program& program) {
+  std::vector<std::string> node_keys(program.nodes.size());
+  std::vector<bool> node_key_ready(program.nodes.size(), false);
+  std::map<std::string, std::size_t> identities;
+  const auto intern = [&identities](const std::string& key) {
+    const auto found = identities.find(key);
+    if (found != identities.end()) return found->second;
+    const std::size_t identity = identities.size();
+    identities.emplace(key, identity);
+    return identity;
+  };
+
+  std::vector<std::size_t> stack;
+  program.source_dag_expression_ids.assign(
+      program.instructions.size(), 0);
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    std::string key;
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "source DAG analytic tag");
+      if (tag == 0) {
+        const int derivative =
+            program.specialized_delta_derivative_coordinates.empty()
+                ? -1
+                : program.specialized_delta_derivative_coordinates.at(
+                      outer_index);
+        const int radicand =
+            program.specialized_delta_radicand_coordinates.empty()
+                ? -1
+                : program.specialized_delta_radicand_coordinates.at(
+                      outer_index);
+        if (kUseSpecializedDeltaDerivatives && derivative >= 0) {
+          key = "delta-derivative:" + std::to_string(derivative);
+        } else if (kUseSpecializedDeltaRadicands && radicand >= 0) {
+          key = "delta-radicand:" + std::to_string(radicand);
+        } else {
+          key = "polynomial:" + exact_cval_key(
+              program, instruction.right, node_keys, node_key_ready);
+        }
+        const std::size_t identity = intern(key);
+        stack.push_back(identity);
+        program.source_dag_expression_ids[outer_index] = identity;
+        continue;
+      }
+      if (tag != 1 || stack.empty()) {
+        throw std::runtime_error("source DAG square-root stack drift");
+      }
+      const std::size_t child = stack.back();
+      stack.pop_back();
+      key = "sqrt:" + std::to_string(child);
+      const std::size_t identity = intern(key);
+      stack.push_back(identity);
+      program.source_dag_expression_ids[outer_index] = identity;
+      continue;
+    }
+
+    const unsigned long opcode = instruction.numeral.get_ui();
+    if (opcode == 8) {
+      const std::size_t identity = intern("pi-half");
+      stack.push_back(identity);
+      program.source_dag_expression_ids[outer_index] = identity;
+      continue;
+    }
+    if (opcode == 2 || opcode == 5 || opcode == 6 || opcode == 7) {
+      if (stack.empty()) {
+        throw std::runtime_error("source DAG unary stack drift");
+      }
+      const std::size_t child = stack.back();
+      stack.pop_back();
+      key = "unary:" + std::to_string(opcode) + ":" +
+            std::to_string(child);
+      const std::size_t identity = intern(key);
+      stack.push_back(identity);
+      program.source_dag_expression_ids[outer_index] = identity;
+      continue;
+    }
+    if (opcode == 3 || opcode == 4) {
+      if (stack.size() < 2) {
+        throw std::runtime_error("source DAG binary stack drift");
+      }
+      const std::size_t right = stack.back();
+      stack.pop_back();
+      const std::size_t left = stack.back();
+      stack.pop_back();
+      key = "binary:" + std::to_string(opcode) + ":" +
+            std::to_string(left) + ":" + std::to_string(right);
+      const std::size_t identity = intern(key);
+      stack.push_back(identity);
+      program.source_dag_expression_ids[outer_index] = identity;
+      continue;
+    }
+    throw std::runtime_error("unknown source DAG analytic opcode");
+  }
+  if (stack.size() != 1 || identities.empty()) {
+    throw std::runtime_error("source DAG final stack drift");
+  }
+  program.source_dag_expression_count = identities.size();
+}
+
 Program::SimplePolynomial classify_simple_polynomial(
     const Program& program, std::size_t payload) {
   using Kind = Program::SimplePolynomialKind;
@@ -6401,6 +6535,8 @@ void add_counters(Counters& total, const Counters& value) {
   total.atan_steps += value.atan_steps;
   total.simple_leaf_cache_hits += value.simple_leaf_cache_hits;
   total.simple_leaf_cache_misses += value.simple_leaf_cache_misses;
+  total.source_dag_cache_hits += value.source_dag_cache_hits;
+  total.source_dag_cache_misses += value.source_dag_cache_misses;
 }
 
 Counters subtract_counters(const Counters& value, const Counters& baseline) {
@@ -6416,7 +6552,10 @@ Counters subtract_counters(const Counters& value, const Counters& baseline) {
           value.atan_steps - baseline.atan_steps,
           value.simple_leaf_cache_hits - baseline.simple_leaf_cache_hits,
           value.simple_leaf_cache_misses -
-              baseline.simple_leaf_cache_misses};
+              baseline.simple_leaf_cache_misses,
+          value.source_dag_cache_hits - baseline.source_dag_cache_hits,
+          value.source_dag_cache_misses -
+              baseline.source_dag_cache_misses};
 }
 
 bool counters_equal(const Counters& left, const Counters& right) {
@@ -6431,7 +6570,9 @@ bool counters_equal(const Counters& left, const Counters& right) {
          left.inverse_steps == right.inverse_steps &&
          left.atan_steps == right.atan_steps &&
          left.simple_leaf_cache_hits == right.simple_leaf_cache_hits &&
-         left.simple_leaf_cache_misses == right.simple_leaf_cache_misses;
+         left.simple_leaf_cache_misses == right.simple_leaf_cache_misses &&
+         left.source_dag_cache_hits == right.source_dag_cache_hits &&
+         left.source_dag_cache_misses == right.source_dag_cache_misses;
 }
 
 void record_rounding_profile(std::vector<RoundingProfile>* profiles,
@@ -6520,6 +6661,26 @@ Evaluation evaluate_job(const Program& program, const Job& job,
 
   Counters counters;
   std::vector<TaylorResult> stack;
+  if (kUseSourceDagCache &&
+      (program.source_dag_expression_ids.size() !=
+           program.instructions.size() ||
+       program.source_dag_expression_count == 0)) {
+    throw std::runtime_error("source DAG cache was not prepared");
+  }
+  std::vector<TaylorResult> source_dag_results(
+      kUseSourceDagCache ? program.source_dag_expression_count : 0);
+  std::vector<bool> source_dag_result_ready(
+      kUseSourceDagCache ? program.source_dag_expression_count : 0, false);
+  std::vector<bool> source_dag_sqrt_certificate_ready(
+      kUseSourceDagCache ? program.source_dag_expression_count : 0, false);
+  std::vector<RationalInterval> source_dag_center_certificates(
+      kUseSourceDagCache ? program.source_dag_expression_count : 0);
+  std::vector<RationalInterval> source_dag_box_certificates(
+      kUseSourceDagCache ? program.source_dag_expression_count : 0);
+  std::vector<Interval> source_dag_fixed_center_certificates(
+      kUseSourceDagCache ? program.source_dag_expression_count : 0);
+  std::vector<Interval> source_dag_fixed_box_certificates(
+      kUseSourceDagCache ? program.source_dag_expression_count : 0);
   std::map<Rat, TaylorResult> simple_constant_cache;
   std::array<TaylorResult, kDimensions> simple_variable_cache;
   std::array<bool, kDimensions> simple_variable_cached{};
@@ -6815,6 +6976,75 @@ Evaluation evaluate_job(const Program& program, const Job& job,
     }
     ++counters.outer_steps;
     const Node& instruction = node_at(program, instruction_index);
+    std::size_t source_dag_identity = 0;
+    bool source_dag_sqrt = false;
+    if (kUseSourceDagCache) {
+      source_dag_identity =
+          program.source_dag_expression_ids.at(outer_index);
+      std::size_t operands = 0;
+      if (instruction.is_pair) {
+        const Integer tag = require_numeral(
+            program, instruction.left, "source DAG runtime tag");
+        if (tag == 1) {
+          operands = 1;
+          source_dag_sqrt = true;
+        } else if (tag != 0) {
+          throw std::runtime_error("unknown source DAG runtime tag");
+        }
+      } else {
+        const unsigned long opcode = instruction.numeral.get_ui();
+        if (opcode == 2 || opcode == 5 || opcode == 6 || opcode == 7) {
+          operands = 1;
+        } else if (opcode == 3 || opcode == 4) {
+          operands = 2;
+        } else if (opcode != 8) {
+          throw std::runtime_error("unknown source DAG runtime opcode");
+        }
+      }
+      if (source_dag_result_ready.at(source_dag_identity)) {
+        if (stack.size() < operands) {
+          throw std::runtime_error("source DAG cache stack underflow");
+        }
+        if (source_dag_sqrt) {
+          if (sqrt_slot >= kSqrtSlots ||
+              !source_dag_sqrt_certificate_ready.at(
+                  source_dag_identity)) {
+            throw std::runtime_error(
+                "source DAG cached square-root slot drift");
+          }
+          const RationalInterval& center =
+              source_dag_center_certificates.at(source_dag_identity);
+          const RationalInterval& box =
+              source_dag_box_certificates.at(source_dag_identity);
+          const Interval& fixed_center =
+              source_dag_fixed_center_certificates.at(
+                  source_dag_identity);
+          const Interval& fixed_box =
+              source_dag_fixed_box_certificates.at(source_dag_identity);
+          if (center.lower != job.center_certificates[sqrt_slot].lower ||
+              center.upper != job.center_certificates[sqrt_slot].upper ||
+              box.lower != job.box_certificates[sqrt_slot].lower ||
+              box.upper != job.box_certificates[sqrt_slot].upper ||
+              fixed_center.lower !=
+                  job.fixed_center_certificates[sqrt_slot].lower ||
+              fixed_center.upper !=
+                  job.fixed_center_certificates[sqrt_slot].upper ||
+              fixed_box.lower !=
+                  job.fixed_box_certificates[sqrt_slot].lower ||
+              fixed_box.upper !=
+                  job.fixed_box_certificates[sqrt_slot].upper) {
+            throw std::runtime_error(
+                "source DAG cached square-root certificate mismatch");
+          }
+          ++sqrt_slot;
+        }
+        while (operands-- != 0) stack.pop_back();
+        stack.push_back(source_dag_results.at(source_dag_identity));
+        ++counters.source_dag_cache_hits;
+        continue;
+      }
+      ++counters.source_dag_cache_misses;
+    }
     if (instruction.is_pair) {
       const Integer tag = require_numeral(program, instruction.left, "analytic tag");
       if (tag == 0) {
@@ -7029,6 +7259,29 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         stack.push_back(pi_half_result());
       } else {
         throw std::runtime_error("unknown analytic scalar instruction");
+      }
+    }
+    if (kUseSourceDagCache) {
+      if (stack.empty()) {
+        throw std::runtime_error("source DAG cache result stack drift");
+      }
+      source_dag_results.at(source_dag_identity) = stack.back();
+      source_dag_result_ready.at(source_dag_identity) = true;
+      if (source_dag_sqrt) {
+        if (sqrt_slot == 0 || sqrt_slot > kSqrtSlots) {
+          throw std::runtime_error(
+              "source DAG square-root certificate store drift");
+        }
+        const std::size_t used_slot = sqrt_slot - 1;
+        source_dag_sqrt_certificate_ready.at(source_dag_identity) = true;
+        source_dag_center_certificates.at(source_dag_identity) =
+            job.center_certificates[used_slot];
+        source_dag_box_certificates.at(source_dag_identity) =
+            job.box_certificates[used_slot];
+        source_dag_fixed_center_certificates.at(source_dag_identity) =
+            job.fixed_center_certificates[used_slot];
+        source_dag_fixed_box_certificates.at(source_dag_identity) =
+            job.fixed_box_certificates[used_slot];
       }
     }
     if (profiles != nullptr) {
@@ -7249,7 +7502,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 46) {
+    if (argc < 4 || argc > 47) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -7268,6 +7521,7 @@ int main(int argc, char** argv) {
                 << " [--verify-fixed-kernel-enclosures]"
                 << " [--prepared-simple-polynomials]"
                 << " [--cache-simple-leaf-results]"
+                << " [--source-dag-cache]"
                 << " [--prepared-coordinate-sqrt-terms]"
                 << " [--prepared-dihedral-chain]"
                 << " [--specialized-dihedral-identities]"
@@ -7390,6 +7644,8 @@ int main(int argc, char** argv) {
         kUsePreparedSimplePolynomials = true;
       } else if (option == "--cache-simple-leaf-results") {
         kCacheSimpleLeafResults = true;
+      } else if (option == "--source-dag-cache") {
+        kUseSourceDagCache = true;
       } else if (option == "--prepared-coordinate-sqrt-terms") {
         kUsePreparedCoordinateSqrtTerms = true;
       } else if (option == "--prepared-dihedral-chain") {
@@ -7678,6 +7934,32 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "simple leaf caching requires prepared simple polynomials");
     }
+    if (kUseSourceDagCache &&
+        (!kUseFixedSqrtInverseKernels || kUseCompactSupportJets ||
+         polynomial_mode != PolynomialMode::kBaseline ||
+         fused_polynomial_outer_index >= 0 ||
+         fused_polynomial_max_steps >= 0 || direct_delta_x4 ||
+         prepared_polynomial_pair_index >= 0 || kCacheSimpleLeafResults ||
+         kUsePreparedCoordinateSqrtTerms || kUsePreparedDihedralChain ||
+         kUseSpecializedDihedralIdentities || kUseHistoricalDihedral ||
+         kUseDirectSpecializedFunction || kUseDirectPreparedInputs ||
+         kUseSpecializedDeltaInverseRoots ||
+         kUseSpecializedDeltaDihedralChains ||
+         kUseSpecializedDeltaDihedralIdentities ||
+         kFuseConsecutiveAdds || kDeferAdditiveLeafCompletion ||
+         kVerifyFixedKernelEnclosures || kUseTightDihedralSqrtCertificates ||
+         kUseComputedTightSqrtCertificates ||
+         kPrecomputeTightSqrtCertificates || profile_enabled ||
+         rounding_profile_enabled || direct_stage_profile_enabled ||
+         full_stage_diagnostics || !trace_first_state_path.empty() ||
+         !capture_reciprocal_certificates_path.empty() ||
+         !use_reciprocal_certificates_path.empty() ||
+         !capture_analytic_certificates_path.empty())) {
+      throw std::runtime_error(
+          "the bounded source DAG cache prototype requires the dense "
+          "baseline fixed-kernel evaluator without collapsed, fused, "
+          "profiled, traced, or certificate-capture lanes");
+    }
     if (kUsePreparedDihedralChain &&
         (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
          polynomial_mode != PolynomialMode::kSpecializedAngle ||
@@ -7924,6 +8206,9 @@ int main(int argc, char** argv) {
         kUseSpecializedDeltaDihedralChains ||
         kUseSpecializedDeltaDihedralIdentities) {
       prepare_specialized_delta_dihedral_chains(program);
+    }
+    if (kUseSourceDagCache) {
+      prepare_source_dag_cache(program);
     }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels ||
@@ -8239,6 +8524,12 @@ int main(int argc, char** argv) {
               << prepared_simple_polynomial_count
               << " cache_simple_leaf_results="
               << (kCacheSimpleLeafResults ? 1 : 0)
+              << " source_dag_cache="
+              << (kUseSourceDagCache ? 1 : 0)
+              << " source_dag_expression_nodes="
+              << program.source_dag_expression_ids.size()
+              << " source_dag_unique_expressions="
+              << program.source_dag_expression_count
               << " prepared_coordinate_sqrt_terms="
               << (kUsePreparedCoordinateSqrtTerms ? 1 : 0)
               << " prepared_coordinate_sqrt_term_count="
@@ -8442,7 +8733,11 @@ int main(int argc, char** argv) {
               << " simple_leaf_cache_hits="
               << total.simple_leaf_cache_hits
               << " simple_leaf_cache_misses="
-              << total.simple_leaf_cache_misses << "\n";
+              << total.simple_leaf_cache_misses
+              << " source_dag_cache_hits="
+              << total.source_dag_cache_hits
+              << " source_dag_cache_misses="
+              << total.source_dag_cache_misses << "\n";
     if (direct_stage_profile_enabled) {
       for (std::size_t index = 0; index < direct_stage_profiles.size();
            ++index) {
