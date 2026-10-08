@@ -124,6 +124,7 @@ bool kUseFixedSqrtInverseKernels = false;
 bool kUseFixedAtanKernel = false;
 bool kVerifyFixedKernelEnclosures = false;
 bool kUsePreparedSimplePolynomials = false;
+bool kCacheSimpleLeafResults = false;
 bool kUsePreparedCoordinateSqrtTerms = false;
 bool kUsePreparedDihedralChain = false;
 bool kUseSpecializedDihedralIdentities = false;
@@ -494,6 +495,8 @@ struct Counters {
   std::uint64_t sqrt_steps = 0;
   std::uint64_t inverse_steps = 0;
   std::uint64_t atan_steps = 0;
+  std::uint64_t simple_leaf_cache_hits = 0;
+  std::uint64_t simple_leaf_cache_misses = 0;
 };
 
 void add_counters(Counters& total, const Counters& value);
@@ -6396,6 +6399,8 @@ void add_counters(Counters& total, const Counters& value) {
   total.sqrt_steps += value.sqrt_steps;
   total.inverse_steps += value.inverse_steps;
   total.atan_steps += value.atan_steps;
+  total.simple_leaf_cache_hits += value.simple_leaf_cache_hits;
+  total.simple_leaf_cache_misses += value.simple_leaf_cache_misses;
 }
 
 Counters subtract_counters(const Counters& value, const Counters& baseline) {
@@ -6408,7 +6413,10 @@ Counters subtract_counters(const Counters& value, const Counters& baseline) {
           value.outer_steps - baseline.outer_steps,
           value.sqrt_steps - baseline.sqrt_steps,
           value.inverse_steps - baseline.inverse_steps,
-          value.atan_steps - baseline.atan_steps};
+          value.atan_steps - baseline.atan_steps,
+          value.simple_leaf_cache_hits - baseline.simple_leaf_cache_hits,
+          value.simple_leaf_cache_misses -
+              baseline.simple_leaf_cache_misses};
 }
 
 bool counters_equal(const Counters& left, const Counters& right) {
@@ -6421,7 +6429,9 @@ bool counters_equal(const Counters& left, const Counters& right) {
          left.outer_steps == right.outer_steps &&
          left.sqrt_steps == right.sqrt_steps &&
          left.inverse_steps == right.inverse_steps &&
-         left.atan_steps == right.atan_steps;
+         left.atan_steps == right.atan_steps &&
+         left.simple_leaf_cache_hits == right.simple_leaf_cache_hits &&
+         left.simple_leaf_cache_misses == right.simple_leaf_cache_misses;
 }
 
 void record_rounding_profile(std::vector<RoundingProfile>* profiles,
@@ -6510,6 +6520,57 @@ Evaluation evaluate_job(const Program& program, const Job& job,
 
   Counters counters;
   std::vector<TaylorResult> stack;
+  std::map<Rat, TaylorResult> simple_constant_cache;
+  std::array<TaylorResult, kDimensions> simple_variable_cache;
+  std::array<bool, kDimensions> simple_variable_cached{};
+  TaylorResult pi_half_cache;
+  bool pi_half_cached = false;
+  const auto simple_constant_result =
+      [&radii, &counters, &simple_constant_cache](const Rat& value) {
+        if (!kCacheSimpleLeafResults) {
+          return result_constant(radii, value, counters);
+        }
+        const auto found = simple_constant_cache.find(value);
+        if (found != simple_constant_cache.end()) {
+          ++counters.simple_leaf_cache_hits;
+          return found->second;
+        }
+        ++counters.simple_leaf_cache_misses;
+        const TaylorResult result = result_constant(radii, value, counters);
+        simple_constant_cache.emplace(value, result);
+        return result;
+      };
+  const auto simple_variable_result =
+      [&radii, &center_environment, &counters, &simple_variable_cache,
+       &simple_variable_cached](std::size_t variable) {
+        if (!kCacheSimpleLeafResults || variable >= kDimensions) {
+          return result_variable(
+              radii, center_environment, variable, counters);
+        }
+        if (simple_variable_cached[variable]) {
+          ++counters.simple_leaf_cache_hits;
+          return simple_variable_cache[variable];
+        }
+        ++counters.simple_leaf_cache_misses;
+        simple_variable_cache[variable] = result_variable(
+            radii, center_environment, variable, counters);
+        simple_variable_cached[variable] = true;
+        return simple_variable_cache[variable];
+      };
+  const auto pi_half_result =
+      [&radii, &counters, &pi_half_cache, &pi_half_cached]() {
+        if (!kCacheSimpleLeafResults) {
+          return result_pi_half(radii, counters);
+        }
+        if (pi_half_cached) {
+          ++counters.simple_leaf_cache_hits;
+          return pi_half_cache;
+        }
+        ++counters.simple_leaf_cache_misses;
+        pi_half_cache = result_pi_half(radii, counters);
+        pi_half_cached = true;
+        return pi_half_cache;
+      };
   std::size_t sqrt_slot = 0;
   bool direct_delta_x4_used = false;
   for (std::size_t outer_index = 0;
@@ -6794,8 +6855,7 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                         {interval_constant(prepared_simple->constant),
                          zero_vector()},
                         zero_matrix())
-                  : result_constant(
-                        radii, prepared_simple->constant, counters));
+                  : simple_constant_result(prepared_simple->constant));
         } else if (kUsePreparedSimplePolynomials &&
                    prepared_simple != nullptr &&
                    prepared_simple->kind ==
@@ -6810,8 +6870,7 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                         true,
                         {value, unit_vector(prepared_simple->variable)},
                         zero_matrix())
-                  : result_variable(radii, center_environment,
-                                    prepared_simple->variable, counters));
+                  : simple_variable_result(prepared_simple->variable));
         } else if (prepared_polynomial != nullptr) {
           stack.push_back(evaluate_prepared_polynomial(
               *prepared_polynomial, radii, center_environment, counters));
@@ -6967,7 +7026,7 @@ Evaluation evaluate_job(const Program& program, const Job& job,
                               : result_mul(radii, left, right, counters));
         }
       } else if (opcode == 8) {
-        stack.push_back(result_pi_half(radii, counters));
+        stack.push_back(pi_half_result());
       } else {
         throw std::runtime_error("unknown analytic scalar instruction");
       }
@@ -7208,6 +7267,7 @@ int main(int argc, char** argv) {
                 << " [--fixed-atan-kernel]"
                 << " [--verify-fixed-kernel-enclosures]"
                 << " [--prepared-simple-polynomials]"
+                << " [--cache-simple-leaf-results]"
                 << " [--prepared-coordinate-sqrt-terms]"
                 << " [--prepared-dihedral-chain]"
                 << " [--specialized-dihedral-identities]"
@@ -7328,6 +7388,8 @@ int main(int argc, char** argv) {
         kVerifyFixedKernelEnclosures = true;
       } else if (option == "--prepared-simple-polynomials") {
         kUsePreparedSimplePolynomials = true;
+      } else if (option == "--cache-simple-leaf-results") {
+        kCacheSimpleLeafResults = true;
       } else if (option == "--prepared-coordinate-sqrt-terms") {
         kUsePreparedCoordinateSqrtTerms = true;
       } else if (option == "--prepared-dihedral-chain") {
@@ -7611,6 +7673,10 @@ int main(int argc, char** argv) {
         !kUseFixedSqrtInverseKernels) {
       throw std::runtime_error(
           "prepared coordinate sqrt terms require fixed sqrt kernels");
+    }
+    if (kCacheSimpleLeafResults && !kUsePreparedSimplePolynomials) {
+      throw std::runtime_error(
+          "simple leaf caching requires prepared simple polynomials");
     }
     if (kUsePreparedDihedralChain &&
         (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
@@ -8171,6 +8237,8 @@ int main(int argc, char** argv) {
               << (kUsePreparedSimplePolynomials ? 1 : 0)
               << " prepared_simple_polynomial_count="
               << prepared_simple_polynomial_count
+              << " cache_simple_leaf_results="
+              << (kCacheSimpleLeafResults ? 1 : 0)
               << " prepared_coordinate_sqrt_terms="
               << (kUsePreparedCoordinateSqrtTerms ? 1 : 0)
               << " prepared_coordinate_sqrt_term_count="
@@ -8370,7 +8438,11 @@ int main(int argc, char** argv) {
               << " outer_steps=" << total.outer_steps
               << " sqrt_steps=" << total.sqrt_steps
               << " inverse_steps=" << total.inverse_steps
-              << " atan_steps=" << total.atan_steps << "\n";
+              << " atan_steps=" << total.atan_steps
+              << " simple_leaf_cache_hits="
+              << total.simple_leaf_cache_hits
+              << " simple_leaf_cache_misses="
+              << total.simple_leaf_cache_misses << "\n";
     if (direct_stage_profile_enabled) {
       for (std::size_t index = 0; index < direct_stage_profiles.size();
            ++index) {
