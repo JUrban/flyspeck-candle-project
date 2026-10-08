@@ -155,6 +155,7 @@ bool kUseSharedDeltaData = false;
 bool kUseSpecializedDeltaInverseRoots = false;
 bool kUseSpecializedDeltaDihedralChains = false;
 bool kUseSpecializedDeltaDihedralIdentities = false;
+bool kUseSpecializedDeltaHistoricalDihedrals = false;
 bool kUseTaylorReconstructedBox = false;
 bool kCountFixedQuotients = false;
 std::uint64_t kFloorFixedQuotientCalls = 0;
@@ -5595,14 +5596,17 @@ SecondOrderBox historical_dihedral_second_order(
 
   const Interval quotient = interval_mul(
       interval_neg(delta_x4.value), fixed_interval_inv(b), counters);
-  if (absolute(quotient.lower) >= kScale ||
-      absolute(quotient.upper) >= kScale) {
+  if (!kUseSpecializedDeltaHistoricalDihedrals &&
+      (absolute(quotient.lower) >= kScale ||
+       absolute(quotient.upper) >= kScale)) {
     throw std::runtime_error("historical dihedral atan domain failure");
   }
   ++counters.atan_steps;
   result.value = interval_add(
       interval_of_q({kPiHalfLower, kPiHalfUpper}),
-      fixed_atan_interval(quotient, counters));
+      kUseSpecializedDeltaHistoricalDihedrals
+          ? fixed_atan_range_interval(quotient, counters)
+          : fixed_atan_interval(quotient, counters));
   return result;
 }
 
@@ -5697,14 +5701,17 @@ FirstJet historical_dihedral_first_order(
 
   const Interval quotient = interval_mul(
       interval_neg(delta_x4), fixed_interval_inv(b), counters);
-  if (absolute(quotient.lower) >= kScale ||
-      absolute(quotient.upper) >= kScale) {
+  if (!kUseSpecializedDeltaHistoricalDihedrals &&
+      (absolute(quotient.lower) >= kScale ||
+       absolute(quotient.upper) >= kScale)) {
     throw std::runtime_error("historical dihedral center atan domain failure");
   }
   ++counters.atan_steps;
   result.value = interval_add(
       interval_of_q({kPiHalfLower, kPiHalfUpper}),
-      fixed_atan_interval(quotient, counters));
+      kUseSpecializedDeltaHistoricalDihedrals
+          ? fixed_atan_range_interval(quotient, counters)
+          : fixed_atan_interval(quotient, counters));
   return result;
 }
 
@@ -5725,6 +5732,51 @@ TaylorResult evaluate_historical_dihedral(
   return defer_completion
       ? deferred_additive_result(true, center, box.hessian)
       : complete_result(radii, true, center, box.hessian, counters);
+}
+
+TaylorResult evaluate_permuted_historical_delta_dihedral(
+    const IntegerVector& radii,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment,
+    std::size_t radicand_coordinate, Counters& counters) {
+  if (radicand_coordinate >= 3) {
+    throw std::runtime_error(
+        "historical delta dihedral coordinate drift");
+  }
+  // These self-inverse tetrahedral edge permutations map the canonical
+  // authenticated (x0,x3) dihedral source to (x1,x4) and (x2,x5).
+  constexpr std::array<std::array<std::size_t, kDimensions>, 3>
+      kPermutations = {{
+          {{0, 1, 2, 3, 4, 5}},
+          {{1, 0, 2, 4, 3, 5}},
+          {{2, 1, 0, 5, 4, 3}},
+      }};
+  const std::array<std::size_t, kDimensions>& permutation =
+      kPermutations[radicand_coordinate];
+  IntegerVector canonical_radii;
+  IntervalVector canonical_center;
+  IntervalVector canonical_box;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    canonical_radii[coordinate] = radii[permutation[coordinate]];
+    canonical_center[coordinate] =
+        center_environment[permutation[coordinate]];
+    canonical_box[coordinate] =
+        box_environment[permutation[coordinate]];
+  }
+  const TaylorResult canonical = evaluate_historical_dihedral(
+      canonical_radii, canonical_center, canonical_box, counters);
+  TaylorResult result = canonical;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    result.center.gradient[permutation[row]] =
+        canonical.center.gradient[row];
+    result.gradient_bounds[permutation[row]] =
+        canonical.gradient_bounds[row];
+    for (std::size_t column = 0; column < kDimensions; ++column) {
+      result.hessian[permutation[row]][permutation[column]] =
+          canonical.hessian[row][column];
+    }
+  }
+  return result;
 }
 
 TaylorResult evaluate_delta_inverse_root_specialized(
@@ -6905,6 +6957,40 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       outer_index += 7;
       continue;
     }
+    if (kUseSpecializedDeltaHistoricalDihedrals &&
+        delta_chain != nullptr && delta_chain->active) {
+      if (sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error(
+            "historical delta dihedral square-root slot drift");
+      }
+      const TaylorResult candidate =
+          evaluate_permuted_historical_delta_dihedral(
+              radii, center_environment, box_environment,
+              delta_chain->radicand_coordinate, counters);
+      stack.push_back(candidate);
+      if (kUseSourceDagCache) {
+        const std::size_t root_index = outer_index + 7;
+        const std::size_t identity =
+            program.source_dag_expression_ids.at(root_index);
+        if (source_dag_result_ready.at(identity)) {
+          throw std::runtime_error(
+              "historical delta dihedral source DAG identity reused");
+        }
+        source_dag_results.at(identity) = candidate;
+        source_dag_result_ready.at(identity) = true;
+        ++counters.source_dag_cache_misses;
+      }
+      ++sqrt_slot;
+      counters.outer_steps += 8;
+      if (rounding_profiles != nullptr) {
+        record_rounding_profile(
+            rounding_profiles, outer_index + 1,
+            "historical_delta_dihedral", rounding_floor_before,
+            rounding_ceil_before, rounding_begin);
+      }
+      outer_index += 7;
+      continue;
+    }
     const Program::DeltaDihedralChain* delta_inverse_root_chain =
         outer_index >= 2 &&
                 !program.specialized_delta_dihedral_chains.empty()
@@ -7554,7 +7640,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 48) {
+    if (argc < 4 || argc > 49) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -7601,6 +7687,7 @@ int main(int argc, char** argv) {
                 << " [--shared-delta-data]"
                 << " [--specialized-delta-inverse-roots]"
                 << " [--specialized-delta-dihedral-chains]"
+                << " [--specialized-delta-historical-dihedrals]"
                 << " [--taylor-reconstructed-box]"
                 << " [--count-fixed-quotients]"
                 << " [--capture-reciprocal-certificates=PATH]"
@@ -7757,6 +7844,9 @@ int main(int argc, char** argv) {
         kUseSpecializedDeltaDihedralChains = true;
       } else if (option == "--specialized-delta-dihedral-identities") {
         kUseSpecializedDeltaDihedralIdentities = true;
+      } else if (option ==
+                 "--specialized-delta-historical-dihedrals") {
+        kUseSpecializedDeltaHistoricalDihedrals = true;
       } else if (option == "--taylor-reconstructed-box") {
         kUseTaylorReconstructedBox = true;
       } else if (option == "--count-fixed-quotients") {
@@ -7906,7 +7996,8 @@ int main(int argc, char** argv) {
          kUseSpecializedDeltaDerivatives ||
          kUseSpecializedDeltaInverseRoots ||
          kUseSpecializedDeltaDihedralChains ||
-         kUseSpecializedDeltaDihedralIdentities) &&
+         kUseSpecializedDeltaDihedralIdentities ||
+         kUseSpecializedDeltaHistoricalDihedrals) &&
         (kUseCompactSupportJets || polynomial_mode != PolynomialMode::kBaseline ||
          fused_polynomial_outer_index >= 0 ||
          fused_polynomial_max_steps >= 0)) {
@@ -7915,7 +8006,8 @@ int main(int argc, char** argv) {
     }
     if ((kUseSpecializedDeltaInverseRoots ||
          kUseSpecializedDeltaDihedralChains ||
-         kUseSpecializedDeltaDihedralIdentities) &&
+         kUseSpecializedDeltaDihedralIdentities ||
+         kUseSpecializedDeltaHistoricalDihedrals) &&
         (!kUseSpecializedDeltaRadicands ||
          !kUseSpecializedDeltaDerivatives)) {
       throw std::runtime_error(
@@ -7931,10 +8023,17 @@ int main(int argc, char** argv) {
     }
     if (static_cast<int>(kUseSpecializedDeltaInverseRoots) +
             static_cast<int>(kUseSpecializedDeltaDihedralChains) +
-            static_cast<int>(kUseSpecializedDeltaDihedralIdentities) >
+            static_cast<int>(kUseSpecializedDeltaDihedralIdentities) +
+            static_cast<int>(kUseSpecializedDeltaHistoricalDihedrals) >
         1) {
       throw std::runtime_error(
           "conflicting specialized delta chain operations");
+    }
+    if (kUseSpecializedDeltaHistoricalDihedrals &&
+        (!kUseSourceDagCache || kCaseId != 16594)) {
+      throw std::runtime_error(
+          "historical delta dihedrals require the case16594 exact source "
+          "DAG lane");
     }
     if (kNormalizeFusedPolynomialProducts &&
         polynomial_mode == PolynomialMode::kBaseline &&
@@ -8266,7 +8365,8 @@ int main(int argc, char** argv) {
     }
     if (kUseSpecializedDeltaInverseRoots ||
         kUseSpecializedDeltaDihedralChains ||
-        kUseSpecializedDeltaDihedralIdentities) {
+        kUseSpecializedDeltaDihedralIdentities ||
+        kUseSpecializedDeltaHistoricalDihedrals) {
       prepare_specialized_delta_dihedral_chains(program);
     }
     if (kUseSourceDagCache) {
@@ -8276,7 +8376,8 @@ int main(int argc, char** argv) {
     if (kUseFixedSqrtInverseKernels ||
         kUseSpecializedDeltaInverseRoots ||
         kUseSpecializedDeltaDihedralChains ||
-        kUseSpecializedDeltaDihedralIdentities) {
+        kUseSpecializedDeltaDihedralIdentities ||
+        kUseSpecializedDeltaHistoricalDihedrals) {
       prepare_fixed_sqrt_certificates(jobs);
     }
     if (kPrecomputeTightSqrtCertificates) {
@@ -8654,6 +8755,8 @@ int main(int argc, char** argv) {
               << (kUseSpecializedDeltaDihedralChains ? 1 : 0)
               << " specialized_delta_dihedral_identities="
               << (kUseSpecializedDeltaDihedralIdentities ? 1 : 0)
+              << " specialized_delta_historical_dihedrals="
+              << (kUseSpecializedDeltaHistoricalDihedrals ? 1 : 0)
               << " specialized_delta_dihedral_chain_count="
               << specialized_delta_dihedral_chain_count
               << " taylor_reconstructed_box="
