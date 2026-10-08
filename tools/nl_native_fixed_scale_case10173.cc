@@ -5549,68 +5549,34 @@ TaylorResult evaluate_delta_dihedral_chain_specialized(
       derivative_coordinate != radicand_coordinate + 3) {
     throw std::runtime_error("delta dihedral coordinate pairing drift");
   }
+  // This candidate changes only interpreter dispatch and intermediate state
+  // materialization.  Keep the exact source operation boundaries, including
+  // every Taylor completion, so its result can be required to match the
+  // sequential authenticated-role lane byte for byte.  The earlier direct
+  // quotient/atan composition was faster but widened the final bounds enough
+  // to reject 467 genuine cells; it is deliberately not reused here.
+  const TaylorResult pi_half = result_pi_half(radii, counters);
   const TaylorResult numerator = legacy_coordinate_zero
       ? evaluate_neg_delta_x4_specialized(
           radii, center_environment, counters)
       : evaluate_neg_delta_derivative_specialized(
           radii, center_environment, derivative_coordinate, counters);
-  const TaylorResult completed_inverse_root =
-      evaluate_delta_inverse_root_specialized(
+  const TaylorResult radicand = legacy_coordinate_zero
+      ? evaluate_four_x1_delta_specialized(
+          radii, center_environment, box_environment, counters)
+      : evaluate_four_coordinate_delta_specialized(
           radii, center_environment, box_environment,
-          center_sqrt_certificate, box_sqrt_certificate,
-          radicand_coordinate, counters, legacy_coordinate_zero);
-  // Preserve the source evaluator's useful Taylor tightening at both of the
-  // late composition boundaries. Raw box composition can cross the fixed
-  // atan kernel's (-1,1) contract even when the completed quotient is safely
-  // inside it.  The authenticated numerator and radicand preparation above
-  // remains shared.
-  const TaylorResult completed_quotient = result_mul(
-      radii, numerator, completed_inverse_root, counters);
-
-  ++counters.atan_steps;
-  const bool atan_domain =
-      absolute(completed_quotient.center.value.lower) != kScale &&
-      absolute(completed_quotient.center.value.upper) != kScale;
-  if (!atan_domain) {
-    throw std::runtime_error(
-        "prepared dihedral arctangent domain failure center=" +
-        integer_of_fixed(completed_quotient.center.value.lower).get_str() +
-        ":" +
-        integer_of_fixed(completed_quotient.center.value.upper).get_str() +
-        " box=" +
-        integer_of_fixed(completed_quotient.value_bound.lower).get_str() +
-        ":" +
-        integer_of_fixed(completed_quotient.value_bound.upper).get_str() +
-        " scale=" + integer_of_fixed(kScale).get_str());
-  }
-  const Interval center_denominator = interval_add(
-      one_interval(),
-      fixed_interval_square(completed_quotient.center.value, counters));
-  const Interval box_denominator = interval_add(
-      one_interval(),
-      fixed_interval_square(completed_quotient.value_bound, counters));
-  const Interval center_atan_d = fixed_interval_inv(center_denominator);
-  const Interval box_atan_d = fixed_interval_inv(box_denominator);
-  const Interval box_atan_d2 = interval_mul(
-      box_atan_d, box_atan_d, counters);
-  const Interval box_atan_dd = interval_neg(interval_mul(
-      interval_add(completed_quotient.value_bound,
-                   completed_quotient.value_bound),
-      box_atan_d2, counters));
-  const FirstJet center = {
-      interval_add(interval_of_q({kPiHalfLower, kPiHalfUpper}),
-                   fixed_atan_range_interval(
-                       completed_quotient.center.value, counters)),
-      interval_vector_scale(
-          center_atan_d, completed_quotient.center.gradient, counters)};
-  const IntervalMatrix hessian = matrix_add(
-      interval_matrix_scale(
-          box_atan_dd,
-          interval_self_outer(
-              completed_quotient.gradient_bounds, counters), counters),
-      interval_matrix_scale(
-          box_atan_d, completed_quotient.hessian, counters));
-  return complete_result(radii, true, center, hessian, counters);
+          radicand_coordinate, counters);
+  const TaylorResult root = result_sqrt_fixed(
+      radii, center_sqrt_certificate, box_sqrt_certificate,
+      radicand, counters);
+  const TaylorResult inverse = result_inverse_fixed(
+      radii, root, counters);
+  const TaylorResult quotient = result_mul(
+      radii, numerator, inverse, counters);
+  const TaylorResult angle = result_atan_fixed(
+      radii, quotient, counters);
+  return result_add(radii, pi_half, angle, counters);
 }
 
 TaylorResult evaluate_dihedral_chain_specialized(
