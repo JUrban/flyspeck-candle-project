@@ -8820,6 +8820,7 @@ int main(int argc, char** argv) {
                 << " [--direct-prepared-inputs]"
                 << " [--whole-box-jet]"
                 << " [--whole-box-plan]"
+                << " [--whole-box-gradient-profile]"
                 << " [--direct-stage-profile]"
                 << " [--historical-stage-profile]"
                 << " [--tight-dihedral-sqrt-certificates]"
@@ -8868,6 +8869,7 @@ int main(int argc, char** argv) {
     bool rounding_profile_enabled = false;
     bool direct_stage_profile_enabled = false;
     bool historical_stage_profile_enabled = false;
+    bool whole_box_gradient_profile_enabled = false;
     bool dyadic_scale = false;
     int fused_polynomial_outer_index = -1;
     int fused_polynomial_max_steps = -1;
@@ -8969,6 +8971,8 @@ int main(int argc, char** argv) {
       } else if (option == "--whole-box-plan") {
         kUseWholeBoxJet = true;
         kUseWholeBoxPlan = true;
+      } else if (option == "--whole-box-gradient-profile") {
+        whole_box_gradient_profile_enabled = true;
       } else if (option == "--direct-stage-profile") {
         direct_stage_profile_enabled = true;
         kCountFixedQuotients = true;
@@ -9414,6 +9418,11 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "the first compact whole-box plan is pinned to case16594");
     }
+    if (whole_box_gradient_profile_enabled &&
+        (!kUseWholeBoxJet || kUseWholeBoxPlan)) {
+      throw std::runtime_error(
+          "whole-box gradient profiling requires direct whole-box jets");
+    }
     if (kDeferAdditiveLeafCompletion &&
         (!kFuseConsecutiveAdds || !kUsePreparedSimplePolynomials ||
          !kUsePreparedCoordinateSqrtTerms ||
@@ -9704,6 +9713,15 @@ int main(int argc, char** argv) {
     std::size_t wider = 0;
     std::size_t domain_failure_subdivisions = 0;
     std::size_t representation_failure_subdivisions = 0;
+    std::size_t whole_box_gradient_observations = 0;
+    std::size_t whole_box_gradient_any_sign_definite = 0;
+    std::size_t whole_box_gradient_all_sign_definite = 0;
+    std::array<std::size_t, kDimensions>
+        whole_box_gradient_nonnegative{};
+    std::array<std::size_t, kDimensions>
+        whole_box_gradient_nonpositive{};
+    std::array<std::size_t, kDimensions> whole_box_gradient_zero{};
+    std::array<std::size_t, kDimensions> whole_box_gradient_mixed{};
     Rat maximum_upper_minus_expected;
     bool have_difference = false;
     const std::uint64_t evaluation_floor_begin =
@@ -9722,8 +9740,15 @@ int main(int argc, char** argv) {
       kReciprocalCertificateOrdinal = 0;
       kAnalyticCertificateOrdinal = 0;
       Evaluation evaluation;
+      IntervalVector profiled_whole_box_gradient;
+      bool observed_whole_box_gradient = false;
       try {
-        evaluation = kUseWholeBoxPlan
+        if (whole_box_gradient_profile_enabled) {
+          evaluation = evaluate_job_whole_box(
+              program, jobs[index], nullptr, &profiled_whole_box_gradient);
+          observed_whole_box_gradient = true;
+        } else {
+          evaluation = kUseWholeBoxPlan
             ? evaluate_job_whole_box_plan(program, jobs[index])
             : kUseWholeBoxJet
             ? evaluate_job_whole_box(program, jobs[index])
@@ -9747,6 +9772,7 @@ int main(int argc, char** argv) {
                   !trace_first_state_path.empty() && index == 0
                       ? &state_trace
                       : nullptr);
+        }
       } catch (const std::exception& error) {
         const std::string message(error.what());
         if (subdivide_domain_failures_development &&
@@ -9772,6 +9798,33 @@ int main(int argc, char** argv) {
         } else {
           throw std::runtime_error(
               "job " + std::to_string(index) + ": " + error.what());
+        }
+      }
+      if (observed_whole_box_gradient) {
+        std::size_t sign_definite_coordinates = 0;
+        for (std::size_t coordinate = 0;
+             coordinate < kDimensions; ++coordinate) {
+          const Interval& derivative =
+              profiled_whole_box_gradient[coordinate];
+          if (derivative.lower == 0 && derivative.upper == 0) {
+            ++whole_box_gradient_zero[coordinate];
+            ++sign_definite_coordinates;
+          } else if (derivative.lower >= 0) {
+            ++whole_box_gradient_nonnegative[coordinate];
+            ++sign_definite_coordinates;
+          } else if (derivative.upper <= 0) {
+            ++whole_box_gradient_nonpositive[coordinate];
+            ++sign_definite_coordinates;
+          } else {
+            ++whole_box_gradient_mixed[coordinate];
+          }
+        }
+        ++whole_box_gradient_observations;
+        if (sign_definite_coordinates != 0) {
+          ++whole_box_gradient_any_sign_definite;
+        }
+        if (sign_definite_coordinates == kDimensions) {
+          ++whole_box_gradient_all_sign_definite;
         }
       }
       results.push_back(evaluation.upper);
@@ -9860,6 +9913,35 @@ int main(int argc, char** argv) {
     const double evaluation_seconds =
         std::chrono::duration<double>(evaluation_end - evaluation_begin).count();
     std::cout << std::setprecision(17);
+    if (whole_box_gradient_profile_enabled) {
+      if (whole_box_gradient_observations != jobs.size()) {
+        throw std::runtime_error(
+            "whole-box gradient profile observation-count drift");
+      }
+      const auto print_counts = [](const auto& counts) {
+        for (std::size_t coordinate = 0;
+             coordinate < kDimensions; ++coordinate) {
+          if (coordinate != 0) std::cout << ',';
+          std::cout << counts[coordinate];
+        }
+      };
+      std::cout << "CANDLE_NL_NATIVE_WHOLE_BOX_GRADIENT_PROFILE"
+                << " cells=" << jobs.size()
+                << " observations=" << whole_box_gradient_observations
+                << " any_sign_definite="
+                << whole_box_gradient_any_sign_definite
+                << " all_sign_definite="
+                << whole_box_gradient_all_sign_definite
+                << " nonnegative_by_coordinate=";
+      print_counts(whole_box_gradient_nonnegative);
+      std::cout << " nonpositive_by_coordinate=";
+      print_counts(whole_box_gradient_nonpositive);
+      std::cout << " zero_by_coordinate=";
+      print_counts(whole_box_gradient_zero);
+      std::cout << " mixed_by_coordinate=";
+      print_counts(whole_box_gradient_mixed);
+      std::cout << "\n";
+    }
     if (kUseDirectSpecializedFunction) {
       constexpr std::array<std::size_t, 6> kRootIndices =
           {{1, 6, 11, 16, 21, 26}};
@@ -9985,6 +10067,8 @@ int main(int argc, char** argv) {
               << " whole_box_plan=" << (kUseWholeBoxPlan ? 1 : 0)
               << " whole_box_plan_nodes="
               << program.source_dag_plan.size()
+              << " whole_box_gradient_profile="
+              << (whole_box_gradient_profile_enabled ? 1 : 0)
               << " direct_stage_profile="
               << (direct_stage_profile_enabled ? 1 : 0)
               << " historical_stage_profile="
