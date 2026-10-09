@@ -585,7 +585,36 @@ struct InstructionProfile {
   std::size_t stack_after = 0;
   std::size_t sqrt_slot_before = 0;
   std::size_t sqrt_slot_after = 0;
+  std::string label;
 };
+
+void finish_instruction_profile(
+    InstructionProfile& profile, const Counters& counters_before,
+    std::size_t stack_before, std::size_t stack_after,
+    std::size_t sqrt_slot_before, std::size_t sqrt_slot_after,
+    const std::chrono::steady_clock::time_point& instruction_begin,
+    const Counters& counters, const std::string& label = "") {
+  const auto instruction_end = std::chrono::steady_clock::now();
+  if (profile.observations == 0) {
+    profile.stack_before = stack_before;
+    profile.stack_after = stack_after;
+    profile.sqrt_slot_before = sqrt_slot_before;
+    profile.sqrt_slot_after = sqrt_slot_after;
+    profile.label = label;
+  } else if (profile.stack_before != stack_before ||
+             profile.stack_after != stack_after ||
+             profile.sqrt_slot_before != sqrt_slot_before ||
+             profile.sqrt_slot_after != sqrt_slot_after ||
+             profile.label != label) {
+    throw std::runtime_error("instruction profile shape drift");
+  }
+  ++profile.observations;
+  profile.nanoseconds += static_cast<std::uint64_t>(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+          instruction_end - instruction_begin).count());
+  add_counters(profile.counters,
+               subtract_counters(counters, counters_before));
+}
 
 struct RoundingProfile {
   std::uint64_t floor_quotients = 0;
@@ -6959,14 +6988,31 @@ Evaluation evaluate_job(const Program& program, const Job& job,
     }
     if (kUseSpecializedDeltaHistoricalDihedrals &&
         delta_chain != nullptr && delta_chain->active) {
+      const Counters counters_before = counters;
+      const std::size_t stack_before = stack.size();
+      const std::size_t sqrt_slot_before = sqrt_slot;
+      std::chrono::steady_clock::time_point instruction_begin;
+      if (profiles != nullptr) {
+        instruction_begin = std::chrono::steady_clock::now();
+      }
       if (sqrt_slot >= kSqrtSlots) {
         throw std::runtime_error(
             "historical delta dihedral square-root slot drift");
       }
-      const TaylorResult candidate =
-          evaluate_permuted_historical_delta_dihedral(
-              radii, center_environment, box_environment,
-              delta_chain->radicand_coordinate, counters);
+      TaylorResult candidate;
+      try {
+        candidate = evaluate_permuted_historical_delta_dihedral(
+            radii, center_environment, box_environment,
+            delta_chain->radicand_coordinate, counters);
+      } catch (...) {
+        if (rounding_profiles != nullptr) {
+          record_rounding_profile(
+              rounding_profiles, outer_index + 1,
+              "historical_delta_dihedral",
+              rounding_floor_before, rounding_ceil_before, rounding_begin);
+        }
+        throw;
+      }
       stack.push_back(candidate);
       if (kUseSourceDagCache) {
         const std::size_t root_index = outer_index + 7;
@@ -6987,6 +7033,12 @@ Evaluation evaluate_job(const Program& program, const Job& job,
             rounding_profiles, outer_index + 1,
             "historical_delta_dihedral", rounding_floor_before,
             rounding_ceil_before, rounding_begin);
+      }
+      if (profiles != nullptr) {
+        finish_instruction_profile(
+            profiles->at(outer_index), counters_before, stack_before,
+            stack.size(), sqrt_slot_before, sqrt_slot, instruction_begin,
+            counters, "historical_delta_dihedral");
       }
       outer_index += 7;
       continue;
@@ -7179,6 +7231,12 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         while (operands-- != 0) stack.pop_back();
         stack.push_back(source_dag_results.at(source_dag_identity));
         ++counters.source_dag_cache_hits;
+        if (profiles != nullptr) {
+          finish_instruction_profile(
+              profiles->at(outer_index), counters_before, stack_before,
+              stack.size(), sqrt_slot_before, sqrt_slot, instruction_begin,
+              counters, "source_dag_cache_hit");
+        }
         continue;
       }
       ++counters.source_dag_cache_misses;
@@ -7423,25 +7481,10 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       }
     }
     if (profiles != nullptr) {
-      const auto instruction_end = std::chrono::steady_clock::now();
-      InstructionProfile& profile = profiles->at(outer_index);
-      if (profile.observations == 0) {
-        profile.stack_before = stack_before;
-        profile.stack_after = stack.size();
-        profile.sqrt_slot_before = sqrt_slot_before;
-        profile.sqrt_slot_after = sqrt_slot;
-      } else if (profile.stack_before != stack_before ||
-                 profile.stack_after != stack.size() ||
-                 profile.sqrt_slot_before != sqrt_slot_before ||
-                 profile.sqrt_slot_after != sqrt_slot) {
-        throw std::runtime_error("instruction profile shape drift");
-      }
-      ++profile.observations;
-      profile.nanoseconds += static_cast<std::uint64_t>(
-          std::chrono::duration_cast<std::chrono::nanoseconds>(
-              instruction_end - instruction_begin).count());
-      add_counters(profile.counters,
-                   subtract_counters(counters, counters_before));
+      finish_instruction_profile(
+          profiles->at(outer_index), counters_before, stack_before,
+          stack.size(), sqrt_slot_before, sqrt_slot, instruction_begin,
+          counters);
     }
     if (rounding_profiles != nullptr) {
       if (rounding_label.empty()) {
@@ -8121,8 +8164,7 @@ int main(int argc, char** argv) {
          kUseSpecializedDeltaDihedralIdentities ||
          kFuseConsecutiveAdds || kDeferAdditiveLeafCompletion ||
          kVerifyFixedKernelEnclosures || kUseTightDihedralSqrtCertificates ||
-         kPrecomputeTightSqrtCertificates || profile_enabled ||
-         rounding_profile_enabled || direct_stage_profile_enabled ||
+         kPrecomputeTightSqrtCertificates || direct_stage_profile_enabled ||
          full_stage_diagnostics || !trace_first_state_path.empty() ||
          !capture_reciprocal_certificates_path.empty() ||
          !use_reciprocal_certificates_path.empty() ||
@@ -8130,7 +8172,7 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "the bounded source DAG cache prototype requires the dense "
           "baseline fixed-kernel evaluator without collapsed, fused, "
-          "profiled, traced, or certificate-capture lanes");
+          "staged, traced, or certificate-capture lanes");
     }
     if (kUsePreparedDihedralChain &&
         (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
@@ -8985,8 +9027,11 @@ int main(int argc, char** argv) {
         const InstructionProfile& profile = profiles[index];
         std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_PROFILE"
                   << " index=" << index
-                  << " label=" << instruction_label(
-                       program, program.instructions[index])
+                  << " label="
+                  << (profile.label.empty()
+                          ? instruction_label(
+                                program, program.instructions[index])
+                          : profile.label)
                   << " observations=" << profile.observations
                   << " stack_before=" << profile.stack_before
                   << " stack_after=" << profile.stack_after
