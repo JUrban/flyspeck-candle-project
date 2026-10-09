@@ -152,6 +152,7 @@ bool kUseSignSpecializedIntervalProducts = false;
 bool kUseSpecializedDeltaRadicands = false;
 bool kUseSpecializedDeltaDerivatives = false;
 bool kUseSharedDeltaData = false;
+bool kUseSharedHistoricalDeltaJet = false;
 bool kUseSpecializedDeltaInverseRoots = false;
 bool kUseSpecializedDeltaDihedralChains = false;
 bool kUseSpecializedDeltaDihedralIdentities = false;
@@ -465,6 +466,11 @@ struct SharedDeltaData {
   IntervalMatrix center_hessian;
   IntervalMatrix box_hessian;
   IntervalVector box_gradient;
+};
+
+struct SharedHistoricalDeltaData {
+  SecondOrderBox center;
+  SecondOrderBox box;
 };
 
 // Development-only handoff for the reflected historical-dihedral
@@ -4863,6 +4869,21 @@ SecondOrderBox delta_full_sign_directed(const IntervalVector& box,
   return result;
 }
 
+SecondOrderBox permute_second_order_box(
+    const SecondOrderBox& source,
+    const std::array<std::size_t, kDimensions>& permutation) {
+  SecondOrderBox result;
+  result.value = source.value;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    result.gradient[row] = source.gradient[permutation[row]];
+    for (std::size_t column = 0; column < kDimensions; ++column) {
+      result.hessian[row][column] =
+          source.hessian[permutation[row]][permutation[column]];
+    }
+  }
+  return result;
+}
+
 bool interval_is_subset(const Interval& candidate,
                         const Interval& reference) {
   return candidate.lower >= reference.lower &&
@@ -5436,6 +5457,14 @@ SecondOrderBox delta_full_direct(const IntervalVector& environment,
           delta_hessian(environment)};
 }
 
+SharedHistoricalDeltaData prepare_shared_historical_delta_data(
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, Counters& counters) {
+  return {delta_full_direct(center_environment, counters),
+          delta_full_sign_directed(
+              box_environment, counters, kUseHistoricalBlockRounding)};
+}
+
 SecondOrderBox delta_x4_full_direct(const IntervalVector& environment,
                                     Counters& counters) {
   return {delta_x4_value(environment, counters),
@@ -5480,11 +5509,14 @@ SecondOrderBox second_order_sqrt(const SecondOrderBox& input,
 SecondOrderBox historical_dihedral_second_order(
     const IntervalVector& environment, bool use_sign_directed_bounds,
     Counters& counters, HistoricalDihedralRootTrace* trace = nullptr,
-    const HistoricalDihedralRootTrace* supplied_roots = nullptr) {
-  const SecondOrderBox delta = use_sign_directed_bounds
-      ? delta_full_sign_directed(
-            environment, counters, kUseHistoricalBlockRounding)
-      : delta_full_direct(environment, counters);
+    const HistoricalDihedralRootTrace* supplied_roots = nullptr,
+    const SecondOrderBox* supplied_delta = nullptr) {
+  const SecondOrderBox delta = supplied_delta == nullptr
+      ? (use_sign_directed_bounds
+             ? delta_full_sign_directed(
+                   environment, counters, kUseHistoricalBlockRounding)
+             : delta_full_direct(environment, counters))
+      : *supplied_delta;
   const Interval* supplied_root_delta = supplied_roots == nullptr
       ? nullptr : &supplied_roots->root_delta;
   const SecondOrderBox root_delta = second_order_sqrt(
@@ -5642,11 +5674,14 @@ SecondOrderBox historical_dihedral_second_order(
 FirstJet historical_dihedral_first_order(
     const IntervalVector& environment, Counters& counters,
     HistoricalDihedralRootTrace* trace = nullptr,
-    const HistoricalDihedralRootTrace* supplied_roots = nullptr) {
-  const Interval delta_value_at_center = delta_value(environment, counters);
-  const IntervalVector delta_gradient_at_center =
-      delta_gradient_from_products(
-          polynomial_pair_products(environment, counters));
+    const HistoricalDihedralRootTrace* supplied_roots = nullptr,
+    const SecondOrderBox* supplied_delta = nullptr) {
+  const Interval delta_value_at_center = supplied_delta == nullptr
+      ? delta_value(environment, counters) : supplied_delta->value;
+  const IntervalVector delta_gradient_at_center = supplied_delta == nullptr
+      ? delta_gradient_from_products(
+            polynomial_pair_products(environment, counters))
+      : supplied_delta->gradient;
   if (delta_value_at_center.lower <= 0) {
     throw std::runtime_error(
         "historical dihedral center square-root domain failure");
@@ -5748,16 +5783,21 @@ TaylorResult evaluate_historical_dihedral(
     const IntegerVector& radii,
     const IntervalVector& center_environment,
     const IntervalVector& box_environment,
-    Counters& counters, bool defer_completion = false) {
+    Counters& counters, bool defer_completion = false,
+    const SharedHistoricalDeltaData* shared_delta = nullptr) {
   const FirstJet center = kUseHistoricalCenterTangent
-      ? historical_dihedral_first_order(center_environment, counters)
-      : [&center_environment, &counters]() {
+      ? historical_dihedral_first_order(
+            center_environment, counters, nullptr, nullptr,
+            shared_delta == nullptr ? nullptr : &shared_delta->center)
+      : [&center_environment, &counters, shared_delta]() {
           const SecondOrderBox full = historical_dihedral_second_order(
-              center_environment, false, counters);
+              center_environment, false, counters, nullptr, nullptr,
+              shared_delta == nullptr ? nullptr : &shared_delta->center);
           return FirstJet{full.value, full.gradient};
         }();
   const SecondOrderBox box = historical_dihedral_second_order(
-      box_environment, true, counters);
+      box_environment, true, counters, nullptr, nullptr,
+      shared_delta == nullptr ? nullptr : &shared_delta->box);
   return defer_completion
       ? deferred_additive_result(true, center, box.hessian)
       : complete_result(radii, true, center, box.hessian, counters);
@@ -5767,7 +5807,8 @@ TaylorResult evaluate_permuted_historical_delta_dihedral(
     const IntegerVector& radii,
     const IntervalVector& center_environment,
     const IntervalVector& box_environment,
-    std::size_t radicand_coordinate, Counters& counters) {
+    std::size_t radicand_coordinate, Counters& counters,
+    const SharedHistoricalDeltaData* shared_delta = nullptr) {
   if (radicand_coordinate >= 3) {
     throw std::runtime_error(
         "historical delta dihedral coordinate drift");
@@ -5792,8 +5833,18 @@ TaylorResult evaluate_permuted_historical_delta_dihedral(
     canonical_box[coordinate] =
         box_environment[permutation[coordinate]];
   }
+  SharedHistoricalDeltaData canonical_shared_delta;
+  const SharedHistoricalDeltaData* canonical_shared_delta_pointer = nullptr;
+  if (shared_delta != nullptr) {
+    canonical_shared_delta.center =
+        permute_second_order_box(shared_delta->center, permutation);
+    canonical_shared_delta.box =
+        permute_second_order_box(shared_delta->box, permutation);
+    canonical_shared_delta_pointer = &canonical_shared_delta;
+  }
   const TaylorResult canonical = evaluate_historical_dihedral(
-      canonical_radii, canonical_center, canonical_box, counters);
+      canonical_radii, canonical_center, canonical_box, counters, false,
+      canonical_shared_delta_pointer);
   TaylorResult result = canonical;
   for (std::size_t row = 0; row < kDimensions; ++row) {
     result.center.gradient[permutation[row]] =
@@ -6793,6 +6844,13 @@ Evaluation evaluate_job(const Program& program, const Job& job,
         radii, center_environment, box_environment, counters);
     shared_delta = &shared_delta_data;
   }
+  SharedHistoricalDeltaData shared_historical_delta_data;
+  const SharedHistoricalDeltaData* shared_historical_delta = nullptr;
+  if (kUseSharedHistoricalDeltaJet) {
+    shared_historical_delta_data = prepare_shared_historical_delta_data(
+        center_environment, box_environment, counters);
+    shared_historical_delta = &shared_historical_delta_data;
+  }
   std::vector<TaylorResult> stack;
   if (kUseSourceDagCache &&
       (program.source_dag_expression_ids.size() !=
@@ -7003,7 +7061,8 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       try {
         candidate = evaluate_permuted_historical_delta_dihedral(
             radii, center_environment, box_environment,
-            delta_chain->radicand_coordinate, counters);
+            delta_chain->radicand_coordinate, counters,
+            shared_historical_delta);
       } catch (...) {
         if (rounding_profiles != nullptr) {
           record_rounding_profile(
@@ -7728,6 +7787,7 @@ int main(int argc, char** argv) {
                 << " [--specialized-delta-radicands]"
                 << " [--specialized-delta-derivatives]"
                 << " [--shared-delta-data]"
+                << " [--shared-historical-delta-jet]"
                 << " [--specialized-delta-inverse-roots]"
                 << " [--specialized-delta-dihedral-chains]"
                 << " [--specialized-delta-historical-dihedrals]"
@@ -7887,6 +7947,8 @@ int main(int argc, char** argv) {
         kUseSpecializedDeltaDerivatives = true;
       } else if (option == "--shared-delta-data") {
         kUseSharedDeltaData = true;
+      } else if (option == "--shared-historical-delta-jet") {
+        kUseSharedHistoricalDeltaJet = true;
       } else if (option == "--specialized-delta-inverse-roots") {
         kUseSpecializedDeltaInverseRoots = true;
       } else if (option == "--specialized-delta-dihedral-chains") {
@@ -8075,6 +8137,13 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "shared delta data requires the case16594 exact source DAG and "
           "both authenticated delta-role lanes");
+    }
+    if (kUseSharedHistoricalDeltaJet &&
+        (!kUseSourceDagCache ||
+         !kUseSpecializedDeltaHistoricalDihedrals || kCaseId != 16594)) {
+      throw std::runtime_error(
+          "shared historical delta jet requires the authenticated "
+          "case16594 historical-dihedral source DAG lane");
     }
     if (static_cast<int>(kUseSpecializedDeltaInverseRoots) +
             static_cast<int>(kUseSpecializedDeltaDihedralChains) +
@@ -8827,6 +8896,8 @@ int main(int argc, char** argv) {
               << specialized_delta_derivative_count
               << " shared_delta_data="
               << (kUseSharedDeltaData ? 1 : 0)
+              << " shared_historical_delta_jet="
+              << (kUseSharedHistoricalDeltaJet ? 1 : 0)
               << " specialized_delta_inverse_roots="
               << (kUseSpecializedDeltaInverseRoots ? 1 : 0)
               << " specialized_delta_dihedral_chains="
