@@ -190,18 +190,23 @@ int main(int argc, char** argv) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv TOPOLOGY.tsv "
                 << "dag|historical|historical-coordinate|"
-                << "historical-whole\n";
+                << "historical-whole|historical-whole-monotone\n";
       return 2;
     }
     const std::string lane(argv[4]);
     if (lane != "dag" && lane != "historical" &&
         lane != "historical-coordinate" &&
-        lane != "historical-whole") {
+        lane != "historical-whole" &&
+        lane != "historical-whole-monotone") {
       throw std::runtime_error("unknown streaming lane");
     }
     const bool historical = lane != "dag";
     const bool coordinate_sqrt_values = lane == "historical-coordinate";
-    const bool whole_box_jet = lane == "historical-whole";
+    const bool whole_box_jet =
+        lane == "historical-whole" ||
+        lane == "historical-whole-monotone";
+    const bool monotone_face_recheck =
+        lane == "historical-whole-monotone";
     const auto total_begin = std::chrono::steady_clock::now();
 
     const auto input_begin = std::chrono::steady_clock::now();
@@ -239,6 +244,9 @@ int main(int argc, char** argv) {
     std::size_t rejected_leaves = 0;
     std::size_t domain_subdivisions = 0;
     std::size_t representation_subdivisions = 0;
+    std::size_t monotone_face_rechecks = 0;
+    std::size_t monotone_restricted_coordinates = 0;
+    std::size_t monotone_new_prunes = 0;
     std::size_t maximum_depth = 0;
     const auto traversal_begin = std::chrono::steady_clock::now();
     while (!stack.empty()) {
@@ -253,11 +261,50 @@ int main(int argc, char** argv) {
       bool domain_subdivision = false;
       bool representation_subdivision = false;
       try {
-        evaluation = whole_box_jet
-            ? evaluate_job_whole_box(program, job)
-            : evaluate_job(
-                program, job, PolynomialMode::kBaseline, -1, -1, false,
-                nullptr, nullptr);
+        if (whole_box_jet) {
+          TaylorResult whole_box_result;
+          IntervalVector whole_box_gradient;
+          evaluation = evaluate_job_whole_box(
+              program, job,
+              monotone_face_recheck ? &whole_box_result : nullptr,
+              monotone_face_recheck ? &whole_box_gradient : nullptr);
+          if (monotone_face_recheck && evaluation.upper >= 0) {
+            Job face_job = job;
+            std::size_t restricted_coordinates = 0;
+            for (std::size_t coordinate = 0;
+                 coordinate < kDimensions; ++coordinate) {
+              const Interval& derivative =
+                  whole_box_gradient[coordinate];
+              if (derivative.lower >= 0 &&
+                  face_job.lower[coordinate] !=
+                      face_job.upper[coordinate]) {
+                face_job.lower[coordinate] = face_job.upper[coordinate];
+                ++restricted_coordinates;
+              } else if (derivative.upper <= 0 &&
+                         face_job.lower[coordinate] !=
+                             face_job.upper[coordinate]) {
+                face_job.upper[coordinate] = face_job.lower[coordinate];
+                ++restricted_coordinates;
+              }
+            }
+            if (restricted_coordinates != 0) {
+              std::vector<Job> singleton{face_job};
+              prepare_fixed_sqrt_certificates(singleton);
+              const Evaluation face_evaluation =
+                  evaluate_job_whole_box(program, singleton.front());
+              add_counters(evaluation.counters,
+                           face_evaluation.counters);
+              if (face_evaluation.upper < 0) ++monotone_new_prunes;
+              evaluation.upper = face_evaluation.upper;
+              ++monotone_face_rechecks;
+              monotone_restricted_coordinates += restricted_coordinates;
+            }
+          }
+        } else {
+          evaluation = evaluate_job(
+              program, job, PolynomialMode::kBaseline, -1, -1, false,
+              nullptr, nullptr);
+        }
       } catch (const std::exception& error) {
         const std::string message(error.what());
         if (message == "invalid fixed square-root input" ||
@@ -302,8 +349,8 @@ int main(int argc, char** argv) {
                 << " decision=" << decision
                 << " domain_subdivision="
                 << (domain_subdivision ? 1 : 0)
-                << " representation_subdivision="
-                << (representation_subdivision ? 1 : 0) << "\n";
+              << " representation_subdivision="
+              << (representation_subdivision ? 1 : 0) << "\n";
       ++visit;
     }
     const auto traversal_end = std::chrono::steady_clock::now();
@@ -325,6 +372,10 @@ int main(int argc, char** argv) {
               << " domain_subdivisions=" << domain_subdivisions
               << " representation_subdivisions="
               << representation_subdivisions
+              << " monotone_face_rechecks=" << monotone_face_rechecks
+              << " monotone_restricted_coordinates="
+              << monotone_restricted_coordinates
+              << " monotone_new_prunes=" << monotone_new_prunes
               << " maximum_depth=" << maximum_depth
               << " input_seconds=" << seconds(input_begin, input_end)
               << " reusable_preparation_seconds="

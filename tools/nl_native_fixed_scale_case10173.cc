@@ -8254,7 +8254,9 @@ Evaluation evaluate_job(const Program& program, const Job& job,
           counters};
 }
 
-Evaluation evaluate_job_whole_box(const Program& program, const Job& job) {
+Evaluation evaluate_job_whole_box(const Program& program, const Job& job,
+                                  TaylorResult* final_result = nullptr,
+                                  IntervalVector* whole_box_gradient = nullptr) {
   IntervalVector center_environment;
   IntervalVector box_environment;
   IntegerVector radii;
@@ -8470,6 +8472,10 @@ Evaluation evaluate_job_whole_box(const Program& program, const Job& job) {
   const TaylorResult result = complete_result(
       radii, true, stack.back().jet.center,
       stack.back().jet.box_hessian, counters);
+  if (final_result != nullptr) *final_result = result;
+  if (whole_box_gradient != nullptr) {
+    *whole_box_gradient = stack.back().jet.box_gradient;
+  }
   return {normalized_rat(integer_of_fixed(result.value_bound.upper),
                          integer_of_fixed(kScale)),
           counters};
