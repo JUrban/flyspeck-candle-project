@@ -538,6 +538,27 @@ constexpr std::array<const char*, 7> kDirectStageNames = {{
 using DirectStageProfiles =
     std::array<DirectStageProfile, kDirectStageNames.size()>;
 
+constexpr std::array<const char*, 15> kHistoricalStageNames = {{
+    "center_delta_and_root",
+    "center_delta_x4",
+    "center_triangle_u",
+    "center_root_inverse_and_b",
+    "center_gradient_assembly",
+    "center_atan_and_value",
+    "box_delta_and_root",
+    "box_delta_x4",
+    "box_triangle_u",
+    "box_root_inverse_and_b",
+    "box_b_gradient",
+    "box_b_hessian",
+    "box_gradient_and_log_u",
+    "box_hessian_finish",
+    "box_atan_and_value",
+}};
+
+using HistoricalStageProfiles =
+    std::array<DirectStageProfile, kHistoricalStageNames.size()>;
+
 struct DirectStageSnapshot {
   std::chrono::steady_clock::time_point begin;
   Counters counters;
@@ -576,6 +597,33 @@ void finish_direct_stage(DirectStageProfile& profile,
           finish - snapshot.begin).count());
   ++profile.observations;
 }
+
+HistoricalStageProfiles* kHistoricalStageProfiles = nullptr;
+
+class HistoricalStageGuard {
+ public:
+  HistoricalStageGuard(std::size_t stage, const Counters& counters)
+      : stage_(stage), counters_(counters),
+        active_(kHistoricalStageProfiles != nullptr) {
+    if (active_) snapshot_ = begin_direct_stage(counters_);
+  }
+
+  HistoricalStageGuard(const HistoricalStageGuard&) = delete;
+  HistoricalStageGuard& operator=(const HistoricalStageGuard&) = delete;
+
+  ~HistoricalStageGuard() {
+    if (active_) {
+      finish_direct_stage(
+          (*kHistoricalStageProfiles)[stage_], snapshot_, counters_);
+    }
+  }
+
+ private:
+  std::size_t stage_;
+  const Counters& counters_;
+  bool active_;
+  DirectStageSnapshot snapshot_{};
+};
 
 struct InstructionProfile {
   Counters counters;
@@ -5481,161 +5529,199 @@ SecondOrderBox historical_dihedral_second_order(
     const IntervalVector& environment, bool use_sign_directed_bounds,
     Counters& counters, HistoricalDihedralRootTrace* trace = nullptr,
     const HistoricalDihedralRootTrace* supplied_roots = nullptr) {
-  const SecondOrderBox delta = use_sign_directed_bounds
-      ? delta_full_sign_directed(
-            environment, counters, kUseHistoricalBlockRounding)
-      : delta_full_direct(environment, counters);
-  const Interval* supplied_root_delta = supplied_roots == nullptr
-      ? nullptr : &supplied_roots->root_delta;
-  const SecondOrderBox root_delta = second_order_sqrt(
-      delta, counters, supplied_root_delta);
-  const SecondOrderBox delta_x4 = use_sign_directed_bounds
-      ? delta_x4_full_sign_directed(
-            environment, counters, kUseHistoricalBlockRounding)
-      : delta_x4_full_direct(environment, counters);
-  const ValueGradient u126 = optimized_triangle_u(
-      environment, std::array<std::size_t, 3>{{0, 1, 5}}, counters,
-      kUseHistoricalBlockRounding);
-  const ValueGradient u135 = optimized_triangle_u(
-      environment, std::array<std::size_t, 3>{{0, 2, 4}}, counters,
-      kUseHistoricalBlockRounding);
-  if (u126.value.lower <= 0 || u135.value.lower <= 0) {
-    throw std::runtime_error("historical dihedral U domain failure");
+  SecondOrderBox delta;
+  SecondOrderBox root_delta;
+  {
+    HistoricalStageGuard stage(6, counters);
+    delta = use_sign_directed_bounds
+        ? delta_full_sign_directed(
+              environment, counters, kUseHistoricalBlockRounding)
+        : delta_full_direct(environment, counters);
+    const Interval* supplied_root_delta = supplied_roots == nullptr
+        ? nullptr : &supplied_roots->root_delta;
+    root_delta = second_order_sqrt(
+        delta, counters, supplied_root_delta);
   }
 
-  Interval root_four_x0;
-  if (supplied_roots == nullptr) {
-    ++counters.sqrt_steps;
-    root_four_x0 = fixed_sqrt_enclosure(
-        interval_integer_scale(4, environment[0]));
-  } else {
-    root_four_x0 = supplied_roots->root_four_x0;
-  }
-  if (trace != nullptr) {
-    trace->root_delta = root_delta.value;
-    trace->root_four_x0 = root_four_x0;
-  }
-  const Interval b = interval_mul(
-      root_delta.value, root_four_x0, counters);
-  if (!fixed_interval_not_zero(b)) {
-    throw std::runtime_error("historical dihedral denominator failure");
-  }
-  const Interval two_over_root_four_x0 = interval_mul(
-      interval_integer_scale(2, one_interval()),
-      fixed_interval_inv(root_four_x0), counters);
-
-  IntervalVector b_gradient = interval_vector_scale(
-      root_four_x0, root_delta.gradient, counters);
-  b_gradient[0] = interval_add(
-      b_gradient[0],
-      interval_mul(root_delta.value, two_over_root_four_x0, counters));
-
-  IntervalMatrix b_hessian = interval_matrix_scale(
-      root_four_x0, root_delta.hessian, counters);
-  for (std::size_t coordinate = 1;
-       coordinate < kDimensions; ++coordinate) {
-    const Interval correction = interval_mul(
-        root_delta.gradient[coordinate], two_over_root_four_x0, counters);
-    b_hessian[0][coordinate] = interval_add(
-        b_hessian[0][coordinate], correction);
-    b_hessian[coordinate][0] = b_hessian[0][coordinate];
-  }
-  const Interval twice_first_correction = interval_integer_scale(
-      2, interval_mul(root_delta.gradient[0],
-                      two_over_root_four_x0, counters));
-  const Interval diagonal_denominator = interval_integer_scale(
-      2, environment[0]);
-  if (!fixed_interval_not_zero(diagonal_denominator)) {
-    throw std::runtime_error(
-        "historical dihedral first-coordinate domain failure");
-  }
-  const Interval diagonal_subtraction = interval_mul(
-      interval_mul(root_delta.value, two_over_root_four_x0, counters),
-      fixed_interval_inv(diagonal_denominator), counters);
-  b_hessian[0][0] = interval_add(
-      b_hessian[0][0],
-      interval_add(twice_first_correction,
-                   interval_neg(diagonal_subtraction)));
-
-  IntervalVector c;
-  for (std::size_t coordinate = 0;
-       coordinate < kDimensions; ++coordinate) {
-    c[coordinate] = interval_add(
-        interval_neg(interval_mul(
-            delta_x4.gradient[coordinate], b, counters)),
-        interval_mul(delta_x4.value, b_gradient[coordinate], counters));
-  }
-  const Interval u_product = interval_mul(
-      u126.value, u135.value, counters);
-  if (!fixed_interval_not_zero(u_product)) {
-    throw std::runtime_error("historical dihedral U product failure");
-  }
-  const Interval reciprocal_u = fixed_interval_inv(u_product);
-
-  SecondOrderBox result;
-  result.gradient = interval_vector_scale(reciprocal_u, c, counters);
-  const Interval two_root_delta = interval_integer_scale(
-      2, root_delta.value);
-  if (!fixed_interval_not_zero(two_root_delta)) {
-    throw std::runtime_error("historical dihedral delta root failure");
-  }
-  result.gradient[3] = interval_mul(
-      root_four_x0, fixed_interval_inv(two_root_delta), counters);
-
-  IntervalVector logarithmic_u_gradient;
-  const Interval reciprocal_u126 = fixed_interval_inv(u126.value);
-  const Interval reciprocal_u135 = fixed_interval_inv(u135.value);
-  for (std::size_t coordinate = 0;
-       coordinate < kDimensions; ++coordinate) {
-    logarithmic_u_gradient[coordinate] = interval_add(
-        interval_mul(u126.gradient[coordinate], reciprocal_u126, counters),
-        interval_mul(u135.gradient[coordinate], reciprocal_u135, counters));
+  SecondOrderBox delta_x4;
+  {
+    HistoricalStageGuard stage(7, counters);
+    delta_x4 = use_sign_directed_bounds
+        ? delta_x4_full_sign_directed(
+              environment, counters, kUseHistoricalBlockRounding)
+        : delta_x4_full_direct(environment, counters);
   }
 
-  for (std::size_t row = 0; row < kDimensions; ++row) {
-    for (std::size_t column = row;
-         column < kDimensions; ++column) {
-      Interval identity;
-      if (row == column) {
-        identity = interval_add(
-            interval_neg(interval_mul(
-                b, delta_x4.hessian[row][column], counters)),
-            interval_mul(delta_x4.value,
-                         b_hessian[row][column], counters));
-      } else {
-        identity = interval_sum({
-            interval_neg(interval_mul(
-                b, delta_x4.hessian[row][column], counters)),
-            interval_neg(interval_mul(
-                delta_x4.gradient[row], b_gradient[column], counters)),
-            interval_mul(delta_x4.gradient[column],
-                         b_gradient[row], counters),
-            interval_mul(delta_x4.value,
-                         b_hessian[row][column], counters)});
-      }
-      const Interval value = interval_add(
-          interval_mul(reciprocal_u, identity, counters),
-          interval_neg(interval_mul(
-              result.gradient[row],
-              logarithmic_u_gradient[column], counters)));
-      result.hessian[row][column] = value;
-      result.hessian[column][row] = value;
+  ValueGradient u126;
+  ValueGradient u135;
+  {
+    HistoricalStageGuard stage(8, counters);
+    u126 = optimized_triangle_u(
+        environment, std::array<std::size_t, 3>{{0, 1, 5}}, counters,
+        kUseHistoricalBlockRounding);
+    u135 = optimized_triangle_u(
+        environment, std::array<std::size_t, 3>{{0, 2, 4}}, counters,
+        kUseHistoricalBlockRounding);
+    if (u126.value.lower <= 0 || u135.value.lower <= 0) {
+      throw std::runtime_error("historical dihedral U domain failure");
     }
   }
 
-  const Interval quotient = interval_mul(
-      interval_neg(delta_x4.value), fixed_interval_inv(b), counters);
-  if (!kUseSpecializedDeltaHistoricalDihedrals &&
-      (absolute(quotient.lower) >= kScale ||
-       absolute(quotient.upper) >= kScale)) {
-    throw std::runtime_error("historical dihedral atan domain failure");
+  Interval root_four_x0;
+  Interval b;
+  Interval two_over_root_four_x0;
+  {
+    HistoricalStageGuard stage(9, counters);
+    if (supplied_roots == nullptr) {
+      ++counters.sqrt_steps;
+      root_four_x0 = fixed_sqrt_enclosure(
+          interval_integer_scale(4, environment[0]));
+    } else {
+      root_four_x0 = supplied_roots->root_four_x0;
+    }
+    if (trace != nullptr) {
+      trace->root_delta = root_delta.value;
+      trace->root_four_x0 = root_four_x0;
+    }
+    b = interval_mul(root_delta.value, root_four_x0, counters);
+    if (!fixed_interval_not_zero(b)) {
+      throw std::runtime_error("historical dihedral denominator failure");
+    }
+    two_over_root_four_x0 = interval_mul(
+        interval_integer_scale(2, one_interval()),
+        fixed_interval_inv(root_four_x0), counters);
   }
-  ++counters.atan_steps;
-  result.value = interval_add(
-      interval_of_q({kPiHalfLower, kPiHalfUpper}),
-      kUseSpecializedDeltaHistoricalDihedrals
-          ? fixed_atan_range_interval(quotient, counters)
-          : fixed_atan_interval(quotient, counters));
+
+  SecondOrderBox result{};
+  IntervalVector b_gradient;
+  {
+    HistoricalStageGuard stage(10, counters);
+    b_gradient = interval_vector_scale(
+        root_four_x0, root_delta.gradient, counters);
+    b_gradient[0] = interval_add(
+        b_gradient[0],
+        interval_mul(root_delta.value, two_over_root_four_x0, counters));
+  }
+
+  IntervalMatrix b_hessian;
+  {
+    HistoricalStageGuard stage(11, counters);
+    b_hessian = interval_matrix_scale(
+        root_four_x0, root_delta.hessian, counters);
+    for (std::size_t coordinate = 1;
+         coordinate < kDimensions; ++coordinate) {
+      const Interval correction = interval_mul(
+          root_delta.gradient[coordinate], two_over_root_four_x0, counters);
+      b_hessian[0][coordinate] = interval_add(
+          b_hessian[0][coordinate], correction);
+      b_hessian[coordinate][0] = b_hessian[0][coordinate];
+    }
+    const Interval twice_first_correction = interval_integer_scale(
+        2, interval_mul(root_delta.gradient[0],
+                        two_over_root_four_x0, counters));
+    const Interval diagonal_denominator = interval_integer_scale(
+        2, environment[0]);
+    if (!fixed_interval_not_zero(diagonal_denominator)) {
+      throw std::runtime_error(
+          "historical dihedral first-coordinate domain failure");
+    }
+    const Interval diagonal_subtraction = interval_mul(
+        interval_mul(root_delta.value, two_over_root_four_x0, counters),
+        fixed_interval_inv(diagonal_denominator), counters);
+    b_hessian[0][0] = interval_add(
+        b_hessian[0][0],
+        interval_add(twice_first_correction,
+                     interval_neg(diagonal_subtraction)));
+  }
+
+  IntervalVector c;
+  Interval reciprocal_u;
+  IntervalVector logarithmic_u_gradient;
+  {
+    HistoricalStageGuard stage(12, counters);
+    for (std::size_t coordinate = 0;
+         coordinate < kDimensions; ++coordinate) {
+      c[coordinate] = interval_add(
+          interval_neg(interval_mul(
+              delta_x4.gradient[coordinate], b, counters)),
+          interval_mul(delta_x4.value, b_gradient[coordinate], counters));
+    }
+    const Interval u_product = interval_mul(
+        u126.value, u135.value, counters);
+    if (!fixed_interval_not_zero(u_product)) {
+      throw std::runtime_error("historical dihedral U product failure");
+    }
+    reciprocal_u = fixed_interval_inv(u_product);
+    result.gradient = interval_vector_scale(reciprocal_u, c, counters);
+    const Interval two_root_delta = interval_integer_scale(
+        2, root_delta.value);
+    if (!fixed_interval_not_zero(two_root_delta)) {
+      throw std::runtime_error("historical dihedral delta root failure");
+    }
+    result.gradient[3] = interval_mul(
+        root_four_x0, fixed_interval_inv(two_root_delta), counters);
+    const Interval reciprocal_u126 = fixed_interval_inv(u126.value);
+    const Interval reciprocal_u135 = fixed_interval_inv(u135.value);
+    for (std::size_t coordinate = 0;
+         coordinate < kDimensions; ++coordinate) {
+      logarithmic_u_gradient[coordinate] = interval_add(
+          interval_mul(
+              u126.gradient[coordinate], reciprocal_u126, counters),
+          interval_mul(
+              u135.gradient[coordinate], reciprocal_u135, counters));
+    }
+  }
+
+  {
+    HistoricalStageGuard stage(13, counters);
+    for (std::size_t row = 0; row < kDimensions; ++row) {
+      for (std::size_t column = row;
+           column < kDimensions; ++column) {
+        Interval identity;
+        if (row == column) {
+          identity = interval_add(
+              interval_neg(interval_mul(
+                  b, delta_x4.hessian[row][column], counters)),
+              interval_mul(delta_x4.value,
+                           b_hessian[row][column], counters));
+        } else {
+          identity = interval_sum({
+              interval_neg(interval_mul(
+                  b, delta_x4.hessian[row][column], counters)),
+              interval_neg(interval_mul(
+                  delta_x4.gradient[row], b_gradient[column], counters)),
+              interval_mul(delta_x4.gradient[column],
+                           b_gradient[row], counters),
+              interval_mul(delta_x4.value,
+                           b_hessian[row][column], counters)});
+        }
+        const Interval value = interval_add(
+            interval_mul(reciprocal_u, identity, counters),
+            interval_neg(interval_mul(
+                result.gradient[row],
+                logarithmic_u_gradient[column], counters)));
+        result.hessian[row][column] = value;
+        result.hessian[column][row] = value;
+      }
+    }
+  }
+
+  {
+    HistoricalStageGuard stage(14, counters);
+    const Interval quotient = interval_mul(
+        interval_neg(delta_x4.value), fixed_interval_inv(b), counters);
+    if (!kUseSpecializedDeltaHistoricalDihedrals &&
+        (absolute(quotient.lower) >= kScale ||
+         absolute(quotient.upper) >= kScale)) {
+      throw std::runtime_error("historical dihedral atan domain failure");
+    }
+    ++counters.atan_steps;
+    result.value = interval_add(
+        interval_of_q({kPiHalfLower, kPiHalfUpper}),
+        kUseSpecializedDeltaHistoricalDihedrals
+            ? fixed_atan_range_interval(quotient, counters)
+            : fixed_atan_interval(quotient, counters));
+  }
   return result;
 }
 
@@ -5643,104 +5729,131 @@ FirstJet historical_dihedral_first_order(
     const IntervalVector& environment, Counters& counters,
     HistoricalDihedralRootTrace* trace = nullptr,
     const HistoricalDihedralRootTrace* supplied_roots = nullptr) {
-  const Interval delta_value_at_center = delta_value(environment, counters);
-  const IntervalVector delta_gradient_at_center =
-      delta_gradient_from_products(
-          polynomial_pair_products(environment, counters));
-  if (delta_value_at_center.lower <= 0) {
-    throw std::runtime_error(
-        "historical dihedral center square-root domain failure");
-  }
-
   Interval root_delta;
-  if (supplied_roots == nullptr) {
-    ++counters.sqrt_steps;
-    root_delta = fixed_sqrt_enclosure(delta_value_at_center);
-  } else {
-    root_delta = supplied_roots->root_delta;
+  IntervalVector root_delta_gradient;
+  {
+    HistoricalStageGuard stage(0, counters);
+    const Interval delta_value_at_center =
+        delta_value(environment, counters);
+    const IntervalVector delta_gradient_at_center =
+        delta_gradient_from_products(
+            polynomial_pair_products(environment, counters));
+    if (delta_value_at_center.lower <= 0) {
+      throw std::runtime_error(
+          "historical dihedral center square-root domain failure");
+    }
+    if (supplied_roots == nullptr) {
+      ++counters.sqrt_steps;
+      root_delta = fixed_sqrt_enclosure(delta_value_at_center);
+    } else {
+      root_delta = supplied_roots->root_delta;
+    }
+    const Interval root_delta_derivative = fixed_interval_inv(
+        interval_integer_scale(2, root_delta));
+    root_delta_gradient = interval_vector_scale(
+        root_delta_derivative, delta_gradient_at_center, counters);
   }
-  const Interval root_delta_derivative = fixed_interval_inv(
-      interval_integer_scale(2, root_delta));
-  const IntervalVector root_delta_gradient = interval_vector_scale(
-      root_delta_derivative, delta_gradient_at_center, counters);
 
-  const Interval delta_x4 = delta_x4_value(environment, counters);
-  const IntervalVector delta_x4_gradient_at_center =
-      delta_x4_gradient(environment);
-  const ValueGradient u126 = optimized_triangle_u(
-      environment, std::array<std::size_t, 3>{{0, 1, 5}}, counters,
-      kUseHistoricalBlockRounding);
-  const ValueGradient u135 = optimized_triangle_u(
-      environment, std::array<std::size_t, 3>{{0, 2, 4}}, counters,
-      kUseHistoricalBlockRounding);
-  if (u126.value.lower <= 0 || u135.value.lower <= 0) {
-    throw std::runtime_error("historical dihedral center U domain failure");
+  Interval delta_x4;
+  IntervalVector delta_x4_gradient_at_center;
+  {
+    HistoricalStageGuard stage(1, counters);
+    delta_x4 = delta_x4_value(environment, counters);
+    delta_x4_gradient_at_center = delta_x4_gradient(environment);
+  }
+
+  ValueGradient u126;
+  ValueGradient u135;
+  {
+    HistoricalStageGuard stage(2, counters);
+    u126 = optimized_triangle_u(
+        environment, std::array<std::size_t, 3>{{0, 1, 5}}, counters,
+        kUseHistoricalBlockRounding);
+    u135 = optimized_triangle_u(
+        environment, std::array<std::size_t, 3>{{0, 2, 4}}, counters,
+        kUseHistoricalBlockRounding);
+    if (u126.value.lower <= 0 || u135.value.lower <= 0) {
+      throw std::runtime_error(
+          "historical dihedral center U domain failure");
+    }
   }
 
   Interval root_four_x0;
-  if (supplied_roots == nullptr) {
-    ++counters.sqrt_steps;
-    root_four_x0 = fixed_sqrt_enclosure(
-        interval_integer_scale(4, environment[0]));
-  } else {
-    root_four_x0 = supplied_roots->root_four_x0;
+  Interval b;
+  Interval two_over_root_four_x0;
+  {
+    HistoricalStageGuard stage(3, counters);
+    if (supplied_roots == nullptr) {
+      ++counters.sqrt_steps;
+      root_four_x0 = fixed_sqrt_enclosure(
+          interval_integer_scale(4, environment[0]));
+    } else {
+      root_four_x0 = supplied_roots->root_four_x0;
+    }
+    if (trace != nullptr) {
+      trace->root_delta = root_delta;
+      trace->root_four_x0 = root_four_x0;
+    }
+    b = interval_mul(root_delta, root_four_x0, counters);
+    if (!fixed_interval_not_zero(b)) {
+      throw std::runtime_error(
+          "historical dihedral center denominator failure");
+    }
+    two_over_root_four_x0 = interval_mul(
+        interval_integer_scale(2, one_interval()),
+        fixed_interval_inv(root_four_x0), counters);
   }
-  if (trace != nullptr) {
-    trace->root_delta = root_delta;
-    trace->root_four_x0 = root_four_x0;
-  }
-  const Interval b = interval_mul(root_delta, root_four_x0, counters);
-  if (!fixed_interval_not_zero(b)) {
-    throw std::runtime_error(
-        "historical dihedral center denominator failure");
-  }
-  const Interval two_over_root_four_x0 = interval_mul(
-      interval_integer_scale(2, one_interval()),
-      fixed_interval_inv(root_four_x0), counters);
-  IntervalVector b_gradient = interval_vector_scale(
-      root_four_x0, root_delta_gradient, counters);
-  b_gradient[0] = interval_add(
-      b_gradient[0],
-      interval_mul(root_delta, two_over_root_four_x0, counters));
 
-  IntervalVector c;
-  for (std::size_t coordinate = 0;
-       coordinate < kDimensions; ++coordinate) {
-    c[coordinate] = interval_add(
-        interval_neg(interval_mul(
-            delta_x4_gradient_at_center[coordinate], b, counters)),
-        interval_mul(delta_x4, b_gradient[coordinate], counters));
+  FirstJet result{};
+  {
+    HistoricalStageGuard stage(4, counters);
+    IntervalVector b_gradient = interval_vector_scale(
+        root_four_x0, root_delta_gradient, counters);
+    b_gradient[0] = interval_add(
+        b_gradient[0],
+        interval_mul(root_delta, two_over_root_four_x0, counters));
+    IntervalVector c;
+    for (std::size_t coordinate = 0;
+         coordinate < kDimensions; ++coordinate) {
+      c[coordinate] = interval_add(
+          interval_neg(interval_mul(
+              delta_x4_gradient_at_center[coordinate], b, counters)),
+          interval_mul(delta_x4, b_gradient[coordinate], counters));
+    }
+    const Interval u_product = interval_mul(
+        u126.value, u135.value, counters);
+    if (!fixed_interval_not_zero(u_product)) {
+      throw std::runtime_error(
+          "historical dihedral center U product failure");
+    }
+    result.gradient = interval_vector_scale(
+        fixed_interval_inv(u_product), c, counters);
+    const Interval two_root_delta = interval_integer_scale(2, root_delta);
+    if (!fixed_interval_not_zero(two_root_delta)) {
+      throw std::runtime_error(
+          "historical dihedral center delta root failure");
+    }
+    result.gradient[3] = interval_mul(
+        root_four_x0, fixed_interval_inv(two_root_delta), counters);
   }
-  const Interval u_product = interval_mul(
-      u126.value, u135.value, counters);
-  if (!fixed_interval_not_zero(u_product)) {
-    throw std::runtime_error(
-        "historical dihedral center U product failure");
-  }
-  FirstJet result;
-  result.gradient = interval_vector_scale(
-      fixed_interval_inv(u_product), c, counters);
-  const Interval two_root_delta = interval_integer_scale(2, root_delta);
-  if (!fixed_interval_not_zero(two_root_delta)) {
-    throw std::runtime_error(
-        "historical dihedral center delta root failure");
-  }
-  result.gradient[3] = interval_mul(
-      root_four_x0, fixed_interval_inv(two_root_delta), counters);
 
-  const Interval quotient = interval_mul(
-      interval_neg(delta_x4), fixed_interval_inv(b), counters);
-  if (!kUseSpecializedDeltaHistoricalDihedrals &&
-      (absolute(quotient.lower) >= kScale ||
-       absolute(quotient.upper) >= kScale)) {
-    throw std::runtime_error("historical dihedral center atan domain failure");
+  {
+    HistoricalStageGuard stage(5, counters);
+    const Interval quotient = interval_mul(
+        interval_neg(delta_x4), fixed_interval_inv(b), counters);
+    if (!kUseSpecializedDeltaHistoricalDihedrals &&
+        (absolute(quotient.lower) >= kScale ||
+         absolute(quotient.upper) >= kScale)) {
+      throw std::runtime_error(
+          "historical dihedral center atan domain failure");
+    }
+    ++counters.atan_steps;
+    result.value = interval_add(
+        interval_of_q({kPiHalfLower, kPiHalfUpper}),
+        kUseSpecializedDeltaHistoricalDihedrals
+            ? fixed_atan_range_interval(quotient, counters)
+            : fixed_atan_interval(quotient, counters));
   }
-  ++counters.atan_steps;
-  result.value = interval_add(
-      interval_of_q({kPiHalfLower, kPiHalfUpper}),
-      kUseSpecializedDeltaHistoricalDihedrals
-          ? fixed_atan_range_interval(quotient, counters)
-          : fixed_atan_interval(quotient, counters));
   return result;
 }
 
@@ -7683,7 +7796,7 @@ std::vector<Rat> read_expected_bounds(const char* path) {
 
 int main(int argc, char** argv) {
   try {
-    if (argc < 4 || argc > 49) {
+    if (argc < 4 || argc > 50) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv EXPECTED-BOUNDS.tsv"
                 << " [--profile]"
@@ -7712,6 +7825,7 @@ int main(int argc, char** argv) {
                 << " [--direct-specialized-function]"
                 << " [--direct-prepared-inputs]"
                 << " [--direct-stage-profile]"
+                << " [--historical-stage-profile]"
                 << " [--tight-dihedral-sqrt-certificates]"
                 << " [--optimized-dihedral-u-bounds]"
                 << " [--computed-tight-sqrt-certificates]"
@@ -7757,6 +7871,7 @@ int main(int argc, char** argv) {
     bool profile_enabled = false;
     bool rounding_profile_enabled = false;
     bool direct_stage_profile_enabled = false;
+    bool historical_stage_profile_enabled = false;
     bool dyadic_scale = false;
     int fused_polynomial_outer_index = -1;
     int fused_polynomial_max_steps = -1;
@@ -7853,6 +7968,9 @@ int main(int argc, char** argv) {
         kUseDirectPreparedInputs = true;
       } else if (option == "--direct-stage-profile") {
         direct_stage_profile_enabled = true;
+        kCountFixedQuotients = true;
+      } else if (option == "--historical-stage-profile") {
+        historical_stage_profile_enabled = true;
         kCountFixedQuotients = true;
       } else if (option == "--tight-dihedral-sqrt-certificates") {
         kUseTightDihedralSqrtCertificates = true;
@@ -8234,6 +8352,12 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "direct stage profiling requires the direct specialized function");
     }
+    if (historical_stage_profile_enabled &&
+        !kUseHistoricalDihedral &&
+        !kUseSpecializedDeltaHistoricalDihedrals) {
+      throw std::runtime_error(
+          "historical stage profiling requires a historical dihedral lane");
+    }
     if (kUseDirectPreparedInputs && !kUseDirectSpecializedFunction) {
       throw std::runtime_error(
           "direct prepared inputs require the direct specialized function");
@@ -8514,6 +8638,9 @@ int main(int argc, char** argv) {
                   << integer_of_fixed(kScale).get_str() << '\n';
     }
     DirectStageProfiles direct_stage_profiles{};
+    HistoricalStageProfiles historical_stage_profiles{};
+    kHistoricalStageProfiles = historical_stage_profile_enabled
+        ? &historical_stage_profiles : nullptr;
     std::size_t mismatches = 0;
     std::size_t accepted = 0;
     std::size_t tighter = 0;
@@ -8604,6 +8731,7 @@ int main(int argc, char** argv) {
         have_difference = true;
       }
     }
+    kHistoricalStageProfiles = nullptr;
     kReciprocalCertificateEvaluationActive = false;
     if (kUseReciprocalCertificates &&
         kReciprocalCertificateCursor != kReciprocalCertificates.size()) {
@@ -8791,6 +8919,8 @@ int main(int argc, char** argv) {
               << (kUseDirectPreparedInputs ? 1 : 0)
               << " direct_stage_profile="
               << (direct_stage_profile_enabled ? 1 : 0)
+              << " historical_stage_profile="
+              << (historical_stage_profile_enabled ? 1 : 0)
               << " tight_dihedral_sqrt_certificates="
               << (kUseTightDihedralSqrtCertificates ? 1 : 0)
               << " optimized_dihedral_u_bounds="
@@ -9017,6 +9147,29 @@ int main(int argc, char** argv) {
                   << " polynomial_steps="
                   << profile.counters.polynomial_steps
                   << " outer_steps=" << profile.counters.outer_steps
+                  << " sqrt_steps=" << profile.counters.sqrt_steps
+                  << " inverse_steps=" << profile.counters.inverse_steps
+                  << " atan_steps=" << profile.counters.atan_steps << "\n";
+      }
+    }
+    if (historical_stage_profile_enabled) {
+      for (std::size_t index = 0;
+           index < historical_stage_profiles.size(); ++index) {
+        const DirectStageProfile& profile =
+            historical_stage_profiles[index];
+        std::cout << "CANDLE_NL_NATIVE_FIXED_SCALE_HISTORICAL_PROFILE"
+                  << " index=" << index
+                  << " label=" << kHistoricalStageNames[index]
+                  << " observations=" << profile.observations
+                  << " nanoseconds=" << profile.nanoseconds
+                  << " floor_quotients=" << profile.floor_quotients
+                  << " ceil_quotients=" << profile.ceil_quotients
+                  << " total_quotients="
+                  << profile.floor_quotients + profile.ceil_quotients
+                  << " interval_products="
+                  << profile.counters.interval_products
+                  << " interval_endpoint_products="
+                  << profile.counters.interval_endpoint_products
                   << " sqrt_steps=" << profile.counters.sqrt_steps
                   << " inverse_steps=" << profile.counters.inverse_steps
                   << " atan_steps=" << profile.counters.atan_steps << "\n";
