@@ -101,14 +101,14 @@ for required in \
   [[ "$mpz_summary" == *"$required"* ]]
 done
 
-cat >"$output_dir/width-gate.tsv" <<EOF
-quantity\tmaximum_magnitude_bits
-rounded_quotient_numerator\t128
-raw_interval_product\t128
-interval_addition_result\t130
-weighted_taylor_accumulator\t115
-final_taylor_center_raw\t118
-EOF
+printf '%s\t%s\n' \
+  quantity maximum_magnitude_bits \
+  rounded_quotient_numerator 128 \
+  raw_interval_product 128 \
+  interval_addition_result 130 \
+  weighted_taylor_accumulator 115 \
+  final_taylor_center_raw 118 \
+  >"$output_dir/width-gate.tsv"
 
 awk -v begin="$build_begin" -v checked="$build_checked_end" \
   -v mpz="$build_mpz_end" \
