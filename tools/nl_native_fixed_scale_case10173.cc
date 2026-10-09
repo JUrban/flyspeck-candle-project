@@ -5566,6 +5566,32 @@ void run_delta_full_diagnostics(const std::vector<Job>& jobs) {
             << " status=DEVELOPMENT_NON_RELEASE\n";
 }
 
+void run_historical_delta_block_diagnostics(const std::vector<Job>& jobs) {
+  Counters counters;
+  const auto begin = std::chrono::steady_clock::now();
+  for (std::size_t index = 0; index < jobs.size(); ++index) {
+    IntervalVector box;
+    for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+      box[coordinate] = interval_of_q(
+          {jobs[index].lower[coordinate], jobs[index].upper[coordinate]});
+    }
+    const Interval value = delta_value_block_rounded(box, counters);
+    std::cout << "CANDLE_NL_NATIVE_HISTORICAL_DELTA_BLOCK"
+              << " index=" << index
+              << " lower=" << integer_of_fixed(value.lower).get_str()
+              << " upper=" << integer_of_fixed(value.upper).get_str()
+              << "\n";
+  }
+  const auto end = std::chrono::steady_clock::now();
+  std::cout << "CANDLE_NL_NATIVE_HISTORICAL_DELTA_BLOCK_SUMMARY"
+            << " cells=" << jobs.size()
+            << " evaluation_seconds="
+            << std::chrono::duration<double>(end - begin).count()
+            << " interval_products=" << counters.interval_products
+            << " endpoint_products=" << counters.interval_endpoint_products
+            << " status=DEVELOPMENT_NON_RELEASE\n";
+}
+
 std::uint64_t signed_fixed_digest(const Fixed& value) {
   Integer magnitude = integer_of_fixed(value);
   const bool negative = magnitude < 0;
@@ -8853,6 +8879,7 @@ int main(int argc, char** argv) {
                 << " [--historical-kernel-diagnostics]"
                 << " [--historical-first-benchmark-repetitions=N]"
                 << " [--historical-second-benchmark-repetitions=N]"
+                << " [--historical-delta-block-diagnostics]"
                 << " [--delta-gradient0-benchmark-repetitions=N]"
                 << " [--delta-full-diagnostics]"
                 << " [--full-stage-diagnostics]"
@@ -8879,6 +8906,7 @@ int main(int argc, char** argv) {
     bool historical_kernel_diagnostics = false;
     std::size_t historical_first_benchmark_repetitions = 0;
     std::size_t historical_second_benchmark_repetitions = 0;
+    bool historical_delta_block_diagnostics = false;
     std::size_t delta_gradient0_benchmark_repetitions = 0;
     bool delta_full_diagnostics = false;
     bool full_stage_diagnostics = false;
@@ -9082,6 +9110,8 @@ int main(int argc, char** argv) {
           throw std::runtime_error(
               "zero historical second-order benchmark repetitions");
         }
+      } else if (option == "--historical-delta-block-diagnostics") {
+        historical_delta_block_diagnostics = true;
       } else if (option.rfind(
                      "--delta-gradient0-benchmark-repetitions=", 0) == 0) {
         delta_gradient0_benchmark_repetitions =
@@ -10421,6 +10451,9 @@ int main(int argc, char** argv) {
     if (historical_second_benchmark_repetitions != 0) {
       benchmark_historical_dihedral_second_order(
           jobs, historical_second_benchmark_repetitions);
+    }
+    if (historical_delta_block_diagnostics) {
+      run_historical_delta_block_diagnostics(jobs);
     }
     if (!accept_only && !dyadic_scale &&
         polynomial_mode == PolynomialMode::kBaseline &&
