@@ -101,6 +101,42 @@ rg -q '^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY .*unsafe_unrounded_hardware=1 .*rep
   "$output_dir/unrounded-results.txt" >"$output_dir/unrounded-vs-padded-bounds.json"
 
 awk '
+  function rational(value, parts) {
+    split(value, parts, "/")
+    return length(parts) == 1 ? parts[1] + 0 : parts[1] / parts[2]
+  }
+  function sign(value) { return value < 0 ? "negative" : (value > 0 ? "positive" : "zero") }
+  FNR == NR {
+    for (i=1; i<=NF; ++i) {
+      split($i, field, "=")
+      if (field[1] == "index") index=field[2]
+      if (field[1] == "upper") upper=field[2]
+    }
+    baseline[index]=sign(rational(upper)); next
+  }
+  {
+    for (i=1; i<=NF; ++i) {
+      split($i, field, "=")
+      if (field[1] == "index") index=field[2]
+      if (field[1] == "upper") upper=field[2]
+    }
+    candidate=sign(rational(upper)); counts[baseline[index] ":" candidate]++
+  }
+  END {
+    print "padded_sign\tunrounded_sign\tcells"
+    print "negative\tnegative\t" counts["negative:negative"]
+    print "zero\tzero\t" counts["zero:zero"]
+    print "zero\tpositive\t" counts["zero:positive"]
+    print "positive\tpositive\t" counts["positive:positive"]
+    total=0; for (pair in counts) total+=counts[pair]
+    if (total != 1344 || length(counts) != 4 ||
+        counts["negative:negative"] != 682 || counts["zero:zero"] != 84 ||
+        counts["zero:positive"] != 1 || counts["positive:positive"] != 577) exit 2
+  }
+' "$output_dir/padded-bounds.txt" "$output_dir/unrounded-bounds.txt" \
+  >"$output_dir/sign-classification.tsv"
+
+awk '
   function value(name, i, field) {
     for (i = 1; i <= NF; ++i) {
       split($i, field, "="); if (field[1] == name) return field[2]
@@ -139,10 +175,12 @@ sha256sum "$0" "$analyzer" "$source_file" "$program" "$jobs" "$expected" \
   "$output_dir/source-revision.txt" "$output_dir/summaries.txt" \
   "$output_dir"/*-results.txt "$output_dir"/*-bounds.txt \
   "$output_dir/unrounded-vs-padded-bounds.json" \
+  "$output_dir/sign-classification.tsv" \
   "$output_dir/phase-times.tsv" "$output_dir/one-time-costs.tsv" \
   "$output_dir"/*-resource.txt >"$output_dir/evidence.sha256"
 
 cat "$output_dir/phase-times.tsv"
+cat "$output_dir/sign-classification.tsv"
 cat "$output_dir/unrounded-vs-padded-bounds.json"
 printf '%s\n' \
   'CANDLE_NL_NATIVE_FIFTH_SIBLING_ROUNDING_FACTORIAL_OK DEVELOPMENT_NON_RELEASE'
