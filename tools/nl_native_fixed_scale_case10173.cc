@@ -8877,6 +8877,7 @@ int main(int argc, char** argv) {
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
                 << " [--historical-kernel-diagnostics]"
+                << " [--historical-kernel-reciprocal-diagnostics]"
                 << " [--historical-first-benchmark-repetitions=N]"
                 << " [--historical-second-benchmark-repetitions=N]"
                 << " [--historical-delta-block-diagnostics]"
@@ -8904,6 +8905,7 @@ int main(int argc, char** argv) {
     bool direct_delta_x4 = false;
     bool dihedral_identity_diagnostics = false;
     bool historical_kernel_diagnostics = false;
+    bool historical_kernel_reciprocal_diagnostics = false;
     std::size_t historical_first_benchmark_repetitions = 0;
     std::size_t historical_second_benchmark_repetitions = 0;
     bool historical_delta_block_diagnostics = false;
@@ -9090,6 +9092,9 @@ int main(int argc, char** argv) {
         dihedral_identity_diagnostics = true;
       } else if (option == "--historical-kernel-diagnostics") {
         historical_kernel_diagnostics = true;
+      } else if (option ==
+                 "--historical-kernel-reciprocal-diagnostics") {
+        historical_kernel_reciprocal_diagnostics = true;
       } else if (option.rfind(
                      "--historical-first-benchmark-repetitions=", 0) == 0) {
         historical_first_benchmark_repetitions =
@@ -9471,6 +9476,19 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "historical kernel diagnostics require the historical dihedral "
           "path");
+    }
+    if (historical_kernel_reciprocal_diagnostics &&
+        !kUseHistoricalDihedral) {
+      throw std::runtime_error(
+          "historical kernel reciprocal diagnostics require the historical "
+          "dihedral path");
+    }
+    if (historical_kernel_reciprocal_diagnostics &&
+        (!capture_reciprocal_certificates_path.empty() ||
+         !use_reciprocal_certificates_path.empty())) {
+      throw std::runtime_error(
+          "historical kernel reciprocal diagnostics cannot be combined "
+          "with whole-evaluation reciprocal certificate streams");
     }
     if (historical_first_benchmark_repetitions != 0 &&
         !kUseHistoricalDihedral) {
@@ -10443,6 +10461,34 @@ int main(int argc, char** argv) {
       for (std::size_t index = 0; index < jobs.size(); ++index) {
         print_historical_dihedral_kernel_diagnostic(index, jobs[index]);
       }
+    }
+    if (historical_kernel_reciprocal_diagnostics) {
+      kReciprocalCertificates.clear();
+      kCaptureReciprocalCertificates = true;
+      kReciprocalCertificateEvaluationActive = true;
+      for (std::size_t index = 0; index < jobs.size(); ++index) {
+        const std::size_t first_record = kReciprocalCertificates.size();
+        kReciprocalCertificateJob = index;
+        kReciprocalCertificateOrdinal = 0;
+        print_historical_dihedral_kernel_diagnostic(index, jobs[index]);
+        for (std::size_t record_index = first_record;
+             record_index < kReciprocalCertificates.size(); ++record_index) {
+          const ReciprocalCertificateRecord& record =
+              kReciprocalCertificates[record_index];
+          std::cout << "CANDLE_NL_NATIVE_HISTORICAL_RECIPROCAL"
+                    << " index=" << record.job_index
+                    << " ordinal=" << record.ordinal
+                    << " input="
+                    << integer_of_fixed(record.input.lower).get_str() << ":"
+                    << integer_of_fixed(record.input.upper).get_str()
+                    << " output="
+                    << integer_of_fixed(record.output.lower).get_str() << ":"
+                    << integer_of_fixed(record.output.upper).get_str()
+                    << "\n";
+        }
+      }
+      kReciprocalCertificateEvaluationActive = false;
+      kCaptureReciprocalCertificates = false;
     }
     if (historical_first_benchmark_repetitions != 0) {
       benchmark_historical_dihedral_first_order(
