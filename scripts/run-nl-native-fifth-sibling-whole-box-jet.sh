@@ -151,16 +151,16 @@ awk '
     }
   }
   FILENAME==ARGV[1] {
-    index=value("index"); upper=value("upper")
-    baseline[index]=(substr(upper,1,1)=="-"); next
+    idx=value("index"); upper=value("upper")
+    baseline[idx]=(substr(upper,1,1)=="-"); next
   }
   FILENAME==ARGV[2] {
-    index=value("index"); upper=value("upper")
+    idx=value("index"); upper=value("upper")
     candidate=(substr(upper,1,1)=="-")
-    baseline_negative+=baseline[index]
+    baseline_negative+=baseline[idx]
     candidate_negative+=candidate
-    if (baseline[index] && !candidate) lost++
-    if (!baseline[index] && candidate) gained++
+    if (baseline[idx] && !candidate) lost++
+    if (!baseline[idx] && candidate) gained++
   }
   END {
     print "baseline_negative\tcandidate_negative\tlost\tgained"
