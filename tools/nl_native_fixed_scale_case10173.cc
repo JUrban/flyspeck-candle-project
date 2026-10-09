@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <initializer_list>
 #include <iostream>
@@ -136,6 +137,7 @@ bool kUseHistoricalCenterTangent = false;
 bool kUseDirectSpecializedFunction = false;
 bool kUseDirectPreparedInputs = false;
 bool kUseWholeBoxJet = false;
+bool kUseWholeBoxPlan = false;
 bool kUseTightDihedralSqrtCertificates = false;
 bool kUseOptimizedDihedralUBounds = false;
 bool kUseComputedTightSqrtCertificates = false;
@@ -808,6 +810,27 @@ struct Program {
   // their authenticated logical role and coordinate.
   std::vector<std::size_t> source_dag_expression_ids;
   std::size_t source_dag_expression_count = 0;
+  enum class SourceDagPlanKind {
+    kPolynomial,
+    kSqrt,
+    kNeg,
+    kAdd,
+    kMul,
+    kSquare,
+    kInverse,
+    kAtan,
+    kPiHalf,
+  };
+  struct SourceDagPlanNode {
+    SourceDagPlanKind kind = SourceDagPlanKind::kPolynomial;
+    std::size_t outer_index = 0;
+    std::size_t left = 0;
+    std::size_t right = 0;
+    std::vector<std::size_t> sqrt_slots;
+    int historical_coordinate = -1;
+  };
+  std::vector<SourceDagPlanNode> source_dag_plan;
+  std::size_t source_dag_plan_root = 0;
   struct CoordinateSqrtTerm {
     bool active = false;
     std::size_t variable = 0;
@@ -4344,6 +4367,155 @@ void prepare_source_dag_cache(Program& program) {
     throw std::runtime_error("source DAG final stack drift");
   }
   program.source_dag_expression_count = identities.size();
+}
+
+void prepare_source_dag_plan(Program& program) {
+  using Kind = Program::SourceDagPlanKind;
+  if (program.source_dag_expression_ids.size() !=
+          program.instructions.size() ||
+      program.source_dag_expression_count == 0) {
+    throw std::runtime_error(
+        "compact source plan requires authenticated source DAG identities");
+  }
+
+  program.source_dag_plan.assign(
+      program.source_dag_expression_count, Program::SourceDagPlanNode{});
+  std::vector<bool> initialized(program.source_dag_expression_count, false);
+  std::vector<std::size_t> stack;
+  std::vector<std::size_t> outer_sqrt_slots(
+      program.instructions.size(), kSqrtSlots);
+  std::size_t sqrt_slot = 0;
+
+  const auto register_node =
+      [&program, &initialized](std::size_t identity, Kind kind,
+                               std::size_t outer_index,
+                               std::size_t left, std::size_t right) {
+        if (identity >= program.source_dag_plan.size()) {
+          throw std::runtime_error("compact source plan identity drift");
+        }
+        Program::SourceDagPlanNode& node =
+            program.source_dag_plan[identity];
+        if (!initialized[identity]) {
+          node.kind = kind;
+          node.outer_index = outer_index;
+          node.left = left;
+          node.right = right;
+          initialized[identity] = true;
+          return;
+        }
+        if (node.kind != kind || node.left != left || node.right != right) {
+          throw std::runtime_error(
+              "compact source plan structural identity collision");
+        }
+      };
+
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const std::size_t identity =
+        program.source_dag_expression_ids[outer_index];
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "compact source plan tag");
+      if (tag == 0) {
+        register_node(identity, Kind::kPolynomial, outer_index, 0, 0);
+        stack.push_back(identity);
+        continue;
+      }
+      if (tag != 1 || stack.empty() || sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error("compact source plan square-root drift");
+      }
+      const std::size_t child = stack.back();
+      stack.pop_back();
+      register_node(identity, Kind::kSqrt, outer_index, child, 0);
+      program.source_dag_plan[identity].sqrt_slots.push_back(sqrt_slot);
+      outer_sqrt_slots[outer_index] = sqrt_slot;
+      ++sqrt_slot;
+      stack.push_back(identity);
+      continue;
+    }
+
+    const unsigned long opcode = instruction.numeral.get_ui();
+    if (opcode == 8) {
+      register_node(identity, Kind::kPiHalf, outer_index, 0, 0);
+      stack.push_back(identity);
+      continue;
+    }
+    if (opcode == 2 || opcode == 5 || opcode == 6 || opcode == 7) {
+      if (stack.empty()) {
+        throw std::runtime_error("compact source plan unary stack drift");
+      }
+      const std::size_t child = stack.back();
+      stack.pop_back();
+      const Kind kind = opcode == 2 ? Kind::kNeg
+          : opcode == 5 ? Kind::kSquare
+          : opcode == 6 ? Kind::kInverse : Kind::kAtan;
+      register_node(identity, kind, outer_index, child, 0);
+      stack.push_back(identity);
+      continue;
+    }
+    if (opcode == 3 || opcode == 4) {
+      if (stack.size() < 2) {
+        throw std::runtime_error("compact source plan binary stack drift");
+      }
+      const std::size_t right = stack.back();
+      stack.pop_back();
+      const std::size_t left = stack.back();
+      stack.pop_back();
+      register_node(identity, opcode == 3 ? Kind::kAdd : Kind::kMul,
+                    outer_index, left, right);
+      stack.push_back(identity);
+      continue;
+    }
+    throw std::runtime_error("unknown compact source plan opcode");
+  }
+
+  if (sqrt_slot != kSqrtSlots || stack.size() != 1 ||
+      std::find(initialized.begin(), initialized.end(), false) !=
+          initialized.end()) {
+    throw std::runtime_error("compact source plan final shape drift");
+  }
+  program.source_dag_plan_root = stack.back();
+  if (kCaseId == 16594 &&
+      (program.source_dag_plan.size() != 76 ||
+       program.source_dag_plan_root != 75)) {
+    throw std::runtime_error(
+        "compact case16594 source plan identity drift");
+  }
+
+  std::size_t historical_chains = 0;
+  for (std::size_t outer_index = 0;
+       outer_index < program.specialized_delta_dihedral_chains.size();
+       ++outer_index) {
+    const Program::DeltaDihedralChain& chain =
+        program.specialized_delta_dihedral_chains[outer_index];
+    if (!chain.active) continue;
+    const std::size_t root_index = outer_index + 7;
+    const std::size_t sqrt_index = outer_index + 3;
+    if (root_index >= program.instructions.size() ||
+        sqrt_index >= program.instructions.size() ||
+        outer_sqrt_slots[sqrt_index] >= kSqrtSlots) {
+      throw std::runtime_error(
+          "compact source plan historical span drift");
+    }
+    const std::size_t root_identity =
+        program.source_dag_expression_ids[root_index];
+    Program::SourceDagPlanNode& root =
+        program.source_dag_plan[root_identity];
+    if (root.historical_coordinate >= 0) {
+      throw std::runtime_error(
+          "compact source plan historical root alias");
+    }
+    root.historical_coordinate =
+        static_cast<int>(chain.radicand_coordinate);
+    root.sqrt_slots = {outer_sqrt_slots[sqrt_index]};
+    ++historical_chains;
+  }
+  if (kCaseId == 16594 && historical_chains != 3) {
+    throw std::runtime_error(
+        "compact source plan historical coverage drift");
+  }
 }
 
 Program::SimplePolynomial classify_simple_polynomial(
@@ -8303,6 +8475,171 @@ Evaluation evaluate_job_whole_box(const Program& program, const Job& job) {
           counters};
 }
 
+Evaluation evaluate_job_whole_box_plan(const Program& program,
+                                       const Job& job) {
+  using Kind = Program::SourceDagPlanKind;
+  IntervalVector center_environment;
+  IntervalVector box_environment;
+  IntegerVector radii;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const Rat midpoint =
+        (job.lower[coordinate] + job.upper[coordinate]) / 2;
+    const Rat radius =
+        (job.upper[coordinate] - job.lower[coordinate]) / 2;
+    center_environment[coordinate] = interval_constant(midpoint);
+    box_environment[coordinate] = interval_of_q(
+        {job.lower[coordinate], job.upper[coordinate]});
+    radii[coordinate] = ceil_scaled(radius);
+    if (kUseTaylorReconstructedBox) {
+      box_environment[coordinate] = {
+          center_environment[coordinate].lower - radii[coordinate],
+          center_environment[coordinate].upper + radii[coordinate]};
+    }
+  }
+
+  if (!kUseSourceDagCache || program.source_dag_plan.empty() ||
+      program.source_dag_plan.size() !=
+          program.source_dag_expression_count ||
+      program.source_dag_plan_root >= program.source_dag_plan.size()) {
+    throw std::runtime_error(
+        "whole-box plan requires authenticated compact source data");
+  }
+
+  Counters counters;
+  std::vector<WholeBoxJet> results(program.source_dag_plan.size());
+  std::vector<unsigned char> state(program.source_dag_plan.size(), 0);
+  const auto same_rational_interval = [](const RationalInterval& left,
+                                         const RationalInterval& right) {
+    return left.lower == right.lower && left.upper == right.upper;
+  };
+  const auto same_interval = [](const Interval& left,
+                                const Interval& right) {
+    return left.lower == right.lower && left.upper == right.upper;
+  };
+
+  std::function<WholeBoxJet(std::size_t)> evaluate =
+      [&](std::size_t identity) -> WholeBoxJet {
+    if (identity >= program.source_dag_plan.size()) {
+      throw std::runtime_error("whole-box plan identity drift");
+    }
+    if (state[identity] == 2) {
+      ++counters.source_dag_cache_hits;
+      return results[identity];
+    }
+    if (state[identity] != 0) {
+      throw std::runtime_error("whole-box plan dependency cycle");
+    }
+    state[identity] = 1;
+    const Program::SourceDagPlanNode& node =
+        program.source_dag_plan[identity];
+    WholeBoxJet result;
+
+    if (kUseSpecializedDeltaHistoricalDihedrals &&
+        node.historical_coordinate >= 0) {
+      if (node.historical_coordinate >= 3 ||
+          node.sqrt_slots.size() != 1 ||
+          node.sqrt_slots[0] >= kSqrtSlots) {
+        throw std::runtime_error(
+            "whole-box plan historical role drift");
+      }
+      result = evaluate_permuted_historical_delta_dihedral_whole_box(
+          center_environment, box_environment,
+          static_cast<std::size_t>(node.historical_coordinate), counters);
+      counters.outer_steps += 8;
+    } else {
+      ++counters.outer_steps;
+      switch (node.kind) {
+        case Kind::kPolynomial: {
+          if (node.outer_index >= program.instructions.size()) {
+            throw std::runtime_error(
+                "whole-box plan polynomial index drift");
+          }
+          const Node& instruction = node_at(
+              program, program.instructions[node.outer_index]);
+          if (!instruction.is_pair ||
+              require_numeral(program, instruction.left,
+                              "whole-box plan polynomial tag") != 0) {
+            throw std::runtime_error(
+                "whole-box plan polynomial source drift");
+          }
+          result = evaluate_polynomial_whole_box(
+              program, instruction.right, center_environment,
+              box_environment, counters);
+          break;
+        }
+        case Kind::kSqrt: {
+          if (node.sqrt_slots.empty()) {
+            throw std::runtime_error(
+                "whole-box plan square-root slots missing");
+          }
+          const std::size_t slot = node.sqrt_slots.front();
+          if (slot >= kSqrtSlots) {
+            throw std::runtime_error(
+                "whole-box plan square-root slot drift");
+          }
+          for (const std::size_t repeated_slot : node.sqrt_slots) {
+            if (repeated_slot >= kSqrtSlots ||
+                !same_rational_interval(job.center_certificates[slot],
+                                        job.center_certificates[repeated_slot]) ||
+                !same_rational_interval(job.box_certificates[slot],
+                                        job.box_certificates[repeated_slot]) ||
+                !same_interval(job.fixed_center_certificates[slot],
+                               job.fixed_center_certificates[repeated_slot]) ||
+                !same_interval(job.fixed_box_certificates[slot],
+                               job.fixed_box_certificates[repeated_slot])) {
+              throw std::runtime_error(
+                  "whole-box plan square-root certificate mismatch");
+            }
+          }
+          result = whole_box_sqrt(
+              job.fixed_center_certificates[slot],
+              job.fixed_box_certificates[slot], evaluate(node.left),
+              counters);
+          break;
+        }
+        case Kind::kNeg:
+          result = whole_box_neg(evaluate(node.left));
+          break;
+        case Kind::kAdd:
+          result = whole_box_add(evaluate(node.left), evaluate(node.right));
+          break;
+        case Kind::kMul:
+          result = whole_box_mul(
+              evaluate(node.left), evaluate(node.right), counters);
+          break;
+        case Kind::kSquare: {
+          const WholeBoxJet value = evaluate(node.left);
+          result = whole_box_mul(value, value, counters);
+          break;
+        }
+        case Kind::kInverse:
+          result = whole_box_inverse(evaluate(node.left), counters);
+          break;
+        case Kind::kAtan:
+          result = whole_box_atan(evaluate(node.left), counters);
+          break;
+        case Kind::kPiHalf:
+          result = whole_box_pi_half();
+          break;
+      }
+    }
+    results[identity] = result;
+    state[identity] = 2;
+    ++counters.source_dag_cache_misses;
+    return result;
+  };
+
+  const WholeBoxJet root = evaluate(program.source_dag_plan_root);
+  if (!root.domain) {
+    throw std::runtime_error("final whole-box plan domain failure");
+  }
+  const TaylorResult result = complete_result(
+      radii, true, root.jet.center, root.jet.box_hessian, counters);
+  return {normalized_rat(integer_of_fixed(result.value_bound.upper),
+                         integer_of_fixed(kScale)),
+          counters};
+}
+
 Evaluation evaluate_job_compact(const Program& program, const Job& job,
                                 PolynomialMode polynomial_mode,
                                 int fused_polynomial_outer_index,
@@ -8476,6 +8813,7 @@ int main(int argc, char** argv) {
                 << " [--direct-specialized-function]"
                 << " [--direct-prepared-inputs]"
                 << " [--whole-box-jet]"
+                << " [--whole-box-plan]"
                 << " [--direct-stage-profile]"
                 << " [--historical-stage-profile]"
                 << " [--tight-dihedral-sqrt-certificates]"
@@ -8622,6 +8960,9 @@ int main(int argc, char** argv) {
         kUseDirectPreparedInputs = true;
       } else if (option == "--whole-box-jet") {
         kUseWholeBoxJet = true;
+      } else if (option == "--whole-box-plan") {
+        kUseWholeBoxJet = true;
+        kUseWholeBoxPlan = true;
       } else if (option == "--direct-stage-profile") {
         direct_stage_profile_enabled = true;
         kCountFixedQuotients = true;
@@ -9063,6 +9404,10 @@ int main(int argc, char** argv) {
           "whole-box jets cannot be combined with interpreter profiles, "
           "collapsed source instructions, or result diagnostics");
     }
+    if (kUseWholeBoxPlan && kCaseId != 16594) {
+      throw std::runtime_error(
+          "the first compact whole-box plan is pinned to case16594");
+    }
     if (kDeferAdditiveLeafCompletion &&
         (!kFuseConsecutiveAdds || !kUsePreparedSimplePolynomials ||
          !kUsePreparedCoordinateSqrtTerms ||
@@ -9246,6 +9591,9 @@ int main(int argc, char** argv) {
     if (kUseSourceDagCache) {
       prepare_source_dag_cache(program);
     }
+    if (kUseWholeBoxPlan) {
+      prepare_source_dag_plan(program);
+    }
     std::vector<Job> jobs = read_jobs(argv[2]);
     if (kUseFixedSqrtInverseKernels ||
         kUseSpecializedDeltaInverseRoots ||
@@ -9369,7 +9717,9 @@ int main(int argc, char** argv) {
       kAnalyticCertificateOrdinal = 0;
       Evaluation evaluation;
       try {
-        evaluation = kUseWholeBoxJet
+        evaluation = kUseWholeBoxPlan
+            ? evaluate_job_whole_box_plan(program, jobs[index])
+            : kUseWholeBoxJet
             ? evaluate_job_whole_box(program, jobs[index])
             : kUseDirectSpecializedFunction
             ? evaluate_direct_specialized_function(
@@ -9626,6 +9976,9 @@ int main(int argc, char** argv) {
               << " direct_prepared_inputs="
               << (kUseDirectPreparedInputs ? 1 : 0)
               << " whole_box_jet=" << (kUseWholeBoxJet ? 1 : 0)
+              << " whole_box_plan=" << (kUseWholeBoxPlan ? 1 : 0)
+              << " whole_box_plan_nodes="
+              << program.source_dag_plan.size()
               << " direct_stage_profile="
               << (direct_stage_profile_enabled ? 1 : 0)
               << " historical_stage_profile="
