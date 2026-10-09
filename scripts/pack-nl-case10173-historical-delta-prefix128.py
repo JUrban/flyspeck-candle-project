@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Pack the genuine case10173 prefix-128 historical delta transfer gate.
+"""Pack a genuine case10173 historical delta transfer gate.
 
 The native output is an untrusted development oracle.  The translated Candle
 program recomputes every result with checked bounded-word arithmetic and
 rejects any byte, shape, count, overflow, or result mismatch.
+
+The default remains the original prefix-128 fixture.  ``--cells 4173`` packs
+the complete authenticated batch from the independently matched full oracle.
 """
 
 from __future__ import annotations
@@ -19,11 +22,11 @@ import struct
 EXPECTED_JOBS_SHA256 = (
     "c03587283858e7ed3f60ba90909e542a7186707a0f45f702249af57e73920afb"
 )
-EXPECTED_ORACLE_SHA256 = (
-    "fda77d3d844e703324585a1c9e1ef86651c343dcab8a31344df303fab29ffc05"
-)
+EXPECTED_ORACLE_SHA256 = {
+    128: "fda77d3d844e703324585a1c9e1ef86651c343dcab8a31344df303fab29ffc05",
+    4173: "888aa093ab67f440f35336a128d52221ef5502db7e5172a2a402951d73ed57c5",
+}
 MAGIC = b"CNLHDB01"
-CELL_COUNT = 128
 SCALE = 1 << 40
 WORD_LIMIT = 1 << 64
 ORACLE_PATTERN = re.compile(
@@ -59,12 +62,12 @@ def signed_endpoint(value: int, context: str) -> bytes:
     return struct.pack("<BQ", int(value < 0), magnitude)
 
 
-def load_boxes(payload: bytes) -> list[list[tuple[int, int]]]:
+def load_boxes(payload: bytes, cell_count: int) -> list[list[tuple[int, int]]]:
     rows = payload.decode("ascii").splitlines()
     if len(rows) != 4173:
         raise ValueError(f"job count drift: {len(rows)}")
     boxes: list[list[tuple[int, int]]] = []
-    for expected_index, row in enumerate(rows[:CELL_COUNT]):
+    for expected_index, row in enumerate(rows[:cell_count]):
         fields = row.split("\t")
         if len(fields) != 5 or int(fields[0]) != expected_index:
             raise ValueError(f"malformed job row {expected_index}")
@@ -87,9 +90,9 @@ def load_boxes(payload: bytes) -> list[list[tuple[int, int]]]:
     return boxes
 
 
-def load_oracle(payload: bytes) -> list[tuple[int, int]]:
+def load_oracle(payload: bytes, cell_count: int) -> list[tuple[int, int]]:
     rows = payload.decode("ascii").splitlines()
-    if len(rows) != CELL_COUNT:
+    if len(rows) != cell_count:
         raise ValueError(f"oracle count drift: {len(rows)}")
     result: list[tuple[int, int]] = []
     for expected_index, row in enumerate(rows):
@@ -109,28 +112,34 @@ def main() -> None:
     parser.add_argument("jobs", type=Path)
     parser.add_argument("oracle", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument(
+        "--cells", type=int, choices=sorted(EXPECTED_ORACLE_SHA256), default=128
+    )
     args = parser.parse_args()
 
     boxes = load_boxes(
-        authenticated_bytes(args.jobs, EXPECTED_JOBS_SHA256, "jobs")
+        authenticated_bytes(args.jobs, EXPECTED_JOBS_SHA256, "jobs"), args.cells
     )
     oracle = load_oracle(
-        authenticated_bytes(args.oracle, EXPECTED_ORACLE_SHA256, "oracle")
+        authenticated_bytes(
+            args.oracle, EXPECTED_ORACLE_SHA256[args.cells], "oracle"
+        ),
+        args.cells,
     )
 
     output = bytearray(MAGIC)
-    output.extend(struct.pack("<I", CELL_COUNT))
+    output.extend(struct.pack("<I", args.cells))
     for index, (box, expected) in enumerate(zip(boxes, oracle)):
         for lower, upper in box:
             output.extend(struct.pack("<QQ", lower, upper))
         output.extend(signed_endpoint(expected[0], f"oracle {index} lower"))
         output.extend(signed_endpoint(expected[1], f"oracle {index} upper"))
 
-    expected_size = len(MAGIC) + 4 + CELL_COUNT * (6 * 16 + 18)
+    expected_size = len(MAGIC) + 4 + args.cells * (6 * 16 + 18)
     if len(output) != expected_size:
         raise AssertionError(f"packed size drift: {len(output)} != {expected_size}")
     args.output.write_bytes(output)
-    print(f"cells={CELL_COUNT}")
+    print(f"cells={args.cells}")
     print(f"bytes={len(output)}")
     print(f"sha256={hashlib.sha256(output).hexdigest()}")
 
