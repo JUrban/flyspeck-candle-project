@@ -89,12 +89,12 @@ for lane in padded unrounded; do
   rg '^CANDLE_NL_NATIVE_FIXED_SCALE_RESULT' "$output_dir/$lane-results.txt" \
     >"$output_dir/$lane-bounds.txt"
   [[ $(wc -l <"$output_dir/$lane-bounds.txt") -eq 1344 ]]
-  rg -q '^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY cells=1344 backend=double-integer .*specialized_delta_historical_dihedrals=1 specialized_delta_dihedral_chain_count=3 .*domain_failure_subdivisions=84 representation_failure_subdivisions=0 .*accepted=682 ' \
+  rg -q '^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY cells=1344 backend=double-integer .*specialized_delta_historical_dihedrals=1 specialized_delta_dihedral_chain_count=3 .*domain_failure_subdivisions=84 .*accepted=682 ' \
     "$output_dir/$lane-results.txt"
 done
-rg -q '^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY .*unsafe_unrounded_hardware=0 ' \
+rg -q '^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY .*unsafe_unrounded_hardware=0 .*representation_failure_subdivisions=1 ' \
   "$output_dir/padded-results.txt"
-rg -q '^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY .*unsafe_unrounded_hardware=1 ' \
+rg -q '^CANDLE_NL_NATIVE_FIXED_SCALE_SUMMARY .*unsafe_unrounded_hardware=1 .*representation_failure_subdivisions=0 ' \
   "$output_dir/unrounded-results.txt"
 
 "$analyzer" "$output_dir/padded-results.txt" \
