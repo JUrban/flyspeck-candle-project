@@ -144,7 +144,7 @@ void validate_streaming_partition(
   }
 }
 
-void configure_streaming_lane(bool historical) {
+void configure_streaming_lane(bool historical, bool coordinate_sqrt_values) {
   Integer binary_scale = 1;
   mpz_mul_2exp(binary_scale.get_mpz_t(), binary_scale.get_mpz_t(), 40);
   kScale = fixed_of_integer(binary_scale);
@@ -162,12 +162,15 @@ void configure_streaming_lane(bool historical) {
   kUseSourceDagCache = true;
   kUseComputedTightSqrtCertificates = true;
   kUseSpecializedDeltaHistoricalDihedrals = historical;
+  kUsePreparedCoordinateSqrtValues = coordinate_sqrt_values;
 }
 
-Program prepare_streaming_program(const char* path, bool historical) {
-  configure_streaming_lane(historical);
+Program prepare_streaming_program(const char* path, bool historical,
+                                  bool coordinate_sqrt_values) {
+  configure_streaming_lane(historical, coordinate_sqrt_values);
   Program program = read_program(path);
   prepare_simple_polynomials(program);
+  if (coordinate_sqrt_values) prepare_coordinate_sqrt_values(program);
   prepare_specialized_delta_radicands(program);
   prepare_specialized_delta_derivatives(program);
   if (historical) prepare_specialized_delta_dihedral_chains(program);
@@ -181,14 +184,17 @@ int main(int argc, char** argv) {
   try {
     if (argc != 5) {
       std::cerr << "usage: " << argv[0]
-                << " PROGRAM.cval JOBS.tsv TOPOLOGY.tsv dag|historical\n";
+                << " PROGRAM.cval JOBS.tsv TOPOLOGY.tsv "
+                << "dag|historical|historical-coordinate\n";
       return 2;
     }
     const std::string lane(argv[4]);
-    if (lane != "dag" && lane != "historical") {
+    if (lane != "dag" && lane != "historical" &&
+        lane != "historical-coordinate") {
       throw std::runtime_error("unknown streaming lane");
     }
-    const bool historical = lane == "historical";
+    const bool historical = lane != "dag";
+    const bool coordinate_sqrt_values = lane == "historical-coordinate";
     const auto total_begin = std::chrono::steady_clock::now();
 
     const auto input_begin = std::chrono::steady_clock::now();
@@ -200,7 +206,8 @@ int main(int argc, char** argv) {
     const auto input_end = std::chrono::steady_clock::now();
 
     const auto preparation_begin = std::chrono::steady_clock::now();
-    Program program = prepare_streaming_program(argv[1], historical);
+    Program program = prepare_streaming_program(
+        argv[1], historical, coordinate_sqrt_values);
     const auto preparation_end = std::chrono::steady_clock::now();
 
     std::vector<std::unique_ptr<Job>> parsed_jobs(nodes.size());

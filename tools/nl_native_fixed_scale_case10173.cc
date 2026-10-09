@@ -127,6 +127,7 @@ bool kUsePreparedSimplePolynomials = false;
 bool kCacheSimpleLeafResults = false;
 bool kUseSourceDagCache = false;
 bool kUsePreparedCoordinateSqrtTerms = false;
+bool kUsePreparedCoordinateSqrtValues = false;
 bool kUsePreparedDihedralChain = false;
 bool kUseSpecializedDihedralIdentities = false;
 bool kUseHistoricalDihedral = false;
@@ -808,6 +809,12 @@ struct Program {
     std::size_t sqrt_slot = 0;
   };
   std::vector<CoordinateSqrtTerm> prepared_coordinate_sqrt_terms;
+  struct CoordinateSqrtValue {
+    bool active = false;
+    std::size_t variable = 0;
+    std::size_t sqrt_slot = 0;
+  };
+  std::vector<CoordinateSqrtValue> prepared_coordinate_sqrt_values;
   bool prepared_dihedral_chain = false;
   bool direct_fixed_plan_prepared = false;
   Interval direct_fixed_constant{};
@@ -2790,6 +2797,51 @@ TaylorResult result_scaled_coordinate_sqrt_fixed_with_coefficient(
       : complete_result(radii, domain, center, hessian, counters);
 }
 
+TaylorResult result_coordinate_sqrt_fixed(
+    const IntegerVector& radii, const Interval& center_certificate,
+    const Interval& box_certificate,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, std::size_t variable,
+    Counters& counters) {
+  if (variable >= kDimensions) {
+    throw std::runtime_error(
+        "coordinate sqrt value variable outside environment");
+  }
+  ++counters.sqrt_steps;
+  const Interval center_sqrt = kUseComputedTightSqrtCertificates
+      ? fixed_sqrt_enclosure(center_environment[variable])
+      : center_certificate;
+  const Interval box_sqrt = kUseComputedTightSqrtCertificates
+      ? fixed_sqrt_enclosure(box_environment[variable])
+      : box_certificate;
+  const Interval center_twice = interval_integer_scale(2, center_sqrt);
+  const Interval box_twice = interval_integer_scale(2, box_sqrt);
+  const Interval input_twice = interval_integer_scale(
+      2, box_environment[variable]);
+  const bool domain =
+      fixed_sqrt_certificate(center_environment[variable], center_sqrt) &&
+      fixed_sqrt_certificate(box_environment[variable], box_sqrt) &&
+      fixed_interval_not_zero(center_twice) &&
+      fixed_interval_not_zero(box_twice);
+  if (!domain) {
+    throw std::runtime_error("prepared coordinate sqrt value domain failure");
+  }
+  const Interval dd_denominator = interval_mul(
+      box_twice, input_twice, counters);
+  if (!fixed_interval_not_zero(dd_denominator)) {
+    throw std::runtime_error(
+        "prepared coordinate sqrt value second derivative domain failure");
+  }
+  const Interval center_d = fixed_interval_inv(center_twice);
+  const Interval box_dd = interval_neg(fixed_interval_inv(dd_denominator));
+  IntervalVector center_gradient = zero_vector();
+  center_gradient[variable] = center_d;
+  IntervalMatrix hessian = zero_matrix();
+  hessian[variable][variable] = box_dd;
+  return complete_result(
+      radii, domain, {center_sqrt, center_gradient}, hessian, counters);
+}
+
 TaylorResult result_scaled_coordinate_sqrt_fixed(
     const IntegerVector& radii, const Interval& center_certificate,
     const Interval& box_certificate,
@@ -4261,6 +4313,44 @@ void prepare_coordinate_sqrt_terms(Program& program) {
     term.coefficient = coefficient.constant;
     term.sqrt_slot = sqrt_slot;
     program.prepared_coordinate_sqrt_terms[outer_index] = term;
+  }
+}
+
+void prepare_coordinate_sqrt_values(Program& program) {
+  using Kind = Program::SimplePolynomialKind;
+  if (program.prepared_simple_polynomials.size() !=
+      program.instructions.size()) {
+    throw std::runtime_error(
+        "coordinate sqrt-value preparation requires simple polynomials");
+  }
+  program.prepared_coordinate_sqrt_values.assign(
+      program.instructions.size(), Program::CoordinateSqrtValue());
+  std::size_t sqrt_slot = 0;
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const Node& instruction = node_at(
+        program, program.instructions[outer_index]);
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "coordinate sqrt-value tag");
+      if (tag == 1) ++sqrt_slot;
+    }
+    if (outer_index + 1 >= program.instructions.size()) continue;
+    const Program::SimplePolynomial& input =
+        program.prepared_simple_polynomials[outer_index];
+    if (input.kind != Kind::kVariable) continue;
+    const Node& sqrt_instruction = node_at(
+        program, program.instructions[outer_index + 1]);
+    if (!sqrt_instruction.is_pair ||
+        require_numeral(program, sqrt_instruction.left,
+                        "coordinate sqrt-value operation tag") != 1) {
+      continue;
+    }
+    Program::CoordinateSqrtValue value;
+    value.active = true;
+    value.variable = input.variable;
+    value.sqrt_slot = sqrt_slot;
+    program.prepared_coordinate_sqrt_values[outer_index] = value;
   }
 }
 
@@ -6992,6 +7082,67 @@ Evaluation evaluate_job(const Program& program, const Job& job,
       rounding_begin = std::chrono::steady_clock::now();
     }
     std::string rounding_label;
+    const Program::CoordinateSqrtValue* coordinate_sqrt_value =
+        program.prepared_coordinate_sqrt_values.empty()
+            ? nullptr
+            : &program.prepared_coordinate_sqrt_values.at(outer_index);
+    if (kUsePreparedCoordinateSqrtValues &&
+        coordinate_sqrt_value != nullptr && coordinate_sqrt_value->active) {
+      const std::size_t used_slot = coordinate_sqrt_value->sqrt_slot;
+      if (sqrt_slot != used_slot || sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error("prepared coordinate sqrt value slot drift");
+      }
+      const TaylorResult candidate = result_coordinate_sqrt_fixed(
+          radii, job.fixed_center_certificates[used_slot],
+          job.fixed_box_certificates[used_slot], center_environment,
+          box_environment, coordinate_sqrt_value->variable, counters);
+      if (kVerifyFixedKernelEnclosures) {
+        Counters reference_counters;
+        const TaylorResult variable = result_variable(
+            radii, center_environment, coordinate_sqrt_value->variable,
+            reference_counters);
+        const TaylorResult reference = result_sqrt_fixed(
+            radii, job.fixed_center_certificates[used_slot],
+            job.fixed_box_certificates[used_slot], variable,
+            reference_counters);
+        require_result_contains(
+            candidate, reference, "prepared-coordinate-sqrt-value");
+        require_result_contains(
+            reference, candidate, "prepared-coordinate-sqrt-value-reverse");
+      }
+      stack.push_back(candidate);
+      if (kUseSourceDagCache) {
+        const std::size_t final_index = outer_index + 1;
+        const std::size_t identity =
+            program.source_dag_expression_ids.at(final_index);
+        if (source_dag_result_ready.at(identity)) {
+          throw std::runtime_error(
+              "coordinate sqrt value source DAG identity reused");
+        }
+        source_dag_results.at(identity) = candidate;
+        source_dag_result_ready.at(identity) = true;
+        source_dag_sqrt_certificate_ready.at(identity) = true;
+        source_dag_center_certificates.at(identity) =
+            job.center_certificates[used_slot];
+        source_dag_box_certificates.at(identity) =
+            job.box_certificates[used_slot];
+        source_dag_fixed_center_certificates.at(identity) =
+            job.fixed_center_certificates[used_slot];
+        source_dag_fixed_box_certificates.at(identity) =
+            job.fixed_box_certificates[used_slot];
+        ++counters.source_dag_cache_misses;
+      }
+      ++sqrt_slot;
+      counters.outer_steps += 2;
+      if (rounding_profiles != nullptr) {
+        record_rounding_profile(
+            rounding_profiles, outer_index + 1,
+            "prepared_coordinate_sqrt_value", rounding_floor_before,
+            rounding_ceil_before, rounding_begin);
+      }
+      ++outer_index;
+      continue;
+    }
     const Program::CoordinateSqrtTerm* coordinate_sqrt_term =
         program.prepared_coordinate_sqrt_terms.empty()
             ? nullptr
@@ -7817,6 +7968,7 @@ int main(int argc, char** argv) {
                 << " [--cache-simple-leaf-results]"
                 << " [--source-dag-cache]"
                 << " [--prepared-coordinate-sqrt-terms]"
+                << " [--prepared-coordinate-sqrt-values]"
                 << " [--prepared-dihedral-chain]"
                 << " [--specialized-dihedral-identities]"
                 << " [--historical-dihedral]"
@@ -7952,6 +8104,8 @@ int main(int argc, char** argv) {
         kUseSourceDagCache = true;
       } else if (option == "--prepared-coordinate-sqrt-terms") {
         kUsePreparedCoordinateSqrtTerms = true;
+      } else if (option == "--prepared-coordinate-sqrt-values") {
+        kUsePreparedCoordinateSqrtValues = true;
       } else if (option == "--prepared-dihedral-chain") {
         kUsePreparedDihedralChain = true;
       } else if (option == "--specialized-dihedral-identities") {
@@ -8219,8 +8373,14 @@ int main(int argc, char** argv) {
           "full stage diagnostics are not implemented for compact support "
           "jets");
     }
-    if (kUsePreparedCoordinateSqrtTerms) {
+    if (kUsePreparedCoordinateSqrtTerms ||
+        kUsePreparedCoordinateSqrtValues) {
       kUsePreparedSimplePolynomials = true;
+    }
+    if (kUsePreparedCoordinateSqrtTerms &&
+        kUsePreparedCoordinateSqrtValues) {
+      throw std::runtime_error(
+          "conflicting prepared coordinate sqrt modes");
     }
     if (profile_enabled && kUseCompactSupportJets) {
       throw std::runtime_error(
@@ -8230,6 +8390,11 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "instruction profiling is not implemented for prepared coordinate "
           "sqrt terms");
+    }
+    if (profile_enabled && kUsePreparedCoordinateSqrtValues) {
+      throw std::runtime_error(
+          "instruction profiling is not implemented for prepared coordinate "
+          "sqrt values");
     }
     if (profile_enabled && kUsePreparedDihedralChain) {
       throw std::runtime_error(
@@ -8263,6 +8428,11 @@ int main(int argc, char** argv) {
         !kUseFixedSqrtInverseKernels) {
       throw std::runtime_error(
           "prepared coordinate sqrt terms require fixed sqrt kernels");
+    }
+    if (kUsePreparedCoordinateSqrtValues &&
+        !kUseFixedSqrtInverseKernels) {
+      throw std::runtime_error(
+          "prepared coordinate sqrt values require fixed sqrt kernels");
     }
     if (kCacheSimpleLeafResults && !kUsePreparedSimplePolynomials) {
       throw std::runtime_error(
@@ -8521,6 +8691,9 @@ int main(int argc, char** argv) {
     if (kUsePreparedCoordinateSqrtTerms) {
       prepare_coordinate_sqrt_terms(program);
     }
+    if (kUsePreparedCoordinateSqrtValues) {
+      prepare_coordinate_sqrt_values(program);
+    }
     if (kDeferAdditiveLeafCompletion) {
       validate_deferred_additive_source(program);
     }
@@ -8593,6 +8766,11 @@ int main(int argc, char** argv) {
     for (const Program::CoordinateSqrtTerm& term :
          program.prepared_coordinate_sqrt_terms) {
       if (term.active) ++prepared_coordinate_sqrt_term_count;
+    }
+    std::size_t prepared_coordinate_sqrt_value_count = 0;
+    for (const Program::CoordinateSqrtValue& value :
+         program.prepared_coordinate_sqrt_values) {
+      if (value.active) ++prepared_coordinate_sqrt_value_count;
     }
     std::size_t prepared_polynomial_instruction_count = 0;
     for (const std::vector<Program::PreparedPolynomialInstruction>&
@@ -8903,6 +9081,10 @@ int main(int argc, char** argv) {
               << (kUsePreparedCoordinateSqrtTerms ? 1 : 0)
               << " prepared_coordinate_sqrt_term_count="
               << prepared_coordinate_sqrt_term_count
+              << " prepared_coordinate_sqrt_values="
+              << (kUsePreparedCoordinateSqrtValues ? 1 : 0)
+              << " prepared_coordinate_sqrt_value_count="
+              << prepared_coordinate_sqrt_value_count
               << " prepared_dihedral_chain="
               << (kUsePreparedDihedralChain ? 1 : 0)
               << " specialized_dihedral_identities="
