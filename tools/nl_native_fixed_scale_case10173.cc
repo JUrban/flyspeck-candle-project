@@ -135,6 +135,7 @@ bool kUseHistoricalBlockRounding = false;
 bool kUseHistoricalCenterTangent = false;
 bool kUseDirectSpecializedFunction = false;
 bool kUseDirectPreparedInputs = false;
+bool kUseWholeBoxJet = false;
 bool kUseTightDihedralSqrtCertificates = false;
 bool kUseOptimizedDihedralUBounds = false;
 bool kUseComputedTightSqrtCertificates = false;
@@ -452,6 +453,11 @@ struct PolynomialJet {
   Interval box_value;
   IntervalVector box_gradient;
   IntervalMatrix box_hessian;
+};
+
+struct WholeBoxJet {
+  bool domain = true;
+  PolynomialJet jet;
 };
 
 struct SecondOrderBox {
@@ -3016,6 +3022,170 @@ TaylorResult result_pi_half(const IntegerVector& radii, Counters& counters) {
                          zero_matrix(), counters);
 }
 
+WholeBoxJet whole_box_constant(const Rat& value) {
+  return {true, polynomial_constant(value)};
+}
+
+WholeBoxJet whole_box_variable(
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, std::size_t variable) {
+  return {true, polynomial_variable(
+      center_environment, box_environment, variable)};
+}
+
+WholeBoxJet whole_box_neg(const WholeBoxJet& value) {
+  return {value.domain, polynomial_neg(value.jet)};
+}
+
+WholeBoxJet whole_box_add(const WholeBoxJet& left,
+                          const WholeBoxJet& right) {
+  return {left.domain && right.domain,
+          polynomial_add(left.jet, right.jet)};
+}
+
+WholeBoxJet whole_box_mul(const WholeBoxJet& left,
+                          const WholeBoxJet& right,
+                          Counters& counters) {
+  return {left.domain && right.domain,
+          polynomial_mul(left.jet, right.jet, counters)};
+}
+
+WholeBoxJet whole_box_inverse(const WholeBoxJet& value,
+                              Counters& counters) {
+  ++counters.inverse_steps;
+  const bool domain = value.domain &&
+      fixed_interval_not_zero(value.jet.center.value) &&
+      fixed_interval_not_zero(value.jet.box_value);
+  if (!domain) throw std::runtime_error("whole-box inverse domain failure");
+
+  const Interval center_r = fixed_interval_inv(value.jet.center.value);
+  const Interval center_r2 = interval_mul(center_r, center_r, counters);
+  const FirstJet center = {
+      center_r,
+      interval_vector_scale(
+          interval_neg(center_r2), value.jet.center.gradient, counters)};
+
+  const Interval box_r = fixed_interval_inv(value.jet.box_value);
+  const Interval box_r2 = interval_mul(box_r, box_r, counters);
+  const Interval box_r3 = interval_mul(box_r2, box_r, counters);
+  const Interval box_d = interval_neg(box_r2);
+  const Interval box_dd = interval_add(box_r3, box_r3);
+  const IntervalVector box_gradient = interval_vector_scale(
+      box_d, value.jet.box_gradient, counters);
+  const IntervalMatrix box_hessian = matrix_add(
+      interval_matrix_scale(box_d, value.jet.box_hessian, counters),
+      interval_matrix_scale(
+          box_dd,
+          interval_self_outer(value.jet.box_gradient, counters), counters));
+  capture_inverse_analytic_certificate(center_r, box_r);
+  return {domain, {center, box_r, box_gradient, box_hessian}};
+}
+
+WholeBoxJet whole_box_sqrt(
+    const Interval& center_certificate, const Interval& box_certificate,
+    const WholeBoxJet& value, Counters& counters) {
+  ++counters.sqrt_steps;
+  const Interval center_sqrt = kUseComputedTightSqrtCertificates
+      ? fixed_sqrt_enclosure(value.jet.center.value)
+      : center_certificate;
+  const Interval box_sqrt = kUseComputedTightSqrtCertificates
+      ? fixed_sqrt_enclosure(value.jet.box_value)
+      : box_certificate;
+  const Interval center_twice = interval_integer_scale(2, center_sqrt);
+  const Interval box_twice = interval_integer_scale(2, box_sqrt);
+  const Interval input_twice = interval_integer_scale(
+      2, value.jet.box_value);
+  const bool domain = value.domain &&
+      fixed_sqrt_certificate(value.jet.center.value, center_sqrt) &&
+      fixed_sqrt_certificate(value.jet.box_value, box_sqrt) &&
+      fixed_interval_not_zero(center_twice) &&
+      fixed_interval_not_zero(box_twice);
+  if (!domain) throw std::runtime_error("whole-box sqrt domain failure");
+
+  const Interval center_d = fixed_interval_inv(center_twice);
+  const FirstJet center = {
+      center_sqrt,
+      interval_vector_scale(
+          center_d, value.jet.center.gradient, counters)};
+  const Interval box_d = fixed_interval_inv(box_twice);
+  const Interval dd_denominator = interval_mul(
+      box_twice, input_twice, counters);
+  if (!fixed_interval_not_zero(dd_denominator)) {
+    throw std::runtime_error(
+        "whole-box sqrt second derivative domain failure");
+  }
+  const Interval box_second_reciprocal =
+      fixed_interval_inv(dd_denominator);
+  const Interval box_dd = interval_neg(box_second_reciprocal);
+  const IntervalVector box_gradient = interval_vector_scale(
+      box_d, value.jet.box_gradient, counters);
+  const IntervalMatrix box_hessian = matrix_add(
+      interval_matrix_scale(
+          box_dd,
+          interval_self_outer(value.jet.box_gradient, counters), counters),
+      interval_matrix_scale(box_d, value.jet.box_hessian, counters));
+  capture_sqrt_analytic_certificate(
+      center_sqrt, box_sqrt, center_d, box_d, box_second_reciprocal);
+  return {domain,
+          {center, box_sqrt, box_gradient, box_hessian}};
+}
+
+WholeBoxJet whole_box_atan(const WholeBoxJet& value,
+                           Counters& counters) {
+  ++counters.atan_steps;
+  const Interval center_denominator = interval_add(
+      one_interval(), fixed_interval_square(value.jet.center.value, counters));
+  const Interval box_denominator = interval_add(
+      one_interval(), fixed_interval_square(value.jet.box_value, counters));
+  const bool arguments_supported =
+      absolute(value.jet.center.value.lower) != kScale &&
+      absolute(value.jet.center.value.upper) != kScale &&
+      absolute(value.jet.box_value.lower) != kScale &&
+      absolute(value.jet.box_value.upper) != kScale;
+  const bool domain = value.domain && arguments_supported &&
+      fixed_interval_not_zero(center_denominator) &&
+      fixed_interval_not_zero(box_denominator);
+  if (!domain) throw std::runtime_error("whole-box atan domain failure");
+
+  const Interval center_d = fixed_interval_inv(center_denominator);
+  bool lower_range_present = false;
+  bool upper_range_present = false;
+  Interval lower_range_reciprocal = zero_fixed_interval();
+  Interval upper_range_reciprocal = zero_fixed_interval();
+  const Interval center_value = fixed_atan_range_interval(
+      value.jet.center.value, counters,
+      &lower_range_present, &lower_range_reciprocal,
+      &upper_range_present, &upper_range_reciprocal);
+  const FirstJet center = {
+      center_value,
+      interval_vector_scale(
+          center_d, value.jet.center.gradient, counters)};
+
+  const Interval box_d = fixed_interval_inv(box_denominator);
+  const Interval box_d2 = interval_mul(box_d, box_d, counters);
+  const Interval box_dd = interval_neg(interval_mul(
+      interval_add(value.jet.box_value, value.jet.box_value), box_d2,
+      counters));
+  const Interval box_value = fixed_atan_range_interval(
+      value.jet.box_value, counters);
+  const IntervalVector box_gradient = interval_vector_scale(
+      box_d, value.jet.box_gradient, counters);
+  const IntervalMatrix box_hessian = matrix_add(
+      interval_matrix_scale(
+          box_dd,
+          interval_self_outer(value.jet.box_gradient, counters), counters),
+      interval_matrix_scale(box_d, value.jet.box_hessian, counters));
+  capture_atan_analytic_certificate(
+      lower_range_present, lower_range_reciprocal,
+      upper_range_present, upper_range_reciprocal, center_d, box_d);
+  return {domain, {center, box_value, box_gradient, box_hessian}};
+}
+
+WholeBoxJet whole_box_pi_half() {
+  const Interval value = interval_of_q({kPiHalfLower, kPiHalfUpper});
+  return {true, {{value, zero_vector()}, value, zero_vector(), zero_matrix()}};
+}
+
 bool interval_is_zero(const Interval& value) {
   return value.lower == 0 && value.upper == 0;
 }
@@ -4657,6 +4827,67 @@ TaylorResult evaluate_polynomial_fused(
                          stack.back().box_hessian, counters);
 }
 
+WholeBoxJet evaluate_polynomial_whole_box(
+    const Program& program, std::size_t payload,
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment, Counters& counters) {
+  std::vector<WholeBoxJet> stack;
+  const std::vector<std::size_t> instructions =
+      decode_list(program, payload, "whole-box polynomial program");
+  for (const std::size_t instruction_index : instructions) {
+    ++counters.polynomial_steps;
+    const Node& instruction = node_at(program, instruction_index);
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "whole-box polynomial tag");
+      if (tag == 0) {
+        stack.push_back(whole_box_constant(
+            decode_q(program, instruction.right)));
+      } else if (tag == 1) {
+        const Integer variable = require_numeral(
+            program, instruction.right, "whole-box polynomial variable");
+        stack.push_back(whole_box_variable(
+            center_environment, box_environment, variable.get_ui()));
+      } else {
+        throw std::runtime_error(
+            "unknown whole-box polynomial pair instruction");
+      }
+      continue;
+    }
+
+    const unsigned long opcode = instruction.numeral.get_ui();
+    if (opcode == 2 || opcode == 5) {
+      if (stack.empty()) {
+        throw std::runtime_error("whole-box polynomial stack underflow");
+      }
+      WholeBoxJet value = stack.back();
+      stack.pop_back();
+      stack.push_back(opcode == 2
+                          ? whole_box_neg(value)
+                          : whole_box_mul(value, value, counters));
+    } else if (opcode == 3 || opcode == 4) {
+      if (stack.size() < 2) {
+        throw std::runtime_error("whole-box polynomial stack underflow");
+      }
+      WholeBoxJet right = stack.back();
+      stack.pop_back();
+      WholeBoxJet left = stack.back();
+      stack.pop_back();
+      stack.push_back(opcode == 3
+                          ? whole_box_add(left, right)
+                          : whole_box_mul(left, right, counters));
+    } else {
+      throw std::runtime_error(
+          "unknown whole-box polynomial scalar instruction");
+    }
+  }
+  if (stack.size() != 1) {
+    throw std::runtime_error(
+        "whole-box polynomial result stack drift");
+  }
+  return stack.back();
+}
+
 IntervalMatrix polynomial_pair_products(const IntervalVector& values,
                                         Counters& counters) {
   IntervalMatrix products = zero_matrix();
@@ -6006,6 +6237,52 @@ TaylorResult evaluate_permuted_historical_delta_dihedral(
     for (std::size_t column = 0; column < kDimensions; ++column) {
       result.hessian[permutation[row]][permutation[column]] =
           canonical.hessian[row][column];
+    }
+  }
+  return result;
+}
+
+WholeBoxJet evaluate_permuted_historical_delta_dihedral_whole_box(
+    const IntervalVector& center_environment,
+    const IntervalVector& box_environment,
+    std::size_t radicand_coordinate, Counters& counters) {
+  if (radicand_coordinate >= 3) {
+    throw std::runtime_error(
+        "whole-box historical delta dihedral coordinate drift");
+  }
+  constexpr std::array<std::array<std::size_t, kDimensions>, 3>
+      kPermutations = {{
+          {{0, 1, 2, 3, 4, 5}},
+          {{1, 0, 2, 4, 3, 5}},
+          {{2, 1, 0, 5, 4, 3}},
+      }};
+  const std::array<std::size_t, kDimensions>& permutation =
+      kPermutations[radicand_coordinate];
+  IntervalVector canonical_center;
+  IntervalVector canonical_box;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    canonical_center[coordinate] =
+        center_environment[permutation[coordinate]];
+    canonical_box[coordinate] =
+        box_environment[permutation[coordinate]];
+  }
+
+  const FirstJet canonical_center_jet = historical_dihedral_first_order(
+      canonical_center, counters);
+  const SecondOrderBox canonical_box_jet =
+      historical_dihedral_second_order(
+          canonical_box, true, counters);
+  WholeBoxJet result;
+  result.jet.center.value = canonical_center_jet.value;
+  result.jet.box_value = canonical_box_jet.value;
+  for (std::size_t row = 0; row < kDimensions; ++row) {
+    result.jet.center.gradient[permutation[row]] =
+        canonical_center_jet.gradient[row];
+    result.jet.box_gradient[permutation[row]] =
+        canonical_box_jet.gradient[row];
+    for (std::size_t column = 0; column < kDimensions; ++column) {
+      result.jet.box_hessian[permutation[row]][permutation[column]] =
+          canonical_box_jet.hessian[row][column];
     }
   }
   return result;
@@ -7804,6 +8081,200 @@ Evaluation evaluate_job(const Program& program, const Job& job,
           counters};
 }
 
+Evaluation evaluate_job_whole_box(const Program& program, const Job& job) {
+  IntervalVector center_environment;
+  IntervalVector box_environment;
+  IntegerVector radii;
+  for (std::size_t coordinate = 0; coordinate < kDimensions; ++coordinate) {
+    const Rat midpoint =
+        (job.lower[coordinate] + job.upper[coordinate]) / 2;
+    const Rat radius =
+        (job.upper[coordinate] - job.lower[coordinate]) / 2;
+    center_environment[coordinate] = interval_constant(midpoint);
+    box_environment[coordinate] = interval_of_q(
+        {job.lower[coordinate], job.upper[coordinate]});
+    radii[coordinate] = ceil_scaled(radius);
+    if (kUseTaylorReconstructedBox) {
+      box_environment[coordinate] = {
+          center_environment[coordinate].lower - radii[coordinate],
+          center_environment[coordinate].upper + radii[coordinate]};
+    }
+  }
+
+  if (!kUseSourceDagCache ||
+      program.source_dag_expression_ids.size() !=
+          program.instructions.size() ||
+      program.source_dag_expression_count == 0) {
+    throw std::runtime_error(
+        "whole-box execution requires authenticated source DAG");
+  }
+  if (!kUseSpecializedDeltaHistoricalDihedrals ||
+      program.specialized_delta_dihedral_chains.empty()) {
+    throw std::runtime_error(
+        "whole-box execution requires authenticated historical dihedrals");
+  }
+
+  Counters counters;
+  std::vector<WholeBoxJet> stack;
+  std::vector<WholeBoxJet> source_dag_results(
+      program.source_dag_expression_count);
+  std::vector<bool> source_dag_result_ready(
+      program.source_dag_expression_count, false);
+  std::size_t sqrt_slot = 0;
+
+  for (std::size_t outer_index = 0;
+       outer_index < program.instructions.size(); ++outer_index) {
+    const Program::DeltaDihedralChain& delta_chain =
+        program.specialized_delta_dihedral_chains.at(outer_index);
+    if (delta_chain.active) {
+      if (sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error(
+            "whole-box historical square-root slot drift");
+      }
+      const WholeBoxJet candidate =
+          evaluate_permuted_historical_delta_dihedral_whole_box(
+              center_environment, box_environment,
+              delta_chain.radicand_coordinate, counters);
+      stack.push_back(candidate);
+      const std::size_t final_index = outer_index + 7;
+      if (final_index >= program.instructions.size()) {
+        throw std::runtime_error(
+            "whole-box historical source span drift");
+      }
+      const std::size_t identity =
+          program.source_dag_expression_ids.at(final_index);
+      if (source_dag_result_ready.at(identity)) {
+        throw std::runtime_error(
+            "whole-box historical source DAG identity reused");
+      }
+      source_dag_results.at(identity) = candidate;
+      source_dag_result_ready.at(identity) = true;
+      ++counters.source_dag_cache_misses;
+      ++sqrt_slot;
+      counters.outer_steps += 8;
+      outer_index += 7;
+      continue;
+    }
+
+    ++counters.outer_steps;
+    const std::size_t instruction_index =
+        program.instructions.at(outer_index);
+    const Node& instruction = node_at(program, instruction_index);
+    const std::size_t identity =
+        program.source_dag_expression_ids.at(outer_index);
+    std::size_t operands = 0;
+    bool is_sqrt = false;
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "whole-box source DAG tag");
+      if (tag == 1) {
+        operands = 1;
+        is_sqrt = true;
+      } else if (tag != 0) {
+        throw std::runtime_error("unknown whole-box analytic pair tag");
+      }
+    } else {
+      const unsigned long opcode = instruction.numeral.get_ui();
+      if (opcode == 2 || opcode == 5 || opcode == 6 || opcode == 7) {
+        operands = 1;
+      } else if (opcode == 3 || opcode == 4) {
+        operands = 2;
+      } else if (opcode != 8) {
+        throw std::runtime_error("unknown whole-box analytic opcode");
+      }
+    }
+
+    if (source_dag_result_ready.at(identity)) {
+      if (stack.size() < operands) {
+        throw std::runtime_error("whole-box source DAG stack underflow");
+      }
+      for (std::size_t operand = 0; operand < operands; ++operand) {
+        stack.pop_back();
+      }
+      stack.push_back(source_dag_results.at(identity));
+      if (is_sqrt) {
+        if (sqrt_slot >= kSqrtSlots) {
+          throw std::runtime_error(
+              "whole-box cached square-root slot drift");
+        }
+        ++sqrt_slot;
+      }
+      ++counters.source_dag_cache_hits;
+      continue;
+    }
+
+    if (instruction.is_pair) {
+      const Integer tag = require_numeral(
+          program, instruction.left, "whole-box analytic tag");
+      if (tag == 0) {
+        stack.push_back(evaluate_polynomial_whole_box(
+            program, instruction.right, center_environment,
+            box_environment, counters));
+      } else {
+        if (sqrt_slot >= kSqrtSlots || stack.empty()) {
+          throw std::runtime_error("whole-box sqrt slot/stack drift");
+        }
+        const WholeBoxJet value = stack.back();
+        stack.pop_back();
+        stack.push_back(whole_box_sqrt(
+            job.fixed_center_certificates[sqrt_slot],
+            job.fixed_box_certificates[sqrt_slot], value, counters));
+        ++sqrt_slot;
+      }
+    } else {
+      const unsigned long opcode = instruction.numeral.get_ui();
+      if (opcode == 2 || opcode == 5 || opcode == 6 || opcode == 7) {
+        if (stack.empty()) {
+          throw std::runtime_error("whole-box analytic stack underflow");
+        }
+        const WholeBoxJet value = stack.back();
+        stack.pop_back();
+        if (opcode == 2) stack.push_back(whole_box_neg(value));
+        if (opcode == 5) {
+          stack.push_back(whole_box_mul(value, value, counters));
+        }
+        if (opcode == 6) {
+          stack.push_back(whole_box_inverse(value, counters));
+        }
+        if (opcode == 7) {
+          stack.push_back(whole_box_atan(value, counters));
+        }
+      } else if (opcode == 3 || opcode == 4) {
+        if (stack.size() < 2) {
+          throw std::runtime_error("whole-box analytic stack underflow");
+        }
+        const WholeBoxJet right = stack.back();
+        stack.pop_back();
+        const WholeBoxJet left = stack.back();
+        stack.pop_back();
+        stack.push_back(opcode == 3
+                            ? whole_box_add(left, right)
+                            : whole_box_mul(left, right, counters));
+      } else {
+        stack.push_back(whole_box_pi_half());
+      }
+    }
+    if (stack.empty()) {
+      throw std::runtime_error("whole-box source DAG result stack drift");
+    }
+    source_dag_results.at(identity) = stack.back();
+    source_dag_result_ready.at(identity) = true;
+    ++counters.source_dag_cache_misses;
+  }
+
+  if (sqrt_slot != kSqrtSlots || stack.size() != 1 ||
+      !stack.back().domain) {
+    throw std::runtime_error(
+        "final whole-box analytic result shape/domain drift");
+  }
+  const TaylorResult result = complete_result(
+      radii, true, stack.back().jet.center,
+      stack.back().jet.box_hessian, counters);
+  return {normalized_rat(integer_of_fixed(result.value_bound.upper),
+                         integer_of_fixed(kScale)),
+          counters};
+}
+
 Evaluation evaluate_job_compact(const Program& program, const Job& job,
                                 PolynomialMode polynomial_mode,
                                 int fused_polynomial_outer_index,
@@ -7976,6 +8447,7 @@ int main(int argc, char** argv) {
                 << " [--historical-center-tangent]"
                 << " [--direct-specialized-function]"
                 << " [--direct-prepared-inputs]"
+                << " [--whole-box-jet]"
                 << " [--direct-stage-profile]"
                 << " [--historical-stage-profile]"
                 << " [--tight-dihedral-sqrt-certificates]"
@@ -8120,6 +8592,8 @@ int main(int argc, char** argv) {
         kUseDirectSpecializedFunction = true;
       } else if (option == "--direct-prepared-inputs") {
         kUseDirectPreparedInputs = true;
+      } else if (option == "--whole-box-jet") {
+        kUseWholeBoxJet = true;
       } else if (option == "--direct-stage-profile") {
         direct_stage_profile_enabled = true;
         kCountFixedQuotients = true;
@@ -8539,6 +9013,27 @@ int main(int argc, char** argv) {
           "direct specialized function cannot be combined with interpreter "
           "profiles, stage capture, or interpreter fusion modes");
     }
+    if (kUseWholeBoxJet &&
+        (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
+         !kUseComputedTightSqrtCertificates || !kUseSourceDagCache ||
+         !kUseSpecializedDeltaHistoricalDihedrals ||
+         !kUseTaylorReconstructedBox || kCaseId != 16594)) {
+      throw std::runtime_error(
+          "whole-box jets require the case16594 exact source DAG, fixed "
+          "nonlinear kernels, computed roots, reconstructed boxes, and "
+          "authenticated historical dihedrals");
+    }
+    if (kUseWholeBoxJet &&
+        (profile_enabled || rounding_profile_enabled ||
+         direct_stage_profile_enabled || historical_stage_profile_enabled ||
+         full_stage_diagnostics || !trace_first_state_path.empty() ||
+         kUsePreparedCoordinateSqrtTerms ||
+         kUsePreparedCoordinateSqrtValues || kFuseConsecutiveAdds ||
+         kDeferAdditiveLeafCompletion || kVerifyFixedKernelEnclosures)) {
+      throw std::runtime_error(
+          "whole-box jets cannot be combined with interpreter profiles, "
+          "collapsed source instructions, or result diagnostics");
+    }
     if (kDeferAdditiveLeafCompletion &&
         (!kFuseConsecutiveAdds || !kUsePreparedSimplePolynomials ||
          !kUsePreparedCoordinateSqrtTerms ||
@@ -8845,7 +9340,9 @@ int main(int argc, char** argv) {
       kAnalyticCertificateOrdinal = 0;
       Evaluation evaluation;
       try {
-        evaluation = kUseDirectSpecializedFunction
+        evaluation = kUseWholeBoxJet
+            ? evaluate_job_whole_box(program, jobs[index])
+            : kUseDirectSpecializedFunction
             ? evaluate_direct_specialized_function(
                   program, jobs[index],
                   direct_stage_profile_enabled ? &direct_stage_profiles
@@ -9099,6 +9596,7 @@ int main(int argc, char** argv) {
               << (kUseDirectSpecializedFunction ? 1 : 0)
               << " direct_prepared_inputs="
               << (kUseDirectPreparedInputs ? 1 : 0)
+              << " whole_box_jet=" << (kUseWholeBoxJet ? 1 : 0)
               << " direct_stage_profile="
               << (direct_stage_profile_enabled ? 1 : 0)
               << " historical_stage_profile="

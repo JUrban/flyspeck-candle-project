@@ -144,7 +144,8 @@ void validate_streaming_partition(
   }
 }
 
-void configure_streaming_lane(bool historical, bool coordinate_sqrt_values) {
+void configure_streaming_lane(bool historical, bool coordinate_sqrt_values,
+                              bool whole_box_jet) {
   Integer binary_scale = 1;
   mpz_mul_2exp(binary_scale.get_mpz_t(), binary_scale.get_mpz_t(), 40);
   kScale = fixed_of_integer(binary_scale);
@@ -163,11 +164,14 @@ void configure_streaming_lane(bool historical, bool coordinate_sqrt_values) {
   kUseComputedTightSqrtCertificates = true;
   kUseSpecializedDeltaHistoricalDihedrals = historical;
   kUsePreparedCoordinateSqrtValues = coordinate_sqrt_values;
+  kUseWholeBoxJet = whole_box_jet;
 }
 
 Program prepare_streaming_program(const char* path, bool historical,
-                                  bool coordinate_sqrt_values) {
-  configure_streaming_lane(historical, coordinate_sqrt_values);
+                                  bool coordinate_sqrt_values,
+                                  bool whole_box_jet) {
+  configure_streaming_lane(
+      historical, coordinate_sqrt_values, whole_box_jet);
   Program program = read_program(path);
   prepare_simple_polynomials(program);
   if (coordinate_sqrt_values) prepare_coordinate_sqrt_values(program);
@@ -185,16 +189,19 @@ int main(int argc, char** argv) {
     if (argc != 5) {
       std::cerr << "usage: " << argv[0]
                 << " PROGRAM.cval JOBS.tsv TOPOLOGY.tsv "
-                << "dag|historical|historical-coordinate\n";
+                << "dag|historical|historical-coordinate|"
+                << "historical-whole\n";
       return 2;
     }
     const std::string lane(argv[4]);
     if (lane != "dag" && lane != "historical" &&
-        lane != "historical-coordinate") {
+        lane != "historical-coordinate" &&
+        lane != "historical-whole") {
       throw std::runtime_error("unknown streaming lane");
     }
     const bool historical = lane != "dag";
     const bool coordinate_sqrt_values = lane == "historical-coordinate";
+    const bool whole_box_jet = lane == "historical-whole";
     const auto total_begin = std::chrono::steady_clock::now();
 
     const auto input_begin = std::chrono::steady_clock::now();
@@ -207,7 +214,7 @@ int main(int argc, char** argv) {
 
     const auto preparation_begin = std::chrono::steady_clock::now();
     Program program = prepare_streaming_program(
-        argv[1], historical, coordinate_sqrt_values);
+        argv[1], historical, coordinate_sqrt_values, whole_box_jet);
     const auto preparation_end = std::chrono::steady_clock::now();
 
     std::vector<std::unique_ptr<Job>> parsed_jobs(nodes.size());
@@ -244,9 +251,11 @@ int main(int argc, char** argv) {
       Evaluation evaluation{};
       bool domain_subdivision = false;
       try {
-        evaluation = evaluate_job(
-            program, job, PolynomialMode::kBaseline, -1, -1, false,
-            nullptr, nullptr);
+        evaluation = whole_box_jet
+            ? evaluate_job_whole_box(program, job)
+            : evaluate_job(
+                program, job, PolynomialMode::kBaseline, -1, -1, false,
+                nullptr, nullptr);
       } catch (const std::exception& error) {
         const std::string message(error.what());
         if (message == "invalid fixed square-root input" ||
