@@ -109,18 +109,18 @@ awk '
   FNR == NR {
     for (i=1; i<=NF; ++i) {
       split($i, field, "=")
-      if (field[1] == "index") index=field[2]
+      if (field[1] == "index") result_index=field[2]
       if (field[1] == "upper") upper=field[2]
     }
-    baseline[index]=sign(rational(upper)); next
+    baseline[result_index]=sign(rational(upper)); next
   }
   {
     for (i=1; i<=NF; ++i) {
       split($i, field, "=")
-      if (field[1] == "index") index=field[2]
+      if (field[1] == "index") result_index=field[2]
       if (field[1] == "upper") upper=field[2]
     }
-    candidate=sign(rational(upper)); counts[baseline[index] ":" candidate]++
+    candidate=sign(rational(upper)); counts[baseline[result_index] ":" candidate]++
   }
   END {
     print "padded_sign\tunrounded_sign\tcells"
