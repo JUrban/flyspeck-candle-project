@@ -238,6 +238,7 @@ int main(int argc, char** argv) {
     std::size_t rejected_internal_nodes = 0;
     std::size_t rejected_leaves = 0;
     std::size_t domain_subdivisions = 0;
+    std::size_t representation_subdivisions = 0;
     std::size_t maximum_depth = 0;
     const auto traversal_begin = std::chrono::steady_clock::now();
     while (!stack.empty()) {
@@ -250,6 +251,7 @@ int main(int argc, char** argv) {
 
       Evaluation evaluation{};
       bool domain_subdivision = false;
+      bool representation_subdivision = false;
       try {
         evaluation = whole_box_jet
             ? evaluate_job_whole_box(program, job)
@@ -262,6 +264,10 @@ int main(int argc, char** argv) {
             message.find("domain failure") != std::string::npos) {
           domain_subdivision = true;
           ++domain_subdivisions;
+        } else if (message == "invalid hardware fixed conversion" ||
+                   message == "computed square-root enclosure failure") {
+          representation_subdivision = true;
+          ++representation_subdivisions;
         } else {
           throw std::runtime_error(
               "streaming node " + std::to_string(index) + ": " +
@@ -295,7 +301,9 @@ int main(int argc, char** argv) {
                 << " upper=" << evaluation.upper.get_str()
                 << " decision=" << decision
                 << " domain_subdivision="
-                << (domain_subdivision ? 1 : 0) << "\n";
+                << (domain_subdivision ? 1 : 0)
+                << " representation_subdivision="
+                << (representation_subdivision ? 1 : 0) << "\n";
       ++visit;
     }
     const auto traversal_end = std::chrono::steady_clock::now();
@@ -315,6 +323,8 @@ int main(int argc, char** argv) {
               << " rejected_internal_nodes=" << rejected_internal_nodes
               << " rejected_leaves=" << rejected_leaves
               << " domain_subdivisions=" << domain_subdivisions
+              << " representation_subdivisions="
+              << representation_subdivisions
               << " maximum_depth=" << maximum_depth
               << " input_seconds=" << seconds(input_begin, input_end)
               << " reusable_preparation_seconds="
