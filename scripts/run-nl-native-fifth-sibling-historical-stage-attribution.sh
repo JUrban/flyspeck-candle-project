@@ -147,9 +147,9 @@ awk '
     ceil[idx]+=value("ceil_quotients")
     products[idx]+=value("interval_products")
     endpoints[idx]+=value("interval_endpoint_products")
-    sqrt[idx]+=value("sqrt_steps")
-    inverse[idx]+=value("inverse_steps")
-    atan[idx]+=value("atan_steps")
+    sqrt_count[idx]+=value("sqrt_steps")
+    inverse_count[idx]+=value("inverse_steps")
+    atan_count[idx]+=value("atan_steps")
   }
   END {
     print "index\tlabel\truns\tmean_observations\tmean_nanoseconds\tstage_share\tmean_floor_quotients\tmean_ceil_quotients\tmean_interval_products\tmean_endpoint_products\tmean_sqrt_steps\tmean_inverse_steps\tmean_atan_steps"
@@ -162,8 +162,8 @@ awk '
         (nanoseconds[idx]/runs[idx])/total, \
         floor[idx]/runs[idx],ceil[idx]/runs[idx], \
         products[idx]/runs[idx],endpoints[idx]/runs[idx], \
-        sqrt[idx]/runs[idx],inverse[idx]/runs[idx], \
-        atan[idx]/runs[idx]
+        sqrt_count[idx]/runs[idx],inverse_count[idx]/runs[idx], \
+        atan_count[idx]/runs[idx]
     }
   }
 ' "$output_dir"/repetition-*-profiled.txt \
