@@ -6273,6 +6273,7 @@ WholeBoxJet evaluate_permuted_historical_delta_dihedral_whole_box(
       historical_dihedral_second_order(
           canonical_box, true, counters);
   WholeBoxJet result;
+  result.domain = true;
   result.jet.center.value = canonical_center_jet.value;
   result.jet.box_value = canonical_box_jet.value;
   for (std::size_t row = 0; row < kDimensions; ++row) {
@@ -8108,10 +8109,10 @@ Evaluation evaluate_job_whole_box(const Program& program, const Job& job) {
     throw std::runtime_error(
         "whole-box execution requires authenticated source DAG");
   }
-  if (!kUseSpecializedDeltaHistoricalDihedrals ||
+  if (kUseSpecializedDeltaHistoricalDihedrals &&
       program.specialized_delta_dihedral_chains.empty()) {
     throw std::runtime_error(
-        "whole-box execution requires authenticated historical dihedrals");
+        "whole-box historical execution requires authenticated dihedrals");
   }
 
   Counters counters;
@@ -8124,9 +8125,36 @@ Evaluation evaluate_job_whole_box(const Program& program, const Job& job) {
 
   for (std::size_t outer_index = 0;
        outer_index < program.instructions.size(); ++outer_index) {
-    const Program::DeltaDihedralChain& delta_chain =
-        program.specialized_delta_dihedral_chains.at(outer_index);
-    if (delta_chain.active) {
+    if (kUseHistoricalDihedral && kCaseId == 10173 && outer_index == 31) {
+      if (!program.prepared_dihedral_chain || sqrt_slot != 6 ||
+          sqrt_slot >= kSqrtSlots) {
+        throw std::runtime_error(
+            "whole-box case10173 historical source/slot drift");
+      }
+      const WholeBoxJet candidate =
+          evaluate_permuted_historical_delta_dihedral_whole_box(
+              center_environment, box_environment, 0, counters);
+      stack.push_back(candidate);
+      const std::size_t final_index = outer_index + 7;
+      const std::size_t identity =
+          program.source_dag_expression_ids.at(final_index);
+      if (source_dag_result_ready.at(identity)) {
+        throw std::runtime_error(
+            "whole-box case10173 historical source DAG identity reused");
+      }
+      source_dag_results.at(identity) = candidate;
+      source_dag_result_ready.at(identity) = true;
+      ++counters.source_dag_cache_misses;
+      ++sqrt_slot;
+      counters.outer_steps += 8;
+      outer_index += 7;
+      continue;
+    }
+    const Program::DeltaDihedralChain* delta_chain =
+        program.specialized_delta_dihedral_chains.empty()
+            ? nullptr
+            : &program.specialized_delta_dihedral_chains.at(outer_index);
+    if (delta_chain != nullptr && delta_chain->active) {
       if (sqrt_slot >= kSqrtSlots) {
         throw std::runtime_error(
             "whole-box historical square-root slot drift");
@@ -8134,7 +8162,7 @@ Evaluation evaluate_job_whole_box(const Program& program, const Job& job) {
       const WholeBoxJet candidate =
           evaluate_permuted_historical_delta_dihedral_whole_box(
               center_environment, box_environment,
-              delta_chain.radicand_coordinate, counters);
+              delta_chain->radicand_coordinate, counters);
       stack.push_back(candidate);
       const std::size_t final_index = outer_index + 7;
       if (final_index >= program.instructions.size()) {
@@ -8919,7 +8947,8 @@ int main(int argc, char** argv) {
          fused_polynomial_max_steps >= 0 || direct_delta_x4 ||
          prepared_polynomial_pair_index >= 0 || kCacheSimpleLeafResults ||
          kUsePreparedCoordinateSqrtTerms || kUsePreparedDihedralChain ||
-         kUseSpecializedDihedralIdentities || kUseHistoricalDihedral ||
+         kUseSpecializedDihedralIdentities ||
+         (kUseHistoricalDihedral && !kUseWholeBoxJet) ||
          kUseDirectSpecializedFunction || kUseDirectPreparedInputs ||
          kUseSpecializedDeltaInverseRoots ||
          kUseSpecializedDeltaDihedralChains ||
@@ -8963,7 +8992,7 @@ int main(int argc, char** argv) {
       throw std::runtime_error(
           "specialized dihedral identity cross-check is not yet implemented");
     }
-    if (kUseHistoricalDihedral &&
+    if (kUseHistoricalDihedral && !kUseWholeBoxJet &&
         (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
          polynomial_mode != PolynomialMode::kSpecializedAngle ||
          !direct_delta_x4)) {
@@ -9016,12 +9045,12 @@ int main(int argc, char** argv) {
     if (kUseWholeBoxJet &&
         (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel ||
          !kUseComputedTightSqrtCertificates || !kUseSourceDagCache ||
-         !kUseSpecializedDeltaHistoricalDihedrals ||
-         !kUseTaylorReconstructedBox || kCaseId != 16594)) {
+         !kUseTaylorReconstructedBox ||
+         (kUseSpecializedDeltaHistoricalDihedrals && kCaseId != 16594))) {
       throw std::runtime_error(
-          "whole-box jets require the case16594 exact source DAG, fixed "
-          "nonlinear kernels, computed roots, reconstructed boxes, and "
-          "authenticated historical dihedrals");
+          "whole-box jets require an exact source DAG, fixed nonlinear "
+          "kernels, computed roots, reconstructed boxes, and a case16594 "
+          "identity for historical dihedrals");
     }
     if (kUseWholeBoxJet &&
         (profile_enabled || rounding_profile_enabled ||
