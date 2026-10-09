@@ -140,30 +140,30 @@ awk '
     }
   }
   /^CANDLE_NL_NATIVE_FIXED_SCALE_HISTORICAL_PROFILE / {
-    index=value("index"); label[index]=value("label"); runs[index]++
-    observations[index]+=value("observations")
-    nanoseconds[index]+=value("nanoseconds")
-    floor[index]+=value("floor_quotients")
-    ceil[index]+=value("ceil_quotients")
-    products[index]+=value("interval_products")
-    endpoints[index]+=value("interval_endpoint_products")
-    sqrt[index]+=value("sqrt_steps")
-    inverse[index]+=value("inverse_steps")
-    atan[index]+=value("atan_steps")
+    idx=value("index"); label[idx]=value("label"); runs[idx]++
+    observations[idx]+=value("observations")
+    nanoseconds[idx]+=value("nanoseconds")
+    floor[idx]+=value("floor_quotients")
+    ceil[idx]+=value("ceil_quotients")
+    products[idx]+=value("interval_products")
+    endpoints[idx]+=value("interval_endpoint_products")
+    sqrt[idx]+=value("sqrt_steps")
+    inverse[idx]+=value("inverse_steps")
+    atan[idx]+=value("atan_steps")
   }
   END {
     print "index\tlabel\truns\tmean_observations\tmean_nanoseconds\tstage_share\tmean_floor_quotients\tmean_ceil_quotients\tmean_interval_products\tmean_endpoint_products\tmean_sqrt_steps\tmean_inverse_steps\tmean_atan_steps"
     total=0
-    for (index in nanoseconds) total+=nanoseconds[index]/runs[index]
-    for (index=0; index<15; ++index) {
+    for (idx in nanoseconds) total+=nanoseconds[idx]/runs[idx]
+    for (idx=0; idx<15; ++idx) {
       printf "%d\t%s\t%d\t%.3f\t%.3f\t%.9f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\n", \
-        index,label[index],runs[index],observations[index]/runs[index], \
-        nanoseconds[index]/runs[index], \
-        (nanoseconds[index]/runs[index])/total, \
-        floor[index]/runs[index],ceil[index]/runs[index], \
-        products[index]/runs[index],endpoints[index]/runs[index], \
-        sqrt[index]/runs[index],inverse[index]/runs[index], \
-        atan[index]/runs[index]
+        idx,label[idx],runs[idx],observations[idx]/runs[idx], \
+        nanoseconds[idx]/runs[idx], \
+        (nanoseconds[idx]/runs[idx])/total, \
+        floor[idx]/runs[idx],ceil[idx]/runs[idx], \
+        products[idx]/runs[idx],endpoints[idx]/runs[idx], \
+        sqrt[idx]/runs[idx],inverse[idx]/runs[idx], \
+        atan[idx]/runs[idx]
     }
   }
 ' "$output_dir"/repetition-*-profiled.txt \
