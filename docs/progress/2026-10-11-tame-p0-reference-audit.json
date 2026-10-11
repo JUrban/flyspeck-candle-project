@@ -1,0 +1,112 @@
+{
+  "status": "DEVELOPMENT_NON_RELEASE",
+  "conclusion": "comparison_failed_before_completion",
+  "isabelle_full_p0": {
+    "session_log": "/home/mptp/.isabelle/Isabelle2014/heaps/polyml-5.5.2_x86_64-linux/log/Candle-Tame-Reference.gz",
+    "session_log_sha256": "038b8e7747b096bc4131a0b02aae6269599ec7388e9420c73ab92a6068bb27eb",
+    "visited_nodes": 312763,
+    "afp_archstat_generated_node_counter_including_initial_one": 312764,
+    "final_visits": 501,
+    "raw_children": 869959,
+    "next_tame0_children": 322944,
+    "retained_children": 312762,
+    "early_pruned_children": 547015,
+    "final_pruned_children": 10182,
+    "maximum_frontier": 96,
+    "canonical_archive_classes": 9,
+    "p0_evaluator_elapsed_seconds": 28587.332,
+    "p2_1000_evaluator_elapsed_seconds": 49.527,
+    "non_value_command_elapsed_seconds": 1.803,
+    "session_theory_elapsed_seconds": 28638.69,
+    "wrapper_total_elapsed_seconds": 28658,
+    "peak_rss": "not_recorded"
+  },
+  "fresh_isabelle_bounded_audit": {
+    "run_dir": "/project/flyspeck-candle-runs/tame-bounded-audit-20261011T112034Z-dev-001",
+    "session_log_sha256": "aff5339a9a8e08e672d77ad6516c123502ee91f788e667177c090a5d8ae1cc9e",
+    "total_elapsed_seconds": 58,
+    "build_elapsed_seconds": 57.96,
+    "theory_elapsed_seconds": 42.139,
+    "non_value_command_elapsed_seconds": 1.883,
+    "peak_rss_kib": 1818916,
+    "cpu_affinity": [0, 1],
+    "p0_prefix_value_elapsed_seconds": [1.534, 0.288, 0.465, 0.487],
+    "p0_at_239": {
+      "visited_nodes": 239,
+      "frontier_length": 56,
+      "final_visits": 0,
+      "raw_children": 875,
+      "next_tame0_children": 295,
+      "retained_children": 294,
+      "early_pruned_children": 580,
+      "final_pruned_children": 1,
+      "maximum_frontier": 74
+    },
+    "p2_1000": {
+      "evaluator_elapsed_seconds": 37.447,
+      "visited_nodes": 1000,
+      "frontier_length": 766,
+      "final_visits": 0,
+      "raw_children": 33902,
+      "next_tame0_children": 1772,
+      "retained_children": 1765,
+      "early_pruned_children": 32130,
+      "final_pruned_children": 7,
+      "maximum_frontier": 813
+    }
+  },
+  "fresh_candle_p0": {
+    "source_commit": "755eec9e39d143444bb57eb9d929b2df75ae734c",
+    "run_dir": "/project/flyspeck-candle-runs/tame-candle-p0-audit-20261011T112335Z-dev-001",
+    "transcript_sha256": "d34e92dbb8dfc2db25153dcd2bf27ee6cb8a6dc3e85c88096c02816c5d3fea32",
+    "preparation_elapsed_seconds": 138.195125,
+    "evaluator_and_output_elapsed_seconds": 0.099041,
+    "handoff_elapsed_seconds": 0.114367,
+    "total_elapsed_seconds": 138.408532,
+    "peak_rss_kib": 1093120,
+    "cpu_affinity": [0, 1],
+    "visited_nodes": 239,
+    "frontier_length": 0,
+    "final_visits": 0,
+    "next_tame0_children": 239,
+    "retained_children": 238,
+    "final_pruned_children": 1,
+    "maximum_frontier": 30
+  },
+  "comparison": {
+    "same_visited_index": 239,
+    "isabelle_frontier_length": 56,
+    "candle_frontier_length": 0,
+    "isabelle_next_tame0_children": 295,
+    "candle_next_tame0_children": 239,
+    "isabelle_retained_children": 294,
+    "candle_retained_children": 238,
+    "identity_comparison": "failed_by_cardinality: Candle has zero finals, AFP has 501 final visits and nine canonical Tri classes",
+    "first_exact_transition": "known_equal",
+    "divergence_bound": "after the first transition and no later than visit 10",
+    "cause": "not_localized"
+  },
+  "repeats": [
+    {
+      "run": "/project/flyspeck-candle-runs/tame-reference-20261006T135022Z-dev-001",
+      "elapsed_seconds": 272,
+      "class": "source_definition_failure"
+    },
+    {
+      "run": "/project/flyspeck-candle-runs/tame-reference-20261006T135517Z-dev-001",
+      "elapsed_seconds": "unavailable",
+      "class": "abandoned_without_completion_marker"
+    },
+    {
+      "run": "/project/flyspeck-candle-runs/tame-bounded-audit-20261011T111938Z-dev-001",
+      "elapsed_seconds": 6.85,
+      "class": "java_heap_reservation_harness_failure"
+    },
+    {
+      "run": "/project/flyspeck-candle-runs/tame-bounded-audit-20261011T112006Z-dev-001",
+      "elapsed_seconds": 5.33,
+      "class": "interrupted_harness_retry_before_theory_load"
+    }
+  ],
+  "open_boundary": "Do not promote or scale the reflected traversal until a graph-state/transition correspondence test localizes and fixes the divergence between visits 2 and 10."
+}

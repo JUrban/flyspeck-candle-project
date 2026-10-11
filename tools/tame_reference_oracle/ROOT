@@ -1,0 +1,6 @@
+chapter Candle_Tame_Bounded_Audit
+
+session "Candle-Tame-Bounded-Audit" = "Flyspeck-Tame" +
+  options [timeout = 3600]
+  theories
+    CandleTameBoundedAudit
