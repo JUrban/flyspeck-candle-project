@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 from pathlib import Path
+import struct
 
 
 EXPECTED_KERNEL_SHA256 = (
@@ -174,6 +175,82 @@ def sml_packet(
     return "BoundedCase10173Packet\n" + "\n".join(f"{indent}  {field}" for field in fields)
 
 
+def packet_values(
+    kernel: dict[str, str],
+    reciprocals: list[dict[str, str]],
+    certificates: list[Certificate],
+) -> tuple[
+    list[int], list[Interval], list[Interval], list[Certificate], Interval,
+    Interval, list[Interval], Interval, Interval, list[Interval]
+]:
+    """Return the canonical packet fields in their checked-parser order."""
+    center = interval_list(kernel["center_environment"], COORDINATES, "center")
+    box = interval_list(kernel["box_environment"], COORDINATES, "box")
+    radii = [
+        max(center_value[0] - box_value[0], box_value[1] - center_value[1])
+        for center_value, box_value in zip(center, box, strict=True)
+    ]
+    if any(radius < 0 or radius >= WORD_LIMIT for radius in radii):
+        raise ValueError("invalid derived radius")
+    center_reciprocals = [
+        interval(record["output"], "center reciprocal")
+        for record in reciprocals[:5]
+    ]
+    box_reciprocals = [
+        interval(reciprocals[ordinal]["output"], "box reciprocal")
+        for ordinal in BOX_RECIPROCAL_ORDINALS
+    ]
+    return (
+        radii,
+        center,
+        box,
+        certificates,
+        interval(kernel["center_root_delta"], "center root delta"),
+        interval(kernel["center_root_four_x0"], "center root four-x0"),
+        center_reciprocals,
+        interval(kernel["box_root_delta"], "box root delta"),
+        interval(kernel["box_root_four_x0"], "box root four-x0"),
+        box_reciprocals,
+    )
+
+
+def packed_signed64(value: int) -> bytes:
+    return bytes([1 if value < 0 else 0]) + struct.pack("<Q", abs(value))
+
+
+def packed_interval64(value: Interval) -> bytes:
+    return packed_signed64(value[0]) + packed_signed64(value[1])
+
+
+def packed_packet(
+    kernel: dict[str, str],
+    reciprocals: list[dict[str, str]],
+    certificates: list[Certificate],
+) -> bytes:
+    (radii, center, box, certificates, center_root_delta,
+     center_root_four_x0, center_reciprocals, box_root_delta,
+     box_root_four_x0, box_reciprocals) = packet_values(
+        kernel, reciprocals, certificates)
+    fields = [b"".join(struct.pack("<Q", value) for value in radii)]
+    fields.append(b"".join(map(packed_interval64, center)))
+    fields.append(b"".join(map(packed_interval64, box)))
+    fields.append(b"".join(
+        packed_interval64(value)
+        for certificate in certificates
+        for value in certificate
+    ))
+    fields.append(packed_interval64(center_root_delta))
+    fields.append(packed_interval64(center_root_four_x0))
+    fields.append(b"".join(map(packed_interval64, center_reciprocals)))
+    fields.append(packed_interval64(box_root_delta))
+    fields.append(packed_interval64(box_root_four_x0))
+    fields.append(b"".join(map(packed_interval64, box_reciprocals)))
+    result = b"".join(fields)
+    if len(result) != 1128:
+        raise AssertionError(f"packed packet size drift: {len(result)}")
+    return result
+
+
 def generate(
     kernel_path: Path,
     reciprocal_path: Path,
@@ -280,6 +357,48 @@ val _ = export_theory ();
     return header + "\n".join(definitions) + "\n" + footer
 
 
+def generate_packed(
+    kernel_path: Path,
+    reciprocal_path: Path,
+    analytic_path: Path,
+    cells: int,
+) -> bytes:
+    if not 1 <= cells <= FULL_CELLS:
+        raise ValueError(f"packed fixture must contain 1..{FULL_CELLS} cells")
+    kernel_lines = authenticated_lines(
+        kernel_path, EXPECTED_KERNEL_SHA256, "kernel trace")
+    reciprocal_lines = authenticated_lines(
+        reciprocal_path, EXPECTED_RECIPROCAL_SHA256, "reciprocal trace")
+    analytic_lines = authenticated_lines(
+        analytic_path, EXPECTED_ANALYTIC_SHA256, "analytic trace")
+    if len(kernel_lines) != FULL_CELLS:
+        raise ValueError(f"kernel row count drift: {len(kernel_lines)}")
+    if len(reciprocal_lines) != FULL_CELLS * RECIPROCALS_PER_CELL:
+        raise ValueError(f"reciprocal row count drift: {len(reciprocal_lines)}")
+    analytic = parse_analytic(analytic_lines)
+
+    packets: list[bytes] = []
+    for index in range(cells):
+        kernel = fields_of(kernel_lines[index], KERNEL_PREFIX, f"kernel row {index}")
+        if int(kernel.get("index", "-1")) != index:
+            raise ValueError(f"kernel identity drift at row {index}")
+        reciprocal_base = index * RECIPROCALS_PER_CELL
+        reciprocals: list[dict[str, str]] = []
+        for ordinal in range(RECIPROCALS_PER_CELL):
+            record = fields_of(
+                reciprocal_lines[reciprocal_base + ordinal],
+                RECIPROCAL_PREFIX,
+                f"reciprocal row {reciprocal_base + ordinal}",
+            )
+            if (int(record.get("index", "-1")) != index or
+                    int(record.get("ordinal", "-1")) != ordinal):
+                raise ValueError(f"reciprocal identity drift at {index}:{ordinal}")
+            reciprocals.append(record)
+        packets.append(packed_packet(kernel, reciprocals, analytic[index]))
+
+    return b"CNLCPB01" + struct.pack("<I", cells) + b"".join(packets)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("kernel_trace", type=Path)
@@ -287,17 +406,30 @@ def main() -> None:
     parser.add_argument("analytic_trace", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--cells", type=int, default=3)
-    args = parser.parse_args()
-    rendered = generate(
-        args.kernel_trace,
-        args.reciprocal_trace,
-        args.analytic_trace,
-        args.cells,
+    parser.add_argument(
+        "--format", choices=("theory", "packed"), default="theory",
+        help="emit an HOL4 theory fixture or the fixed-width binary batch",
     )
-    args.output.write_text(rendered, encoding="ascii")
+    args = parser.parse_args()
+    if args.format == "theory":
+        rendered = generate(
+            args.kernel_trace,
+            args.reciprocal_trace,
+            args.analytic_trace,
+            args.cells,
+        ).encode("ascii")
+    else:
+        rendered = generate_packed(
+            args.kernel_trace,
+            args.reciprocal_trace,
+            args.analytic_trace,
+            args.cells,
+        )
+    args.output.write_bytes(rendered)
     print(f"cells={args.cells}")
-    print(f"bytes={len(rendered.encode('ascii'))}")
-    print(f"sha256={hashlib.sha256(rendered.encode('ascii')).hexdigest()}")
+    print(f"format={args.format}")
+    print(f"bytes={len(rendered)}")
+    print(f"sha256={hashlib.sha256(rendered).hexdigest()}")
 
 
 if __name__ == "__main__":
