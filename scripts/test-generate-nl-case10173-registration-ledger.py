@@ -93,6 +93,12 @@ class RegistrationLedgerTests(unittest.TestCase):
         ledger_eval = (
             self.output / f"{MODULE.LEDGER_EVAL_THEORY}Script.sml"
         ).read_text(encoding="ascii")
+        ledger_fast = (
+            self.output / f"{MODULE.LEDGER_FAST_THEORY}Script.sml"
+        ).read_text(encoding="ascii")
+        ledger_packed_fast = (
+            self.output / f"{MODULE.LEDGER_PACKED_FAST_THEORY}Script.sml"
+        ).read_text(encoding="ascii")
         self.assertIn(
             "compute_eval_pure ("
             + MODULE.suc_fuel(
@@ -105,6 +111,18 @@ class RegistrationLedgerTests(unittest.TestCase):
         self.assertIn("PURE_REWRITE_TAC", group_eval)
         self.assertIn("_pair_SOME", group_eval)
         self.assertIn("_shared_value", group_eval)
+        self.assertIn("compute_fast_eval_ok", ledger_fast)
+        self.assertIn(
+            "bounded_packed_chars_case10173_full_check",
+            ledger_packed_fast,
+        )
+        self.assertRegex(
+            manifest["aggregate"]["fast_sha256"], r"^[0-9a-f]{64}$"
+        )
+        self.assertRegex(
+            manifest["aggregate"]["packed_fast_sha256"],
+            r"^[0-9a-f]{64}$",
+        )
 
     def test_suc_fuel_preserves_structural_depth(self) -> None:
         self.assertEqual(

@@ -34,6 +34,10 @@ LEDGER_GROUP_COUNT = (CELL_COUNT + CHUNK_SIZE * GROUP_SIZE - 1) // (
 LEDGER_DEPTH = math.ceil(math.log2(LEDGER_GROUP_COUNT))
 LEDGER_DATA_THEORY = "compute_registeredCase10173HistoricalLedgerData"
 LEDGER_EVAL_THEORY = "compute_registeredCase10173HistoricalLedgerEval"
+LEDGER_FAST_THEORY = "compute_registeredCase10173HistoricalLedgerFast"
+LEDGER_PACKED_FAST_THEORY = (
+    "compute_registeredCase10173HistoricalLedgerPackedFast"
+)
 LEDGER_PREFIX = "registered_case10173_historical_ledger"
 
 
@@ -303,6 +307,114 @@ Proof
     [{LEDGER_PREFIX}_num_group_fuel,
      {group_theorems}
     ]
+QED
+
+val _ = export_theory ();
+'''
+
+
+def render_ledger_fast(fuel: int) -> str:
+    return f'''(*****************************************************************************
+ * Exact fast-evaluator authority for the balanced genuine case-10173 ledger.
+ * The expensive generic evaluations are composed once by the ancestor
+ * theorem; a runtime hit returns the same kernel-checked result directly.
+ *****************************************************************************)
+Theory {LEDGER_FAST_THEORY}
+Ancestors
+  {LEDGER_EVAL_THEORY}
+Libs bossLib preamble
+
+Definition {LEDGER_PREFIX}_fast_eval_def:
+  {LEDGER_PREFIX}_fast_eval ceqs cexp =
+    if ceqs = {SHARED_CEQS} /\\
+       cexp = {LEDGER_PREFIX}_cexp
+    then SOME {LEDGER_PREFIX}_result
+    else NONE
+End
+
+Theorem {LEDGER_PREFIX}_compute_eval:
+  !s.
+    compute_eval compute_default_clock {SHARED_CEQS}
+      {LEDGER_PREFIX}_cexp s =
+    (M_success (from_cv {LEDGER_PREFIX}_result),s)
+Proof
+  gen_tac
+  >> irule compute_evalPureTheory.compute_eval_pure_refines
+  >> qexists_tac `{fuel}`
+  >> simp [computeTheory.compute_default_clock,
+           {LEDGER_PREFIX}_pure_eval_value]
+QED
+
+Theorem {LEDGER_PREFIX}_fast_eval_ok:
+  compute_fast_eval_ok {LEDGER_PREFIX}_fast_eval
+Proof
+  rw [computeTheory.compute_fast_eval_ok_def,
+      {LEDGER_PREFIX}_fast_eval_def]
+  >> every_case_tac
+  >> gvs [{LEDGER_PREFIX}_compute_eval]
+QED
+
+val _ = export_theory ();
+'''
+
+
+def render_ledger_packed_fast() -> str:
+    return f'''(*****************************************************************************
+ * Proof-producing bounded gate from the complete packed case-10173 payload
+ * to the exact balanced object-level ledger.  Payload bytes remain untrusted:
+ * no registered result is returned unless every packed cell is accepted.
+ *****************************************************************************)
+Theory {LEDGER_PACKED_FAST_THEORY}
+Ancestors
+  {LEDGER_FAST_THEORY}
+  compute_boundedCase10173PackedBatch
+Libs bossLib preamble
+
+Definition {LEDGER_PREFIX}_packed_fast_eval_def:
+  {LEDGER_PREFIX}_packed_fast_eval payload ceqs cexp =
+    if ceqs = {SHARED_CEQS} /\\
+       cexp = {LEDGER_PREFIX}_cexp /\\
+       bounded_packed_chars_case10173_full_check payload
+    then SOME {LEDGER_PREFIX}_result
+    else NONE
+End
+
+Theorem {LEDGER_PREFIX}_packed_fast_eval_ok:
+  !payload.
+    compute_fast_eval_ok ({LEDGER_PREFIX}_packed_fast_eval payload)
+Proof
+  rw [computeTheory.compute_fast_eval_ok_def,
+      {LEDGER_PREFIX}_packed_fast_eval_def]
+  >> every_case_tac
+  >> gvs [{LEDGER_PREFIX}_compute_eval]
+QED
+
+Definition compute_{LEDGER_PREFIX}_packed_def:
+  compute_{LEDGER_PREFIX}_packed payload (ths,ceqs) tm =
+    compute_with ({LEDGER_PREFIX}_packed_fast_eval payload) (ths,ceqs) tm
+End
+
+Theorem compute_{LEDGER_PREFIX}_packed_thm:
+  STATE ctxt s /\\
+  EVERY (THM ctxt) ths /\\
+  EVERY (THM ctxt) ceqs /\\
+  TERM ctxt tm ==>
+  compute_{LEDGER_PREFIX}_packed payload (ths,ceqs) tm s = (res,s') ==>
+  s' = s /\\
+  (!th. res = M_success th ==> THM ctxt th) /\\
+  (!tm. res <> M_failure (Clash tm))
+Proof
+  strip_tac
+  >> fs [compute_{LEDGER_PREFIX}_packed_def]
+  >> strip_tac
+  >> assume_tac {LEDGER_PREFIX}_packed_fast_eval_ok
+  >> irule computeProofTheory.compute_with_thm
+  >> simp []
+  >> qexists_tac `ceqs`
+  >> qexists_tac `{LEDGER_PREFIX}_packed_fast_eval payload`
+  >> qexists_tac `ths`
+  >> qexists_tac `tm`
+  >> simp []
 QED
 
 val _ = export_theory ();
@@ -591,20 +703,35 @@ def generate(
 
     ledger_data_path = output_dir / f"{LEDGER_DATA_THEORY}Script.sml"
     ledger_eval_path = output_dir / f"{LEDGER_EVAL_THEORY}Script.sml"
+    ledger_fast_path = output_dir / f"{LEDGER_FAST_THEORY}Script.sml"
+    ledger_packed_fast_path = output_dir / f"{LEDGER_PACKED_FAST_THEORY}Script.sml"
     ledger_data_path.write_text(render_ledger_data(groups), encoding="ascii")
     ledger_eval_path.write_text(render_ledger_eval(groups), encoding="ascii")
+    ledger_fuel = 100000 + GROUP_DEPTH + LEDGER_DEPTH
+    ledger_fast_path.write_text(
+        render_ledger_fast(ledger_fuel), encoding="ascii"
+    )
+    ledger_packed_fast_path.write_text(
+        render_ledger_packed_fast(), encoding="ascii"
+    )
     aggregate = {
         "group_size": GROUP_SIZE,
         "group_depth": GROUP_DEPTH,
         "group_count": len(groups),
         "ledger_depth": LEDGER_DEPTH,
-        "fuel": 100000 + GROUP_DEPTH + LEDGER_DEPTH,
+        "fuel": ledger_fuel,
         "data_theory": LEDGER_DATA_THEORY,
         "eval_theory": LEDGER_EVAL_THEORY,
         "data_file": str(ledger_data_path.resolve()),
         "data_sha256": sha256(ledger_data_path),
         "eval_file": str(ledger_eval_path.resolve()),
         "eval_sha256": sha256(ledger_eval_path),
+        "fast_theory": LEDGER_FAST_THEORY,
+        "fast_file": str(ledger_fast_path.resolve()),
+        "fast_sha256": sha256(ledger_fast_path),
+        "packed_fast_theory": LEDGER_PACKED_FAST_THEORY,
+        "packed_fast_file": str(ledger_packed_fast_path.resolve()),
+        "packed_fast_sha256": sha256(ledger_packed_fast_path),
         "groups": groups,
     }
     manifest: dict[str, object] = {
