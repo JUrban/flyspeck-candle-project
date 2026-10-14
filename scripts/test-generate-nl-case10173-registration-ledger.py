@@ -63,6 +63,8 @@ class RegistrationLedgerTests(unittest.TestCase):
         self.assertEqual(manifest["cell_count"], 33)
         self.assertEqual(manifest["chunk_count"], 3)
         self.assertEqual(manifest["final_chunk_size"], 1)
+        self.assertEqual(manifest["aggregate"]["group_count"], 1)
+        self.assertEqual(manifest["aggregate"]["groups"][0]["chunk_count"], 3)
         self.assertRegex(manifest["shared_ceqs_body_sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(
             [(chunk["start"], chunk["end"]) for chunk in manifest["chunks"]],
@@ -70,7 +72,7 @@ class RegistrationLedgerTests(unittest.TestCase):
         )
         self.assertTrue((self.output / "ledger-manifest.json").is_file())
         self.assertEqual(
-            len(list(self.output.glob("*EvalScript.sml"))), 3
+            len(list(self.output.glob("*EvalScript.sml"))), 5
         )
         first_eval = (
             self.output / MODULE.names(0, 16)["eval_file"]
@@ -79,6 +81,28 @@ class RegistrationLedgerTests(unittest.TestCase):
             f'Theory {MODULE.names(0, 16)["eval_theory"]}[no_sig_docs]',
             first_eval,
         )
+        group = MODULE.group_names(0)
+        group_eval = (self.output / group["eval_file"]).read_text(
+            encoding="ascii"
+        )
+        self.assertIn(f'Theory {group["eval_theory"]}[no_sig_docs]', group_eval)
+        self.assertIn(
+            "registered_case10173_historical_chunk_at32_count1_pure_eval",
+            group_eval,
+        )
+        ledger_eval = (
+            self.output / f"{MODULE.LEDGER_EVAL_THEORY}Script.sml"
+        ).read_text(encoding="ascii")
+        self.assertIn(
+            f"compute_eval_pure {100000 + MODULE.GROUP_DEPTH + MODULE.LEDGER_DEPTH}",
+            ledger_eval,
+        )
+
+    def test_balanced_pair_has_uniform_depth_and_fails_on_overflow(self) -> None:
+        rendered = MODULE.balanced_pair(["A", "B", "C"], 2, "P")
+        self.assertEqual(rendered, "Pair (Pair (A) (B)) (Pair (C) (P))")
+        with self.assertRaisesRegex(ValueError, "too many balanced-tree leaves"):
+            MODULE.balanced_pair(["A", "B", "C"], 1, "P")
 
     def test_missing_chunk_fails_closed(self) -> None:
         (self.data / MODULE.names(16, 16)["data_file"]).unlink()

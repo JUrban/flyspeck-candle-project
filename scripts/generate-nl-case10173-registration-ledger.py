@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 
@@ -25,6 +26,15 @@ SCHEMA = "candle-nl-case10173-registration-ledger-v1"
 SHARED_DATA_THEORY = "compute_registeredCase10173HistoricalSharedCeqsData"
 SHARED_EVAL_THEORY = "compute_registeredCase10173HistoricalSharedCeqsEval"
 SHARED_CEQS = "registered_case10173_historical_shared_ceqs"
+GROUP_SIZE = 16
+GROUP_DEPTH = 4
+LEDGER_GROUP_COUNT = (CELL_COUNT + CHUNK_SIZE * GROUP_SIZE - 1) // (
+    CHUNK_SIZE * GROUP_SIZE
+)
+LEDGER_DEPTH = math.ceil(math.log2(LEDGER_GROUP_COUNT))
+LEDGER_DATA_THEORY = "compute_registeredCase10173HistoricalLedgerData"
+LEDGER_EVAL_THEORY = "compute_registeredCase10173HistoricalLedgerEval"
+LEDGER_PREFIX = "registered_case10173_historical_ledger"
 
 
 def sha256(path: Path) -> str:
@@ -63,6 +73,175 @@ def names(start: int, count: int) -> dict[str, str]:
         "data_file": f"{stem}DataScript.sml",
         "eval_file": f"{stem}EvalScript.sml",
     }
+
+
+def group_names(index: int) -> dict[str, str]:
+    stem = f"compute_registeredCase10173HistoricalLedgerGroup{index}"
+    return {
+        "index": str(index),
+        "data_theory": f"{stem}Data",
+        "eval_theory": f"{stem}Eval",
+        "data_file": f"{stem}DataScript.sml",
+        "eval_file": f"{stem}EvalScript.sml",
+        "prefix": f"registered_case10173_historical_ledger_group{index}",
+    }
+
+
+def balanced_pair(leaves: list[str], depth: int, padding: str) -> str:
+    """Render a perfect pair tree so every real leaf has identical fuel depth."""
+    expected = 1 << depth
+    if len(leaves) > expected:
+        raise ValueError(
+            f"too many balanced-tree leaves: count={len(leaves)} capacity={expected}"
+        )
+    level = leaves + [padding] * (expected - len(leaves))
+    while len(level) > 1:
+        level = [
+            f"Pair ({level[index]}) ({level[index + 1]})"
+            for index in range(0, len(level), 2)
+        ]
+    return level[0]
+
+
+def render_ledger_group_data(
+    index: int, group_chunks: list[dict[str, object]]
+) -> str:
+    item = group_names(index)
+    ancestors = "\n  ".join(str(chunk["data_theory"]) for chunk in group_chunks)
+    cexp_leaves = [
+        "registered_case10173_historical_chunk_"
+        f"at{chunk['start']}_count{chunk['count']}_cexp"
+        for chunk in group_chunks
+    ]
+    result_leaves = ["Num 1" for _ in group_chunks]
+    cexp_tree = balanced_pair(cexp_leaves, GROUP_DEPTH, "Num 1")
+    result_tree = balanced_pair(result_leaves, GROUP_DEPTH, "Num 1")
+    return f'''(*****************************************************************************
+ * Mechanically composed exact-result group {index} for the bounded genuine
+ * case-10173 registration ledger.  Perfect depth preserves evaluator fuel.
+ *****************************************************************************)
+Theory {item["data_theory"]}
+Ancestors
+  compute
+  {SHARED_DATA_THEORY}
+  {ancestors}
+Libs bossLib preamble
+
+Definition {item["prefix"]}_cexp_def:
+  {item["prefix"]}_cexp : compute_exp =
+    {cexp_tree}
+End
+
+Definition {item["prefix"]}_result_def:
+  {item["prefix"]}_result : cv =
+    {result_tree}
+End
+
+val _ = export_theory ();
+'''
+
+
+def render_ledger_group_eval(
+    index: int, group_chunks: list[dict[str, object]]
+) -> str:
+    item = group_names(index)
+    ancestors = "\n  ".join(str(chunk["eval_theory"]) for chunk in group_chunks)
+    leaf_theorems = "\n     ".join(
+        "registered_case10173_historical_chunk_"
+        f"at{chunk['start']}_count{chunk['count']}_pure_eval,"
+        for chunk in group_chunks
+    )
+    fuel = 100000 + GROUP_DEPTH
+    return f'''(*****************************************************************************
+ * Mechanically composed proof-producing group {index} for the bounded
+ * genuine case-10173 registration ledger.
+ *****************************************************************************)
+Theory {item["eval_theory"]}[no_sig_docs]
+Ancestors
+  compute_evalPure
+  {item["data_theory"]}
+  {ancestors}
+Libs bossLib preamble
+
+Theorem {item["prefix"]}_pure_eval_value:
+  compute_eval_pure {fuel} {SHARED_CEQS} {item["prefix"]}_cexp =
+    SOME (from_cv {item["prefix"]}_result)
+Proof
+  simp
+    [{item["prefix"]}_cexp_def,
+     {item["prefix"]}_result_def,
+     {leaf_theorems}
+     compute_eval_pure_def,
+     compute_execTheory.from_cv_def]
+QED
+
+val _ = export_theory ();
+'''
+
+
+def render_ledger_data(groups: list[dict[str, object]]) -> str:
+    ancestors = "\n  ".join(str(group["data_theory"]) for group in groups)
+    cexp_leaves = [f"{group['prefix']}_cexp" for group in groups]
+    result_leaves = [f"{group['prefix']}_result" for group in groups]
+    cexp_tree = balanced_pair(cexp_leaves, LEDGER_DEPTH, "Num 1")
+    result_tree = balanced_pair(result_leaves, LEDGER_DEPTH, "Num 1")
+    return f'''(*****************************************************************************
+ * Mechanically composed complete 4,173-cell exact-result ledger for genuine
+ * case 10173.  The tree is balanced so every group uses its proved fuel.
+ *****************************************************************************)
+Theory {LEDGER_DATA_THEORY}
+Ancestors
+  compute
+  {SHARED_DATA_THEORY}
+  {ancestors}
+Libs bossLib preamble
+
+Definition {LEDGER_PREFIX}_cexp_def:
+  {LEDGER_PREFIX}_cexp : compute_exp =
+    {cexp_tree}
+End
+
+Definition {LEDGER_PREFIX}_result_def:
+  {LEDGER_PREFIX}_result : cv =
+    {result_tree}
+End
+
+val _ = export_theory ();
+'''
+
+
+def render_ledger_eval(groups: list[dict[str, object]]) -> str:
+    ancestors = "\n  ".join(str(group["eval_theory"]) for group in groups)
+    group_theorems = "\n     ".join(
+        f"{group['prefix']}_pure_eval_value," for group in groups
+    )
+    fuel = 100000 + GROUP_DEPTH + LEDGER_DEPTH
+    return f'''(*****************************************************************************
+ * Proof-producing composition of every exact case-10173 numerical chunk.
+ * This theorem is a bounded first-inequality authority, not the reusable
+ * packed word/object refinement required for the full nonlinear corpus.
+ *****************************************************************************)
+Theory {LEDGER_EVAL_THEORY}[no_sig_docs]
+Ancestors
+  compute_evalPure
+  {LEDGER_DATA_THEORY}
+  {ancestors}
+Libs bossLib preamble
+
+Theorem {LEDGER_PREFIX}_pure_eval_value:
+  compute_eval_pure {fuel} {SHARED_CEQS} {LEDGER_PREFIX}_cexp =
+    SOME (from_cv {LEDGER_PREFIX}_result)
+Proof
+  simp
+    [{LEDGER_PREFIX}_cexp_def,
+     {LEDGER_PREFIX}_result_def,
+     {group_theorems}
+     compute_eval_pure_def,
+     compute_execTheory.from_cv_def]
+QED
+
+val _ = export_theory ();
+'''
 
 
 def render_shared_data(ceqs_rhs: str) -> str:
@@ -316,6 +495,53 @@ def generate(
             "eval_file": str(shared_eval_path.resolve()),
             "eval_sha256": sha256(shared_eval_path),
         }
+
+    groups: list[dict[str, object]] = []
+    for group_index, chunk_offset in enumerate(range(0, len(chunks), GROUP_SIZE)):
+        group_chunks = chunks[chunk_offset : chunk_offset + GROUP_SIZE]
+        item = group_names(group_index)
+        group_data_path = output_dir / item["data_file"]
+        group_eval_path = output_dir / item["eval_file"]
+        group_data_path.write_text(
+            render_ledger_group_data(group_index, group_chunks),
+            encoding="ascii",
+        )
+        group_eval_path.write_text(
+            render_ledger_group_eval(group_index, group_chunks),
+            encoding="ascii",
+        )
+        groups.append(
+            {
+                **item,
+                "chunk_start_index": chunk_offset,
+                "chunk_count": len(group_chunks),
+                "first_cell": int(group_chunks[0]["start"]),
+                "end_cell": int(group_chunks[-1]["end"]),
+                "data_path": str(group_data_path.resolve()),
+                "data_sha256": sha256(group_data_path),
+                "eval_path": str(group_eval_path.resolve()),
+                "eval_sha256": sha256(group_eval_path),
+            }
+        )
+
+    ledger_data_path = output_dir / f"{LEDGER_DATA_THEORY}Script.sml"
+    ledger_eval_path = output_dir / f"{LEDGER_EVAL_THEORY}Script.sml"
+    ledger_data_path.write_text(render_ledger_data(groups), encoding="ascii")
+    ledger_eval_path.write_text(render_ledger_eval(groups), encoding="ascii")
+    aggregate = {
+        "group_size": GROUP_SIZE,
+        "group_depth": GROUP_DEPTH,
+        "group_count": len(groups),
+        "ledger_depth": LEDGER_DEPTH,
+        "fuel": 100000 + GROUP_DEPTH + LEDGER_DEPTH,
+        "data_theory": LEDGER_DATA_THEORY,
+        "eval_theory": LEDGER_EVAL_THEORY,
+        "data_file": str(ledger_data_path.resolve()),
+        "data_sha256": sha256(ledger_data_path),
+        "eval_file": str(ledger_eval_path.resolve()),
+        "eval_sha256": sha256(ledger_eval_path),
+        "groups": groups,
+    }
     manifest: dict[str, object] = {
         "schema": SCHEMA,
         "status": "DEVELOPMENT_NON_RELEASE",
@@ -326,6 +552,7 @@ def generate(
         "shared_ceqs_body_sha256": shared_ceqs_body_sha256,
         "normalized_shared_ceqs": normalize_shared_ceqs,
         "shared_files": shared_files,
+        "aggregate": aggregate,
         "chunks": chunks,
     }
     manifest_path = output_dir / "ledger-manifest.json"
