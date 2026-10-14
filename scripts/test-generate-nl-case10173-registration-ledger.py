@@ -64,6 +64,12 @@ class RegistrationLedgerTests(unittest.TestCase):
         self.assertEqual(manifest["chunk_count"], 3)
         self.assertEqual(manifest["final_chunk_size"], 1)
         self.assertEqual(manifest["aggregate"]["group_count"], 1)
+        self.assertEqual(
+            manifest["aggregate"]["authority"], "exact_registered_ledger"
+        )
+        self.assertFalse(
+            manifest["aggregate"]["reusable_packed_object_refinement"]
+        )
         self.assertEqual(manifest["aggregate"]["groups"][0]["chunk_count"], 3)
         self.assertRegex(manifest["shared_ceqs_body_sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(

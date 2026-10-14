@@ -363,6 +363,9 @@ def render_ledger_packed_fast() -> str:
  * Proof-producing bounded gate from the complete packed case-10173 payload
  * to the exact balanced object-level ledger.  Payload bytes remain untrusted:
  * no registered result is returned unless every packed cell is accepted.
+ * Soundness still comes from the exact registered ledger; this theorem does
+ * not claim the reusable packed-byte/object-data correspondence needed by
+ * other inequalities.
  *****************************************************************************)
 Theory {LEDGER_PACKED_FAST_THEORY}
 Ancestors
@@ -715,6 +718,8 @@ def generate(
         render_ledger_packed_fast(), encoding="ascii"
     )
     aggregate = {
+        "authority": "exact_registered_ledger",
+        "reusable_packed_object_refinement": False,
         "group_size": GROUP_SIZE,
         "group_depth": GROUP_DEPTH,
         "group_count": len(groups),
