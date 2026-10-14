@@ -103,6 +103,14 @@ def balanced_pair(leaves: list[str], depth: int, padding: str) -> str:
     return level[0]
 
 
+def suc_fuel(base: str, depth: int) -> str:
+    """Keep evaluator fuel structural so recursive equations match exactly."""
+    value = base
+    for _ in range(depth):
+        value = f"SUC ({value})"
+    return value
+
+
 def render_ledger_group_data(
     index: int, group_chunks: list[dict[str, object]]
 ) -> str:
@@ -146,12 +154,31 @@ def render_ledger_group_eval(
 ) -> str:
     item = group_names(index)
     ancestors = "\n  ".join(str(chunk["eval_theory"]) for chunk in group_chunks)
-    leaf_theorems = "\n     ".join(
-        "registered_case10173_historical_chunk_"
-        f"at{chunk['start']}_count{chunk['count']}_pure_eval,"
-        for chunk in group_chunks
-    )
-    fuel = 100000 + GROUP_DEPTH
+    shared_lemmas: list[str] = []
+    shared_lemma_names: list[str] = []
+    for chunk in group_chunks:
+        chunk_prefix = (
+            "registered_case10173_historical_chunk_"
+            f"at{chunk['start']}_count{chunk['count']}"
+        )
+        data_namespace = f"{chunk['data_theory']}Theory"
+        shared_name = f"{chunk_prefix}_shared_value"
+        shared_lemma_names.append(shared_name)
+        shared_lemmas.append(
+            f'''Theorem {shared_name}:
+  compute_eval_pure 100000 {SHARED_CEQS} {chunk_prefix}_cexp = SOME (Num 1)
+Proof
+  PURE_ONCE_REWRITE_TAC
+    [GSYM {data_namespace}.{chunk_prefix}_ceqs_def]
+  >> simp
+    [{chunk_prefix}_pure_eval_value,
+     {data_namespace}.{chunk_prefix}_result_def,
+     compute_execTheory.from_cv_def]
+QED'''
+        )
+    shared_lemma_text = "\n\n".join(shared_lemmas)
+    leaf_theorems = ",\n     ".join(shared_lemma_names)
+    fuel = suc_fuel("100000", GROUP_DEPTH)
     return f'''(*****************************************************************************
  * Mechanically composed proof-producing group {index} for the bounded
  * genuine case-10173 registration ledger.
@@ -163,16 +190,36 @@ Ancestors
   {ancestors}
 Libs bossLib preamble
 
+Theorem {item["prefix"]}_pair_SOME:
+  compute_eval_pure ck ceqs p = SOME x /\\
+  compute_eval_pure ck ceqs q = SOME y ==>
+  compute_eval_pure (SUC ck) ceqs (Pair p q) = SOME (Pair x y)
+Proof
+  simp [compute_eval_pure_def]
+QED
+
+Theorem {item["prefix"]}_num_100000:
+  compute_eval_pure 100000 ceqs (Num n) = SOME (Num n)
+Proof
+  once_rewrite_tac [GSYM (EVAL ``SUC 99999``)]
+  >> simp [compute_eval_pure_def]
+QED
+
+{shared_lemma_text}
+
 Theorem {item["prefix"]}_pure_eval_value:
-  compute_eval_pure {fuel} {SHARED_CEQS} {item["prefix"]}_cexp =
+  compute_eval_pure ({fuel}) {SHARED_CEQS} {item["prefix"]}_cexp =
     SOME (from_cv {item["prefix"]}_result)
 Proof
-  simp
+  PURE_REWRITE_TAC
     [{item["prefix"]}_cexp_def,
      {item["prefix"]}_result_def,
-     {leaf_theorems}
-     compute_eval_pure_def,
      compute_execTheory.from_cv_def]
+  >> rpt (irule {item["prefix"]}_pair_SOME >> conj_tac)
+  >> simp
+    [{item["prefix"]}_num_100000,
+     {leaf_theorems}
+    ]
 QED
 
 val _ = export_theory ();
@@ -212,10 +259,11 @@ val _ = export_theory ();
 
 def render_ledger_eval(groups: list[dict[str, object]]) -> str:
     ancestors = "\n  ".join(str(group["eval_theory"]) for group in groups)
-    group_theorems = "\n     ".join(
-        f"{group['prefix']}_pure_eval_value," for group in groups
+    group_theorems = ",\n     ".join(
+        f"{group['prefix']}_pure_eval_value" for group in groups
     )
-    fuel = 100000 + GROUP_DEPTH + LEDGER_DEPTH
+    group_fuel = suc_fuel("100000", GROUP_DEPTH)
+    fuel = suc_fuel(group_fuel, LEDGER_DEPTH)
     return f'''(*****************************************************************************
  * Proof-producing composition of every exact case-10173 numerical chunk.
  * This theorem is a bounded first-inequality authority, not the reusable
@@ -228,16 +276,33 @@ Ancestors
   {ancestors}
 Libs bossLib preamble
 
+Theorem {LEDGER_PREFIX}_pair_SOME:
+  compute_eval_pure ck ceqs p = SOME x /\\
+  compute_eval_pure ck ceqs q = SOME y ==>
+  compute_eval_pure (SUC ck) ceqs (Pair p q) = SOME (Pair x y)
+Proof
+  simp [compute_eval_pure_def]
+QED
+
+Theorem {LEDGER_PREFIX}_num_group_fuel:
+  compute_eval_pure ({group_fuel}) ceqs (Num n) = SOME (Num n)
+Proof
+  PURE_REWRITE_TAC [compute_eval_pure_def]
+QED
+
 Theorem {LEDGER_PREFIX}_pure_eval_value:
-  compute_eval_pure {fuel} {SHARED_CEQS} {LEDGER_PREFIX}_cexp =
+  compute_eval_pure ({fuel}) {SHARED_CEQS} {LEDGER_PREFIX}_cexp =
     SOME (from_cv {LEDGER_PREFIX}_result)
 Proof
-  simp
+  PURE_REWRITE_TAC
     [{LEDGER_PREFIX}_cexp_def,
      {LEDGER_PREFIX}_result_def,
-     {group_theorems}
-     compute_eval_pure_def,
      compute_execTheory.from_cv_def]
+  >> rpt (irule {LEDGER_PREFIX}_pair_SOME >> conj_tac)
+  >> simp
+    [{LEDGER_PREFIX}_num_group_fuel,
+     {group_theorems}
+    ]
 QED
 
 val _ = export_theory ();

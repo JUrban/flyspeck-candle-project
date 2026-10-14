@@ -94,8 +94,22 @@ class RegistrationLedgerTests(unittest.TestCase):
             self.output / f"{MODULE.LEDGER_EVAL_THEORY}Script.sml"
         ).read_text(encoding="ascii")
         self.assertIn(
-            f"compute_eval_pure {100000 + MODULE.GROUP_DEPTH + MODULE.LEDGER_DEPTH}",
+            "compute_eval_pure ("
+            + MODULE.suc_fuel(
+                MODULE.suc_fuel("100000", MODULE.GROUP_DEPTH),
+                MODULE.LEDGER_DEPTH,
+            )
+            + ")",
             ledger_eval,
+        )
+        self.assertIn("PURE_REWRITE_TAC", group_eval)
+        self.assertIn("_pair_SOME", group_eval)
+        self.assertIn("_shared_value", group_eval)
+
+    def test_suc_fuel_preserves_structural_depth(self) -> None:
+        self.assertEqual(
+            MODULE.suc_fuel("100000", 3),
+            "SUC (SUC (SUC (100000)))",
         )
 
     def test_balanced_pair_has_uniform_depth_and_fails_on_overflow(self) -> None:
