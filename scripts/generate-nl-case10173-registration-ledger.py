@@ -32,6 +32,22 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def text_sha256(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def definition_rhs(source: str, name: str) -> str:
+    """Return the generated HOL definition's right-hand-side source text."""
+    marker = f"Definition {name}_def:"
+    try:
+        definition_start = source.index(marker) + len(marker)
+        definition_end = source.index("\nEnd", definition_start)
+        equals = source.index("=\n", definition_start, definition_end) + 2
+    except ValueError as error:
+        raise ValueError(f"malformed generated definition: {name}") from error
+    return source[equals:definition_end]
+
+
 def names(start: int, count: int) -> dict[str, str]:
     title = f"At{start}Count{count}"
     identifier = f"at{start}_count{count}"
@@ -54,7 +70,7 @@ def render_eval(start: int, count: int, item: dict[str, str]) -> str:
  * cells [{start},{start + count}).  The aligned job/root chunk was sliced
  * before HOL4 source registration.
  *****************************************************************************)
-Theory {item["eval_theory"]}
+Theory {item["eval_theory"]}[no_sig_docs]
 Ancestors
   compute_evalPure
   {item["data_theory"]}
@@ -96,6 +112,7 @@ def generate(data_dir: Path, output_dir: Path) -> dict[str, object]:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     chunks: list[dict[str, object]] = []
+    shared_ceqs_body_sha256: str | None = None
     start = 0
     while start < CELL_COUNT:
         count = min(CHUNK_SIZE, CELL_COUNT - start)
@@ -115,6 +132,16 @@ def generate(data_dir: Path, output_dir: Path) -> dict[str, object]:
         for marker in expected_markers:
             if marker not in source:
                 raise ValueError(f"data theory identity drift in {data_path}: {marker}")
+
+        prefix = f"registered_case10173_historical_chunk_{item['identifier']}"
+        ceqs_body_sha256 = text_sha256(definition_rhs(source, f"{prefix}_ceqs"))
+        if shared_ceqs_body_sha256 is None:
+            shared_ceqs_body_sha256 = ceqs_body_sha256
+        elif ceqs_body_sha256 != shared_ceqs_body_sha256:
+            raise ValueError(
+                f"equation environment drift in {data_path}: "
+                f"expected={shared_ceqs_body_sha256} actual={ceqs_body_sha256}"
+            )
 
         eval_path = output_dir / item["eval_file"]
         eval_path.write_text(render_eval(start, count, item), encoding="ascii")
@@ -157,6 +184,7 @@ def generate(data_dir: Path, output_dir: Path) -> dict[str, object]:
         "chunk_size": CHUNK_SIZE,
         "chunk_count": len(chunks),
         "final_chunk_size": int(chunks[-1]["count"]),
+        "shared_ceqs_body_sha256": shared_ceqs_body_sha256,
         "chunks": chunks,
     }
     manifest_path = output_dir / "ledger-manifest.json"

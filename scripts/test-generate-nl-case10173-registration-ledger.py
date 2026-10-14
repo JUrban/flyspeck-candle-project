@@ -36,8 +36,15 @@ class RegistrationLedgerTests(unittest.TestCase):
                     (
                         f'Theory {item["data_theory"]}',
                         f"Definition {prefix}_ceqs_def:",
+                        f"  {prefix}_ceqs =",
+                        "    [(«shared»,([],Num 1))]",
+                        "End",
                         f"Definition {prefix}_cexp_def:",
+                        f"  {prefix}_cexp = Num {start}",
+                        "End",
                         f"Definition {prefix}_result_def:",
+                        f"  {prefix}_result = Num 1",
+                        "End",
                         "(* UTF-8 HOL quotation smoke test: «payload» *)",
                     )
                 )
@@ -54,6 +61,7 @@ class RegistrationLedgerTests(unittest.TestCase):
         self.assertEqual(manifest["cell_count"], 33)
         self.assertEqual(manifest["chunk_count"], 3)
         self.assertEqual(manifest["final_chunk_size"], 1)
+        self.assertRegex(manifest["shared_ceqs_body_sha256"], r"^[0-9a-f]{64}$")
         self.assertEqual(
             [(chunk["start"], chunk["end"]) for chunk in manifest["chunks"]],
             [(0, 16), (16, 32), (32, 33)],
@@ -61,6 +69,13 @@ class RegistrationLedgerTests(unittest.TestCase):
         self.assertTrue((self.output / "ledger-manifest.json").is_file())
         self.assertEqual(
             len(list(self.output.glob("*EvalScript.sml"))), 3
+        )
+        first_eval = (
+            self.output / MODULE.names(0, 16)["eval_file"]
+        ).read_text(encoding="ascii")
+        self.assertIn(
+            f'Theory {MODULE.names(0, 16)["eval_theory"]}[no_sig_docs]',
+            first_eval,
         )
 
     def test_missing_chunk_fails_closed(self) -> None:
@@ -72,6 +87,17 @@ class RegistrationLedgerTests(unittest.TestCase):
         path = self.data / MODULE.names(0, 16)["data_file"]
         path.write_text("Theory Wrong\n", encoding="utf-8")
         with self.assertRaisesRegex(ValueError, "data theory identity drift"):
+            MODULE.generate(self.data, self.output)
+
+    def test_equation_environment_drift_fails_closed(self) -> None:
+        item = MODULE.names(16, 16)
+        path = self.data / item["data_file"]
+        source = path.read_text(encoding="utf-8")
+        path.write_text(
+            source.replace("[(«shared»,([],Num 1))]", "[(«changed»,([],Num 1))]"),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "equation environment drift"):
             MODULE.generate(self.data, self.output)
 
     def test_unexpected_chunk_fails_closed(self) -> None:
