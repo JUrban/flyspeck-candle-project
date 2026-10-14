@@ -40,10 +40,12 @@ class RegistrationLedgerTests(unittest.TestCase):
                         "    [(«shared»,([],Num 1))]",
                         "End",
                         f"Definition {prefix}_cexp_def:",
-                        f"  {prefix}_cexp = Num {start}",
+                        f"  {prefix}_cexp : compute_exp =",
+                        f"    Num {start}",
                         "End",
                         f"Definition {prefix}_result_def:",
-                        f"  {prefix}_result = Num 1",
+                        f"  {prefix}_result : cv =",
+                        "    Num 1",
                         "End",
                         "(* UTF-8 HOL quotation smoke test: «payload» *)",
                     )
@@ -82,6 +84,37 @@ class RegistrationLedgerTests(unittest.TestCase):
         (self.data / MODULE.names(16, 16)["data_file"]).unlink()
         with self.assertRaisesRegex(ValueError, "missing exported data theory"):
             MODULE.generate(self.data, self.output)
+
+    def test_normalized_shared_equations_are_emitted_once(self) -> None:
+        manifest = MODULE.generate(
+            self.data, self.output, normalize_shared_ceqs=True
+        )
+        self.assertTrue(manifest["normalized_shared_ceqs"])
+        self.assertIsNotNone(manifest["shared_files"])
+        self.assertTrue(
+            (self.output / f"{MODULE.SHARED_DATA_THEORY}Script.sml").is_file()
+        )
+        normalized_data = (
+            self.output / MODULE.names(16, 16)["data_file"]
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            f"    {MODULE.SHARED_CEQS}\nEnd", normalized_data
+        )
+        self.assertNotIn("«shared»", normalized_data)
+        normalized_eval = (
+            self.output / MODULE.names(16, 16)["eval_file"]
+        ).read_text(encoding="ascii")
+        self.assertIn(MODULE.SHARED_EVAL_THEORY, normalized_eval)
+        self.assertNotIn(
+            f"cv_trans registered_case10173_historical_chunk_at16_count16_ceqs_def",
+            normalized_eval,
+        )
+
+    def test_normalization_rejects_in_place_output(self) -> None:
+        with self.assertRaisesRegex(ValueError, "must differ"):
+            MODULE.generate(
+                self.data, self.data, normalize_shared_ceqs=True
+            )
 
     def test_identity_drift_fails_closed(self) -> None:
         path = self.data / MODULE.names(0, 16)["data_file"]
