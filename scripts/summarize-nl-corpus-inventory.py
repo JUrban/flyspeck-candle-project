@@ -5,8 +5,9 @@ The action-296 capture writes one pipe-delimited marker per source ID.  This
 tool keeps family selection reproducible: it validates unique source IDs and
 reports both exact serialized constant-signature families and the family
 containing a requested source.  The capture used comma-separated constant
-names even though `,` is itself a HOL constant, so the serialized field is
-kept opaque rather than being split into a misleading list.
+names even though `,` is itself a HOL constant.  The raw field therefore
+remains the family identity; a narrowly checked decoder recovers the one
+literal comma used by this capture for the usage inventory.
 """
 
 from __future__ import annotations
@@ -61,6 +62,32 @@ def read_sources(path: Path) -> list[Source]:
     return sources
 
 
+def decode_constants(serialized: str) -> tuple[str, ...]:
+    """Decode the canonical capture's sole delimiter-shaped constant.
+
+    Every empty split field must occur as one adjacent pair, produced by the
+    literal constant name `,`.  Anything else is schema drift and fails
+    closed.  The exact raw string, not this decoded view, remains the family
+    key.
+    """
+    parts = serialized.split(",")
+    decoded: list[str] = []
+    index = 0
+    while index < len(parts):
+        part = parts[index]
+        if part:
+            decoded.append(part)
+            index += 1
+        elif index + 1 < len(parts) and not parts[index + 1]:
+            decoded.append(",")
+            index += 2
+        else:
+            raise ValueError("ambiguous comma-separated constant signature")
+    if ",".join(decoded) != serialized:
+        raise ValueError("constant signature does not round-trip")
+    return tuple(decoded)
+
+
 def summarize(sources: list[Source], signature_of: str | None) -> dict:
     families: dict[str, list[Source]] = defaultdict(list)
     for source in sources:
@@ -88,12 +115,34 @@ def summarize(sources: list[Source], signature_of: str | None) -> dict:
         }
         for constants, members in ordered
     ]
+    constant_members: dict[str, list[Source]] = defaultdict(list)
+    for source in sources:
+        for constant in decode_constants(source.constants_serialized):
+            constant_members[constant].append(source)
+    constant_usage = [
+        {
+            "constant": constant,
+            "source_ids": len(members),
+            "parameter_count": sum(
+                source.parameter_count for source in members
+            ),
+        }
+        for constant, members in sorted(
+            constant_members.items(),
+            key=lambda item: (
+                -sum(source.parameter_count for source in item[1]),
+                -len(item[1]),
+                item[0],
+            ),
+        )
+    ]
     result = {
         "source_ids": len(sources),
         "parameter_count": sum(source.parameter_count for source in sources),
         "formula_digests": len({source.formula_digest for source in sources}),
         "serialized_signature_families": len(families),
         "families": family_rows,
+        "constant_usage": constant_usage,
     }
     if signature_of is not None:
         matches = [source for source in sources if source.source_id == signature_of]
@@ -120,11 +169,15 @@ def main() -> None:
     parser.add_argument("inventory_log", type=Path)
     parser.add_argument("--signature-of")
     parser.add_argument("--top", type=int, default=10)
+    parser.add_argument("--constant-top", type=int, default=0)
     args = parser.parse_args()
     if args.top < 0:
         parser.error("--top must be nonnegative")
+    if args.constant_top < 0:
+        parser.error("--constant-top must be nonnegative")
     result = summarize(read_sources(args.inventory_log), args.signature_of)
     result["families"] = result["families"][: args.top]
+    result["constant_usage"] = result["constant_usage"][: args.constant_top]
     print(json.dumps(result, indent=2, sort_keys=True))
 
 

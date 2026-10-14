@@ -49,6 +49,15 @@ class InventorySummaryTests(unittest.TestCase):
         self.assertEqual(
             result["selected_family"]["constants_serialized"], "!,,,BIT0"
         )
+        self.assertEqual(
+            MODULE.decode_constants("!,,,BIT0"), ("!", ",", "BIT0")
+        )
+        usage = {row["constant"]: row for row in result["constant_usage"]}
+        self.assertEqual(usage[","]["source_ids"], 2)
+
+    def test_ambiguous_comma_encoding_fails_closed(self) -> None:
+        with self.assertRaisesRegex(ValueError, "ambiguous"):
+            MODULE.decode_constants("x,,y")
 
     def test_duplicate_source_fails_closed(self) -> None:
         path = self.write(
