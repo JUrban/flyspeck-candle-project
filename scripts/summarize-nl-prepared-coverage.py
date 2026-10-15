@@ -140,19 +140,25 @@ def summarize(
     errors = [record for record in prepared if record.error is not None]
     source_counts: Counter[str] = Counter()
     parameter_counts: Counter[str] = Counter()
+    selected_counts: Counter[str] = Counter()
     signature_sources: Counter[tuple[str, ...]] = Counter()
     signature_parameters: Counter[tuple[str, ...]] = Counter()
+    signature_selected: Counter[tuple[str, ...]] = Counter()
     for record in unsupported:
         signature = tuple(sorted(record.unsupported))
         signature_sources[signature] += 1
         signature_parameters[signature] += inventory_by_id[
             record.source_id
         ].parameter_count
+        if selected is not None:
+            signature_selected[signature] += selected[record.source_id]
         for head in record.unsupported:
             source_counts[head] += 1
             parameter_counts[head] += inventory_by_id[
                 record.source_id
             ].parameter_count
+            if selected is not None:
+                selected_counts[head] += selected[record.source_id]
 
     ordered_heads = sorted(
         source_counts,
@@ -233,6 +239,11 @@ def summarize(
                 "heads": list(signature),
                 "source_ids": signature_sources[signature],
                 "parameter_records": signature_parameters[signature],
+                **(
+                    {"selected_leaves": signature_selected[signature]}
+                    if selected is not None
+                    else {}
+                ),
             }
             for signature in ordered_signatures
         ],
@@ -241,6 +252,11 @@ def summarize(
                 "head": head,
                 "source_ids": source_counts[head],
                 "parameter_records": parameter_counts[head],
+                **(
+                    {"selected_leaves": selected_counts[head]}
+                    if selected is not None
+                    else {}
+                ),
             }
             for head in ordered_heads
         ],

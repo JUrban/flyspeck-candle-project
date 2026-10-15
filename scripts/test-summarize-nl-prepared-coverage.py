@@ -168,6 +168,28 @@ class PreparedCoverageTests(unittest.TestCase):
         self.assertEqual(result["supported_selected_leaves"], 11)
         self.assertEqual(result["unsupported_selected_leaves"], 13)
         self.assertEqual(result["error_selected_leaves"], 17)
+        self.assertEqual(
+            result["unsupported_signatures"],
+            [
+                {
+                    "heads": ["vol_x"],
+                    "source_ids": 1,
+                    "parameter_records": 5,
+                    "selected_leaves": 13,
+                }
+            ],
+        )
+        self.assertEqual(
+            result["unsupported_heads"],
+            [
+                {
+                    "head": "vol_x",
+                    "source_ids": 1,
+                    "parameter_records": 5,
+                    "selected_leaves": 13,
+                }
+            ],
+        )
 
     def test_selected_leaf_identity_mismatch_fails_closed(self) -> None:
         log = self.write_log(
