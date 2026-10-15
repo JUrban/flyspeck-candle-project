@@ -119,6 +119,15 @@ class RegistrationLedgerTests(unittest.TestCase):
         self.assertIn("_shared_value", group_eval)
         self.assertIn("compute_fast_eval_ok", ledger_fast)
         self.assertIn(
+            "qexists_tac `"
+            + MODULE.suc_fuel(
+                MODULE.suc_fuel("100000", MODULE.GROUP_DEPTH),
+                MODULE.LEDGER_DEPTH,
+            )
+            + "`",
+            ledger_fast,
+        )
+        self.assertIn(
             "bounded_packed_chars_case10173_full_check",
             ledger_packed_fast,
         )

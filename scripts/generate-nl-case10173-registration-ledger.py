@@ -292,6 +292,7 @@ Theorem {LEDGER_PREFIX}_num_group_fuel:
   compute_eval_pure ({group_fuel}) ceqs (Num n) = SOME (Num n)
 Proof
   PURE_REWRITE_TAC [compute_eval_pure_def]
+  >> REFL_TAC
 QED
 
 Theorem {LEDGER_PREFIX}_pure_eval_value:
@@ -313,7 +314,7 @@ val _ = export_theory ();
 '''
 
 
-def render_ledger_fast(fuel: int) -> str:
+def render_ledger_fast(fuel_term: str) -> str:
     return f'''(*****************************************************************************
  * Exact fast-evaluator authority for the balanced genuine case-10173 ledger.
  * The expensive generic evaluations are composed once by the ancestor
@@ -340,7 +341,7 @@ Theorem {LEDGER_PREFIX}_compute_eval:
 Proof
   gen_tac
   >> irule compute_evalPureTheory.compute_eval_pure_refines
-  >> qexists_tac `{fuel}`
+  >> qexists_tac `{fuel_term}`
   >> simp [computeTheory.compute_default_clock,
            {LEDGER_PREFIX}_pure_eval_value]
 QED
@@ -711,8 +712,11 @@ def generate(
     ledger_data_path.write_text(render_ledger_data(groups), encoding="ascii")
     ledger_eval_path.write_text(render_ledger_eval(groups), encoding="ascii")
     ledger_fuel = 100000 + GROUP_DEPTH + LEDGER_DEPTH
+    ledger_fuel_term = suc_fuel(
+        suc_fuel("100000", GROUP_DEPTH), LEDGER_DEPTH
+    )
     ledger_fast_path.write_text(
-        render_ledger_fast(ledger_fuel), encoding="ascii"
+        render_ledger_fast(ledger_fuel_term), encoding="ascii"
     )
     ledger_packed_fast_path.write_text(
         render_ledger_packed_fast(), encoding="ascii"
