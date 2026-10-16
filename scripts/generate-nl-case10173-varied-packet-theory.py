@@ -411,6 +411,69 @@ def generate_packed(
     return b"CNLCPB01" + struct.pack("<I", cells) + b"".join(packets)
 
 
+def generate_decimal_packed(
+    kernel_path: Path,
+    reciprocal_path: Path,
+    analytic_path: Path,
+    root_path: Path,
+    cells: int,
+) -> bytes:
+    """Pack the canonical decimal packets in the shared fail-closed layout."""
+    if not 1 <= cells <= FULL_CELLS:
+        raise ValueError(
+            f"decimal packed fixture must contain 1..{FULL_CELLS} cells"
+        )
+    kernel_lines = authenticated_lines(
+        kernel_path, EXPECTED_DECIMAL_KERNEL_SHA256, "decimal kernel trace"
+    )
+    reciprocal_lines = authenticated_lines(
+        reciprocal_path,
+        EXPECTED_DECIMAL_RECIPROCAL_SHA256,
+        "decimal reciprocal trace",
+    )
+    analytic_lines = authenticated_lines(
+        analytic_path, EXPECTED_DECIMAL_ANALYTIC_SHA256, "decimal analytic trace"
+    )
+    root_lines = authenticated_lines(
+        root_path, EXPECTED_DECIMAL_ROOT_SHA256, "authenticated decimal roots"
+    )
+    if len(kernel_lines) != FULL_CELLS:
+        raise ValueError(f"decimal kernel row count drift: {len(kernel_lines)}")
+    if len(reciprocal_lines) != FULL_CELLS * RECIPROCALS_PER_CELL:
+        raise ValueError(
+            f"decimal reciprocal row count drift: {len(reciprocal_lines)}"
+        )
+    verify_decimal_roots(kernel_lines, root_lines)
+    analytic = parse_analytic(analytic_lines)
+
+    packets: list[bytes] = []
+    for index in range(cells):
+        kernel = fields_of(
+            kernel_lines[index], KERNEL_PREFIX, f"decimal kernel row {index}"
+        )
+        if int(kernel.get("index", "-1")) != index:
+            raise ValueError(f"decimal kernel identity drift at row {index}")
+        reciprocal_base = index * RECIPROCALS_PER_CELL
+        reciprocals: list[dict[str, str]] = []
+        for ordinal in range(RECIPROCALS_PER_CELL):
+            record = fields_of(
+                reciprocal_lines[reciprocal_base + ordinal],
+                RECIPROCAL_PREFIX,
+                f"decimal reciprocal row {reciprocal_base + ordinal}",
+            )
+            if (
+                int(record.get("index", "-1")) != index
+                or int(record.get("ordinal", "-1")) != ordinal
+            ):
+                raise ValueError(
+                    f"decimal reciprocal identity drift at {index}:{ordinal}"
+                )
+            reciprocals.append(record)
+        packets.append(packed_packet(kernel, reciprocals, analytic[index]))
+
+    return b"CNLCPB01" + struct.pack("<I", cells) + b"".join(packets)
+
+
 def verify_decimal_roots(
     kernel_lines: list[str], root_lines: list[str]
 ) -> None:
@@ -548,12 +611,12 @@ def main() -> None:
     parser.add_argument(
         "--roots",
         type=Path,
-        help="authenticated four-root fixture required by decimal-theory",
+        help="authenticated four-root fixture required by decimal formats",
     )
     parser.add_argument("--cells", type=int, default=3)
     parser.add_argument(
         "--format",
-        choices=("theory", "packed", "decimal-theory"),
+        choices=("theory", "packed", "decimal-theory", "decimal-packed"),
         default="theory",
         help="emit an HOL4 theory fixture or the fixed-width binary batch",
     )
@@ -572,7 +635,7 @@ def main() -> None:
             args.analytic_trace,
             args.cells,
         )
-    else:
+    elif args.format == "decimal-theory":
         if args.roots is None:
             parser.error("--roots is required with --format decimal-theory")
         rendered = generate_decimal_theory(
@@ -582,6 +645,16 @@ def main() -> None:
             args.roots,
             args.cells,
         ).encode("ascii")
+    else:
+        if args.roots is None:
+            parser.error("--roots is required with --format decimal-packed")
+        rendered = generate_decimal_packed(
+            args.kernel_trace,
+            args.reciprocal_trace,
+            args.analytic_trace,
+            args.roots,
+            args.cells,
+        )
     args.output.write_bytes(rendered)
     print(f"cells={args.cells}")
     print(f"format={args.format}")
