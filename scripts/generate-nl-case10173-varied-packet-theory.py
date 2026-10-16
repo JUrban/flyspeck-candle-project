@@ -12,6 +12,7 @@ in-logic packet checks.
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 import hashlib
 from pathlib import Path
 import struct
@@ -38,6 +39,9 @@ EXPECTED_DECIMAL_ANALYTIC_SHA256 = (
 EXPECTED_DECIMAL_ROOT_SHA256 = (
     "ac3f94e1ad09dda4240809ff29638dea23150e60e9572df2a61b4567d716d4cb"
 )
+EXPECTED_SOURCE_JOBS_SHA256 = (
+    "aaf26e7561345206cbb106a901784a78c95c5819d0f15a19406dca6fa7034f93"
+)
 KERNEL_PREFIX = "CANDLE_NL_NATIVE_HISTORICAL_DIHEDRAL_KERNEL"
 RECIPROCAL_PREFIX = "CANDLE_NL_NATIVE_HISTORICAL_RECIPROCAL"
 FULL_CELLS = 4173
@@ -45,6 +49,7 @@ RECIPROCALS_PER_CELL = 14
 COORDINATES = 6
 BOX_RECIPROCAL_ORDINALS = (5, 6, 7, 8, 9, 10, 13, 11, 12)
 WORD_LIMIT = 1 << 64
+DECIMAL_SCALE = 1_000_000_000_000
 
 
 Interval = tuple[int, int]
@@ -140,6 +145,152 @@ def parse_analytic(lines: list[str]) -> list[list[Certificate]]:
         if len(values) != 5:
             raise AssertionError("analytic certificate shape drift")
         result[cell].append((values[0], values[1], values[2], values[3], values[4]))
+    return result
+
+
+def decimal_floor(value: Fraction, context: str) -> int:
+    if value <= 0:
+        raise ValueError(f"nonpositive rational at {context}: {value}")
+    result = value.numerator * DECIMAL_SCALE // value.denominator
+    if result >= WORD_LIMIT:
+        raise ValueError(f"word64 overflow at {context}: {result}")
+    return result
+
+
+def decimal_ceil(value: Fraction, context: str) -> int:
+    if value <= 0:
+        raise ValueError(f"nonpositive rational at {context}: {value}")
+    numerator = value.numerator * DECIMAL_SCALE
+    result = (numerator + value.denominator - 1) // value.denominator
+    if result >= WORD_LIMIT:
+        raise ValueError(f"word64 overflow at {context}: {result}")
+    return result
+
+
+def source_interval(text: str, context: str) -> Interval:
+    fields = text.split(":")
+    if len(fields) != 2:
+        raise ValueError(f"malformed source interval at {context}: {text}")
+    lower, upper = map(Fraction, fields)
+    if lower > upper:
+        raise ValueError(f"reversed source interval at {context}: {text}")
+    return decimal_floor(lower, context), decimal_ceil(upper, context)
+
+
+def positive_inverse(value: Interval, context: str) -> Interval:
+    lower, upper = value
+    if lower <= 0 or upper < lower:
+        raise ValueError(f"invalid positive inverse input at {context}: {value}")
+    square_scale = DECIMAL_SCALE * DECIMAL_SCALE
+    return (
+        square_scale // upper,
+        (square_scale + lower - 1) // lower,
+    )
+
+
+def positive_product(left: Interval, right: Interval, context: str) -> Interval:
+    if left[0] <= 0 or right[0] <= 0:
+        raise ValueError(f"nonpositive product input at {context}")
+    lower = left[0] * right[0] // DECIMAL_SCALE
+    upper_product = left[1] * right[1]
+    upper = (upper_product + DECIMAL_SCALE - 1) // DECIMAL_SCALE
+    if lower >= WORD_LIMIT or upper >= WORD_LIMIT:
+        raise ValueError(f"word64 overflow at {context}: {lower}:{upper}")
+    return lower, upper
+
+
+def source_aligned_certificates(
+    source_lines: list[str], kernel_lines: list[str]
+) -> list[list[Certificate]]:
+    if len(source_lines) != FULL_CELLS:
+        raise ValueError(f"source job row count drift: {len(source_lines)}")
+    result: list[list[Certificate]] = []
+    for index, (source_line, kernel_line) in enumerate(
+        zip(source_lines, kernel_lines, strict=True)
+    ):
+        fields = source_line.split("\t")
+        if len(fields) != 5 or int(fields[0]) != index:
+            raise ValueError(f"source job identity/shape drift at row {index}")
+        box_roots_text = fields[1].split(",")
+        center_roots_text = fields[2].split(",")
+        lowers = fields[3].split(",")
+        uppers = fields[4].split(",")
+        if (
+            len(box_roots_text) != 7
+            or len(center_roots_text) != 7
+            or len(lowers) != COORDINATES
+            or len(uppers) != COORDINATES
+        ):
+            raise ValueError(f"source job field arity drift at row {index}")
+        kernel = fields_of(
+            kernel_line, KERNEL_PREFIX, f"source-aligned kernel row {index}"
+        )
+        source_lower = list(map(Fraction, lowers))
+        source_upper = list(map(Fraction, uppers))
+        if any(lower <= 0 or lower > upper for lower, upper in
+               zip(source_lower, source_upper, strict=True)):
+            raise ValueError(f"invalid source box at row {index}")
+        source_box_environment = [
+            (decimal_floor(lower, f"source box lower {index}:{coordinate}"),
+             decimal_ceil(upper, f"source box upper {index}:{coordinate}"))
+            for coordinate, (lower, upper) in enumerate(
+                zip(source_lower, source_upper, strict=True)
+            )
+        ]
+        source_center_environment = [
+            (decimal_floor((lower + upper) / 2,
+                           f"source center lower {index}:{coordinate}"),
+             decimal_ceil((lower + upper) / 2,
+                          f"source center upper {index}:{coordinate}"))
+            for coordinate, (lower, upper) in enumerate(
+                zip(source_lower, source_upper, strict=True)
+            )
+        ]
+        box_environment = interval_list(
+            kernel["box_environment"], COORDINATES, f"box environment {index}"
+        )
+        center_environment = interval_list(
+            kernel["center_environment"],
+            COORDINATES,
+            f"center environment {index}",
+        )
+        if source_box_environment != box_environment:
+            raise ValueError(f"source/kernel box mismatch at row {index}")
+        if source_center_environment != center_environment:
+            raise ValueError(f"source/kernel center mismatch at row {index}")
+        certificates: list[Certificate] = []
+        for coordinate in range(COORDINATES):
+            center_root = source_interval(
+                center_roots_text[coordinate],
+                f"source center root {index}:{coordinate}",
+            )
+            box_root = source_interval(
+                box_roots_text[coordinate],
+                f"source box root {index}:{coordinate}",
+            )
+            center_derivative = positive_inverse(
+                (2 * center_root[0], 2 * center_root[1]),
+                f"source center derivative {index}:{coordinate}",
+            )
+            box_derivative = positive_inverse(
+                (2 * box_root[0], 2 * box_root[1]),
+                f"source box derivative {index}:{coordinate}",
+            )
+            second_denominator = positive_product(
+                (2 * box_environment[coordinate][0],
+                 2 * box_environment[coordinate][1]),
+                (2 * box_root[0], 2 * box_root[1]),
+                f"source second denominator {index}:{coordinate}",
+            )
+            box_second_reciprocal = positive_inverse(
+                second_denominator,
+                f"source second reciprocal {index}:{coordinate}",
+            )
+            certificates.append(
+                (center_root, box_root, center_derivative, box_derivative,
+                 box_second_reciprocal)
+            )
+        result.append(certificates)
     return result
 
 
@@ -417,6 +568,7 @@ def generate_decimal_packed(
     analytic_path: Path,
     root_path: Path,
     cells: int,
+    source_jobs_path: Path | None = None,
 ) -> bytes:
     """Pack the canonical decimal packets in the shared fail-closed layout."""
     if not 1 <= cells <= FULL_CELLS:
@@ -444,7 +596,13 @@ def generate_decimal_packed(
             f"decimal reciprocal row count drift: {len(reciprocal_lines)}"
         )
     verify_decimal_roots(kernel_lines, root_lines)
-    analytic = parse_analytic(analytic_lines)
+    if source_jobs_path is None:
+        analytic = parse_analytic(analytic_lines)
+    else:
+        source_lines = authenticated_lines(
+            source_jobs_path, EXPECTED_SOURCE_JOBS_SHA256, "source jobs"
+        )
+        analytic = source_aligned_certificates(source_lines, kernel_lines)
 
     packets: list[bytes] = []
     for index in range(cells):
@@ -508,6 +666,7 @@ def generate_decimal_theory(
     analytic_path: Path,
     root_path: Path,
     cells: int,
+    source_jobs_path: Path | None = None,
 ) -> str:
     if not 1 <= cells <= 16:
         raise ValueError("decimal fixture must contain between 1 and 16 cells")
@@ -529,7 +688,13 @@ def generate_decimal_theory(
             f"decimal reciprocal row count drift: {len(reciprocal_lines)}"
         )
     verify_decimal_roots(kernel_lines, root_lines)
-    analytic = parse_analytic(analytic_lines)
+    if source_jobs_path is None:
+        analytic = parse_analytic(analytic_lines)
+    else:
+        source_lines = authenticated_lines(
+            source_jobs_path, EXPECTED_SOURCE_JOBS_SHA256, "source jobs"
+        )
+        analytic = source_aligned_certificates(source_lines, kernel_lines)
 
     definitions: list[str] = []
     theorems: list[str] = []
@@ -613,6 +778,14 @@ def main() -> None:
         type=Path,
         help="authenticated four-root fixture required by decimal formats",
     )
+    parser.add_argument(
+        "--source-jobs",
+        type=Path,
+        help=(
+            "replace coordinate sqrt certificates with canonical decimal "
+            "certificates derived from the authenticated source jobs"
+        ),
+    )
     parser.add_argument("--cells", type=int, default=3)
     parser.add_argument(
         "--format",
@@ -644,6 +817,7 @@ def main() -> None:
             args.analytic_trace,
             args.roots,
             args.cells,
+            args.source_jobs,
         ).encode("ascii")
     else:
         if args.roots is None:
@@ -654,6 +828,7 @@ def main() -> None:
             args.analytic_trace,
             args.roots,
             args.cells,
+            args.source_jobs,
         )
     args.output.write_bytes(rendered)
     print(f"cells={args.cells}")
