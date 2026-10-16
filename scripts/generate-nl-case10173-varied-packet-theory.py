@@ -26,6 +26,18 @@ EXPECTED_RECIPROCAL_SHA256 = (
 EXPECTED_ANALYTIC_SHA256 = (
     "8108d47c92287232381ddd75a3bfe275063e1a4ed209a84327201f45f0819b01"
 )
+EXPECTED_DECIMAL_KERNEL_SHA256 = (
+    "0750885c2d30cb93dbabf63b0b334ca176f17ed37e1cd6ac3c0a274baeec89a3"
+)
+EXPECTED_DECIMAL_RECIPROCAL_SHA256 = (
+    "09994e156b5066424c73cd4389566ded3902362a0751c2f6db8b236af583fb1a"
+)
+EXPECTED_DECIMAL_ANALYTIC_SHA256 = (
+    "793296918ef37a1ff0eca41decc3bcb6f8138f012c85640dd85133265c376959"
+)
+EXPECTED_DECIMAL_ROOT_SHA256 = (
+    "ac3f94e1ad09dda4240809ff29638dea23150e60e9572df2a61b4567d716d4cb"
+)
 KERNEL_PREFIX = "CANDLE_NL_NATIVE_HISTORICAL_DIHEDRAL_KERNEL"
 RECIPROCAL_PREFIX = "CANDLE_NL_NATIVE_HISTORICAL_RECIPROCAL"
 FULL_CELLS = 4173
@@ -399,15 +411,150 @@ def generate_packed(
     return b"CNLCPB01" + struct.pack("<I", cells) + b"".join(packets)
 
 
+def verify_decimal_roots(
+    kernel_lines: list[str], root_lines: list[str]
+) -> None:
+    if len(root_lines) != FULL_CELLS:
+        raise ValueError(f"decimal root row count drift: {len(root_lines)}")
+    roles = (
+        "center_root_delta",
+        "center_root_four_x0",
+        "box_root_delta",
+        "box_root_four_x0",
+    )
+    for index, (kernel_line, root_line) in enumerate(
+        zip(kernel_lines, root_lines, strict=True)
+    ):
+        kernel = fields_of(kernel_line, KERNEL_PREFIX, f"decimal kernel row {index}")
+        root_fields = root_line.split()
+        if len(root_fields) != 9 or int(root_fields[0]) != index:
+            raise ValueError(f"decimal root identity/shape drift at row {index}")
+        expected = [
+            endpoint
+            for role in roles
+            for endpoint in interval(kernel[role], f"decimal kernel {index}:{role}")
+        ]
+        actual = list(map(int, root_fields[1:]))
+        if actual != expected:
+            raise ValueError(f"decimal root value drift at row {index}")
+
+
+def generate_decimal_theory(
+    kernel_path: Path,
+    reciprocal_path: Path,
+    analytic_path: Path,
+    root_path: Path,
+    cells: int,
+) -> str:
+    if not 1 <= cells <= 16:
+        raise ValueError("decimal fixture must contain between 1 and 16 cells")
+    kernel_lines = authenticated_lines(
+        kernel_path, EXPECTED_DECIMAL_KERNEL_SHA256, "decimal kernel trace")
+    reciprocal_lines = authenticated_lines(
+        reciprocal_path,
+        EXPECTED_DECIMAL_RECIPROCAL_SHA256,
+        "decimal reciprocal trace",
+    )
+    analytic_lines = authenticated_lines(
+        analytic_path, EXPECTED_DECIMAL_ANALYTIC_SHA256, "decimal analytic trace")
+    root_lines = authenticated_lines(
+        root_path, EXPECTED_DECIMAL_ROOT_SHA256, "authenticated decimal roots")
+    if len(kernel_lines) != FULL_CELLS:
+        raise ValueError(f"decimal kernel row count drift: {len(kernel_lines)}")
+    if len(reciprocal_lines) != FULL_CELLS * RECIPROCALS_PER_CELL:
+        raise ValueError(
+            f"decimal reciprocal row count drift: {len(reciprocal_lines)}"
+        )
+    verify_decimal_roots(kernel_lines, root_lines)
+    analytic = parse_analytic(analytic_lines)
+
+    definitions: list[str] = []
+    theorems: list[str] = []
+    for index in range(cells):
+        kernel = fields_of(
+            kernel_lines[index], KERNEL_PREFIX, f"decimal kernel row {index}"
+        )
+        if int(kernel.get("index", "-1")) != index:
+            raise ValueError(f"decimal kernel identity drift at row {index}")
+        reciprocal_base = index * RECIPROCALS_PER_CELL
+        reciprocals: list[dict[str, str]] = []
+        for ordinal in range(RECIPROCALS_PER_CELL):
+            record = fields_of(
+                reciprocal_lines[reciprocal_base + ordinal],
+                RECIPROCAL_PREFIX,
+                f"decimal reciprocal row {reciprocal_base + ordinal}",
+            )
+            if (
+                int(record.get("index", "-1")) != index
+                or int(record.get("ordinal", "-1")) != ordinal
+            ):
+                raise ValueError(
+                    f"decimal reciprocal identity drift at {index}:{ordinal}"
+                )
+            reciprocals.append(record)
+        name = f"bounded_case10173_decimal_packet{index}"
+        packet = sml_packet(kernel, reciprocals, analytic[index], "  ")
+        definitions.append(
+            f"Definition {name}_def:\n"
+            f"  {name} =\n"
+            f"  {packet}\n"
+            f"End\n"
+        )
+        theorems.append(
+            f"Theorem {name}_accepts:\n"
+            f"  case {name} of\n"
+            f"  | BoundedCase10173Packet radii center_environment box_environment\n"
+            f"      coordinate_sqrt_certificates center_root_delta\n"
+            f"      center_root_four_x0 center_reciprocals box_root_delta\n"
+            f"      box_root_four_x0 box_reciprocals =>\n"
+            f"      bounded_case10173_checked_cell_accepts_decimal radii\n"
+            f"        center_environment box_environment coordinate_sqrt_certificates\n"
+            f"        center_root_delta center_root_four_x0 center_reciprocals\n"
+            f"        box_root_delta box_root_four_x0 box_reciprocals\n"
+            f"Proof\n"
+            f"  rw [{name}_def]\n"
+            f"  >> EVAL_TAC >> wordsLib.WORD_EVAL_TAC\n"
+            f"QED\n"
+        )
+
+    header = f'''(*****************************************************************************
+ * Mechanically generated genuine case-10173 decimal cell fixture.
+ *
+ * Decimal kernel:     sha256 {EXPECTED_DECIMAL_KERNEL_SHA256}
+ * Decimal reciprocal: sha256 {EXPECTED_DECIMAL_RECIPROCAL_SHA256}
+ * Decimal analytic:   sha256 {EXPECTED_DECIMAL_ANALYTIC_SHA256}
+ * Authenticated roots:sha256 {EXPECTED_DECIMAL_ROOT_SHA256}
+ * Cells: {cells}
+ *****************************************************************************)
+Theory compute_boundedCase10173HistoricalCellDecimalData
+Ancestors
+  compute_boundedCase10173HistoricalCellDecimal
+  compute_boundedCase10173Packet
+Libs
+  bossLib preamble wordsLib
+
+'''
+    return header + "\n".join(definitions) + "\n" + "\n".join(theorems) + (
+        "\nval _ = export_theory ();\n"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("kernel_trace", type=Path)
     parser.add_argument("reciprocal_trace", type=Path)
     parser.add_argument("analytic_trace", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument(
+        "--roots",
+        type=Path,
+        help="authenticated four-root fixture required by decimal-theory",
+    )
     parser.add_argument("--cells", type=int, default=3)
     parser.add_argument(
-        "--format", choices=("theory", "packed"), default="theory",
+        "--format",
+        choices=("theory", "packed", "decimal-theory"),
+        default="theory",
         help="emit an HOL4 theory fixture or the fixed-width binary batch",
     )
     args = parser.parse_args()
@@ -418,13 +565,23 @@ def main() -> None:
             args.analytic_trace,
             args.cells,
         ).encode("ascii")
-    else:
+    elif args.format == "packed":
         rendered = generate_packed(
             args.kernel_trace,
             args.reciprocal_trace,
             args.analytic_trace,
             args.cells,
         )
+    else:
+        if args.roots is None:
+            parser.error("--roots is required with --format decimal-theory")
+        rendered = generate_decimal_theory(
+            args.kernel_trace,
+            args.reciprocal_trace,
+            args.analytic_trace,
+            args.roots,
+            args.cells,
+        ).encode("ascii")
     args.output.write_bytes(rendered)
     print(f"cells={args.cells}")
     print(f"format={args.format}")
