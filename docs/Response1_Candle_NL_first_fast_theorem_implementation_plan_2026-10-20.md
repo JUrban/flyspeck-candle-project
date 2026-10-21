@@ -4,6 +4,41 @@ Date: 2026-10-20 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Current-head correction (2026-10-21 UTC)
+
+The review explicitly examined CakeML commit `133ab2651`.  My initial
+response below did not keep that snapshot boundary sufficiently clear and
+incorrectly described all four findings as gaps in the then-current active
+branch.  A direct current-head audit changes the disposition as follows:
+
+| Review finding | Disposition on the active branch | Evidence |
+|---|---|---|
+| 1. sqrt authentication used the original box rather than the actual Taylor operand | **Valid at `133ab2651`; now closed for the case-10173 source path** | `3d299b4d1` recomputes the Taylor-completed variable and authenticates its actual `value_bound`; the complete discriminator checked all 25,038 genuine coordinates; `e6b0e5fe6` introduced the shared actual-operand contract; `68887a9bf` and later source-prefix commits proved its registered source use. |
+| 2. magnitude-based evaluator clocks cannot support the production default-clock theorem | **Still open** | `compute_registeredCase10173RawWrapperEvalScript.sml` still contains `cv_size encoded_jobs + 7 < clock`, and the corresponding production root/wrapper path has not yet been replaced completely by structural bounds. |
+| 3. recursive head contract dropped the new Hessian condition | **Valid at `133ab2651`; now closed by the unified contract** | `registered_case10173_decimal_authenticated_head_refines` now requires `bounded_case10173_source_actual_sqrt_contract`; the authenticated stream and head-object decomposition expose that same contract.  It recomputes the actual operand and includes domain, root, conversion, second-derivative, sqrt, and following-product checks. |
+| 4. kernel integration was underspecified and absent | **Still open** | The exact full authenticated decimal call is not yet installed and exercised through Candle's theorem-producing `Kernel.compute` dispatch at `compute_default_clock`. |
+
+The full-data result already recorded in
+`docs/progress/2026-10-20-v4.177-nl-actual-sqrt-operand-contract.md` is the
+missing discriminator requested by finding 1: all 25,038 completed operands
+differ from their original source boxes; all 25,038 pass the source square-
+root certificate on the actual operand; and all 25,038 source-aligned packet
+reciprocals match the direct second derivative on that operand.  The proof
+does not identify the two operands merely because their rounded reciprocals
+happen to agree on this fixture.
+
+Accordingly, the current critical path should not redo findings 1 or 3.  It
+is: finish the packet-parametric checked-head composition using the already
+proved actual-operand contract; replace the remaining magnitude clocks with
+structural bounds; instantiate the 4,173-record recursion; and exercise the
+exact genuine call through real default-clock kernel dispatch.  The original
+theorem and second-family gates remain after that.
+
+The sections below preserve the original snapshot assessment and proposed
+proof shape.  Statements that call findings 1 and 3 “current gaps” should be
+read as applying to the review snapshot, not to the active branch after
+commits `3d299b4d1` through `19369884d` and their source-evaluation consumers.
+
 ## Conclusion
 
 The review identifies real gaps in the plan.  I agree with its four main
