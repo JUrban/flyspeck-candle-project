@@ -41,14 +41,13 @@ commits `3d299b4d1` through `19369884d` and their source-evaluation consumers.
 
 ## Conclusion
 
-The review identifies real gaps in the plan.  I agree with its four main
-findings after checking them against the active CakeML branch.  In particular,
-the first finding changes the critical path: the new square-root Hessian
-authentication is currently stated over the original source box, while the
-literal historical evaluator applies `q_dim_jet_sqrt_dd` to the
-Taylor-completed `value_bound`.  The current generic algebraic bridge remains
-useful, but it cannot close the source evaluator until the certificate is
-authenticated against that actual operand or a sound bridge to it is proved.
+The review identified four real gaps at its audited snapshot, CakeML commit
+`133ab2651`.  It did not, and could not, include the actual-operand and unified-
+contract work committed later that day.  Against the active branch, findings
+1 and 3 are closed; findings 2 and 4 remain production blockers.  The review
+therefore improved the plan, but it is not a current status report and should
+not be used to infer that the actual-operand authentication still needs to be
+designed or implemented.
 
 The 4--7 day working estimate in the original plan is therefore withdrawn.
 The next defensible estimate will be made only after both an arbitrary genuine
@@ -60,12 +59,12 @@ structural findings below, which are visible directly in the current sources.
 Numerical claims from the review will be reproduced before they are promoted
 to project evidence.
 
-## 1. Square-root operand mismatch
+## 1. Square-root operand mismatch (review snapshot)
 
-**Assessment: confirmed and critical.**
+**Assessment: confirmed at `133ab2651`; closed on the active branch.**
 
-`bounded_case10173_source_coordinate_sqrt_dd_decimals_exact` currently pairs
-the supplied square-root certificate with `source_boxes`.  In contrast,
+At `133ab2651`, `bounded_case10173_source_coordinate_sqrt_dd_decimals_exact`
+paired the supplied square-root certificate with `source_boxes`.  In contrast,
 `candle_cv_fsn_result_sqrt` obtains the second-derivative input by applying
 `candle_cv_fs_interval_to_q` to the incoming result's `value_bound`.  Taylor
 completion can widen that interval, so equality of the original source box
@@ -77,8 +76,8 @@ sample fixtures is useful diagnostic evidence, but it is not the missing
 proof.  In particular, it does not establish the literal source domain check,
 and a one-unit rounded-endpoint difference is possible near a boundary.
 
-The correction is to authenticate the operand actually consumed by the
-literal evaluator.  The preferred route is:
+The correction was to authenticate the operand actually consumed by the
+literal evaluator.  The implemented route was:
 
 1. define one canonical per-coordinate square-root contract containing the
    computed Taylor operand, root certificate, domain result, first derivative,
@@ -122,21 +121,21 @@ production composition path whose premise exceeds the default clock.  The
 result will be a finite clock-obligation ledger, not another isolated bound
 patch.
 
-## 3. Recursive head-contract drift
+## 3. Recursive head-contract drift (review snapshot)
 
-**Assessment: confirmed.**
+**Assessment: confirmed at `133ab2651`; closed on the active branch.**
 
-`registered_case10173_decimal_authenticated_head_refines` includes the older
-source square-root and decimal predicates but omits the newly introduced
-second-derivative predicate.  Therefore the existing recursion cannot consume
-the intended new premise as the original plan implied.
+At `133ab2651`, `registered_case10173_decimal_authenticated_head_refines`
+included the older source square-root and decimal predicates but omitted the
+newly introduced second-derivative predicate.  Therefore that snapshot's
+recursion could not consume the intended new premise as the original plan
+implied.
 
-The immediate repair is not simply to add the current source-box predicate,
-because finding 1 shows that predicate has the wrong operand.  After defining
-the corrected actual-operand contract, the authenticator, local head theorem,
-and recursive refinement will all refer to one shared versioned packet
-contract.  Separate handwritten lists of authentication conjuncts will be
-removed or mechanically derived from that contract.
+The repair was not simply to add the source-box predicate, because finding 1
+showed that predicate had the wrong operand.  The corrected authenticator,
+local head theorem, and recursive refinement now refer to the shared actual-
+operand contract instead of carrying a separate incomplete list of
+authentication conjuncts.
 
 ## 4. Kernel integration
 
@@ -160,9 +159,14 @@ route.  The concrete exit test must include all of the following:
 The generic three-payload seam is reusable machinery, but it does not discharge
 any of these call-specific obligations automatically.
 
-## Revised critical sequence
+## Historical revised sequence from the initial response
 
-The active work is reorganized as follows.
+The sequence below records how the review was first translated into work.  On
+the active branch, steps 2 and the contract-propagation part of step 4 are
+complete.  The current sequence is the shorter one stated in the current-head
+correction above.
+
+The initial response reorganized the work as follows.
 
 1. **Conditional composition skeleton.**  State the complete theorem chain
    from corrected packet acceptance and default-clock registered evaluation to
@@ -188,14 +192,14 @@ The active work is reorganized as follows.
    prepared states.
 8. **Second-family gate.**  only then estimate the all-NL rollout.
 
-The local algebraic Packet 1 proof can continue because it is generic in its
-input interval and is not invalidated by the mismatch.  It will no longer be
-reported as closing the source square-root boundary until it is instantiated
-with the corrected actual-operand contract.
+The local algebraic Packet 1 proof could continue because it is generic in its
+input interval and was not invalidated by the mismatch.  It was not counted as
+closing the source square-root boundary until instantiated with the corrected
+actual-operand contract.
 
-## Near-term gates and estimates
+## Historical near-term gates and estimates
 
-The next bounded gates are:
+These were the bounded gates proposed from the review snapshot:
 
 | Gate | Evidence | Focused effort estimate |
 |---|---|---:|
