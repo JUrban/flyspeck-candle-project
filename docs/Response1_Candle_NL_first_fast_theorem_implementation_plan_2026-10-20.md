@@ -14,9 +14,9 @@ branch.  A direct current-head audit changes the disposition as follows:
 | Review finding | Disposition on the active branch | Evidence |
 |---|---|---|
 | 1. sqrt authentication used the original box rather than the actual Taylor operand | **Valid at `133ab2651`; now closed for the case-10173 source path** | `3d299b4d1` recomputes the Taylor-completed variable and authenticates its actual `value_bound`; the complete discriminator checked all 25,038 genuine coordinates; `e6b0e5fe6` introduced the shared actual-operand contract; `68887a9bf` and later source-prefix commits proved its registered source use. |
-| 2. magnitude-based evaluator clocks cannot support the production default-clock theorem | **Still open** | `compute_registeredCase10173RawWrapperEvalScript.sml` still contains `cv_size encoded_jobs + 7 < clock`, and the corresponding production root/wrapper path has not yet been replaced completely by structural bounds. |
+| 2. magnitude-based evaluator clocks cannot support the production default-clock theorem | **Closed on the active production composition path** | `5a04a8c45` supplied structural root/guard bounds; `3d4675252` composes the arbitrary authenticated head through all 4,173 jobs and the structural raw wrapper at `compute_default_clock`.  The older magnitude theorem remains in the tree but is not used by this route. |
 | 3. recursive head contract dropped the new Hessian condition | **Valid at `133ab2651`; now closed by the unified contract** | `registered_case10173_decimal_authenticated_head_refines` now requires `bounded_case10173_source_actual_sqrt_contract`; the authenticated stream and head-object decomposition expose that same contract.  It recomputes the actual operand and includes domain, root, conversion, second-derivative, sqrt, and following-product checks. |
-| 4. kernel integration was underspecified and absent | **Still open** | The exact full authenticated decimal call is not yet installed and exercised through Candle's theorem-producing `Kernel.compute` dispatch at `compute_default_clock`. |
+| 4. kernel integration was underspecified and absent | **Partly closed; real installation/run still open** | `7997b9c77` proves the exact equation-set, entry-point, literal three-payload, source-program, and full-authenticator dispatcher contract.  The genuine certificate-byte closure is not yet installed in the kernel program or exercised by theorem-producing `Kernel.compute`. |
 
 The full-data result already recorded in
 `docs/progress/2026-10-20-v4.177-nl-actual-sqrt-operand-contract.md` is the
@@ -27,12 +27,14 @@ reciprocals match the direct second derivative on that operand.  The proof
 does not identify the two operands merely because their rounded reciprocals
 happen to agree on this fixture.
 
-Accordingly, the current critical path should not redo findings 1 or 3.  It
-is: finish the packet-parametric checked-head composition using the already
-proved actual-operand contract; replace the remaining magnitude clocks with
-structural bounds; instantiate the 4,173-record recursion; and exercise the
-exact genuine call through real default-clock kernel dispatch.  The original
-theorem and second-family gates remain after that.
+Accordingly, the current critical path should not redo findings 1--3.  The
+packet-parametric checked head, structural default-clock bounds, complete
+4,173-record recursion, raw-wrapper semantics, and generic registered
+dispatcher refinement are now green.  The next boundary is to materialize the
+genuine packed certificate bytes in that checker closure, install the proved
+dispatcher in the kernel program, and exercise the exact genuine call through
+real theorem-producing default-clock dispatch.  The original-theorem and
+second-family gates remain after that.
 
 The sections below preserve the original snapshot assessment and proposed
 proof shape.  Statements that call findings 1 and 3 “current gaps” should be
@@ -44,14 +46,18 @@ commits `3d299b4d1` through `19369884d` and their source-evaluation consumers.
 The review identified four real gaps at its audited snapshot, CakeML commit
 `133ab2651`.  It did not, and could not, include the actual-operand and unified-
 contract work committed later that day.  Against the active branch, findings
-1 and 3 are closed; findings 2 and 4 remain production blockers.  The review
-therefore improved the plan, but it is not a current status report and should
-not be used to infer that the actual-operand authentication still needs to be
-designed or implemented.
+1--3 are now closed on the selected production path.  Finding 4 has a proved
+dispatcher contract but remains a production blocker until the exact genuine
+byte closure is installed and a real theorem-producing kernel call takes that
+branch.  The review therefore improved the plan, but it is not a current
+status report and should not be used to infer that actual-operand
+authentication or structural-clock composition still needs to be designed or
+implemented.
 
 The 4--7 day working estimate in the original plan is therefore withdrawn.
-The next defensible estimate will be made only after both an arbitrary genuine
-job theorem and a genuine default-clock kernel-dispatch test are green.
+The arbitrary authenticated job theorem is now green.  The next defensible
+end-to-end estimate will be made after a genuine default-clock kernel-dispatch
+test is also green.
 
 The review was based on an earlier snapshot and some of its measurements have
 not yet been independently rerun in this worktree.  That does not weaken the
