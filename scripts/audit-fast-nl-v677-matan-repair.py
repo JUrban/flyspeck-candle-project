@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""Authenticate the exact 19-file fast-NL matan compatibility overlay."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import pathlib
+import re
+import subprocess
+import sys
+
+
+PROJECT = pathlib.Path("/project/flyspeck-candle-project")
+MANIFEST = PROJECT / "docs/fast-nl-v677-matan-repair-manifest.json"
+OVERLAY = PROJECT / "tools/fast_nl_v677_matan_repair_overlay.ml"
+IDENTITIES = pathlib.Path(
+    "/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001/"
+    "extra-source-identities.ml"
+)
+CONSTRUCTOR_AUDIT = PROJECT / "scripts/audit-fast-nl-matan-constructor-closure.py"
+
+
+def digest(path: pathlib.Path, algorithm: str) -> str:
+    hasher = hashlib.new(algorithm)
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            hasher.update(block)
+    return hasher.hexdigest()
+
+
+def git(path: pathlib.Path, *arguments: str) -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(path), *arguments], text=True
+    ).strip()
+
+
+def fail(message: str) -> int:
+    print("status=1")
+    print(f"error={message}")
+    return 1
+
+
+def main() -> int:
+    for path in (MANIFEST, OVERLAY, IDENTITIES, CONSTRUCTOR_AUDIT):
+        if not path.is_file():
+            return fail(f"missing:{path}")
+    try:
+        payload = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        return fail(f"manifest_parse:{error}")
+    if payload.get("schema_version") != 1:
+        return fail("manifest_schema")
+    original = payload.get("original", {})
+    candidate = payload.get("candidate", {})
+    files = payload.get("files")
+    if not isinstance(files, list) or len(files) != 19:
+        return fail("manifest_file_count")
+    roots = []
+    try:
+        for role, item in (("original", original), ("candidate", candidate)):
+            root = pathlib.Path(item["root"]).resolve()
+            expected_head = item["commit"]
+            if git(root, "rev-parse", "HEAD") != expected_head:
+                return fail(f"{role}_head")
+            if git(root, "status", "--porcelain"):
+                return fail(f"{role}_dirty")
+            roots.append(root)
+    except (KeyError, OSError, subprocess.CalledProcessError) as error:
+        return fail(f"repository:{error}")
+    original_root, candidate_root = roots
+
+    paths = [entry.get("path") for entry in files if isinstance(entry, dict)]
+    if len(paths) != 19 or len(set(paths)) != 19 or paths != sorted(paths):
+        return fail("manifest_paths")
+    changed = git(
+        candidate_root,
+        "diff",
+        "--name-only",
+        original["commit"],
+        candidate["commit"],
+    ).splitlines()
+    if changed != paths:
+        return fail("candidate_changed_file_set")
+
+    identity_text = IDENTITIES.read_text(encoding="utf-8")
+    for entry in files:
+        logical = entry["path"]
+        old_path = original_root / logical
+        new_path = candidate_root / logical
+        for path in (old_path, new_path):
+            if not path.is_file() or path.is_symlink():
+                return fail(f"source_node:{path}")
+        expected = {
+            "original_md5": digest(old_path, "md5"),
+            "original_sha256": digest(old_path, "sha256"),
+            "candidate_md5": digest(new_path, "md5"),
+            "candidate_sha256": digest(new_path, "sha256"),
+        }
+        for key, actual in expected.items():
+            if entry.get(key) != actual:
+                return fail(f"{key}:{logical}")
+        identity = (
+            f'("{old_path}",("{old_path.name}",'
+            f'"{entry["original_md5"]}"));'
+        )
+        if identity_text.count(identity) != 1:
+            return fail(f"source_identity:{logical}")
+
+    overlay = OVERLAY.read_text(encoding="utf-8")
+    overlay_paths = re.findall(r'"(candle/[^\"]+\.ml)"', overlay)
+    if overlay_paths != paths:
+        return fail("overlay_path_set")
+    required_overlay_fragments = (
+        'List.length candle_flyspeck_v677_existing_mappings <> 95',
+        'List.length candle_flyspeck_v677_matan_repair_mappings <> 19',
+        'existing = original',
+        'Some\n    (candle_flyspeck_v677_matan_repair_mappings @',
+        'mappings) <> 114',
+        'CANDLE_FLYSPECK_V677_MATAN_REPAIR_OVERLAY_READY mappings=19 total=114',
+    )
+    for fragment in required_overlay_fragments:
+        if fragment not in overlay:
+            return fail(f"overlay_contract:{fragment}")
+
+    completed = subprocess.run(
+        [str(CONSTRUCTOR_AUDIT), "--candidate-candle-root", str(candidate_root)],
+        cwd=PROJECT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=120,
+        check=False,
+    )
+    if completed.returncode != 0 or "status=0" not in completed.stdout.splitlines():
+        print(completed.stdout, end="")
+        return fail("candidate_constructor_closure")
+
+    print("status=0")
+    print(f"repair_source_count={len(files)}")
+    print(f"original_head={original['commit']}")
+    print(f"candidate_head={candidate['commit']}")
+    print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
+    print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
