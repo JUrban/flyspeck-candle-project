@@ -305,6 +305,16 @@
       "root_cause": "The probe required the marker to occupy the whole output line, while Candle's interactive printer prefixes the marker with '# '; exact substring cardinality is the correct discriminator.",
       "check_id": "checkpoint_finalization",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-026",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-m-verifier-v673/runtime.log",
+      "failure_mode": "The authenticated nonlinear verifier closure reaches List.flatten, but the exact linked runtime does not export that OCaml List alias.",
+      "root_cause": "The current Candle source defines List.flatten as List.concat, but the frozen linked development runtime predates that exported module member; source-head provenance alone does not establish the linked module surface.",
+      "check_id": "list_flatten_surface",
+      "enforcement": "preflight"
     }
   ]
 }

@@ -36,6 +36,9 @@ CHECKPOINT_FINALIZATION = (
 MULTIVARIATE_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v672-checkpoint-finalization.py"
 )
+LIST_FLATTEN_SURFACE = (
+    PROJECT / "scripts/audit-fast-nl-v674-list-flatten-surface.py"
+)
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
 
@@ -185,6 +188,10 @@ def check_checkpoint_finalization(_: dict, __: pathlib.Path) -> CheckResult:
         multivariate.ok,
         f"interval=[{interval.detail}] multivariate=[{multivariate.detail}]",
     )
+
+
+def check_list_flatten_surface(_: dict, __: pathlib.Path) -> CheckResult:
+    return run_checked([str(LIST_FLATTEN_SURFACE)], timeout=30)
 
 
 def check_checkpoint_integrity(config: dict, _: pathlib.Path) -> CheckResult:
@@ -485,6 +492,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "runtime_symbol_surface": check_runtime_symbol_surface,
     "support_stage_boundaries": check_support_stage_boundaries,
     "checkpoint_finalization": check_checkpoint_finalization,
+    "list_flatten_surface": check_list_flatten_surface,
     "checkpoint_integrity": check_checkpoint_integrity,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,
     "short_runtime_probe": check_short_runtime_probe,
