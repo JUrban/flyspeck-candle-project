@@ -11,12 +11,12 @@ case $1 in
   *) printf 'unsupported output basename: %s\n' "$1" >&2; exit 2 ;;
 esac
 
-run=/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001
+run=${FAST_NL_RUN_DIR:-/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001}
 fixture=/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001
 base_dir=$run/postsupport
 output_dir=$run/$1
 driver=$fixture/exact-one-call.ml
-dev_runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-001
+dev_runtime=${FAST_NL_DEV_RUNTIME:-/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-001}
 expected_marker=CANDLE_CV_CASE10173_HISTORICAL_REGISTERED_FULL_CALL_ORIGINAL_PROVE_TEST_OK
 numerical_marker=CANDLE_REGISTERED_FULL_CALL_REGISTERED_NUMERICAL_END
 fast_numerical_max_seconds=120

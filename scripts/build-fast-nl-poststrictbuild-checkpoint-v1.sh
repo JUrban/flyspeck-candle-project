@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-run_dir=/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001
+run_dir=${FAST_NL_RUN_DIR:-/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001}
 fixture_dir=/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001
-dev_runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-001
+dev_runtime=${FAST_NL_DEV_RUNTIME:-/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-001}
+x64_receipt=${FAST_NL_X64_RECEIPT:-$run_dir/x64-link-v1-controller.receipt}
 base_source=/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df
 ready_marker=CANDLE_FLYSPECK_V656_FAST_NL_POSTSTRICTBUILD_CHECKPOINT_READY
 setup=$fixture_dir/setup.ml
@@ -19,7 +20,7 @@ check_sha() {
 [[ $(git -C "$base_source" rev-parse HEAD) == \
    9ae969dfaca95e223d44b50f7cae00df3d2ab949 ]]
 [[ -x $dev_runtime/cake ]]
-grep -Fxq 'status=0' "$run_dir/x64-link-v1-controller.receipt"
+grep -Fxq 'status=0' "$x64_receipt"
 jq -e '
   .repositories.cakeml.commit == "aa7ffbc3a5e30c0f78acfe883f39476d0a3f035a" and
   .repositories.candle.commit == "0f9690d3683efca78a60d4607596815245e37578" and

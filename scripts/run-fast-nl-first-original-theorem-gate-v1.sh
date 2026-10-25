@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-run=/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001
+run=${FAST_NL_RUN_DIR:-/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001}
 fixture=/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001
 scripts=/project/flyspeck-candle-project/scripts
 

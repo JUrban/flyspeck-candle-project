@@ -11,7 +11,7 @@ output_dir=$2
 driver=$3
 expected_marker=$4
 receipt_kind=$5
-dev_runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-001
+dev_runtime=${FAST_NL_DEV_RUNTIME:-/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-001}
 
 [[ -f $base_dir/CHECKPOINT-READY ]]
 [[ ! -f $base_dir/CHECKPOINT-FAILED ]]
