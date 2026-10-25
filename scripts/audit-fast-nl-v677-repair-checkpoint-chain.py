@@ -98,6 +98,23 @@ STAGES = (
             "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_compile_sound.ml",
         ),
     },
+    {
+        "directory": ROOT / "post-fixed-outer-nonlinear-compile-sound-v677s",
+        "kind": "development-fast-nl-v677-fixed-outer-nonlinear-compile-sound-checkpoint-v1",
+        "sha256": "25e7179af6617c2983746666903ed36a2d4d70072a71b36e8be314da44c87e14",
+        "marker": "CANDLE_FLYSPECK_V677_FIXED_OUTER_NONLINEAR_COMPILE_SOUND_CHECKPOINT_READY",
+        "driver": PROJECT / "tools/fast_nl_v677_fixed_outer_nonlinear_compile_sound_stage.ml",
+        "required": (
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_program_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_compile_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_program_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_compile_sound.ml",
+        ),
+        "forbidden": (
+            "- Finished loading candle/cv_compute_analytic_expr_certificate_variant_prepare.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_fixed_scale_historical_dihedral_first_order_sound.ml",
+        ),
+    },
 )
 
 
