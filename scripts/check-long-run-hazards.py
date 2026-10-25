@@ -33,6 +33,9 @@ SUPPORT_STAGE_BOUNDARIES = (
 CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v671-checkpoint-finalization.py"
 )
+MULTIVARIATE_CHECKPOINT_FINALIZATION = (
+    PROJECT / "scripts/audit-fast-nl-v672-checkpoint-finalization.py"
+)
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
 
@@ -172,7 +175,16 @@ def check_support_stage_boundaries(_: dict, __: pathlib.Path) -> CheckResult:
 
 
 def check_checkpoint_finalization(_: dict, __: pathlib.Path) -> CheckResult:
-    return run_checked([str(CHECKPOINT_FINALIZATION)], timeout=180)
+    interval = run_checked([str(CHECKPOINT_FINALIZATION)], timeout=180)
+    if not interval.ok:
+        return interval
+    multivariate = run_checked(
+        [str(MULTIVARIATE_CHECKPOINT_FINALIZATION)], timeout=180
+    )
+    return CheckResult(
+        multivariate.ok,
+        f"interval=[{interval.detail}] multivariate=[{multivariate.detail}]",
+    )
 
 
 def check_checkpoint_integrity(config: dict, _: pathlib.Path) -> CheckResult:
