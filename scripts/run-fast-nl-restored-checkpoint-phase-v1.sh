@@ -12,12 +12,14 @@ driver=$3
 expected_marker=$4
 receipt_kind=$5
 dev_runtime=${FAST_NL_DEV_RUNTIME:-/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-001}
+phase_timeout_seconds=${FAST_NL_PHASE_TIMEOUT_SECONDS:-21600}
 
 [[ -f $base_dir/CHECKPOINT-READY ]]
 [[ ! -f $base_dir/CHECKPOINT-FAILED ]]
 [[ ! -e $output_dir ]]
 [[ -f $driver ]]
 [[ -x $dev_runtime/cake ]]
+[[ $phase_timeout_seconds =~ ^[1-9][0-9]*$ ]]
 mapfile -t checkpoints < <(
   find "$base_dir/checkpoint" -maxdepth 1 -type f -name 'ckpt_*.dmtcp' -print
 )
@@ -50,7 +52,7 @@ writer_pid=$!
 cd "$dev_runtime"
 env -i PATH=/project/bin:/usr/local/bin:/usr/bin:/bin LC_ALL=C \
   CML_HEAP_SIZE=32768 DMTCP_TMPDIR="$output_dir/dmtcp-tmp" \
-  timeout 21600 dmtcp_restart --new-coordinator --coord-port 0 \
+  timeout "$phase_timeout_seconds" dmtcp_restart --new-coordinator --coord-port 0 \
     --port-file "$output_dir/coord.port" --ckptdir "$output_dir/checkpoint" \
     "${checkpoints[0]}" <"$output_dir/input.fifo" \
     >"$output_dir/output.fifo" 2>&1 &

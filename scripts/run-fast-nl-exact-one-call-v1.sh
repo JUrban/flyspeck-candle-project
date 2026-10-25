@@ -21,11 +21,13 @@ expected_marker=CANDLE_CV_CASE10173_HISTORICAL_REGISTERED_FULL_CALL_ORIGINAL_PRO
 numerical_marker=CANDLE_REGISTERED_FULL_CALL_REGISTERED_NUMERICAL_END
 fast_numerical_max_seconds=120
 numerical_watchdog_seconds=180
+call_timeout_seconds=${FAST_NL_CALL_TIMEOUT_SECONDS:-21600}
 
 [[ -f $base_dir/CHECKPOINT-READY ]]
 [[ ! -f $base_dir/CHECKPOINT-FAILED ]]
 [[ ! -e $output_dir ]]
 [[ -x $dev_runtime/cake ]]
+[[ $call_timeout_seconds =~ ^[1-9][0-9]*$ ]]
 mapfile -t checkpoints < <(
   find "$base_dir/checkpoint" -maxdepth 1 -type f -name 'ckpt_*.dmtcp' -print
 )
@@ -46,7 +48,7 @@ set +e
 setsid /usr/bin/time -v -o "$output_dir/time.log" \
   env -i PATH=/project/bin:/usr/local/bin:/usr/bin:/bin LC_ALL=C \
     CML_HEAP_SIZE=32768 DMTCP_TMPDIR="$output_dir/dmtcp-tmp" \
-    timeout 21600 dmtcp_restart --new-coordinator --coord-port 0 \
+    timeout "$call_timeout_seconds" dmtcp_restart --new-coordinator --coord-port 0 \
       --port-file "$output_dir/coord.port" "${checkpoints[0]}" \
       <"$output_dir/stdin.ml" >"$output_dir/runtime.log" 2>&1 &
 launcher_pid=$!

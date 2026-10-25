@@ -4,6 +4,11 @@ set -euo pipefail
 run=${FAST_NL_RUN_DIR:-/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001}
 fixture=/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001
 scripts=/project/flyspeck-candle-project/scripts
+action49_timeout_seconds=${FAST_NL_ACTION49_TIMEOUT_SECONDS:-21600}
+support_timeout_seconds=${FAST_NL_SUPPORT_TIMEOUT_SECONDS:-21600}
+
+[[ $action49_timeout_seconds =~ ^[1-9][0-9]*$ ]]
+[[ $support_timeout_seconds =~ ^[1-9][0-9]*$ ]]
 
 [[ $(sha256sum "$fixture/action0-through49.ml" | awk '{print $1}') == \
    0174c32fd75dd9db8027c9dddfef46cd6a98afd58c4f48345203800158ab03ce ]]
@@ -12,12 +17,14 @@ scripts=/project/flyspeck-candle-project/scripts
 [[ $(sha256sum "$fixture/exact-one-call.ml" | awk '{print $1}') == \
    e2129e131a7ce4df7f1d5792f4799c98f111a6ecf54dfab181ba95a8455e8cd8 ]]
 
-"$scripts/run-fast-nl-restored-checkpoint-phase-v1.sh" \
+FAST_NL_PHASE_TIMEOUT_SECONDS=$action49_timeout_seconds \
+  "$scripts/run-fast-nl-restored-checkpoint-phase-v1.sh" \
   "$run" "$run/postaction49" "$fixture/action0-through49.ml" \
   'CANDLE_FLYSPECK_V656_ACTION49_CHECKPOINT_READY actions=50 passed=50' \
   development-fast-nl-post-action49-checkpoint-v1
 
-"$scripts/run-fast-nl-restored-checkpoint-phase-v1.sh" \
+FAST_NL_PHASE_TIMEOUT_SECONDS=$support_timeout_seconds \
+  "$scripts/run-fast-nl-restored-checkpoint-phase-v1.sh" \
   "$run/postaction49" "$run/postsupport" "$fixture/support.ml" \
   CANDLE_FLYSPECK_V656_FAST_NL_SUPPORT_CHECKPOINT_READY \
   development-fast-nl-post-support-checkpoint-v1
