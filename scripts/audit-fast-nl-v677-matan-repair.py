@@ -147,6 +147,21 @@ def main() -> int:
         != 1
     ):
         return fail("first_jet_matan_series_module_binding")
+    compile_sound_text = (candidate_root / paths[5]).read_text(encoding="utf-8")
+    premise_free_discharge = re.compile(
+        r"REWRITE_TAC\s*"
+        r"\[candle_q_dim_taylor_model_result_default_analytic_invariant\]",
+        re.S,
+    )
+    if (
+        len(premise_free_discharge.findall(compile_sound_text)) != 1
+        or re.search(
+            r"MATCH_MP_TAC\s*"
+            r"candle_q_dim_taylor_model_result_default_analytic_invariant",
+            compile_sound_text,
+        )
+    ):
+        return fail("matan_default_invariant_discharge")
 
     overlay = OVERLAY.read_text(encoding="utf-8")
     overlay_pairs = re.findall(
@@ -194,6 +209,7 @@ def main() -> int:
     print("matan_step_premise_delimitation_count=1")
     print("matan_representation_logical_normalization_count=1")
     print("first_jet_matan_series_module_binding_count=1")
+    print("matan_default_invariant_discharge_count=1")
     print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
     print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
     return 0

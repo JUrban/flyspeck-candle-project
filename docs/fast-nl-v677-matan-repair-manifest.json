@@ -7,7 +7,7 @@
   },
   "candidate": {
     "root": "/project/worktrees/candle-fast-nl-matan-closure-v1",
-    "commit": "7540011a62810755d2c9fdb4bb9dfe9bd933cea1"
+    "commit": "0d55a53f9d16059a88eaf6ce20a43bcd250fe48d"
   },
   "files": [
     {"path":"candle/cv_compute_analytic_expr_certificate_patch.ml","original_md5":"7a84867e06ab73da17ba3038e9d41278","original_sha256":"01d8ccde4afa2fe0d509c303240dac88b0babc619153e0546387cd09d9d0caed","candidate_md5":"643a879d3b65b3f39d2fb1b5805e4711","candidate_sha256":"b88e770ce0b7635f6ba827d5122231688c32ccadf023400f48cee4312ebfa667"},
@@ -15,7 +15,7 @@
     {"path":"candle/cv_compute_analytic_expr_certificate_patch_exact.ml","original_md5":"087a8d240ad7fef9f8901b72988bea5f","original_sha256":"9724687f5a68b03cd0786db9cf28f606ba84fe5b7523a056bf07607207048ee9","candidate_md5":"7b3acf18afdec829a753bc33e36aeee4","candidate_sha256":"9c1251dc9de37614040de2c3cb7de7837254325543b80dcd17db04c035544581"},
     {"path":"candle/cv_compute_analytic_expr_certificate_variant_prepare.ml","original_md5":"14289599b3141c79c09b840e13198145","original_sha256":"3ecb3afc0ae4b36eb65bc7389619b830e206a37594efc6ecf1ec7272993aa0c3","candidate_md5":"46a7634ec9048c63d4c6ae95abcb235d","candidate_sha256":"afc63630231afb61a9439c9a95683c5590284b197ebcc859576141e4efc51c27"},
     {"path":"candle/cv_compute_analytic_expr_first_jet_program_compute.ml","original_md5":"41e3f459c4c7dd904d44b588d7eccd5e","original_sha256":"2b5564a57dbf3468b788cbddac7bd8ea6d4cf56beae74a433b33d2cce0c5ca32","candidate_md5":"64a8a0ff7327b76024885d2306449611","candidate_sha256":"b9ad8573df5e66feeb81eb6e81e07faf81aa5c53e7d0eb4c05333ccd48def1d5"},
-    {"path":"candle/cv_compute_analytic_expr_taylor_model_program_compile_sound.ml","original_md5":"f22b795b191e08854a1872fb4fff81eb","original_sha256":"f1c4eb1fe768b42ebcc3856d52c783d4ad4563b469f6762bf15cf5cda2c34f3a","candidate_md5":"4974effdbb64c86b9ac06368dc070d78","candidate_sha256":"c7ff76ed965d5bed66330e6fbc34b6e619337a161f15c4f00ec59c4313a29be3"},
+    {"path":"candle/cv_compute_analytic_expr_taylor_model_program_compile_sound.ml","original_md5":"f22b795b191e08854a1872fb4fff81eb","original_sha256":"f1c4eb1fe768b42ebcc3856d52c783d4ad4563b469f6762bf15cf5cda2c34f3a","candidate_md5":"ec0233be3ec9a2c1585bfb427d82e96d","candidate_sha256":"8051e5c2cd5465d8714101f98093b833d4a213e90dc75ab22eb8b7ea7758b35d"},
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_compute.ml","original_md5":"8094d33d76dbf841f198d009b5225cf1","original_sha256":"43ae9dec58bd3ae5c909f6566f1655b7183f74d7b5ed9e84d931273b9f2675f0","candidate_md5":"4363c3a3d0eefe9b2bf8aeb7e94c1a19","candidate_sha256":"61c0a11ab6121f376621bae5334d7c8a56cff35c6c3d3560f77c7c4f65bbc594"},
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compile_sound.ml","original_md5":"0b2437383e94614ae9a8b0745ddf9142","original_sha256":"72da4a4dc6078209a83234bc11974fe9be6a0e6276a03fa9f6e3bf6a4f011ced","candidate_md5":"19992e22f1b395815d88d34618dfe9d0","candidate_sha256":"d4c327a0ca785249a3652bd1c72deb33df254434c20efe05febe5f9462e31ec7"},
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compute.ml","original_md5":"c388bf13687f942a1aa121cd8be907fc","original_sha256":"6a3dcb0e25449c02b8314b6b38da468bfb0c44a7eca9d919a66e54a558f9cc82","candidate_md5":"e468f726f078867514f80f3e5ccb46dd","candidate_sha256":"72584c405815967331bdc24784cf29564e8bc0c2232d879b72cf14a808863f85"},
