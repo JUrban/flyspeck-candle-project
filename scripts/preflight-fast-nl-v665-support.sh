@@ -6,6 +6,7 @@ runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb
 renderer=$project/scripts/render-fast-nl-v665-inputs.py
 audit=$project/scripts/audit-fast-nl-support-module-closure.py
 runtime_surface_audit=$project/scripts/audit-fast-nl-v670-runtime-symbol-surface.py
+segmentation_audit=$project/scripts/audit-fast-nl-v671-support-segmentation.py
 data=$project/tools/fast_nl_v665_verifier_data.ml
 compat=$project/tools/fast_nl_v665_verifier_runtime_compat.ml
 setup=$project/tools/fast_nl_v665_setup.ml
@@ -14,10 +15,16 @@ runtime_surface=$project/tools/fast_nl_v670_runtime_surface_support.ml
 
 [[ -x $runtime ]]
 [[ -x $renderer ]]
-for path in "$audit" "$runtime_surface_audit" "$data" "$compat" "$setup" \
+for path in "$audit" "$runtime_surface_audit" "$segmentation_audit" \
+  "$data" "$compat" "$setup" \
   "$support" "$runtime_surface"; do
   [[ -f $path ]]
 done
+
+segmentation_result=$($segmentation_audit)
+grep -Fxq 'status=0' <<<"$segmentation_result"
+grep -Fxq 'required_checkpoint_stage_count=2' <<<"$segmentation_result"
+grep -Fxq 'historical_checkpoint_reusable_count=0' <<<"$segmentation_result"
 
 runtime_surface_result=$($runtime_surface_audit)
 grep -Fxq 'status=0' <<<"$runtime_surface_result"
@@ -93,6 +100,8 @@ printf '%s\n' \
   'runtime_symbol_surface_status=OK' \
   'runtime_identifier_count=9' \
   'runtime_identifier_use_count=94' \
+  'support_segmentation_status=OK' \
+  'required_checkpoint_stage_count=2' \
   "parser_nonce=$nonce" \
   "data_sha256=$(sha256sum "$data" | awk '{print $1}')" \
   "compat_sha256=$(sha256sum "$compat" | awk '{print $1}')" \

@@ -263,6 +263,16 @@
       "root_cause": "Runtime provenance hashes established repository and compiler lineage but did not test the exported binary symbol surface; the linked runtime lacks float_of_string while the closure authority classifies it as centrally supplied.",
       "check_id": "runtime_symbol_surface",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-022",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v670-fast-nl-runtime-surface-support-probe-dev-001",
+      "failure_mode": "A monolithic support probe spends its entire one-hour budget in reusable analytic-library preparation and exits before the support boundary, losing completed Taylor work.",
+      "root_cause": "The support plan placed no checkpoint between the two expensive compiled Taylor theories and the remaining verifier closure; a historical Taylor checkpoint has different predecessor/source/runtime lineage and cannot safely replace the current direct state.",
+      "check_id": "support_stage_boundaries",
+      "enforcement": "preflight"
     }
   ]
 }
