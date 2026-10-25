@@ -44,6 +44,35 @@ INSTRUCTION_OLD_CONSTRUCTORS = {
 }
 EXPR_RE = re.compile(r"\bCandle_analytic_[a-z][A-Za-z0-9_]*\b")
 INSTRUCTION_RE = re.compile(r"\bCandle_analytic_program_[a-z][A-Za-z0-9_]*\b")
+MATAN_IDENTIFIER_RE = re.compile(r"\b[A-Za-z0-9_]*matan[A-Za-z0-9_]*\b", re.I)
+
+
+def explicit_induction_branch_missing(
+    text: str, induction_name: str, constructor_name: str
+) -> bool:
+    """Identify enumerated induction proofs with no matan case.
+
+    A proof that applies one tactic uniformly to every induction goal does not
+    need to name constructors.  A THENL proof enumerates its branches and must
+    contain either the constructor or a matan-specific semantic theorem in the
+    proof segment.  Complete constructor-family definitions are audited
+    separately below.
+    """
+
+    start = 0
+    while True:
+        index = text.find(induction_name, start)
+        if index < 0:
+            return False
+        end = text.find(";;", index)
+        segment = text[index:] if end < 0 else text[index:end]
+        if (
+            "THENL" in segment
+            and constructor_name not in segment
+            and MATAN_IDENTIFIER_RE.search(segment) is None
+        ):
+            return True
+        start = index + len(induction_name)
 
 
 def load_module_audit():
@@ -163,14 +192,16 @@ def main() -> int:
         text = checked_path.read_text(encoding="utf-8", errors="replace")
         uncommented = MODULE.LITERAL.strip_comments(text)
         reasons: set[str] = set()
-        if (
-            "candle_analytic_expr_INDUCT" in uncommented
-            and "Candle_analytic_matan" not in uncommented
+        if explicit_induction_branch_missing(
+            uncommented,
+            "candle_analytic_expr_INDUCT",
+            "Candle_analytic_matan",
         ):
             reasons.add("expr_induction_missing_matan")
-        if (
-            "candle_analytic_instruction_INDUCT" in uncommented
-            and "Candle_analytic_program_matan" not in uncommented
+        if explicit_induction_branch_missing(
+            uncommented,
+            "candle_analytic_instruction_INDUCT",
+            "Candle_analytic_program_matan",
         ):
             reasons.add("instruction_induction_missing_matan")
         expr_constructors = set(EXPR_RE.findall(uncommented))
@@ -185,6 +216,12 @@ def main() -> int:
             and "Candle_analytic_program_matan" not in instruction_constructors
         ):
             reasons.add("complete_old_instruction_family_missing_matan")
+        if (
+            "Cexp_num 8" in uncommented
+            and ("program_step" in uncommented or "instruction" in uncommented)
+            and "Cexp_num 9" not in uncommented
+        ):
+            reasons.add("numeric_instruction_dispatch_missing_matan")
         if reasons:
             stale[checked_path] = reasons
 
