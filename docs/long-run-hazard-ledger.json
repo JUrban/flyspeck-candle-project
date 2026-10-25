@@ -22,6 +22,7 @@
       "source_worktrees": {
         "/project/worktrees/cakeml-direct-fast-nl-integration-v1": "b3fb54e9f822fd462b929843e816d1fa1dd46cfd",
         "/project/worktrees/candle-direct-fast-nl-runtime-v1": "0f9690d3683efca78a60d4607596815245e37578",
+        "/project/worktrees/candle-fast-nl-matan-closure-v1": "862d2729cab5c0a2c3c2226b456832366329c4c4",
         "/project/worktrees/HOL-cakeml-dopen-v13": "bc47e6586a87ac538a71b10206a83c169c171d1a",
         "/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df": "9ae969dfaca95e223d44b50f7cae00df3d2ab949",
         "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5",
@@ -391,6 +392,16 @@
       "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-matan-repair-v677a/runtime.log",
       "failure_mode": "A compact dynamically constructed normalization overlay fails at the restored CakeML top level, so the subsequent proof load silently begins selecting the unrepaired original sources until the controller observes the earlier type error.",
       "root_cause": "The overlay used a List.map/string-concatenation expression that had not been exercised against the exact restored frontend and produced a string/function tuple type mismatch.",
+      "check_id": "matan_repair_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-032",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-matan-repair-v677b/runtime.log",
+      "failure_mode": "A new helper theorem typechecks its certificate tuple as the left operand of Boolean implication before any tactic executes.",
+      "root_cause": "The right-hand side of the premise was a HOL let-expression without an enclosing premise parenthesis, so the let body captured the following ==> operator.",
       "check_id": "matan_repair_contract",
       "enforcement": "preflight"
     }

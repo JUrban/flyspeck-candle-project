@@ -7,10 +7,10 @@
   },
   "candidate": {
     "root": "/project/worktrees/candle-fast-nl-matan-closure-v1",
-    "commit": "995f0b69fe7041e96ba2ef461a3f447053c3ff19"
+    "commit": "862d2729cab5c0a2c3c2226b456832366329c4c4"
   },
   "files": [
-    {"path":"candle/cv_compute_analytic_expr_certificate_patch.ml","original_md5":"7a84867e06ab73da17ba3038e9d41278","original_sha256":"01d8ccde4afa2fe0d509c303240dac88b0babc619153e0546387cd09d9d0caed","candidate_md5":"84b304bbdc769bf45d02c10f8d50cbf3","candidate_sha256":"bb21ccb4df7f4092202b11023d27e84a5bd3477bb9f11082ef5419a2f5ec2e3b"},
+    {"path":"candle/cv_compute_analytic_expr_certificate_patch.ml","original_md5":"7a84867e06ab73da17ba3038e9d41278","original_sha256":"01d8ccde4afa2fe0d509c303240dac88b0babc619153e0546387cd09d9d0caed","candidate_md5":"643a879d3b65b3f39d2fb1b5805e4711","candidate_sha256":"b88e770ce0b7635f6ba827d5122231688c32ccadf023400f48cee4312ebfa667"},
     {"path":"candle/cv_compute_analytic_expr_certificate_patch_compute.ml","original_md5":"43b9e4ecfdcc3210b9ac3d1c86c2b2c3","original_sha256":"b961d37b750b6bfc39c1f97b2256866a5992aae98618a7097c9ee4be9b62d3c9","candidate_md5":"fb2d777c8e7fb50e5620a9f502135352","candidate_sha256":"8eaf15e30b4546935d777215bb7cbb643fa84ddc884b678ada3a5434cc901a74"},
     {"path":"candle/cv_compute_analytic_expr_certificate_patch_exact.ml","original_md5":"087a8d240ad7fef9f8901b72988bea5f","original_sha256":"9724687f5a68b03cd0786db9cf28f606ba84fe5b7523a056bf07607207048ee9","candidate_md5":"7b3acf18afdec829a753bc33e36aeee4","candidate_sha256":"9c1251dc9de37614040de2c3cb7de7837254325543b80dcd17db04c035544581"},
     {"path":"candle/cv_compute_analytic_expr_certificate_variant_prepare.ml","original_md5":"14289599b3141c79c09b840e13198145","original_sha256":"3ecb3afc0ae4b36eb65bc7389619b830e206a37594efc6ecf1ec7272993aa0c3","candidate_md5":"46a7634ec9048c63d4c6ae95abcb235d","candidate_sha256":"afc63630231afb61a9439c9a95683c5590284b197ebcc859576141e4efc51c27"},

@@ -107,6 +107,23 @@ def main() -> int:
         if identity_text.count(identity) != 1:
             return fail(f"source_identity:{logical}")
 
+    # LR-032: in a HOL quotation, an unparenthesized ``let ... in`` RHS can
+    # absorb the following implication and make a certificate tuple serve as
+    # a Boolean.  Require the repaired helper's premise to close explicitly.
+    patch_text = (candidate_root / paths[0]).read_text(encoding="utf-8")
+    delimited_premise = re.compile(
+        r"!a intervals\.\s*"
+        r"\(candle_analytic_program_patch_sqrt intervals\s*"
+        r"\(candle_analytic_compile a\)\s*=\s*"
+        r"let patched =\s*"
+        r"candle_analytic_patch_sqrt_certificates intervals a in\s*"
+        r"\(FST patched,candle_analytic_compile \(SND patched\)\)\)\s*"
+        r"==>",
+        re.S,
+    )
+    if len(delimited_premise.findall(patch_text)) != 1:
+        return fail("matan_step_premise_delimitation")
+
     overlay = OVERLAY.read_text(encoding="utf-8")
     overlay_pairs = re.findall(
         r'\("(/project/worktrees/candle-direct-fast-nl-runtime-v1/(candle/[^\"]+\.ml))",\s*'
@@ -150,6 +167,7 @@ def main() -> int:
     print(f"repair_source_count={len(files)}")
     print(f"original_head={original['commit']}")
     print(f"candidate_head={candidate['commit']}")
+    print("matan_step_premise_delimitation_count=1")
     print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
     print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
     return 0
