@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-run=/project/flyspeck-candle-runs/v661-fast-nl-x64-cv-rep-dev-001
+run=/project/flyspeck-candle-runs/v662-fast-nl-x64-cv-rep-dev-001
 failed_run=/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001
 cake=/project/worktrees/cakeml-direct-fast-nl-integration-v1
 candle=/project/worktrees/candle-direct-fast-nl-runtime-v1
@@ -9,7 +9,7 @@ hol=/project/worktrees/HOL-cakeml-dopen-v13
 project=/project/worktrees/flyspeck-project-candle-repin-prep-v13
 trans=$cake/compiler/bootstrap/translation
 x64=$cake/compiler/bootstrap/compilation/x64/64
-runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-004
+runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-005
 
 cake_head=b3fb54e9f822fd462b929843e816d1fa1dd46cfd
 compiler_source_head=aa7ffbc3a5e30c0f78acfe883f39476d0a3f035a
@@ -128,7 +128,8 @@ set +e
 (
   cd "$x64"
   /usr/bin/time -v timeout 21600 "$hol/bin/Holmake" --no-project \
-    --no_preexecs --heap-size=150000 --no_prereqs -j1 cake.S
+    --no_preexecs --rebuild_deps -I "$trans" --heap-size=150000 \
+    --no_prereqs -j1 cake.S
 ) >"$run/$prefix-x64.log" 2>&1
 x64_status=$?
 set -e
