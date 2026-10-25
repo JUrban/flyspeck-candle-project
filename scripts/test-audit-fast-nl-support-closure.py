@@ -70,6 +70,19 @@ class FastNlSupportClosureTests(unittest.TestCase):
         self.assertEqual(mismatches, [])
         self.assertEqual(mapping[canonical], expected)
 
+    def test_canonical_verifier_closure_and_overlay_are_exact(self) -> None:
+        identities, normalized, errors = MODULE.parse_verifier_closure()
+        self.assertEqual(errors, [])
+        self.assertEqual(len(identities), 90)
+        self.assertEqual(len(normalized), 29)
+        self.assertEqual(
+            MODULE.VERIFIER_FLYSPECK_ROOT,
+            pathlib.Path(
+                "/project/worktrees/"
+                "flyspeck-cv-nonlinear-closure-v11-manifest-d6"
+            ),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

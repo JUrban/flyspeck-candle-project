@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import pathlib
 import re
+import subprocess
 import sys
 
 
@@ -42,6 +44,20 @@ NORMALIZATION_OVERLAY = (
     / "flyspeck-candle-runs/v355-postsetup-checkpoint-dev-001"
     / "overlay-data-v355.ml"
 )
+VERIFIER_FLYSPECK_ROOT = (
+    PROJECT / "worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6"
+)
+VERIFIER_FORMAL_ROOT = VERIFIER_FLYSPECK_ROOT / "formal_ineqs"
+VERIFIER_CLOSURE = (
+    PROJECT
+    / "worktrees/candle-direct-fast-nl-runtime-v1"
+    / "candle/flyspeck_nonlinear_verifier_closure.json"
+)
+VERIFIER_OVERLAY_ROOT = (
+    PROJECT
+    / "flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37"
+    / "overlay"
+)
 V664_BASE_STRICTBUILD = (
     PROJECT
     / "worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df"
@@ -52,7 +68,7 @@ V664_BASE_STRICTBUILD = (
 # the matan and verifier support sources.  Entry order is part of the contract.
 PREREQUISITE_ENTRY_REQUESTS = (
     # One declared umbrella for the legacy verifier, including matan_eval.
-    "verifier/m_verifier_main.hl",
+    str(VERIFIER_FORMAL_ROOT / "verifier/m_verifier_main.hl"),
     # Foundational Candle modules that the matan bridge historically inherited
     # from the action-296 analytic checkpoint.
     "candle/cv_compute_polynomial_expr_dim_jet_semantics.ml",
@@ -66,8 +82,9 @@ PREREQUISITE_ENTRY_REQUESTS = (
     "candle/cv_compute_analytic_expr_fixed_scale_historical_root_four_x0_sound.ml",
     "candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_variable_compact_stack_sound.ml",
     "candle/cv_compute_analytic_expr_taylor_model_tree_compact_correct.ml",
-    # Authenticate the original logical Flyspeck node; the configured
-    # normalization overlay selects its current compatibility source.
+    # Authenticate the original logical Flyspeck nodes; the configured
+    # normalization overlay selects their current compatibility sources.
+    "/project/flyspeck-candle-runs/v352-full-boundary-materialization-heap16-dev-005/snapshot/flyspeck/text_formalization/general/serialization.hl",
     "/project/flyspeck-candle-runs/v352-full-boundary-materialization-heap16-dev-005/snapshot/flyspeck/text_formalization/nonlinear/break_case_exec.hl",
 )
 
@@ -206,6 +223,90 @@ def parse_normalization() -> tuple[
     return mapping, mismatches
 
 
+def sha256(path: pathlib.Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def parse_verifier_closure() -> tuple[
+    dict[pathlib.Path, str],
+    dict[pathlib.Path, pathlib.Path],
+    list[str],
+]:
+    """Authenticate the canonical verifier closure and its materialized overlay."""
+
+    payload = json.loads(VERIFIER_CLOSURE.read_text(encoding="utf-8"))
+    errors: list[str] = []
+    if (
+        payload.get("schema") != 1
+        or payload.get("root")
+        != "flyspeck:formal_ineqs/verifier/m_verifier_main.hl"
+        or payload.get("counts", {}).get("selected_source_nodes") != 90
+        or payload.get("counts", {}).get("normalized_sources") != 29
+    ):
+        errors.append("verifier_closure_contract")
+    expected_head = payload.get("repositories", {}).get("flyspeck", {}).get("commit")
+    try:
+        actual_head = subprocess.check_output(
+            ["git", "-C", str(VERIFIER_FLYSPECK_ROOT), "rev-parse", "HEAD"],
+            text=True,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError) as error:
+        actual_head = f"ERROR:{error}"
+    if actual_head != expected_head:
+        errors.append(f"verifier_flyspeck_head:{actual_head}")
+
+    roots = {
+        "candle": LITERAL.CANDLE_CURRENT,
+        "flyspeck": VERIFIER_FLYSPECK_ROOT,
+    }
+    identities: dict[pathlib.Path, str] = {}
+    normalized: dict[pathlib.Path, pathlib.Path] = {}
+    nodes = payload.get("source_nodes", {})
+    if not isinstance(nodes, dict) or len(nodes) != 90:
+        errors.append("verifier_source_nodes")
+        nodes = {}
+    for source_key, node in nodes.items():
+        repository = node.get("repository")
+        logical = node.get("logical_relative_path")
+        if repository not in roots or not isinstance(logical, str):
+            errors.append(f"verifier_node_shape:{source_key}")
+            continue
+        path = (roots[repository] / logical).resolve()
+        if not path.is_file():
+            errors.append(f"verifier_source_missing:{path}")
+            continue
+        actual_md5 = md5(path)
+        actual_sha256 = sha256(path)
+        if actual_md5 != node.get("md5") or actual_sha256 != node.get("sha256"):
+            errors.append(f"verifier_source_hash:{path}")
+            continue
+        identities[path] = actual_md5
+        normalization = node.get("normalization")
+        if normalization is None:
+            continue
+        overlay = (VERIFIER_OVERLAY_ROOT / repository / logical).resolve()
+        if not overlay.is_file():
+            errors.append(f"verifier_overlay_missing:{overlay}")
+            continue
+        if (
+            overlay.stat().st_size != normalization.get("normalized_bytes")
+            or md5(overlay) != normalization.get("normalized_md5")
+            or sha256(overlay) != normalization.get("normalized_sha256")
+        ):
+            errors.append(f"verifier_overlay_hash:{overlay}")
+            continue
+        normalized[path] = overlay
+    if len(identities) != 90:
+        errors.append(f"verifier_identity_count:{len(identities)}")
+    if len(normalized) != 29:
+        errors.append(f"verifier_normalization_count:{len(normalized)}")
+    return identities, normalized, errors
+
+
 def resolve_logged_path(text: str) -> pathlib.Path | None:
     candidate = pathlib.Path(text)
     if candidate.is_absolute() and candidate.is_file():
@@ -237,12 +338,26 @@ def md5(path: pathlib.Path) -> str:
     return digest.hexdigest()
 
 
+def resolve_planned(request: str) -> pathlib.Path | None:
+    """Resolve through the exact planned verifier-first support load path."""
+
+    candidate = pathlib.Path(request)
+    if candidate.is_absolute():
+        return candidate.resolve(strict=False) if candidate.is_file() else None
+    for root in (VERIFIER_FORMAL_ROOT,) + LITERAL.SEARCH_ROOTS:
+        candidate = root / request
+        if candidate.is_file():
+            return candidate.resolve()
+    return None
+
+
 def main() -> int:
     for required in (
         LITERAL_AUDIT_PATH,
         BASE_LOG,
         ACTION_LOG,
         NORMALIZATION_OVERLAY,
+        VERIFIER_CLOSURE,
     ):
         if not required.is_file():
             print(f"missing_input={required}", file=sys.stderr)
@@ -250,6 +365,13 @@ def main() -> int:
 
     starting_paths, unresolved_loaded = loaded_paths()
     normalized_sources, normalization_mismatches = parse_normalization()
+    verifier_identities, verifier_normalized, verifier_errors = (
+        parse_verifier_closure()
+    )
+    normalization_conflicts = sorted(
+        set(normalized_sources) & set(verifier_normalized), key=str
+    )
+    normalized_sources.update(verifier_normalized)
     facts: dict[
         pathlib.Path, tuple[set[str], set[str], list[str], list[tuple[int, str]]]
     ] = {}
@@ -282,7 +404,7 @@ def main() -> int:
     visited: set[pathlib.Path] = set(starting_paths)
 
     def visit_request(request: str, parent: pathlib.Path | None) -> None:
-        path = LITERAL.resolve(request)
+        path = resolve_planned(request)
         if path is None:
             unresolved_requests.append((parent, request))
             return
@@ -317,6 +439,12 @@ def main() -> int:
         available_modules.update(providers)
 
     identities, _ = LITERAL.parse_authority()
+    identity_conflicts = sorted(
+        path
+        for path, expected in verifier_identities.items()
+        if path in identities and identities[path] != expected
+    )
+    identities.update(verifier_identities)
     required_paths = set(execution_order)
     missing_identities = sorted(
         (path for path in required_paths if path not in identities), key=str
@@ -339,6 +467,9 @@ def main() -> int:
             or missing_identities
             or stale_identities
             or normalization_mismatches
+            or verifier_errors
+            or normalization_conflicts
+            or identity_conflicts
         )
     )
     print(f"status={status}")
@@ -356,6 +487,9 @@ def main() -> int:
     print(f"unresolved_request_count={len(unresolved_requests)}")
     print(f"parse_error_count={len(parse_errors)}")
     print(f"normalization_mismatch_count={len(normalization_mismatches)}")
+    print(f"verifier_closure_error_count={len(verifier_errors)}")
+    print(f"normalization_conflict_count={len(normalization_conflicts)}")
+    print(f"identity_conflict_count={len(identity_conflicts)}")
 
     for index, path in enumerate(entry_paths):
         print(f"entry_path={index}\t{path}")
@@ -378,6 +512,12 @@ def main() -> int:
             "normalization_mismatch="
             f"{canonical}\ttarget={target}\texpected={expected}\tactual={actual}"
         )
+    for error in verifier_errors:
+        print(f"verifier_closure_error={error}")
+    for path in normalization_conflicts:
+        print(f"normalization_conflict={path}")
+    for path in identity_conflicts:
+        print(f"identity_conflict={path}")
 
     return status
 
