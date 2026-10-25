@@ -42,6 +42,9 @@ LIST_FLATTEN_SURFACE = (
 M_VERIFIER_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v674-checkpoint-finalization.py"
 )
+FOUNDATION_CHECKPOINT_FINALIZATION = (
+    PROJECT / "scripts/audit-fast-nl-v675-checkpoint-finalization.sh"
+)
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
 
@@ -190,10 +193,15 @@ def check_checkpoint_finalization(_: dict, __: pathlib.Path) -> CheckResult:
     if not multivariate.ok:
         return multivariate
     verifier = run_checked([str(M_VERIFIER_CHECKPOINT_FINALIZATION)], timeout=180)
+    if not verifier.ok:
+        return verifier
+    foundation = run_checked(
+        [str(FOUNDATION_CHECKPOINT_FINALIZATION)], timeout=180
+    )
     return CheckResult(
-        verifier.ok,
+        foundation.ok,
         f"interval=[{interval.detail}] multivariate=[{multivariate.detail}] "
-        f"verifier=[{verifier.detail}]",
+        f"verifier=[{verifier.detail}] foundation=[{foundation.detail}]",
     )
 
 

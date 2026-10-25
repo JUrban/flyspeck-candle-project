@@ -31,7 +31,8 @@
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v669/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/posttaylor-interval-v671/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/posttaylor-multivariate-v672/checkpoint.receipt",
-        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-m-verifier-v674/checkpoint.receipt"
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-m-verifier-v674/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-foundation-v675/checkpoint.receipt"
       ],
       "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
