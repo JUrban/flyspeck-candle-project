@@ -469,6 +469,16 @@
       "root_cause": "Checking only previously failed theorem names leaves the other tactic applications introduced by the same repair unclassified.",
       "check_id": "matan_repair_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-039",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-algebraic-compile-sound-v677n/runtime.log",
+      "failure_mode": "The fixed-algebraic program-sound dependency reaches TAC_PROOF with unsolved goals before the repaired compile-sound file begins.",
+      "root_cause": "The matan opcode changed the executable/logical nonlinear and step definitions, but the existing exhaustive representation proof was not independently exercised by the constructor-closure or theorem-shape audits.",
+      "check_id": "matan_repair_contract",
+      "enforcement": "preflight"
     }
   ]
 }
