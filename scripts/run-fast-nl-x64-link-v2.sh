@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-run=/project/flyspeck-candle-runs/v660-fast-nl-compiler64-artifact-auth-dev-001
+run=/project/flyspeck-candle-runs/v661-fast-nl-x64-cv-rep-dev-001
 failed_run=/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001
 cake=/project/worktrees/cakeml-direct-fast-nl-integration-v1
 candle=/project/worktrees/candle-direct-fast-nl-runtime-v1
@@ -9,9 +9,10 @@ hol=/project/worktrees/HOL-cakeml-dopen-v13
 project=/project/worktrees/flyspeck-project-candle-repin-prep-v13
 trans=$cake/compiler/bootstrap/translation
 x64=$cake/compiler/bootstrap/compilation/x64/64
-runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-003
+runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-004
 
-cake_head=aa7ffbc3a5e30c0f78acfe883f39476d0a3f035a
+cake_head=b3fb54e9f822fd462b929843e816d1fa1dd46cfd
+compiler_source_head=aa7ffbc3a5e30c0f78acfe883f39476d0a3f035a
 candle_head=0f9690d3683efca78a60d4607596815245e37578
 hol_head=bc47e6586a87ac538a71b10206a83c169c171d1a
 project_head=e325a3ef6b0cd4e88bcdbf432de170d967364fa3
@@ -32,6 +33,7 @@ finish() {
     printf 'status=%s\n' "$status"
     printf 'last_phase=%s\n' "$phase"
     printf 'cake_head=%s\n' "$cake_head"
+    printf 'compiler_source_head=%s\n' "$compiler_source_head"
     printf 'candle_head=%s\n' "$candle_head"
     printf 'hol_head=%s\n' "$hol_head"
     printf 'compiler_theory_hash=82ee3e5ce08af05ea34610a6d75c9bea324962e6\n'
@@ -55,6 +57,8 @@ mkdir -p "$run"
 [[ -z $(git -C "$candle" status --short) ]]
 [[ -z $(git -C "$hol" status --short) ]]
 [[ -z $(git -C "$project" status --short) ]]
+[[ $(git -C "$cake" diff --name-only "$compiler_source_head"..HEAD) == \
+   compiler/bootstrap/compilation/x64/64/x64BootstrapScript.sml ]]
 
 # Preserve the failed global-graph result.  It is not reclassified as a
 # successful run: the following checks authenticate the completed target
