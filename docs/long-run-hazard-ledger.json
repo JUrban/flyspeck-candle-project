@@ -23,12 +23,24 @@
         "/project/worktrees/candle-direct-fast-nl-runtime-v1": "0f9690d3683efca78a60d4607596815245e37578",
         "/project/worktrees/HOL-cakeml-dopen-v13": "bc47e6586a87ac538a71b10206a83c169c171d1a",
         "/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df": "9ae969dfaca95e223d44b50f7cae00df3d2ab949",
-        "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5"
+        "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5",
+        "/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6": "d6cdcd9f3e45f4ceb5fd1ba08f5b5ec4ce6a65eb"
       },
       "checkpoint_receipts": [
         "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/postaction49/checkpoint.receipt"
       ],
+      "short_runtime_probe": {
+        "receipt": "/project/flyspeck-candle-runs/v665-fast-nl-support-probe-dev-001/SHORT-RUNTIME-PROBE.receipt",
+        "maximum_elapsed_seconds": 3600,
+        "predecessor_checkpoint_receipt": "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/postaction49/checkpoint.receipt",
+        "required_files": [
+          "/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_data.ml",
+          "/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_runtime_compat.ml",
+          "/project/flyspeck-candle-project/tools/fast_nl_v665_setup.ml",
+          "/project/flyspeck-candle-project/tools/fast_nl_v665_support.ml"
+        ]
+      },
       "minimum_available_memory_gib": 24,
       "maximum_active_matching_controllers": 0,
       "active_controller_pattern": "run-fast-nl-v[0-9]+-first-theorem-controller.sh"
@@ -183,6 +195,26 @@
       "failure_mode": "A new long-run target overwrites or resumes an existing run directory.",
       "root_cause": "The controller does not establish a fresh immutable output target.",
       "check_id": "fresh_run_target",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-016",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v664-fast-nl-complete-support-closure-dev-001/postsupport",
+      "failure_mode": "The support plan mixes a current direct Flyspeck root with a verifier closure developed and normalized against a different repository identity.",
+      "root_cause": "Verifier source lineage, its 90-node closure, and its 29 normalization overlays were not treated as one authenticated unit.",
+      "check_id": "module_load_order_closure",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-017",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "v664-fast-nl-complete-support-closure-dev-001/postsupport",
+      "failure_mode": "Static source and module audits pass but runtime-only compatibility names, load-path resolution, or loader state still fail after checkpoint restore.",
+      "root_cause": "Lexical closure cannot establish runtime top-level bindings or the exact behavior of a restored state.",
+      "check_id": "short_runtime_probe",
       "enforcement": "preflight"
     }
   ]

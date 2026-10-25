@@ -170,6 +170,83 @@ def check_checkpoint_integrity(config: dict, _: pathlib.Path) -> CheckResult:
     return CheckResult(True, f"authenticated_checkpoint_count={len(seen)}")
 
 
+def short_probe_input_manifest(paths: list[pathlib.Path]) -> tuple[str, str]:
+    """Return the canonical input manifest text and its SHA-256 digest."""
+
+    lines = []
+    for path in paths:
+        resolved = path.resolve()
+        lines.append(f"{resolved}\t{sha256(resolved)}")
+    text = "\n".join(lines) + "\n"
+    return text, hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def check_short_runtime_probe(config: dict, _: pathlib.Path) -> CheckResult:
+    """Require a bounded runtime smoke test over the exact planned support bytes."""
+
+    probe = config.get("short_runtime_probe")
+    if not isinstance(probe, dict):
+        return CheckResult(False, "short_probe_config=missing")
+    required_keys = {
+        "receipt",
+        "maximum_elapsed_seconds",
+        "predecessor_checkpoint_receipt",
+        "required_files",
+    }
+    missing_keys = sorted(required_keys - set(probe))
+    if missing_keys:
+        return CheckResult(False, f"short_probe_config_missing={missing_keys[0]}")
+
+    required_files = [pathlib.Path(item) for item in probe["required_files"]]
+    if not required_files:
+        return CheckResult(False, "short_probe_required_files=empty")
+    for path in required_files:
+        if not path.is_file():
+            return CheckResult(False, f"short_probe_input_missing={path}")
+    _, manifest_sha = short_probe_input_manifest(required_files)
+
+    predecessor_receipt_path = pathlib.Path(probe["predecessor_checkpoint_receipt"])
+    if not predecessor_receipt_path.is_file():
+        return CheckResult(False, f"short_probe_predecessor_missing={predecessor_receipt_path}")
+    predecessor = parse_receipt(predecessor_receipt_path)
+    predecessor_sha = predecessor.get("checkpoint_sha256")
+    if not predecessor_sha:
+        return CheckResult(False, "short_probe_predecessor_sha=missing")
+
+    receipt_path = pathlib.Path(probe["receipt"])
+    if not receipt_path.is_file():
+        return CheckResult(False, f"short_probe_receipt_missing={receipt_path}")
+    receipt = parse_receipt(receipt_path)
+    expected = {
+        "receipt_kind": "development-fast-nl-short-runtime-probe-v1",
+        "release_evidence": "false",
+        "status": "0",
+        "runtime_sha256": config["runtime_sha256"],
+        "predecessor_checkpoint_sha256": predecessor_sha,
+        "input_manifest_sha256": manifest_sha,
+        "ready_marker_count": "1",
+        "source_error_count": "0",
+        "pending_source_id_count": "0",
+    }
+    for key, expected_value in expected.items():
+        if receipt.get(key) != expected_value:
+            return CheckResult(False, f"short_probe_{key}={receipt.get(key)!r}")
+    try:
+        elapsed = float(receipt["elapsed_seconds"])
+        maximum = float(probe["maximum_elapsed_seconds"])
+    except (KeyError, TypeError, ValueError) as error:
+        return CheckResult(False, f"short_probe_elapsed_error={error}")
+    if elapsed < 0 or elapsed > maximum or maximum > 3600:
+        return CheckResult(
+            False,
+            f"short_probe_elapsed_seconds={elapsed} maximum_seconds={maximum}",
+        )
+    return CheckResult(
+        True,
+        f"short_probe_elapsed_seconds={elapsed} input_manifest_sha256={manifest_sha}",
+    )
+
+
 def controller_run_target(controller: pathlib.Path) -> pathlib.Path | None:
     text = controller.read_text(encoding="utf-8")
     match = re.search(r"(?m)^run=(/[^\s]+)$", text)
@@ -304,6 +381,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "literal_source_closure": check_literal_closure,
     "module_load_order_closure": check_module_closure,
     "checkpoint_integrity": check_checkpoint_integrity,
+    "short_runtime_probe": check_short_runtime_probe,
     "bounded_controller": check_bounded_controller,
     "fast_theorem_controller_contract": check_theorem_controller_contract,
     "resource_headroom": check_resource_headroom,

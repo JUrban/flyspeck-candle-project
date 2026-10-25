@@ -15,6 +15,15 @@ evidence, enforcement phase, and executable check.  An entry without a known
 check blocks the gate.  A new failure must be appended to the ledger and must
 receive a cheap discriminator before a retry is allowed.
 
+The checks are deliberately layered.  Purely static checks establish source
+identity, normalization, literal-load, module, and load-order closure.  A
+bounded disposable runtime probe must then restore the real predecessor and
+reach the proposed readiness marker with the exact setup/support bytes.  Its
+receipt is bound to the verified runtime hash, predecessor checkpoint hash,
+and a canonical manifest hash of every candidate input.  Editing any one of
+those bytes invalidates the probe automatically.  The probe cap may not exceed
+one hour.
+
 The ledger is intentionally append-oriented.  A hazard may be retired only
 when the obsolete architecture is no longer reachable; the historical entry
 and evidence remain.  A passed preflight is not a theorem claim and does not
@@ -24,7 +33,7 @@ recorded failure class has been checked against the exact planned run.
 For the first fast NL theorem, the gate covers verified-runtime provenance,
 clean pinned worktrees, normalization and source identity closure, explicit
 module/load ordering, checkpoint hashes, fresh output targets, resource
-headroom, phase caps, fast-branch evidence, exact theorem acceptance, and the
-two-fresh-restore requirement.  The v664 implicit-module omission is seeded
-as an active failing hazard, so another long replay is forbidden until that
-audit is green.
+headroom, a byte-bound short runtime probe, phase caps, fast-branch evidence,
+exact theorem acceptance, and the two-fresh-restore requirement.  The v664
+implicit-module omission and absent short-probe receipt are active failing
+hazards, so another long replay is forbidden until both gates are green.

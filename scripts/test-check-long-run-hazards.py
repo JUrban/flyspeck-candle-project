@@ -26,7 +26,7 @@ class LongRunHazardGateTests(unittest.TestCase):
         )
         hazards = ledger["hazards"]
         self.assertEqual(len({item["id"] for item in hazards}), len(hazards))
-        self.assertGreaterEqual(len(hazards), 15)
+        self.assertGreaterEqual(len(hazards), 17)
         for item in hazards:
             self.assertIn(item["check_id"], GATE.CHECKS)
 
@@ -52,6 +52,73 @@ class LongRunHazardGateTests(unittest.TestCase):
         controller = ROOT / "scripts/run-fast-nl-v664-first-theorem-controller.sh"
         result = GATE.check_theorem_controller_contract({}, controller)
         self.assertTrue(result.ok, result.detail)
+
+    def test_short_probe_is_bound_to_exact_candidate_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            candidate = root / "support.ml"
+            candidate.write_text("print_endline \"ready\";;\n", encoding="utf-8")
+            predecessor = root / "checkpoint.receipt"
+            predecessor.write_text(
+                "checkpoint_sha256=predecessor-digest\n", encoding="utf-8"
+            )
+            receipt = root / "probe.receipt"
+            _, manifest_sha = GATE.short_probe_input_manifest([candidate])
+            runtime_sha = "runtime-digest"
+            receipt.write_text(
+                "\n".join(
+                    [
+                        "receipt_kind=development-fast-nl-short-runtime-probe-v1",
+                        "release_evidence=false",
+                        "status=0",
+                        f"runtime_sha256={runtime_sha}",
+                        "predecessor_checkpoint_sha256=predecessor-digest",
+                        f"input_manifest_sha256={manifest_sha}",
+                        "ready_marker_count=1",
+                        "source_error_count=0",
+                        "pending_source_id_count=0",
+                        "elapsed_seconds=12.5",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            config = {
+                "runtime_sha256": runtime_sha,
+                "short_runtime_probe": {
+                    "receipt": str(receipt),
+                    "maximum_elapsed_seconds": 60,
+                    "predecessor_checkpoint_receipt": str(predecessor),
+                    "required_files": [str(candidate)],
+                },
+            }
+            result = GATE.check_short_runtime_probe(config, root / "unused.sh")
+            self.assertTrue(result.ok, result.detail)
+
+            candidate.write_text("print_endline \"changed\";;\n", encoding="utf-8")
+            result = GATE.check_short_runtime_probe(config, root / "unused.sh")
+            self.assertFalse(result.ok)
+            self.assertIn("input_manifest_sha256", result.detail)
+
+    def test_short_probe_fails_closed_without_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            candidate = root / "support.ml"
+            candidate.write_text("();;\n", encoding="utf-8")
+            predecessor = root / "checkpoint.receipt"
+            predecessor.write_text("checkpoint_sha256=x\n", encoding="utf-8")
+            config = {
+                "runtime_sha256": "runtime-digest",
+                "short_runtime_probe": {
+                    "receipt": str(root / "missing.receipt"),
+                    "maximum_elapsed_seconds": 60,
+                    "predecessor_checkpoint_receipt": str(predecessor),
+                    "required_files": [str(candidate)],
+                },
+            }
+            result = GATE.check_short_runtime_probe(config, root / "unused.sh")
+            self.assertFalse(result.ok)
+            self.assertIn("short_probe_receipt_missing", result.detail)
 
 
 if __name__ == "__main__":
