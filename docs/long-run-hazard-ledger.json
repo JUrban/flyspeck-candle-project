@@ -39,7 +39,8 @@
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-pre-first-jet-v677g/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-first-jet-v677h/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-pre-compile-sound-v677j/checkpoint.receipt",
-        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-compile-sound-v677k/checkpoint.receipt"
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-compile-sound-v677k/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-algebraic-item-invariant-v677m/checkpoint.receipt"
       ],
       "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
@@ -456,6 +457,16 @@
       "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-repaired-fixed-scale-v677l/runtime.log",
       "failure_mode": "A later fixed-algebraic item invariant raises MATCH_MP_TAC: Bad theorem after the earlier generic compile-sound copy of the same defect was repaired.",
       "root_cause": "The premise-free default-invariant application pattern was copied into five layers of the 19-file closure, but the first repair and static contract covered only the first theorem name and file rather than the semantic failure class.",
+      "check_id": "matan_repair_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-038",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "2026-10-25 closure-wide theorem-shape pre-mortem",
+      "failure_mode": "Another newly added tactic application reaches an incompatible theorem shape only after a later dependency-heavy proof load.",
+      "root_cause": "Checking only previously failed theorem names leaves the other tactic applications introduced by the same repair unclassified.",
       "check_id": "matan_repair_contract",
       "enforcement": "preflight"
     }

@@ -66,6 +66,23 @@ STAGES = (
         ),
         "forbidden": (),
     },
+    {
+        "directory": ROOT / "post-fixed-algebraic-item-invariant-v677m",
+        "kind": "development-fast-nl-v677-fixed-algebraic-item-invariant-checkpoint-v1",
+        "sha256": "6c48608d0bc73c18d7eb02ba66f0dd6cc63ab4841c1ec7dfaae240a1bfcf316f",
+        "marker": "CANDLE_FLYSPECK_V677_FIXED_ALGEBRAIC_ITEM_INVARIANT_CHECKPOINT_READY",
+        "driver": PROJECT / "tools/fast_nl_v677_fixed_algebraic_item_invariant_stage.ml",
+        "required": (
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compute.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_item_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_invariant.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_item_invariant.ml",
+        ),
+        "forbidden": (
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compile_sound.ml",
+        ),
+    },
 )
 
 
@@ -161,7 +178,7 @@ def main() -> int:
 
     print("status=0")
     print(f"repair_checkpoint_count={len(STAGES)}")
-    print("fresh_input_ack_count=4")
+    print(f"fresh_input_ack_count={len(STAGES)}")
     print("runtime_error_count=0")
     print(f"terminal_checkpoint_sha256={STAGES[-1]['sha256']}")
     return 0

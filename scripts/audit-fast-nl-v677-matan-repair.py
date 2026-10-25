@@ -184,6 +184,43 @@ def main() -> int:
     )
     if len(direct_accepts) != 5:
         return fail("premise_free_direct_accept_count")
+    # LR-038: classify every MATCH_MP_TAC introduced by the repair, not only
+    # the theorem family that has failed already.  The twelve remaining sites
+    # are four constructor branches, each with an equivalence implication, an
+    # induction hypothesis, and an append-single theorem with real premises.
+    repair_diff = subprocess.check_output(
+        [
+            "git", "-C", str(candidate_root), "diff", "--unified=0",
+            original["commit"], candidate["commit"], "--", *paths,
+        ],
+        text=True,
+    )
+    added_text = "\n".join(
+        line[1:]
+        for line in repair_diff.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+    introduced_match_mp = len(re.findall(r"\bMATCH_MP_TAC\b", added_text))
+    introduced_match_mp_shapes = {
+        "erase_equivalence": len(re.findall(
+            r"MATCH_MP_TAC\s+\(fst\s+\(EQ_IMP_RULE", added_text
+        )),
+        "induction_hypothesis": len(re.findall(
+            r'USE_THEN\s+"ih"\s+MATCH_MP_TAC', added_text
+        )),
+        "append_single": len(re.findall(
+            r"MATCH_MP_TAC\s+(?:"
+            r"candle_q_dim_taylor_model_program_run_append_single|"
+            r"candle_fsa_logical_program_run_with_future_append_single|"
+            r"candle_fsn_logical_program_run_append_single|"
+            r"candle_fso_logical_program_run_append_single)",
+            added_text,
+        )),
+    }
+    if introduced_match_mp != 12 or any(
+        count != 4 for count in introduced_match_mp_shapes.values()
+    ):
+        return fail("introduced_match_mp_shape_partition")
 
     overlay = OVERLAY.read_text(encoding="utf-8")
     overlay_pairs = re.findall(
@@ -234,6 +271,8 @@ def main() -> int:
     print("matan_default_invariant_discharge_count=1")
     print("premise_free_match_mp_count=0")
     print(f"premise_free_direct_accept_count={len(direct_accepts)}")
+    print(f"introduced_match_mp_count={introduced_match_mp}")
+    print("introduced_match_mp_shape_counts=4,4,4")
     print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
     print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
     return 0
