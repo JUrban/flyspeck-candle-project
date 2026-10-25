@@ -26,7 +26,7 @@ class LongRunHazardGateTests(unittest.TestCase):
         )
         hazards = ledger["hazards"]
         self.assertEqual(len({item["id"] for item in hazards}), len(hazards))
-        self.assertGreaterEqual(len(hazards), 18)
+        self.assertGreaterEqual(len(hazards), 19)
         for item in hazards:
             self.assertIn(item["check_id"], GATE.CHECKS)
 

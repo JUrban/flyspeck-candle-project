@@ -44,3 +44,12 @@ installs this table exactly once.  The gate therefore requires the support
 predecessor to descend from a base receipt with the complete candidate source
 count and binds the exact setup/data files through that base's SHA-256 input
 manifest.
+
+Historical compatibility overlays may assert the cardinality of the direct
+Flyspeck normalization table.  Adding a disjoint side-lane normalization set
+must not falsify that local invariant.  The action replay therefore partitions
+the exact 29 verifier rows from the exact 56 direct rows, executes the unchanged
+historical overlay/action driver on its original table, and restores all 85
+rows before checkpoint acceptance.  A static discriminator proves disjointness
+and authenticates the historical 50/50 replay evidence before this bridge may
+run.

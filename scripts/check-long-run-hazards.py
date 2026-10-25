@@ -21,6 +21,9 @@ DEFAULT_LEDGER = PROJECT / "docs/long-run-hazard-ledger.json"
 NORMALIZATION = PROJECT / "scripts/preflight-fast-nl-v663-normalization.sh"
 LITERAL_CLOSURE = PROJECT / "scripts/audit-fast-nl-support-source-closure.py"
 MODULE_CLOSURE = PROJECT / "scripts/audit-fast-nl-support-module-closure.py"
+ACTION_OVERLAY_PARTITION = (
+    PROJECT / "scripts/audit-fast-nl-v668-action-overlay-partition.py"
+)
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
 
@@ -145,6 +148,10 @@ def check_literal_closure(_: dict, __: pathlib.Path) -> CheckResult:
 
 def check_module_closure(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(MODULE_CLOSURE)], timeout=120)
+
+
+def check_action_overlay_partition(_: dict, __: pathlib.Path) -> CheckResult:
+    return run_checked([str(ACTION_OVERLAY_PARTITION)], timeout=30)
 
 
 def check_checkpoint_integrity(config: dict, _: pathlib.Path) -> CheckResult:
@@ -441,6 +448,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "normalization_contract": check_normalization,
     "literal_source_closure": check_literal_closure,
     "module_load_order_closure": check_module_closure,
+    "action_overlay_partition_contract": check_action_overlay_partition,
     "checkpoint_integrity": check_checkpoint_integrity,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,
     "short_runtime_probe": check_short_runtime_probe,

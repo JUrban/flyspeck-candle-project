@@ -13,6 +13,7 @@ expected_marker=$4
 receipt_kind=$5
 dev_runtime=${FAST_NL_DEV_RUNTIME:-/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-001}
 phase_timeout_seconds=${FAST_NL_PHASE_TIMEOUT_SECONDS:-21600}
+driver_mode=${FAST_NL_PHASE_DRIVER_MODE:-source}
 
 [[ -f $base_dir/CHECKPOINT-READY ]]
 [[ ! -f $base_dir/CHECKPOINT-FAILED ]]
@@ -20,6 +21,7 @@ phase_timeout_seconds=${FAST_NL_PHASE_TIMEOUT_SECONDS:-21600}
 [[ -f $driver ]]
 [[ -x $dev_runtime/cake ]]
 [[ $phase_timeout_seconds =~ ^[1-9][0-9]*$ ]]
+[[ $driver_mode == source || $driver_mode == direct ]]
 mapfile -t checkpoints < <(
   find "$base_dir/checkpoint" -maxdepth 1 -type f -name 'ckpt_*.dmtcp' -print
 )
@@ -45,7 +47,11 @@ nonce=$(printf '%s\n%s\n%s\n' "$output_dir" "$driver_sha" "$expected_marker" |
 ack="CANDLE_RESTORE_INPUT_ACK nonce=$nonce"
 {
   printf 'print_endline "%s";;\n' "$ack"
-  printf '#use "%s";;\n' "$driver"
+  if [[ $driver_mode == source ]]; then
+    printf '#use "%s";;\n' "$driver"
+  else
+    sed -n '1,$p' "$driver"
+  fi
 } >"$output_dir/input.fifo" &
 writer_pid=$!
 
@@ -122,6 +128,7 @@ while true; do
       'cml_heap_size_mib=32768' \
       "base_checkpoint=$(realpath "${checkpoints[0]}")" \
       "driver=$driver" \
+      "driver_mode=$driver_mode" \
       "driver_sha256=$driver_sha" \
       "expected_marker=$expected_marker" \
       "checkpoint=$checkpoint" \
