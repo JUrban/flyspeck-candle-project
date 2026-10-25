@@ -511,6 +511,16 @@
       "root_cause": "Both downstream proofs share the same numeric-reduction/final-cleanup structure and likewise omitted `cexp_if_def` after adding the matan branch.",
       "check_id": "matan_repair_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-043",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-historical-sound-v677t/runtime.log",
+      "failure_mode": "The first historical dihedral soundness dependency raises Failure SPECL after the fixed-scale angle-polynomial source finishes; the incomplete logical load then makes the ordinary-needs identity check fail closed.",
+      "root_cause": "An explicit SPECL application in the historical dihedral soundness dependency is being given a theorem with fewer leading universal quantifiers than the requested specialization list; the exact call site is not yet localized.",
+      "check_id": "historical_sound_contract",
+      "enforcement": "preflight"
     }
   ]
 }

@@ -48,6 +48,9 @@ MATAN_REPAIR_CONTRACT = (
 MATAN_REPAIR_CHECKPOINT_CHAIN = (
     PROJECT / "scripts/audit-fast-nl-v677-repair-checkpoint-chain.py"
 )
+HISTORICAL_SOUND_CONTRACT = (
+    PROJECT / "scripts/audit-fast-nl-v677-historical-sound-contract.py"
+)
 M_VERIFIER_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v674-checkpoint-finalization.py"
 )
@@ -235,6 +238,10 @@ def check_matan_repair_contract(_: dict, __: pathlib.Path) -> CheckResult:
 
 def check_matan_repair_checkpoint_chain(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(MATAN_REPAIR_CHECKPOINT_CHAIN)], timeout=120)
+
+
+def check_historical_sound_contract(_: dict, __: pathlib.Path) -> CheckResult:
+    return run_checked([str(HISTORICAL_SOUND_CONTRACT)], timeout=30)
 
 
 def check_checkpoint_integrity(
@@ -781,6 +788,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "matan_constructor_closure": check_matan_constructor_closure,
     "matan_repair_contract": check_matan_repair_contract,
     "matan_repair_checkpoint_chain": check_matan_repair_checkpoint_chain,
+    "historical_sound_contract": check_historical_sound_contract,
     "checkpoint_integrity": check_checkpoint_integrity,
     "checkpoint_admission_chain": check_checkpoint_admission_chain,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,
