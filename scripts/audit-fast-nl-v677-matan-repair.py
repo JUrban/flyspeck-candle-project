@@ -108,9 +108,19 @@ def main() -> int:
             return fail(f"source_identity:{logical}")
 
     overlay = OVERLAY.read_text(encoding="utf-8")
-    overlay_paths = re.findall(r'"(candle/[^\"]+\.ml)"', overlay)
+    overlay_pairs = re.findall(
+        r'\("(/project/worktrees/candle-direct-fast-nl-runtime-v1/(candle/[^\"]+\.ml))",\s*'
+        r'"(/project/worktrees/candle-fast-nl-matan-closure-v1/candle/[^\"]+\.ml)"\)',
+        overlay,
+    )
+    overlay_paths = [logical for _, logical, _ in overlay_pairs]
     if overlay_paths != paths:
         return fail("overlay_path_set")
+    for old_text, logical, new_text in overlay_pairs:
+        if pathlib.Path(old_text) != original_root / logical:
+            return fail(f"overlay_original:{logical}")
+        if pathlib.Path(new_text) != candidate_root / logical:
+            return fail(f"overlay_candidate:{logical}")
     required_overlay_fragments = (
         'List.length candle_flyspeck_v677_existing_mappings <> 95',
         'List.length candle_flyspeck_v677_matan_repair_mappings <> 19',

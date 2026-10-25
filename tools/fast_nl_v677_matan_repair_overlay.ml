@@ -4,39 +4,45 @@
    original logical nodes.  This table changes only the bytes selected for
    those 19 exact paths after both repositories and every byte identity have
    been checked by audit-fast-nl-v677-matan-repair.py. *)
-let candle_flyspeck_v677_matan_repair_original_root =
-  "/project/worktrees/candle-direct-fast-nl-runtime-v1/";;
-
-let candle_flyspeck_v677_matan_repair_candidate_root =
-  "/project/worktrees/candle-fast-nl-matan-closure-v1/";;
-
-let candle_flyspeck_v677_matan_repair_relatives =
- ["candle/cv_compute_analytic_expr_certificate_patch.ml";
-  "candle/cv_compute_analytic_expr_certificate_patch_compute.ml";
-  "candle/cv_compute_analytic_expr_certificate_patch_exact.ml";
-  "candle/cv_compute_analytic_expr_certificate_variant_prepare.ml";
-  "candle/cv_compute_analytic_expr_first_jet_program_compute.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_compile_sound.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_compute.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compile_sound.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compute.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_item_invariant.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_compile_sound.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_program_sound.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_compile_sound.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_program_sound.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_program_fixed_sound.ml";
-  "candle/cv_compute_analytic_expr_taylor_model_representation.ml"];;
-
 let candle_flyspeck_v677_matan_repair_mappings =
-  List.map
-    (fun relative ->
-      (candle_flyspeck_v677_matan_repair_original_root ^ relative,
-       candle_flyspeck_v677_matan_repair_candidate_root ^ relative))
-    candle_flyspeck_v677_matan_repair_relatives;;
+ [("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_certificate_patch.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_certificate_patch.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_certificate_patch_compute.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_certificate_patch_compute.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_certificate_patch_exact.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_certificate_patch_exact.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_certificate_variant_prepare.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_certificate_variant_prepare.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_first_jet_program_compute.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_first_jet_program_compute.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_compile_sound.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_compile_sound.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_compute.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_compute.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compile_sound.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compile_sound.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compute.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compute.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_item_invariant.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_item_invariant.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_compile_sound.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_compile_sound.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_program_sound.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_program_sound.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_compile_sound.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_compile_sound.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_program_sound.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_program_sound.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_sound.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_sound.ml");
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_analytic_expr_taylor_model_representation.ml",
+   "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_representation.ml")];;
 
 let candle_flyspeck_v677_existing_mappings =
   match !Cakeml.normalizationOverlay with
