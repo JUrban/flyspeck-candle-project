@@ -37,3 +37,10 @@ headroom, a byte-bound short runtime probe, phase caps, fast-branch evidence,
 exact theorem acceptance, and the two-fresh-restore requirement.  The v664
 implicit-module omission and absent short-probe receipt are active failing
 hazards, so another long replay is forbidden until both gates are green.
+
+The source-identity configuration is also part of checkpoint lineage.  A
+later setup file cannot extend an already restored checkpoint because Candle
+installs this table exactly once.  The gate therefore requires the support
+predecessor to descend from a base receipt with the complete candidate source
+count and binds the exact setup/data files through that base's SHA-256 input
+manifest.

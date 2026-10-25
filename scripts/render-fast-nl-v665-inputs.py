@@ -17,6 +17,9 @@ CANDLE_ROOT = pathlib.Path("/project/worktrees/candle-direct-fast-nl-runtime-v1"
 FLYSPECK_ROOT = pathlib.Path(
     "/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6"
 )
+BOOTSTRAP_FORMAL_ROOT = pathlib.Path(
+    "/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs"
+)
 CLOSURE = CANDLE_ROOT / "candle/flyspeck_nonlinear_verifier_closure.json"
 OVERLAY_ROOT = pathlib.Path(
     "/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay"
@@ -26,6 +29,19 @@ COMPAT_OUTPUT = PROJECT / "tools/fast_nl_v665_verifier_runtime_compat.ml"
 EXPECTED_FLYSPECK_HEAD = "d6cdcd9f3e45f4ceb5fd1ba08f5b5ec4ce6a65eb"
 EXPECTED_COMPAT_SHA256 = (
     "b20e594edbbdc50ada14c739ae3341967b7333772fd589cf60ec34cf3cef9360"
+)
+BOOTSTRAP_SUPPORT_SOURCES = (
+    "arith/interval_arith.hl",
+    "lib/ssrbool.hl",
+    "lib/ssreflect/sections.hl",
+    "lib/ssreflect/ssreflect.hl",
+    "lib/ssrfun.hl",
+    "lib/ssrnat.hl",
+    "misc/misc_vars.hl",
+    "misc/report.hl",
+    "taylor/theory/taylor_interval-compiled.hl",
+    "trig/matan.hl",
+    "trig/series.hl",
 )
 
 
@@ -120,12 +136,17 @@ def render_data() -> str:
         if not source.is_file():
             raise ValueError(f"missing matan prerequisite: {source}")
         identities.append((str(source), source.name, md5(source)))
+    for logical in BOOTSTRAP_SUPPORT_SOURCES:
+        source = BOOTSTRAP_FORMAL_ROOT / logical
+        if not source.is_file():
+            raise ValueError(f"missing bootstrap support source: {source}")
+        identities.append((str(source), source.name, md5(source)))
     compat_text = render_compat()
     compat_md5 = hashlib.md5(
         compat_text.encode("ascii"), usedforsecurity=False
     ).hexdigest()
     identities.append((str(COMPAT_OUTPUT), COMPAT_OUTPUT.name, compat_md5))
-    if len(identities) != 65 or len(normalizations) != 29:
+    if len(identities) != 76 or len(normalizations) != 29:
         raise ValueError(
             f"v665 generated count mismatch: {len(identities)} identities, "
             f"{len(normalizations)} normalizations"
@@ -145,7 +166,7 @@ def render_data() -> str:
         [
             "];;",
             "",
-            "if List.length candle_fast_nl_v665_verifier_source_identities <> 65 then",
+            "if List.length candle_fast_nl_v665_verifier_source_identities <> 76 then",
             '  failwith "v665 verifier source identity count mismatch";;',
             "",
             "let candle_fast_nl_v665_verifier_normalized_sources = [",

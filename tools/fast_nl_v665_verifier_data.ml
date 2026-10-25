@@ -66,10 +66,21 @@ let candle_fast_nl_v665_verifier_source_identities = [
   ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier_options.hl",("verifier_options.hl","18978e346e065b1c464d288990ca7cea"));
   ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_exact_interval_matan_series.ml",("cv_compute_exact_interval_matan_series.ml","7461529a70e5f006cf0ecc8c45ba4297"));
   ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_exact_interval_matan_series_program.ml",("cv_compute_exact_interval_matan_series_program.ml","8baa6fa6c5cb749377f07339d36f3705"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/arith/interval_arith.hl",("interval_arith.hl","0af2e87c2a753e4736e6bf5078a8dca4"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/lib/ssrbool.hl",("ssrbool.hl","aa04bba1f6f142aed2a049b4511106d5"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/lib/ssreflect/sections.hl",("sections.hl","4b207a2e7a8b7ab7f86f9cb9ffd80d88"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/lib/ssreflect/ssreflect.hl",("ssreflect.hl","ee9aa6011f0277ca2a4ed190515e99c9"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/lib/ssrfun.hl",("ssrfun.hl","031939698158f77c7913d12396445f35"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/lib/ssrnat.hl",("ssrnat.hl","16500e2d805ccbe7da700138ce14b87e"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/misc/misc_vars.hl",("misc_vars.hl","74887cce49991876672087f6e9812852"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/misc/report.hl",("report.hl","19cf18cda718471efb4d659bf8aff07c"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/taylor/theory/taylor_interval-compiled.hl",("taylor_interval-compiled.hl","461022ad60f0beaa660e6c8d1df59284"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/trig/matan.hl",("matan.hl","900f6f8aeaab2eb44e20fb1f43674890"));
+  ("/project/worktrees/flyspeck-strictbuild-bootstrap-v1/formal_ineqs/trig/series.hl",("series.hl","a586ddb93975e3c1fcb10250f062dd6f"));
   ("/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_runtime_compat.ml",("fast_nl_v665_verifier_runtime_compat.ml","4eb96d11e6a9421b48c9ec7cb7eb5747"));
 ];;
 
-if List.length candle_fast_nl_v665_verifier_source_identities <> 65 then
+if List.length candle_fast_nl_v665_verifier_source_identities <> 76 then
   failwith "v665 verifier source identity count mismatch";;
 
 let candle_fast_nl_v665_verifier_normalized_sources = [

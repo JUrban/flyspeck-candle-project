@@ -8,7 +8,6 @@
 #use "/project/flyspeck-candle-runs/v355-postsetup-checkpoint-dev-001/runtime-config-no-trace.ml";;
 #use "/project/flyspeck-candle-runs/v355-postsetup-checkpoint-dev-001/overlay-data-v355.ml";;
 #use "/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001/extra-source-identities.ml";;
-#use "/project/flyspeck-candle-project/tools/fast_nl_v664_support_identity_extension.ml";;
 #use "/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_data.ml";;
 #use "/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001/fast-nl-source-aliases.ml";;
 

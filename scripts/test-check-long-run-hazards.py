@@ -26,7 +26,7 @@ class LongRunHazardGateTests(unittest.TestCase):
         )
         hazards = ledger["hazards"]
         self.assertEqual(len({item["id"] for item in hazards}), len(hazards))
-        self.assertGreaterEqual(len(hazards), 17)
+        self.assertGreaterEqual(len(hazards), 18)
         for item in hazards:
             self.assertIn(item["check_id"], GATE.CHECKS)
 
@@ -119,6 +119,53 @@ class LongRunHazardGateTests(unittest.TestCase):
             result = GATE.check_short_runtime_probe(config, root / "unused.sh")
             self.assertFalse(result.ok)
             self.assertIn("short_probe_receipt_missing", result.detail)
+
+    def test_predecessor_must_descend_from_complete_identity_setup(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            setup = root / "setup.ml"
+            setup.write_text("let identities = 283;;\n", encoding="utf-8")
+            data = root / "data.ml"
+            data.write_text("let rows = [];;\n", encoding="utf-8")
+            checkpoint = root / "base.dmtcp"
+            source_receipt = root / "checkpoint.receipt"
+            source_receipt.write_text(
+                "authenticated_fast_nl_source_count=283\n"
+                f"checkpoint={checkpoint}\n",
+                encoding="utf-8",
+            )
+            (root / "input-files.sha256").write_text(
+                f"{GATE.sha256(setup)}  {setup.resolve()}\n"
+                f"{GATE.sha256(data)}  {data.resolve()}\n",
+                encoding="utf-8",
+            )
+            predecessor = root / "action49.receipt"
+            predecessor.write_text(
+                f"base_checkpoint={checkpoint}\n", encoding="utf-8"
+            )
+            config = {
+                "required_authenticated_fast_nl_source_count": 283,
+                "short_runtime_probe": {
+                    "predecessor_checkpoint_receipt": str(predecessor),
+                    "source_configuration_receipt": str(source_receipt),
+                    "source_configuration_inputs": [str(setup), str(data)],
+                },
+            }
+            result = GATE.check_predecessor_identity_coverage(
+                config, root / "unused.sh"
+            )
+            self.assertTrue(result.ok, result.detail)
+
+            source_receipt.write_text(
+                "authenticated_fast_nl_source_count=218\n"
+                f"checkpoint={checkpoint}\n",
+                encoding="utf-8",
+            )
+            result = GATE.check_predecessor_identity_coverage(
+                config, root / "unused.sh"
+            )
+            self.assertFalse(result.ok)
+            self.assertIn("authenticated_fast_nl_source_count", result.detail)
 
 
 if __name__ == "__main__":

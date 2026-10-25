@@ -247,6 +247,67 @@ def check_short_runtime_probe(config: dict, _: pathlib.Path) -> CheckResult:
     )
 
 
+def check_predecessor_identity_coverage(config: dict, _: pathlib.Path) -> CheckResult:
+    """Reject checkpoints created before the candidate identity table existed."""
+
+    probe = config.get("short_runtime_probe")
+    if not isinstance(probe, dict):
+        return CheckResult(False, "predecessor_identity_config=missing")
+    source_receipt_text = probe.get("source_configuration_receipt")
+    required_inputs_text = probe.get("source_configuration_inputs")
+    expected_count = config.get("required_authenticated_fast_nl_source_count")
+    if (
+        not isinstance(source_receipt_text, str)
+        or not isinstance(required_inputs_text, list)
+        or not isinstance(expected_count, int)
+    ):
+        return CheckResult(False, "predecessor_identity_config=incomplete")
+    source_receipt_path = pathlib.Path(source_receipt_text)
+    if not source_receipt_path.is_file():
+        return CheckResult(False, f"source_configuration_receipt_missing={source_receipt_path}")
+    source_receipt = parse_receipt(source_receipt_path)
+    if source_receipt.get("authenticated_fast_nl_source_count") != str(expected_count):
+        return CheckResult(
+            False,
+            "authenticated_fast_nl_source_count="
+            f"{source_receipt.get('authenticated_fast_nl_source_count')!r}",
+        )
+    source_checkpoint_text = source_receipt.get("checkpoint")
+    if not source_checkpoint_text:
+        return CheckResult(False, "source_configuration_checkpoint=missing")
+
+    manifest_path = source_receipt_path.parent / "input-files.sha256"
+    if not manifest_path.is_file():
+        return CheckResult(False, f"source_configuration_manifest_missing={manifest_path}")
+    manifest_lines = set(manifest_path.read_text(encoding="utf-8").splitlines())
+    for text_path in required_inputs_text:
+        path = pathlib.Path(text_path).resolve()
+        if not path.is_file():
+            return CheckResult(False, f"source_configuration_input_missing={path}")
+        expected_line = f"{sha256(path)}  {path}"
+        if expected_line not in manifest_lines:
+            return CheckResult(False, f"source_configuration_input_unbound={path}")
+
+    predecessor_path = pathlib.Path(probe["predecessor_checkpoint_receipt"])
+    if not predecessor_path.is_file():
+        return CheckResult(False, f"identity_predecessor_receipt_missing={predecessor_path}")
+    predecessor = parse_receipt(predecessor_path)
+    try:
+        configured_checkpoint = pathlib.Path(source_checkpoint_text).resolve()
+        observed_base = pathlib.Path(predecessor["base_checkpoint"]).resolve()
+    except KeyError:
+        return CheckResult(False, "identity_predecessor_base_checkpoint=missing")
+    if observed_base != configured_checkpoint:
+        return CheckResult(
+            False,
+            f"identity_predecessor_base_checkpoint={observed_base}",
+        )
+    return CheckResult(
+        True,
+        f"authenticated_fast_nl_source_count={expected_count} predecessor_lineage=exact",
+    )
+
+
 def controller_run_target(controller: pathlib.Path) -> pathlib.Path | None:
     text = controller.read_text(encoding="utf-8")
     match = re.search(r"(?m)^run=(/[^\s]+)$", text)
@@ -381,6 +442,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "literal_source_closure": check_literal_closure,
     "module_load_order_closure": check_module_closure,
     "checkpoint_integrity": check_checkpoint_integrity,
+    "predecessor_identity_coverage": check_predecessor_identity_coverage,
     "short_runtime_probe": check_short_runtime_probe,
     "bounded_controller": check_bounded_controller,
     "fast_theorem_controller_contract": check_theorem_controller_contract,

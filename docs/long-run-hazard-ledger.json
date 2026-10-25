@@ -30,10 +30,16 @@
         "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/postaction49/checkpoint.receipt"
       ],
+      "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
-        "receipt": "/project/flyspeck-candle-runs/v665-fast-nl-support-probe-dev-001/SHORT-RUNTIME-PROBE.receipt",
+        "receipt": "/project/flyspeck-candle-runs/v667-fast-nl-support-probe-dev-001/SHORT-RUNTIME-PROBE.receipt",
         "maximum_elapsed_seconds": 3600,
-        "predecessor_checkpoint_receipt": "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/postaction49/checkpoint.receipt",
+        "predecessor_checkpoint_receipt": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49/checkpoint.receipt",
+        "source_configuration_receipt": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/checkpoint.receipt",
+        "source_configuration_inputs": [
+          "/project/flyspeck-candle-project/tools/fast_nl_v665_setup.ml",
+          "/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_data.ml"
+        ],
         "required_files": [
           "/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_data.ml",
           "/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_runtime_compat.ml",
@@ -215,6 +221,16 @@
       "failure_mode": "Static source and module audits pass but runtime-only compatibility names, load-path resolution, or loader state still fail after checkpoint restore.",
       "root_cause": "Lexical closure cannot establish runtime top-level bindings or the exact behavior of a restored state.",
       "check_id": "short_runtime_probe",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-018",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v665-fast-nl-support-probe-dev-001",
+      "failure_mode": "A restored predecessor rejects newly authenticated support sources even though the candidate setup contains their identities.",
+      "root_cause": "Candle source identities are configured exactly once; the v664 checkpoint froze 218 entries before the 283-entry canonical verifier plan existed.",
+      "check_id": "predecessor_identity_coverage",
       "enforcement": "preflight"
     }
   ]

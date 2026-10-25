@@ -64,7 +64,7 @@ printf '%s\n' \
   'status=0' \
   'verifier_source_count=90' \
   'verifier_normalization_count=29' \
-  'generated_identity_extension_count=65' \
+  'generated_identity_extension_count=76' \
   'complete_extra_identity_count=283' \
   'complete_normalization_count=85' \
   'planned_load_path_count=304' \
