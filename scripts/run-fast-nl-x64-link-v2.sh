@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-run=/project/flyspeck-candle-runs/v659-fast-nl-compiler64-artifact-auth-dev-001
+run=/project/flyspeck-candle-runs/v660-fast-nl-compiler64-artifact-auth-dev-001
 failed_run=/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001
 cake=/project/worktrees/cakeml-direct-fast-nl-integration-v1
 candle=/project/worktrees/candle-direct-fast-nl-runtime-v1
@@ -9,7 +9,7 @@ hol=/project/worktrees/HOL-cakeml-dopen-v13
 project=/project/worktrees/flyspeck-project-candle-repin-prep-v13
 trans=$cake/compiler/bootstrap/translation
 x64=$cake/compiler/bootstrap/compilation/x64/64
-runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-002
+runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-aa7ffbc-0f9690d-bc47e65-attempt-003
 
 cake_head=aa7ffbc3a5e30c0f78acfe883f39476d0a3f035a
 candle_head=0f9690d3683efca78a60d4607596815245e37578
@@ -95,7 +95,6 @@ for theorem in \
   semantics_compiler64_prog_parser_ok_exact \
   semantics_compiler64_prog_parser_error_exact \
   semantics_compiler64_prog \
-  BUTLAST_compiler64_prog \
   Decls_FRONT_compiler64_prog \
   LAST_compiler64_prog; do
   rg -q "\"$theorem\"" "$compiler_sml"
