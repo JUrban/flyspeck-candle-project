@@ -45,6 +45,9 @@ M_VERIFIER_CHECKPOINT_FINALIZATION = (
 FOUNDATION_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v675-checkpoint-finalization.sh"
 )
+MATAN_CHECKPOINT_FINALIZATION = (
+    PROJECT / "scripts/audit-fast-nl-v676-checkpoint-finalization.sh"
+)
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
 
@@ -198,10 +201,14 @@ def check_checkpoint_finalization(_: dict, __: pathlib.Path) -> CheckResult:
     foundation = run_checked(
         [str(FOUNDATION_CHECKPOINT_FINALIZATION)], timeout=180
     )
+    if not foundation.ok:
+        return foundation
+    matan = run_checked([str(MATAN_CHECKPOINT_FINALIZATION)], timeout=180)
     return CheckResult(
-        foundation.ok,
+        matan.ok,
         f"interval=[{interval.detail}] multivariate=[{multivariate.detail}] "
-        f"verifier=[{verifier.detail}] foundation=[{foundation.detail}]",
+        f"verifier=[{verifier.detail}] foundation=[{foundation.detail}] "
+        f"matan=[{matan.detail}]",
     )
 
 
