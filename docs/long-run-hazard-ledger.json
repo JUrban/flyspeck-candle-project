@@ -242,6 +242,16 @@
       "root_cause": "Three late overlays assert the old global cardinality 56 instead of checking only their direct-Flyspeck logical subset; the canonical verifier adds 29 unrelated rows.",
       "check_id": "action_overlay_partition_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-020",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v668",
+      "failure_mode": "A partition wrapper restores the correct verifier rows but rejects the historical action replay because it assumes the direct normalization table is cardinality-invariant.",
+      "root_cause": "Actions 0--49 legitimately add ten authenticated direct-Flyspeck normalization rows, growing the direct partition from 56 to 66 and the combined table from 85 to 95.",
+      "check_id": "action_overlay_partition_contract",
+      "enforcement": "preflight"
     }
   ]
 }

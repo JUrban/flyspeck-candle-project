@@ -38,7 +38,10 @@ let candle_flyspeck_v668_updated_direct_mappings =
   | None -> failwith "v668 historical action removed normalization overlay"
   | Some mappings -> mappings;;
 
-if List.length candle_flyspeck_v668_updated_direct_mappings <> 56 ||
+(* The historical actions authenticate ten additional direct-Flyspeck
+   normalizations.  This is a state transition, not an invariant cardinality:
+   the protected direct partition therefore grows from 56 to 66. *)
+if List.length candle_flyspeck_v668_updated_direct_mappings <> 66 ||
    List.filter candle_flyspeck_v668_is_verifier_original
      candle_flyspeck_v668_updated_direct_mappings <> [] ||
    List.length !candle_flyspeck_stratum_action_events <> 50 ||
@@ -49,9 +52,9 @@ let candle_flyspeck_v668_complete_mappings =
   candle_flyspeck_v668_verifier_mappings @
   candle_flyspeck_v668_updated_direct_mappings;;
 
-if List.length candle_flyspeck_v668_complete_mappings <> 85 then
+if List.length candle_flyspeck_v668_complete_mappings <> 95 then
   failwith "v668 restored normalization cardinality mismatch";;
 
 Cakeml.normalizationOverlay := Some candle_flyspeck_v668_complete_mappings;;
 print_endline
-  "CANDLE_FLYSPECK_V668_ACTION49_CHECKPOINT_READY actions=50 passed=50 normalizations=85";;
+  "CANDLE_FLYSPECK_V668_ACTION49_CHECKPOINT_READY actions=50 passed=50 normalizations=95";;

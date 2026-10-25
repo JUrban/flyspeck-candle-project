@@ -24,6 +24,9 @@ SUCCESS_LOG = pathlib.Path(
 FAILED_LOG = pathlib.Path(
     "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49/runtime.log"
 )
+TRANSITION_LOG = pathlib.Path(
+    "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v668/runtime.log"
+)
 VERIFIER_ROOT = "/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/"
 EXPECTED_ACTION_SHA256 = (
     "0174c32fd75dd9db8027c9dddfef46cd6a98afd58c4f48345203800158ab03ce"
@@ -46,7 +49,15 @@ def fail(message: str) -> int:
 
 
 def main() -> int:
-    for path in (WRAPPER, BASE_DATA, VERIFIER_DATA, ACTION_DRIVER, SUCCESS_LOG, FAILED_LOG):
+    for path in (
+        WRAPPER,
+        BASE_DATA,
+        VERIFIER_DATA,
+        ACTION_DRIVER,
+        SUCCESS_LOG,
+        FAILED_LOG,
+        TRANSITION_LOG,
+    ):
         if not path.is_file():
             return fail(f"missing:{path}")
     if sha256(ACTION_DRIVER) != EXPECTED_ACTION_SHA256:
@@ -74,8 +85,9 @@ def main() -> int:
         "List.length candle_flyspeck_v668_verifier_mappings <> 29",
         "List.length candle_flyspeck_v668_direct_mappings <> 56",
         f'#use "{ACTION_DRIVER}";;',
-        "List.length candle_flyspeck_v668_complete_mappings <> 85",
-        "CANDLE_FLYSPECK_V668_ACTION49_CHECKPOINT_READY actions=50 passed=50 normalizations=85",
+        "List.length candle_flyspeck_v668_updated_direct_mappings <> 66",
+        "List.length candle_flyspeck_v668_complete_mappings <> 95",
+        "CANDLE_FLYSPECK_V668_ACTION49_CHECKPOINT_READY actions=50 passed=50 normalizations=95",
     )
     if any(wrapper_text.count(fragment) != 1 for fragment in required_wrapper_fragments):
         return fail("wrapper_contract")
@@ -104,6 +116,34 @@ def main() -> int:
     if failure_lines != [expected_failure]:
         return fail("failed_evidence_class")
 
+    # The first partitioned replay is immutable evidence for the actual
+    # transition performed by actions 0--49: 56 direct rows become 66.  Parse
+    # the printed top-level values so a later wrapper cannot regress to the
+    # false assumption that normalization cardinality is invariant.
+    transition_text = TRANSITION_LOG.read_text(encoding="utf-8", errors="replace")
+    transition_values: dict[str, str] = {}
+    for name in (
+        "candle_flyspeck_v668_updated_direct_mappings",
+        "candle_flyspeck_v668_complete_mappings",
+    ):
+        start = transition_text.find(f"val {name} = ")
+        if start < 0:
+            return fail(f"transition_value_missing:{name}")
+        end = transition_text.find(": (string * string) list", start)
+        if end < 0:
+            return fail(f"transition_value_truncated:{name}")
+        transition_values[name] = transition_text[start:end]
+    updated = transition_values["candle_flyspeck_v668_updated_direct_mappings"]
+    complete = transition_values["candle_flyspeck_v668_complete_mappings"]
+    if (
+        updated.count('(\"/project/') != 66
+        or VERIFIER_ROOT in updated
+        or complete.count('(\"/project/') != 95
+        or complete.count(VERIFIER_ROOT) != 29
+        or transition_text.count("CANDLE_FLYSPECK_STRATUM_ACTION_OK") != 50
+    ):
+        return fail("observed_action_overlay_transition")
+
     late_overlay_root = BASE_DATA.parent
     cardinality_files = []
     for name in ("late-overlay-v356.ml", "late-overlay-v357.ml", "late-overlay-v358.ml"):
@@ -117,6 +157,8 @@ def main() -> int:
     print("base_normalization_count=56")
     print("verifier_normalization_count=29")
     print("combined_normalization_count=85")
+    print("post_action_direct_normalization_count=66")
+    print("post_action_combined_normalization_count=95")
     print("normalization_overlap_count=0")
     print("historical_action_verifier_load_count=0")
     print("historical_action_status=50/50")
@@ -124,6 +166,7 @@ def main() -> int:
     print(f"action_driver_sha256={sha256(ACTION_DRIVER)}")
     print(f"wrapper_sha256={sha256(WRAPPER)}")
     print(f"failed_log_sha256={sha256(FAILED_LOG)}")
+    print(f"transition_log_sha256={sha256(TRANSITION_LOG)}")
     return 0
 
 
