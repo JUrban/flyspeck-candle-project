@@ -182,7 +182,13 @@ def main() -> int:
         r"candle_fsa_logical_item_matan_default_analytic_invariant)\b",
         all_candidate_text,
     )
-    if len(direct_accepts) != 5:
+    normalized_item_accepts = re.findall(
+        r"MATCH_ACCEPT_TAC\s*\(REWRITE_RULE\s*"
+        r"\[LET_DEF;\s*LET_END_DEF\]\s*"
+        r"candle_fsa_item_matan_default_analytic_invariant\)",
+        all_candidate_text,
+    )
+    if len(direct_accepts) != 4 or len(normalized_item_accepts) != 1:
         return fail("premise_free_direct_accept_count")
     # LR-038: classify every MATCH_MP_TAC introduced by the repair, not only
     # the theorem family that has failed already.  The twelve remaining sites
@@ -283,7 +289,11 @@ def main() -> int:
     print("first_jet_matan_series_module_binding_count=1")
     print("matan_default_invariant_discharge_count=1")
     print("premise_free_match_mp_count=0")
-    print(f"premise_free_direct_accept_count={len(direct_accepts)}")
+    print(
+        "premise_free_direct_accept_count="
+        f"{len(direct_accepts) + len(normalized_item_accepts)}"
+    )
+    print(f"normalized_item_accept_count={len(normalized_item_accepts)}")
     print(f"introduced_match_mp_count={introduced_match_mp}")
     print("introduced_match_mp_shape_counts=4,4,4")
     print("algebraic_program_step_if_cleanup_count=1")
