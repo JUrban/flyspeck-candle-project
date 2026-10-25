@@ -124,8 +124,15 @@ def main() -> int:
     if len(delimited_premise.findall(patch_text)) != 1:
         return fail("matan_step_premise_delimitation")
     compute_patch_text = (candidate_root / paths[1]).read_text(encoding="utf-8")
-    if compute_patch_text.count("PRINT_GOAL_TAC") != 2:
-        return fail("matan_representation_residual_diagnostic")
+    if "PRINT_GOAL_TAC" in compute_patch_text:
+        return fail("matan_representation_debug_tactic")
+    representation_branch = re.compile(
+        r"REWRITE_TAC\s*\[candle_cv_analytic_program_matan_patch_sqrt;\s*"
+        r"candle_analytic_instruction_patch_sqrt_def; FST; SND\]",
+        re.S,
+    )
+    if len(representation_branch.findall(compute_patch_text)) != 1:
+        return fail("matan_representation_logical_normalization")
 
     overlay = OVERLAY.read_text(encoding="utf-8")
     overlay_pairs = re.findall(
@@ -171,7 +178,7 @@ def main() -> int:
     print(f"original_head={original['commit']}")
     print(f"candidate_head={candidate['commit']}")
     print("matan_step_premise_delimitation_count=1")
-    print("matan_representation_residual_diagnostic_count=2")
+    print("matan_representation_logical_normalization_count=1")
     print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
     print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
     return 0

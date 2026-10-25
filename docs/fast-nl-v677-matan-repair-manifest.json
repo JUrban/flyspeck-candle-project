@@ -7,11 +7,11 @@
   },
   "candidate": {
     "root": "/project/worktrees/candle-fast-nl-matan-closure-v1",
-    "commit": "a3d610caca19081b428d9a6e45284e6542c5182f"
+    "commit": "65397eb2d87d817acff962a3e3e4320fb5cdfb68"
   },
   "files": [
     {"path":"candle/cv_compute_analytic_expr_certificate_patch.ml","original_md5":"7a84867e06ab73da17ba3038e9d41278","original_sha256":"01d8ccde4afa2fe0d509c303240dac88b0babc619153e0546387cd09d9d0caed","candidate_md5":"643a879d3b65b3f39d2fb1b5805e4711","candidate_sha256":"b88e770ce0b7635f6ba827d5122231688c32ccadf023400f48cee4312ebfa667"},
-    {"path":"candle/cv_compute_analytic_expr_certificate_patch_compute.ml","original_md5":"43b9e4ecfdcc3210b9ac3d1c86c2b2c3","original_sha256":"b961d37b750b6bfc39c1f97b2256866a5992aae98618a7097c9ee4be9b62d3c9","candidate_md5":"5f58b8b52c4d73d7e74309f04a66aef8","candidate_sha256":"519e98b363c24e49a870d9573707d46c075dce0c6d533195fc28deefe7bf4702"},
+    {"path":"candle/cv_compute_analytic_expr_certificate_patch_compute.ml","original_md5":"43b9e4ecfdcc3210b9ac3d1c86c2b2c3","original_sha256":"b961d37b750b6bfc39c1f97b2256866a5992aae98618a7097c9ee4be9b62d3c9","candidate_md5":"06e38a931ff1df0305585c95576dc629","candidate_sha256":"e107543eac263a894cb5a442daa73813f384d3062f75309013e9e2dcdf1dd68d"},
     {"path":"candle/cv_compute_analytic_expr_certificate_patch_exact.ml","original_md5":"087a8d240ad7fef9f8901b72988bea5f","original_sha256":"9724687f5a68b03cd0786db9cf28f606ba84fe5b7523a056bf07607207048ee9","candidate_md5":"7b3acf18afdec829a753bc33e36aeee4","candidate_sha256":"9c1251dc9de37614040de2c3cb7de7837254325543b80dcd17db04c035544581"},
     {"path":"candle/cv_compute_analytic_expr_certificate_variant_prepare.ml","original_md5":"14289599b3141c79c09b840e13198145","original_sha256":"3ecb3afc0ae4b36eb65bc7389619b830e206a37594efc6ecf1ec7272993aa0c3","candidate_md5":"46a7634ec9048c63d4c6ae95abcb235d","candidate_sha256":"afc63630231afb61a9439c9a95683c5590284b197ebcc859576141e4efc51c27"},
     {"path":"candle/cv_compute_analytic_expr_first_jet_program_compute.ml","original_md5":"41e3f459c4c7dd904d44b588d7eccd5e","original_sha256":"2b5564a57dbf3468b788cbddac7bd8ea6d4cf56beae74a433b33d2cce0c5ca32","candidate_md5":"4b2ed5a1862e4306eea9d07142fb0346","candidate_sha256":"561cf946840a93932676f1e84a6819e2564fab924a11c2d47bcdb0e464d7466b"},
