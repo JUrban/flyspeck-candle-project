@@ -29,6 +29,11 @@ class LongRunHazardGateTests(unittest.TestCase):
         self.assertGreaterEqual(len(hazards), 19)
         for item in hazards:
             self.assertIn(item["check_id"], GATE.CHECKS)
+            profiles = item.get("profiles", ["theorem", "support-stage"])
+            self.assertTrue(profiles)
+            self.assertTrue(
+                set(profiles).issubset({"theorem", "support-stage"})
+            )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -47,6 +52,38 @@ class LongRunHazardGateTests(unittest.TestCase):
                 GATE.controller_run_target(good), pathlib.Path("/project/example-run")
             )
             self.assertIsNone(GATE.controller_run_target(bad))
+
+    def test_stage_output_is_a_run_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "stage.sh"
+            path.write_text("output=/project/stage-output\n", encoding="utf-8")
+            self.assertEqual(
+                GATE.controller_run_target(path), pathlib.Path("/project/stage-output")
+            )
+
+    def test_stage_controller_timeout_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "stage.sh"
+            path.write_text(
+                "#!/usr/bin/env bash\n"
+                "set -euo pipefail\n"
+                "# check-long-run-hazards.py\n"
+                "export FAST_NL_PHASE_TIMEOUT_SECONDS=3300\n",
+                encoding="utf-8",
+            )
+            result = GATE.check_bounded_controller(
+                {"maximum_support_stage_seconds": 3600}, path
+            )
+            self.assertTrue(result.ok, result.detail)
+
+            path.write_text(
+                path.read_text(encoding="utf-8").replace("3300", "7200"),
+                encoding="utf-8",
+            )
+            result = GATE.check_bounded_controller(
+                {"maximum_support_stage_seconds": 3600}, path
+            )
+            self.assertFalse(result.ok)
 
     def test_existing_controller_retains_exact_theorem_contract(self) -> None:
         controller = ROOT / "scripts/run-fast-nl-v664-first-theorem-controller.sh"

@@ -216,8 +216,12 @@ def check_list_flatten_surface(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(LIST_FLATTEN_SURFACE)], timeout=30)
 
 
-def check_checkpoint_integrity(config: dict, _: pathlib.Path) -> CheckResult:
+def check_checkpoint_integrity(
+    config: dict, controller: pathlib.Path
+) -> CheckResult:
+    metadata_only = "stage" in controller.name
     seen: set[pathlib.Path] = set()
+    previous_checkpoint: pathlib.Path | None = None
     for receipt_text in config["checkpoint_receipts"]:
         receipt_path = pathlib.Path(receipt_text)
         if not receipt_path.is_file():
@@ -233,10 +237,142 @@ def check_checkpoint_integrity(config: dict, _: pathlib.Path) -> CheckResult:
             return CheckResult(False, f"missing_checkpoint={checkpoint}")
         if checkpoint.stat().st_size != int(expected_size):
             return CheckResult(False, f"checkpoint_size={checkpoint}")
-        if checkpoint not in seen and sha256(checkpoint) != expected_sha:
+        if (
+            not metadata_only
+            and checkpoint not in seen
+            and sha256(checkpoint) != expected_sha
+        ):
             return CheckResult(False, f"checkpoint_sha256={checkpoint}")
+        if previous_checkpoint is not None:
+            base_text = receipt.get("base_checkpoint")
+            if not base_text or pathlib.Path(base_text).resolve() != previous_checkpoint:
+                return CheckResult(False, f"checkpoint_lineage={receipt_path}")
         seen.add(checkpoint)
-    return CheckResult(True, f"authenticated_checkpoint_count={len(seen)}")
+        previous_checkpoint = checkpoint.resolve()
+    if metadata_only:
+        match = re.search(
+            r"(?m)^base=(/[^\s]+)$", controller.read_text(encoding="utf-8")
+        )
+        if not match or previous_checkpoint is None:
+            return CheckResult(False, "stage_base_checkpoint=missing")
+        expected_base = pathlib.Path(match.group(1)).resolve()
+        if expected_base != pathlib.Path(config["checkpoint_receipts"][-1]).parent.resolve():
+            return CheckResult(False, f"stage_base_checkpoint={expected_base}")
+        return CheckResult(
+            True,
+            f"authenticated_checkpoint_count={len(seen)} mode=chained-metadata "
+            "immediate_byte_check=phase-runner",
+        )
+    return CheckResult(
+        True, f"authenticated_checkpoint_count={len(seen)} mode=full-byte"
+    )
+
+
+def check_checkpoint_admission_chain(
+    config: dict, controller: pathlib.Path
+) -> CheckResult:
+    """Cheap admission check; the phase runner hashes the immediate heap."""
+
+    admission = config.get("support_stage_predecessor")
+    if not isinstance(admission, dict):
+        return CheckResult(False, "stage_predecessor_config=missing")
+    required_keys = {
+        "base",
+        "receipt_kind",
+        "checkpoint_sha256",
+        "driver_sha256",
+        "marker",
+        "required_logs",
+        "probe",
+        "probe_marker",
+    }
+    missing = sorted(required_keys - set(admission))
+    if missing:
+        return CheckResult(False, f"stage_predecessor_config_missing={missing[0]}")
+
+    text = controller.read_text(encoding="utf-8")
+    base_match = re.search(r"(?m)^base=(/[^\s]+)$", text)
+    if not base_match or base_match.group(1) != admission["base"]:
+        return CheckResult(False, "stage_predecessor_base_mismatch")
+    phase_runner = PROJECT / "scripts/run-fast-nl-restored-checkpoint-phase-v1.sh"
+    phase_text = phase_runner.read_text(encoding="utf-8")
+    if 'sha256sum -c "$base_dir/checkpoint.sha256"' not in phase_text:
+        return CheckResult(False, "phase_runner_immediate_hash=missing")
+
+    base = pathlib.Path(admission["base"])
+    probe = pathlib.Path(admission["probe"])
+    required_paths = (
+        base / "CHECKPOINT-READY",
+        base / "checkpoint.receipt",
+        base / "checkpoint.sha256",
+        base / "runtime.log",
+        probe / "PROBE-PASSED",
+        probe / "restart-probe.receipt",
+        probe / "runtime.log",
+    )
+    for path in required_paths:
+        if not path.is_file():
+            return CheckResult(False, f"stage_admission_missing={path}")
+    if (base / "CHECKPOINT-FAILED").exists() or (probe / "PROBE-FAILED").exists():
+        return CheckResult(False, "stage_admission_failure_marker")
+
+    base_receipt = parse_receipt(base / "checkpoint.receipt")
+    checkpoint = pathlib.Path(base_receipt.get("checkpoint", ""))
+    if not checkpoint.is_file():
+        return CheckResult(False, "stage_admission_checkpoint=missing")
+    expected_sha = admission["checkpoint_sha256"]
+    checksum_line = (base / "checkpoint.sha256").read_text(encoding="utf-8").strip()
+    if (
+        base_receipt.get("receipt_kind") != admission["receipt_kind"]
+        or base_receipt.get("release_evidence") != "false"
+        or base_receipt.get("driver_mode") != "direct"
+        or base_receipt.get("driver_sha256") != admission["driver_sha256"]
+        or base_receipt.get("expected_marker") != admission["marker"]
+        or base_receipt.get("checkpoint_sha256") != expected_sha
+        or base_receipt.get("checkpoint_size_bytes") != str(checkpoint.stat().st_size)
+        or checksum_line != f"{expected_sha}  {checkpoint}"
+    ):
+        return CheckResult(False, "stage_admission_base_receipt")
+
+    base_log = (base / "runtime.log").read_text(encoding="utf-8", errors="replace")
+    teardown = "Message: read invalid message, _magicBits mismatch."
+    if (
+        len(re.findall(r"(?m)^CANDLE_RESTORE_INPUT_ACK nonce=[0-9a-f]{64}$", base_log))
+        != 1
+        or base_log.count(admission["marker"]) != 1
+        or base_log.count(teardown) != 1
+        or base_log.index(teardown) < base_log.index(admission["marker"])
+        or any(base_log.count(item) != 1 for item in admission["required_logs"])
+    ):
+        return CheckResult(False, "stage_admission_base_log")
+
+    probe_receipt = parse_receipt(probe / "restart-probe.receipt")
+    probe_log = (probe / "runtime.log").read_text(encoding="utf-8", errors="replace")
+    ack = probe_receipt.get("fresh_ack", "")
+    if (
+        probe_receipt.get("receipt_kind")
+        != "development-fast-nl-checkpoint-restart-probe-v1"
+        or probe_receipt.get("release_evidence") != "false"
+        or probe_receipt.get("base_checkpoint") != str(checkpoint)
+        or probe_receipt.get("base_checkpoint_sha256") != expected_sha
+        or probe_receipt.get("expected_marker") != admission["probe_marker"]
+        or not ack
+        or probe_log.count(ack) != 1
+        or probe_log.count(admission["probe_marker"]) != 1
+        or "ERROR:" in probe_log
+    ):
+        return CheckResult(False, "stage_admission_restart_probe")
+    try:
+        elapsed = int(probe_receipt["elapsed_seconds"])
+    except (KeyError, ValueError):
+        return CheckResult(False, "stage_admission_restart_elapsed")
+    if not 0 < elapsed <= 600:
+        return CheckResult(False, "stage_admission_restart_elapsed")
+    return CheckResult(
+        True,
+        f"checkpoint_sha256={expected_sha} fresh_restart_count=1 "
+        f"immediate_byte_check={phase_runner.name}",
+    )
 
 
 def short_probe_input_manifest(paths: list[pathlib.Path]) -> tuple[str, str]:
@@ -379,7 +515,7 @@ def check_predecessor_identity_coverage(config: dict, _: pathlib.Path) -> CheckR
 
 def controller_run_target(controller: pathlib.Path) -> pathlib.Path | None:
     text = controller.read_text(encoding="utf-8")
-    match = re.search(r"(?m)^run=(/[^\s]+)$", text)
+    match = re.search(r"(?m)^(?:run|output)=(/[^\s]+)$", text)
     return pathlib.Path(match.group(1)) if match else None
 
 
@@ -387,9 +523,26 @@ def check_bounded_controller(config: dict, controller: pathlib.Path) -> CheckRes
     if not controller.is_file():
         return CheckResult(False, f"missing_controller={controller}")
     text = controller.read_text(encoding="utf-8")
+    common = ("set -euo pipefail", "check-long-run-hazards.py")
+    missing = [item for item in common if item not in text]
+    if missing:
+        return CheckResult(False, f"missing_controller_contract={','.join(missing)}")
+
+    stage_match = re.search(
+        r"(?m)^export FAST_NL_PHASE_TIMEOUT_SECONDS=([0-9]+)$", text
+    )
+    if stage_match:
+        maximum = int(stage_match.group(1))
+        stage_limit = int(config.get("maximum_support_stage_seconds", 3600))
+        if maximum > stage_limit:
+            return CheckResult(False, f"declared_stage_maximum_seconds={maximum}")
+        return CheckResult(
+            True,
+            f"declared_stage_maximum_seconds={maximum} "
+            f"controller_sha256={sha256(controller)}",
+        )
+
     required = (
-        "set -euo pipefail",
-        "check-long-run-hazards.py",
         "FAST_NL_BASE_TIMEOUT_SECONDS",
         "FAST_NL_ACTION49_TIMEOUT_SECONDS",
         "FAST_NL_SUPPORT_TIMEOUT_SECONDS",
@@ -399,7 +552,7 @@ def check_bounded_controller(config: dict, controller: pathlib.Path) -> CheckRes
     if missing:
         return CheckResult(False, f"missing_controller_contract={','.join(missing)}")
     timeouts: dict[str, int] = {}
-    for name in required[2:]:
+    for name in required:
         match = re.search(rf"(?m)^export {name}=([0-9]+)$", text)
         if not match:
             return CheckResult(False, f"nonliteral_timeout={name}")
@@ -415,6 +568,89 @@ def check_bounded_controller(config: dict, controller: pathlib.Path) -> CheckRes
     return CheckResult(
         True,
         f"declared_maximum_seconds={maximum} controller_sha256={sha256(controller)}",
+    )
+
+
+def check_support_stage_controller_contract(
+    _: dict, controller: pathlib.Path
+) -> CheckResult:
+    """Bind a checkpoint stage to its cheap static and predecessor audits."""
+
+    if not controller.is_file():
+        return CheckResult(False, f"missing_controller={controller}")
+    text = controller.read_text(encoding="utf-8")
+    required = (
+        "--profile support-stage",
+        "audit-fast-nl-support-source-closure.py",
+        "audit-fast-nl-support-module-closure.py",
+        "run-fast-nl-restored-checkpoint-phase-v1.sh",
+    )
+    missing = [item for item in required if item not in text]
+    if missing:
+        return CheckResult(False, f"stage_controller_missing={missing[0]}")
+
+    assignments: dict[str, str] = {}
+    for name in ("base", "output", "runtime", "driver"):
+        match = re.search(rf"(?m)^{name}=(/[^\s]+)$", text)
+        if not match:
+            return CheckResult(False, f"stage_literal_assignment_missing={name}")
+        assignments[name] = match.group(1)
+    for name in ("base", "runtime", "driver"):
+        path = pathlib.Path(assignments[name])
+        if not path.exists():
+            return CheckResult(False, f"stage_input_missing={name}:{path}")
+    output = pathlib.Path(assignments["output"])
+    if output.exists():
+        return CheckResult(False, f"stage_output_exists={output}")
+
+    stage_audits = sorted(
+        set(re.findall(r"audit-fast-nl-v[0-9]+-[A-Za-z0-9_-]+-stage\.py", text))
+    )
+    if len(stage_audits) != 1:
+        return CheckResult(False, f"stage_audit_count={len(stage_audits)}")
+    stage_audit = PROJECT / "scripts" / stage_audits[0]
+    if not stage_audit.is_file():
+        return CheckResult(False, f"stage_audit_missing={stage_audit}")
+    phase_runner = PROJECT / "scripts/run-fast-nl-restored-checkpoint-phase-v1.sh"
+    if 'sha256sum -c "$base_dir/checkpoint.sha256"' not in phase_runner.read_text(
+        encoding="utf-8"
+    ):
+        return CheckResult(False, "stage_runner_byte_check=missing")
+    result = run_checked([str(stage_audit)], timeout=60)
+    if not result.ok:
+        return CheckResult(False, f"stage_audit=[{result.detail}]")
+    driver_path = pathlib.Path(assignments["driver"])
+    driver_text = "\n".join(
+        line
+        for line in driver_path.read_text(encoding="utf-8").splitlines()
+        if not line.startswith("#use ")
+    ) + "\n"
+    nonce = hashlib.sha256(
+        f"{sha256(controller)}\n{sha256(driver_path)}\n".encode("utf-8")
+    ).hexdigest()
+    try:
+        parser = subprocess.run(
+            [
+                str(pathlib.Path(assignments["runtime"]) / "cake"),
+                "--candle-parser-diagnostic-v1",
+                nonce,
+            ],
+            input=driver_text,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return CheckResult(False, f"stage_parser_error={error}")
+    expected = f"CANDLE_CAMLPARSER_DIAGNOSTIC_V1\t{nonce}\tOK"
+    if parser.returncode != 0 or parser.stdout.strip() != expected:
+        return CheckResult(False, f"stage_parser_status={parser.returncode}")
+    return CheckResult(
+        True,
+        f"stage_audit={stage_audits[0]} driver_sha256="
+        f"{sha256(driver_path)} parser_status=OK",
     )
 
 
@@ -452,7 +688,7 @@ def check_theorem_controller_contract(_: dict, controller: pathlib.Path) -> Chec
     return CheckResult(True, "two_fresh_calls=required exact_digest=required fast_watchdog=required")
 
 
-def check_resource_headroom(config: dict, _: pathlib.Path) -> CheckResult:
+def check_resource_headroom(config: dict, controller: pathlib.Path) -> CheckResult:
     memory: dict[str, int] = {}
     for line in pathlib.Path("/proc/meminfo").read_text().splitlines():
         if ":" in line:
@@ -481,7 +717,13 @@ def check_resource_headroom(config: dict, _: pathlib.Path) -> CheckResult:
             break
         ancestor = int(match.group(1))
     listing = subprocess.check_output(["ps", "-eo", "pid=,args="], text=True)
-    pattern = re.compile(config["active_controller_pattern"])
+    if "stage" in controller.name:
+        pattern_text = config.get(
+            "stage_active_controller_pattern", config["active_controller_pattern"]
+        )
+    else:
+        pattern_text = config["active_controller_pattern"]
+    pattern = re.compile(pattern_text)
     active = []
     for line in listing.splitlines():
         match = re.match(r"\s*([0-9]+)\s+(.*)", line)
@@ -516,9 +758,11 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "checkpoint_finalization": check_checkpoint_finalization,
     "list_flatten_surface": check_list_flatten_surface,
     "checkpoint_integrity": check_checkpoint_integrity,
+    "checkpoint_admission_chain": check_checkpoint_admission_chain,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,
     "short_runtime_probe": check_short_runtime_probe,
     "bounded_controller": check_bounded_controller,
+    "support_stage_controller_contract": check_support_stage_controller_contract,
     "fast_theorem_controller_contract": check_theorem_controller_contract,
     "resource_headroom": check_resource_headroom,
     "fresh_run_target": check_fresh_run_target,
@@ -528,6 +772,9 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scope", required=True)
+    parser.add_argument(
+        "--profile", choices=("theorem", "support-stage"), default="theorem"
+    )
     parser.add_argument("--controller", required=True, type=pathlib.Path)
     parser.add_argument("--ledger", type=pathlib.Path, default=DEFAULT_LEDGER)
     parser.add_argument("--receipt", type=pathlib.Path)
@@ -544,7 +791,12 @@ def main() -> int:
         print(f"status=1\nledger_error=unknown_scope:{args.scope}")
         return 1
 
-    hazards = [item for item in ledger.get("hazards", []) if item.get("scope") == args.scope]
+    hazards = [
+        item
+        for item in ledger.get("hazards", [])
+        if item.get("scope") == args.scope
+        and args.profile in item.get("profiles", ("theorem", "support-stage"))
+    ]
     ids = [item.get("id") for item in hazards]
     schema_errors = []
     if len(ids) != len(set(ids)):
@@ -565,6 +817,13 @@ def main() -> int:
             schema_errors.append(f"{hazard.get('id','<unknown>')}:{','.join(missing)}")
         if hazard.get("check_id") not in CHECKS:
             schema_errors.append(f"{hazard.get('id','<unknown>')}:unknown_check")
+        profiles = hazard.get("profiles", ("theorem", "support-stage"))
+        if (
+            not isinstance(profiles, (list, tuple))
+            or not profiles
+            or any(item not in ("theorem", "support-stage") for item in profiles)
+        ):
+            schema_errors.append(f"{hazard.get('id','<unknown>')}:invalid_profiles")
 
     results: dict[str, CheckResult] = {}
     if not schema_errors:
@@ -577,6 +836,8 @@ def main() -> int:
         "release_evidence=false",
         f"status={0 if ok else 1}",
         f"scope={args.scope}",
+        f"profile={args.profile}",
+        f"gate_sha256={sha256(pathlib.Path(__file__).resolve())}",
         f"ledger_sha256={hashlib.sha256(ledger_bytes).hexdigest()}",
         f"controller={args.controller.resolve()}",
         f"controller_sha256={sha256(args.controller.resolve()) if args.controller.is_file() else '-'}",

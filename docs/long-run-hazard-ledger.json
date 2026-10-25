@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "policy": {
-    "long_run_threshold_seconds": 3600,
+    "long_run_threshold_seconds": 1800,
     "rule": "No run whose declared maximum exceeds the threshold may start without a status=0 receipt from scripts/check-long-run-hazards.py over the exact ledger and controller bytes.",
     "retry_rule": "Every new long-run failure must be added with an executable discriminator before a retry is permitted.",
     "unknown_rule": "An active hazard without a registered executable check blocks the run."
@@ -9,6 +9,7 @@
   "scopes": {
     "fast-nl-first-original-theorem": {
       "maximum_total_seconds": 15300,
+      "maximum_support_stage_seconds": 3600,
       "runtime_dir": "/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-005",
       "runtime_sha256": "da10797b39eebae4c43a433b331b1c5aa21c32d582371b454e3f37f2e0e0dee5",
       "x64_receipt": "/project/flyspeck-candle-runs/v662-fast-nl-x64-cv-rep-dev-001/x64-link-v2-controller.receipt",
@@ -53,9 +54,23 @@
           "/project/flyspeck-candle-project/tools/fast_nl_v670_runtime_surface_support.ml"
         ]
       },
+      "support_stage_predecessor": {
+        "base": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-matan-v676",
+        "receipt_kind": "development-fast-nl-v676-matan-checkpoint-v1",
+        "checkpoint_sha256": "014ac019edcb782bb4cc9aca77553bd541ea184aea0f64c29b6c6d6e865f5b0d",
+        "driver_sha256": "4df318a9f9d752c834a193b59b9581aaf26f987cb9a6e694b1d66d9e95697eb2",
+        "marker": "CANDLE_FLYSPECK_V676_MATAN_CHECKPOINT_READY",
+        "required_logs": [
+          "- Finished loading candle/cv_compute_exact_interval_matan_series.ml",
+          "- Finished loading candle/cv_compute_exact_interval_matan_series_program.ml"
+        ],
+        "probe": "/project/flyspeck-candle-runs/v676-fast-nl-matan-restart-probe-dev-001",
+        "probe_marker": "CANDLE_FLYSPECK_V676_MATAN_RESTART_PROBE_OK"
+      },
       "minimum_available_memory_gib": 24,
       "maximum_active_matching_controllers": 0,
-      "active_controller_pattern": "run-fast-nl-v[0-9]+-first-theorem-controller.sh"
+      "active_controller_pattern": "run-fast-nl-v[0-9]+-first-theorem-controller.sh",
+      "stage_active_controller_pattern": "run-fast-nl-v[0-9]+-.*stage-under-hour.sh"
     }
   },
   "hazards": [
@@ -137,7 +152,8 @@
       "failure_mode": "A slow generic evaluator fallback is reported as a fast specialized theorem.",
       "root_cause": "Acceptance alone does not prove which dispatch branch executed.",
       "check_id": "fast_theorem_controller_contract",
-      "enforcement": "controller"
+      "enforcement": "controller",
+      "profiles": ["theorem"]
     },
     {
       "id": "LR-009",
@@ -147,7 +163,8 @@
       "failure_mode": "A theorem with the wrong target, assumptions, or axiom delta is accepted as the milestone.",
       "root_cause": "The integration test checks only successful evaluation.",
       "check_id": "fast_theorem_controller_contract",
-      "enforcement": "controller"
+      "enforcement": "controller",
+      "profiles": ["theorem"]
     },
     {
       "id": "LR-010",
@@ -197,7 +214,8 @@
       "failure_mode": "A completed milestone depends on accidental state from one session.",
       "root_cause": "The exact theorem call is not repeated from two fresh copies of the same prepared checkpoint.",
       "check_id": "fast_theorem_controller_contract",
-      "enforcement": "controller"
+      "enforcement": "controller",
+      "profiles": ["theorem"]
     },
     {
       "id": "LR-015",
@@ -227,7 +245,8 @@
       "failure_mode": "Static source and module audits pass but runtime-only compatibility names, load-path resolution, or loader state still fail after checkpoint restore.",
       "root_cause": "Lexical closure cannot establish runtime top-level bindings or the exact behavior of a restored state.",
       "check_id": "short_runtime_probe",
-      "enforcement": "preflight"
+      "enforcement": "preflight",
+      "profiles": ["theorem"]
     },
     {
       "id": "LR-018",
@@ -287,7 +306,8 @@
       "failure_mode": "A checkpoint controller can finalize and hash a checkpoint while the old worker emits a DMTCP coordinator-disconnect assertion during post-marker teardown.",
       "root_cause": "The success receipt authenticates the finalized bytes but does not by itself distinguish a harmless post-checkpoint coordinator teardown from a corrupt or unrestorable checkpoint.",
       "check_id": "checkpoint_finalization",
-      "enforcement": "preflight"
+      "enforcement": "preflight",
+      "profiles": ["theorem"]
     },
     {
       "id": "LR-024",
@@ -297,7 +317,8 @@
       "failure_mode": "A checkpoint restartability probe with a three-minute budget kills the restored 34 GiB worker before it reaches the fresh-input acknowledgement.",
       "root_cause": "The probe budget covered steady-state command execution but not the measured restore latency of the larger post-Taylor heap; an empty runtime log and coordinator connection/disconnection timestamps distinguish this from a parser or proof failure.",
       "check_id": "checkpoint_finalization",
-      "enforcement": "preflight"
+      "enforcement": "preflight",
+      "profiles": ["theorem"]
     },
     {
       "id": "LR-025",
@@ -307,7 +328,8 @@
       "failure_mode": "A restart probe consumes fresh input successfully but its controller misses the success marker and would wait to the watchdog.",
       "root_cause": "The probe required the marker to occupy the whole output line, while Candle's interactive printer prefixes the marker with '# '; exact substring cardinality is the correct discriminator.",
       "check_id": "checkpoint_finalization",
-      "enforcement": "preflight"
+      "enforcement": "preflight",
+      "profiles": ["theorem"]
     },
     {
       "id": "LR-026",
@@ -318,6 +340,39 @@
       "root_cause": "The current Candle source defines List.flatten as List.concat, but the frozen linked development runtime predates that exported module member; source-head provenance alone does not establish the linked module surface.",
       "check_id": "list_flatten_surface",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-027",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "2026-10-25 owner process correction",
+      "failure_mode": "A 30--60 minute checkpoint stage starts after ad hoc checks that are not bound to the exact controller, driver, predecessor, and central hazard-ledger bytes.",
+      "root_cause": "The initial central gate covered the final multi-hour theorem controller but not the segmented support-stage controllers introduced later.",
+      "check_id": "support_stage_controller_contract",
+      "enforcement": "preflight",
+      "profiles": ["support-stage"]
+    },
+    {
+      "id": "LR-028",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "2026-10-25 first support-stage central preflight",
+      "failure_mode": "The segmented support-stage profile is blocked by the deliberately failed obsolete monolithic v670 support probe.",
+      "root_cause": "A theorem-profile short-probe requirement was inherited after successful staged loads and fresh restart probes had replaced that experiment for checkpoint construction.",
+      "check_id": "support_stage_controller_contract",
+      "enforcement": "preflight",
+      "profiles": ["support-stage"]
+    },
+    {
+      "id": "LR-029",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "2026-10-25 first support-stage central preflight",
+      "failure_mode": "A cheap preflight rereads the complete multi-gigabyte checkpoint chain and times out while independently rehashing an already admitted ancestor.",
+      "root_cause": "Checkpoint-integrity and checkpoint-finalization checks duplicated full byte hashing even though only the immediate predecessor is consumed by the new stage.",
+      "check_id": "checkpoint_admission_chain",
+      "enforcement": "preflight",
+      "profiles": ["support-stage"]
     }
   ]
 }

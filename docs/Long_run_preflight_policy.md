@@ -4,8 +4,9 @@ Date: 2026-10-25 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
-The project treats any run with a declared maximum over one hour as an
-integration run, not as an exploratory edit/test loop.  Before such a run can
+The project treats any run with a declared maximum over 30 minutes as an
+integration run, not as an exploratory edit/test loop.  This includes the
+segmented 3,300-second support-checkpoint stages.  Before such a run can
 start, `scripts/check-long-run-hazards.py` must produce `status=0` for the
 exact controller and the current `docs/long-run-hazard-ledger.json` bytes.
 
@@ -29,6 +30,25 @@ when the obsolete architecture is no longer reachable; the historical entry
 and evidence remain.  A passed preflight is not a theorem claim and does not
 guarantee success.  It establishes the narrower, useful statement that every
 recorded failure class has been checked against the exact planned run.
+
+The gate has separate `theorem` and `support-stage` profiles.  The latter
+requires a literal fresh output target, a phase cap of at most one hour, the
+exact stage audit and driver hash, the authenticated predecessor chain, static
+source/module closure, parser acceptance, pinned runtime/worktrees, adequate
+memory, and no competing stage controller.  Its receipt is written outside
+the proposed output directory, so the freshness assertion remains true at
+launch.  A support-stage controller that does not invoke this profile fails
+closed.
+
+For a segmented support stage, old admitted ancestors are checked through the
+ordered receipt lineage without rereading every historical heap.  The
+immediate predecessor's receipt, completion log, and independent fresh-restart
+probe are checked in full.  The phase runner then verifies that predecessor's
+checkpoint SHA-256 immediately before restore.  This avoids duplicate
+full-chain I/O while still detecting changed bytes at the boundary actually
+consumed by the proposed run.  The failed v670 monolithic probe remains
+historical evidence; it is a theorem-profile requirement until replaced by a
+byte-bound complete-support probe, not a blocker on already segmented stages.
 
 For the first fast NL theorem, the gate covers verified-runtime provenance,
 clean pinned worktrees, normalization and source identity closure, explicit
