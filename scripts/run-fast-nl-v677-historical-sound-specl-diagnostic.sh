@@ -3,7 +3,7 @@ set -euo pipefail
 
 scripts=/project/flyspeck-candle-project/scripts
 base=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-outer-nonlinear-compile-sound-v677s
-output=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/historical-sound-specl-diagnostic-v677u
+output=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/historical-sound-specl-types-diagnostic-v677v
 runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-005
 driver=/project/flyspeck-candle-project/tools/fast_nl_v677_historical_sound_specl_diagnostic.ml
 

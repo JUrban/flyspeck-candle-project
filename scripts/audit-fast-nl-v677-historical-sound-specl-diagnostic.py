@@ -77,6 +77,8 @@ def main() -> int:
         "let candle_v677_original_SPECL = SPECL;;",
         "CANDLE_V677_SPECL_FAILURE call=",
         "CANDLE_V677_SPECL_THEOREM ",
+        "CANDLE_V677_SPECL_ARGUMENTS",
+        "let rec candle_v677_print_term_types index terms =",
         "string_of_term (concl theorem)",
         "v677 historical SPECL diagnostic unexpectedly completed",
     )
@@ -86,6 +88,7 @@ def main() -> int:
     print("status=0")
     print("planned_top_level_load_count=1")
     print("diagnostic_specl_wrapper_count=1")
+    print("diagnostic_type_trace_count=1")
     print(f"driver_sha256={sha256(DRIVER)}")
     print(f"base_checkpoint_sha256={BASE_SHA256}")
     return 0
