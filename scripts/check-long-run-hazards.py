@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed gate for project integration runs longer than one hour."""
+"""Fail-closed gate for project integration runs longer than 30 minutes."""
 
 from __future__ import annotations
 

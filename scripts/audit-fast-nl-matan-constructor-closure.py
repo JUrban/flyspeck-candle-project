@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import pathlib
 import re
@@ -102,7 +103,25 @@ def planned_paths() -> tuple[set[pathlib.Path], list[str]]:
     return execution, errors
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Detect stale pre-matan datatype consumers in the exact fast-NL "
+            "load closure.  By default the authenticated source tree is "
+            "checked.  --candidate-candle-root is a development-only view of "
+            "the same logical files and is never used by the central gate."
+        )
+    )
+    parser.add_argument(
+        "--candidate-candle-root",
+        type=pathlib.Path,
+        help="development Candle repository root whose relative files are checked",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     if not FAILURE_LOG.is_file() or MODULE.sha256(FAILURE_LOG) != EXPECTED_FAILURE_LOG_SHA256:
         print("status=1")
         print("error=failure_log_identity")
@@ -125,12 +144,23 @@ def main() -> int:
     closure, errors = planned_paths()
     stale: dict[pathlib.Path, set[str]] = {}
     candle_root = MODULE.LITERAL.CANDLE_CURRENT.resolve()
+    candidate_root = (
+        args.candidate_candle_root.resolve()
+        if args.candidate_candle_root is not None
+        else None
+    )
+    if candidate_root is not None and not (candidate_root / "candle").is_dir():
+        errors.append(f"candidate_candle_root:{candidate_root}")
     for path in sorted(closure, key=str):
         try:
-            path.relative_to(candle_root)
+            relative = path.relative_to(candle_root)
         except ValueError:
             continue
-        text = path.read_text(encoding="utf-8", errors="replace")
+        checked_path = candidate_root / relative if candidate_root is not None else path
+        if not checked_path.is_file():
+            errors.append(f"candidate_missing:{checked_path}")
+            continue
+        text = checked_path.read_text(encoding="utf-8", errors="replace")
         uncommented = MODULE.LITERAL.strip_comments(text)
         reasons: set[str] = set()
         if (
@@ -156,10 +186,13 @@ def main() -> int:
         ):
             reasons.add("complete_old_instruction_family_missing_matan")
         if reasons:
-            stale[path] = reasons
+            stale[checked_path] = reasons
 
     status = int(bool(errors or stale))
     print(f"status={status}")
+    print(f"scan_mode={'candidate' if candidate_root is not None else 'authenticated'}")
+    if candidate_root is not None:
+        print(f"candidate_candle_root={candidate_root}")
     print(f"planned_load_path_count={len(closure)}")
     print(f"closure_error_count={len(errors)}")
     print(f"stale_constructor_consumer_count={len(stale)}")
