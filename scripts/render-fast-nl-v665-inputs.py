@@ -8,6 +8,7 @@ import hashlib
 import importlib.util
 import json
 import pathlib
+import re
 import subprocess
 import sys
 
@@ -26,6 +27,12 @@ OVERLAY_ROOT = pathlib.Path(
 )
 DATA_OUTPUT = PROJECT / "tools/fast_nl_v665_verifier_data.ml"
 COMPAT_OUTPUT = PROJECT / "tools/fast_nl_v665_verifier_runtime_compat.ml"
+BASE_IDENTITIES = pathlib.Path(
+    "/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001/extra-source-identities.ml"
+)
+BASE_NORMALIZATIONS = pathlib.Path(
+    "/project/flyspeck-candle-runs/v355-postsetup-checkpoint-dev-001/overlay-data-v355.ml"
+)
 EXPECTED_FLYSPECK_HEAD = "d6cdcd9f3e45f4ceb5fd1ba08f5b5ec4ce6a65eb"
 EXPECTED_COMPAT_SHA256 = (
     "b20e594edbbdc50ada14c739ae3341967b7333772fd589cf60ec34cf3cef9360"
@@ -215,10 +222,79 @@ def render_compat() -> str:
     return header + text
 
 
+def authenticate_combined_tables(generated_data: str) -> tuple[int, int]:
+    """Check complete one-shot tables before paying for HOL startup."""
+
+    identity_pattern = re.compile(
+        r'^\s*\("([^"]+)",\("([^"]+)","([0-9a-f]{32})"\)\);$',
+        flags=re.MULTILINE,
+    )
+    normalization_pattern = re.compile(
+        r'^\s*\("([^"]+)","([^"]+)","([0-9a-f]{32})"\);$',
+        flags=re.MULTILINE,
+    )
+    base_identities = identity_pattern.findall(
+        BASE_IDENTITIES.read_text(encoding="utf-8")
+    )
+    generated_identity_text, generated_normalization_text = generated_data.split(
+        "let candle_fast_nl_v665_verifier_normalized_sources", 1
+    )
+    generated_identities = identity_pattern.findall(generated_identity_text)
+    identities = base_identities + generated_identities
+    identity_paths = [row[0] for row in identities]
+    if (
+        len(base_identities) != 207
+        or len(generated_identities) != 76
+        or len(identities) != 283
+        or len(set(identity_paths)) != 283
+    ):
+        raise ValueError("combined v665 source identity table is not unique and complete")
+    for text_path, basename, expected_md5 in identities:
+        path = pathlib.Path(text_path)
+        if (
+            not path.is_file()
+            or path.name != basename
+            or md5(path) != expected_md5
+        ):
+            raise ValueError(f"combined v665 source identity mismatch: {path}")
+
+    base_normalizations = normalization_pattern.findall(
+        BASE_NORMALIZATIONS.read_text(encoding="utf-8")
+    )
+    generated_normalizations = normalization_pattern.findall(
+        generated_normalization_text
+    )
+    normalizations = base_normalizations + generated_normalizations
+    original_paths = [row[0] for row in normalizations]
+    if (
+        len(base_normalizations) != 56
+        or len(generated_normalizations) != 29
+        or len(normalizations) != 85
+        or len(set(original_paths)) != 85
+    ):
+        raise ValueError("combined v665 normalization table is not unique and complete")
+    for _, text_target, expected_md5 in normalizations:
+        target = pathlib.Path(text_target)
+        # Three base targets are deliberately rewritten by setup.ml.  Their
+        # refreshed values are authenticated by the separate normalization
+        # audit, so check only targets whose recorded row is still current.
+        if target.is_file() and md5(target) == expected_md5:
+            continue
+        if text_target.endswith("text_formalization/build/strictbuild.hl"):
+            continue
+        if text_target.endswith("text_formalization/general/serialization.hl"):
+            continue
+        if text_target.endswith("text_formalization/nonlinear/mk_all_ineq.hl"):
+            continue
+        raise ValueError(f"combined v665 normalization target mismatch: {target}")
+    return len(identities), len(normalizations)
+
+
 def check() -> int:
     failures = 0
+    generated_data = render_data()
     for path, expected in (
-        (DATA_OUTPUT, render_data()),
+        (DATA_OUTPUT, generated_data),
         (COMPAT_OUTPUT, render_compat()),
     ):
         if not path.is_file():
@@ -229,6 +305,16 @@ def check() -> int:
             failures += 1
         else:
             print(f"verified={path}\tsha256={hashlib.sha256(expected.encode()).hexdigest()}")
+    try:
+        identity_count, normalization_count = authenticate_combined_tables(
+            generated_data
+        )
+        print(f"combined_identity_count={identity_count}")
+        print(f"combined_normalization_count={normalization_count}")
+        print("combined_duplicate_count=0")
+    except (OSError, ValueError) as error:
+        print(f"combined_table_error={error}")
+        failures += 1
     print(f"status={int(bool(failures))}")
     print(f"failure_count={failures}")
     return int(bool(failures))

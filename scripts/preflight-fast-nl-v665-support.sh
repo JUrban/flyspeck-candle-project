@@ -19,6 +19,9 @@ done
 render_result=$($renderer check)
 grep -Fxq 'status=0' <<<"$render_result"
 grep -Fxq 'failure_count=0' <<<"$render_result"
+grep -Fxq 'combined_identity_count=283' <<<"$render_result"
+grep -Fxq 'combined_normalization_count=85' <<<"$render_result"
+grep -Fxq 'combined_duplicate_count=0' <<<"$render_result"
 
 module_result=$($audit)
 for expectation in \
