@@ -221,6 +221,19 @@ def main() -> int:
         count != 4 for count in introduced_match_mp_shapes.values()
     ):
         return fail("introduced_match_mp_shape_partition")
+    # LR-039: the new tag-9 cases leave ifc (numc 0) terms only after
+    # NUM_REDUCE_CONV.  The final representation cleanup must therefore
+    # include cexp_if_def, rather than relying on the earlier rewrite pass.
+    algebraic_program_sound = candidate_texts[
+        "candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml"
+    ]
+    step_cleanup = re.compile(
+        r"let candle_cv_fsa_logical_program_step_correct = prove.*?"
+        r"LET_DEF; LET_END_DEF; cexp_if_def\]\);;",
+        re.S,
+    )
+    if len(step_cleanup.findall(algebraic_program_sound)) != 1:
+        return fail("algebraic_program_step_if_cleanup")
 
     overlay = OVERLAY.read_text(encoding="utf-8")
     overlay_pairs = re.findall(
@@ -273,6 +286,7 @@ def main() -> int:
     print(f"premise_free_direct_accept_count={len(direct_accepts)}")
     print(f"introduced_match_mp_count={introduced_match_mp}")
     print("introduced_match_mp_shape_counts=4,4,4")
+    print("algebraic_program_step_if_cleanup_count=1")
     print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
     print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
     return 0

@@ -22,7 +22,7 @@
       "source_worktrees": {
         "/project/worktrees/cakeml-direct-fast-nl-integration-v1": "b3fb54e9f822fd462b929843e816d1fa1dd46cfd",
         "/project/worktrees/candle-direct-fast-nl-runtime-v1": "0f9690d3683efca78a60d4607596815245e37578",
-        "/project/worktrees/candle-fast-nl-matan-closure-v1": "06976aa7fb30769e1524d905a451647a61950648",
+        "/project/worktrees/candle-fast-nl-matan-closure-v1": "01e88d8e3f7e4ec46057a6c2b30b71fd1882423b",
         "/project/worktrees/HOL-cakeml-dopen-v13": "bc47e6586a87ac538a71b10206a83c169c171d1a",
         "/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df": "9ae969dfaca95e223d44b50f7cae00df3d2ab949",
         "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5",
@@ -476,7 +476,7 @@
       "classification": "observed",
       "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-algebraic-compile-sound-v677n/runtime.log",
       "failure_mode": "The fixed-algebraic program-sound dependency reaches TAC_PROOF with unsolved goals before the repaired compile-sound file begins.",
-      "root_cause": "The matan opcode changed the executable/logical nonlinear and step definitions, but the existing exhaustive representation proof was not independently exercised by the constructor-closure or theorem-shape audits.",
+      "root_cause": "Numeric reduction in the exhaustive program-step representation proof leaves fifteen `ifc (numc 0)` residuals for the new opcode cases, but its final cleanup omitted `cexp_if_def`; constructor-closure and theorem-shape audits did not exercise this proof result.",
       "check_id": "matan_repair_contract",
       "enforcement": "preflight"
     },

@@ -7,7 +7,7 @@
   },
   "candidate": {
     "root": "/project/worktrees/candle-fast-nl-matan-closure-v1",
-    "commit": "06976aa7fb30769e1524d905a451647a61950648"
+    "commit": "01e88d8e3f7e4ec46057a6c2b30b71fd1882423b"
   },
   "files": [
     {"path":"candle/cv_compute_analytic_expr_certificate_patch.ml","original_md5":"7a84867e06ab73da17ba3038e9d41278","original_sha256":"01d8ccde4afa2fe0d509c303240dac88b0babc619153e0546387cd09d9d0caed","candidate_md5":"643a879d3b65b3f39d2fb1b5805e4711","candidate_sha256":"b88e770ce0b7635f6ba827d5122231688c32ccadf023400f48cee4312ebfa667"},
@@ -20,7 +20,7 @@
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compile_sound.ml","original_md5":"0b2437383e94614ae9a8b0745ddf9142","original_sha256":"72da4a4dc6078209a83234bc11974fe9be6a0e6276a03fa9f6e3bf6a4f011ced","candidate_md5":"63e7e4bbed055991b698b8c93ed4af97","candidate_sha256":"8583262b46ff2fecbbb2bbab0827c72a13e25c8232907808b300f052041db89b"},
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compute.ml","original_md5":"c388bf13687f942a1aa121cd8be907fc","original_sha256":"6a3dcb0e25449c02b8314b6b38da468bfb0c44a7eca9d919a66e54a558f9cc82","candidate_md5":"e468f726f078867514f80f3e5ccb46dd","candidate_sha256":"72584c405815967331bdc24784cf29564e8bc0c2232d879b72cf14a808863f85"},
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_item_invariant.ml","original_md5":"5b69606646e9799c587376c01dda3a6d","original_sha256":"f99a1fd70cb1ebcc03e511414227fe5fc8629917dbdabfc2041ac1208f4273ed","candidate_md5":"b30aca4c6eed26636fc964f322ae64ec","candidate_sha256":"1e02195ea205d0665853d37337484210b27e4202b11f784c2f282d6184c21a02"},
-    {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml","original_md5":"274f37dc9603bb6e99b1388597de2f92","original_sha256":"3a76803b73003206fa5299d4c335c9dd6ed1ed5735f0679d348cd017a6f4d237","candidate_md5":"4909359944c08cef218daf4361f673db","candidate_sha256":"a71df3cc8fd270744adea57507efb7d8ba184e015926b6261d227ecbab2acfa5"},
+    {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml","original_md5":"274f37dc9603bb6e99b1388597de2f92","original_sha256":"3a76803b73003206fa5299d4c335c9dd6ed1ed5735f0679d348cd017a6f4d237","candidate_md5":"4b8b9e3fe296c56420c79407814c20aa","candidate_sha256":"de6044bf65574a19df10911568c9fd220e7c77c36d7a6ff20a1fa57654b45379"},
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear.ml","original_md5":"16f077760e346af72194e5b267809c4d","original_sha256":"5db90d698122def29e51242c7ebedc5724d7adaf9e498c0136ba0fcd636296c4","candidate_md5":"33c49abba3c4117dd499af4015754d29","candidate_sha256":"fb3d7a81628db265fab3278cb580d52cca9d3d4cf778e1758d906feeb0a99cea"},
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_compile_sound.ml","original_md5":"cdd7194429afaba9b269370f39ff4e7c","original_sha256":"df6a8a98858a61adb9c3af48fab6e8112fe8fa008145e1cf8fd8b61e2ec1d459","candidate_md5":"dc82339f057ca3fff4d28bd7e00ab483","candidate_sha256":"e7ebce57545e9e946d0bacb5b05c771d2318e92c29183367d01768c17746a56d"},
     {"path":"candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_program_sound.ml","original_md5":"eafcaa12f247044ac203c57776593be9","original_sha256":"abf9f3c055c3e7e6ab5c0d0eb406d625b1540812b6aa0b20eb771749284172a2","candidate_md5":"21d8972ff1a35cc2a9d10617f81081d8","candidate_sha256":"786b280791a0364f32e09cc0082b9119e685cb1bcd2d374e181c12c699d4123e"},
