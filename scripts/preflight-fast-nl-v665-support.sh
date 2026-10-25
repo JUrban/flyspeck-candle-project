@@ -5,16 +5,28 @@ project=/project/flyspeck-candle-project
 runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-005/cake
 renderer=$project/scripts/render-fast-nl-v665-inputs.py
 audit=$project/scripts/audit-fast-nl-support-module-closure.py
+runtime_surface_audit=$project/scripts/audit-fast-nl-v670-runtime-symbol-surface.py
 data=$project/tools/fast_nl_v665_verifier_data.ml
 compat=$project/tools/fast_nl_v665_verifier_runtime_compat.ml
 setup=$project/tools/fast_nl_v665_setup.ml
 support=$project/tools/fast_nl_v665_support.ml
+runtime_surface=$project/tools/fast_nl_v670_runtime_surface_support.ml
 
 [[ -x $runtime ]]
 [[ -x $renderer ]]
-for path in "$audit" "$data" "$compat" "$setup" "$support"; do
+for path in "$audit" "$runtime_surface_audit" "$data" "$compat" "$setup" \
+  "$support" "$runtime_surface"; do
   [[ -f $path ]]
 done
+
+runtime_surface_result=$($runtime_surface_audit)
+grep -Fxq 'status=0' <<<"$runtime_surface_result"
+grep -Fxq 'runtime_identifier_count=9' <<<"$runtime_surface_result"
+grep -Fxq 'runtime_identifier_use_count=94' <<<"$runtime_surface_result"
+grep -Fxq 'raw_runtime_missing_float_of_string_count=1' \
+  <<<"$runtime_surface_result"
+grep -Fxq 'raw_runtime_replacement_probe_count=1' \
+  <<<"$runtime_surface_result"
 
 render_result=$($renderer check)
 grep -Fxq 'status=0' <<<"$render_result"
@@ -53,6 +65,7 @@ parser_result=$(
     sed '/^#use /d' "$compat"
     sed '/^#use /d' "$setup"
     sed '/^#use /d' "$support"
+    sed '/^#use /d' "$runtime_surface"
   } | "$runtime" --candle-parser-diagnostic-v1 "$nonce" 2>&1
 )
 parser_status=$?
@@ -77,8 +90,12 @@ printf '%s\n' \
   'unresolved_request_count=0' \
   'dynamic_request_count=0' \
   'parser_status=OK' \
+  'runtime_symbol_surface_status=OK' \
+  'runtime_identifier_count=9' \
+  'runtime_identifier_use_count=94' \
   "parser_nonce=$nonce" \
   "data_sha256=$(sha256sum "$data" | awk '{print $1}')" \
   "compat_sha256=$(sha256sum "$compat" | awk '{print $1}')" \
   "setup_sha256=$(sha256sum "$setup" | awk '{print $1}')" \
-  "support_sha256=$(sha256sum "$support" | awk '{print $1}')"
+  "support_sha256=$(sha256sum "$support" | awk '{print $1}')" \
+  "runtime_surface_sha256=$(sha256sum "$runtime_surface" | awk '{print $1}')"

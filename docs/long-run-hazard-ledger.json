@@ -32,7 +32,7 @@
       ],
       "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
-        "receipt": "/project/flyspeck-candle-runs/v667-fast-nl-support-probe-dev-001/SHORT-RUNTIME-PROBE.receipt",
+        "receipt": "/project/flyspeck-candle-runs/v670-fast-nl-runtime-surface-support-probe-dev-001/SHORT-RUNTIME-PROBE.receipt",
         "maximum_elapsed_seconds": 3600,
         "predecessor_checkpoint_receipt": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v669/checkpoint.receipt",
         "source_configuration_receipt": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/checkpoint.receipt",
@@ -44,7 +44,8 @@
           "/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_data.ml",
           "/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_runtime_compat.ml",
           "/project/flyspeck-candle-project/tools/fast_nl_v665_setup.ml",
-          "/project/flyspeck-candle-project/tools/fast_nl_v665_support.ml"
+          "/project/flyspeck-candle-project/tools/fast_nl_v665_support.ml",
+          "/project/flyspeck-candle-project/tools/fast_nl_v670_runtime_surface_support.ml"
         ]
       },
       "minimum_available_memory_gib": 24,
@@ -251,6 +252,16 @@
       "failure_mode": "A partition wrapper restores the correct verifier rows but rejects the historical action replay because it assumes the direct normalization table is cardinality-invariant.",
       "root_cause": "Actions 0--49 legitimately add ten authenticated direct-Flyspeck normalization rows, growing the direct partition from 56 to 66 and the combined table from 85 to 95.",
       "check_id": "action_overlay_partition_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-021",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v667-fast-nl-support-probe-dev-001",
+      "failure_mode": "The canonical nonlinear verifier reaches a top-level OCaml compatibility name that is present in the current Candle source tree but absent from the exact linked runtime environment.",
+      "root_cause": "Runtime provenance hashes established repository and compiler lineage but did not test the exported binary symbol surface; the linked runtime lacks float_of_string while the closure authority classifies it as centrally supplied.",
+      "check_id": "runtime_symbol_surface",
       "enforcement": "preflight"
     }
   ]
