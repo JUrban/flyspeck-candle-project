@@ -123,6 +123,9 @@ def main() -> int:
     )
     if len(delimited_premise.findall(patch_text)) != 1:
         return fail("matan_step_premise_delimitation")
+    compute_patch_text = (candidate_root / paths[1]).read_text(encoding="utf-8")
+    if compute_patch_text.count("PRINT_GOAL_TAC") != 2:
+        return fail("matan_representation_residual_diagnostic")
 
     overlay = OVERLAY.read_text(encoding="utf-8")
     overlay_pairs = re.findall(
@@ -168,6 +171,7 @@ def main() -> int:
     print(f"original_head={original['commit']}")
     print(f"candidate_head={candidate['commit']}")
     print("matan_step_premise_delimitation_count=1")
+    print("matan_representation_residual_diagnostic_count=2")
     print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
     print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
     return 0
