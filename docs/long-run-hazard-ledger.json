@@ -35,7 +35,11 @@
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/posttaylor-multivariate-v672/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-m-verifier-v674/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-foundation-v675/checkpoint.receipt",
-        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-matan-v676/checkpoint.receipt"
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-matan-v676/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-pre-first-jet-v677g/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-first-jet-v677h/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-pre-compile-sound-v677j/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-compile-sound-v677k/checkpoint.receipt"
       ],
       "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
@@ -433,6 +437,16 @@
       "failure_mode": "The new matan compile-sound branch raises MATCH_MP_TAC: Bad theorem after its execution equality is proved.",
       "root_cause": "The branch passed a premise-free universally quantified invariant theorem to MATCH_MP_TAC; it must discharge the matching proposition directly rather than treat the theorem as an implication.",
       "check_id": "matan_repair_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-036",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "2026-10-25 staged matan repair proof-load policy",
+      "failure_mode": "A later long run relies on a stale, failed, partially loaded, or source-drifted repair checkpoint even though the current static candidate audit is green.",
+      "root_cause": "Static candidate checks and checkpoint readiness are independent evidence unless every staged receipt, driver, lineage edge, fresh-input acknowledgement, selected repair source, and completion marker is audited together.",
+      "check_id": "matan_repair_checkpoint_chain",
       "enforcement": "preflight"
     }
   ]

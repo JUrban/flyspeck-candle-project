@@ -45,6 +45,9 @@ MATAN_CONSTRUCTOR_CLOSURE = (
 MATAN_REPAIR_CONTRACT = (
     PROJECT / "scripts/audit-fast-nl-v677-matan-repair.py"
 )
+MATAN_REPAIR_CHECKPOINT_CHAIN = (
+    PROJECT / "scripts/audit-fast-nl-v677-repair-checkpoint-chain.py"
+)
 M_VERIFIER_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v674-checkpoint-finalization.py"
 )
@@ -228,6 +231,10 @@ def check_matan_constructor_closure(_: dict, __: pathlib.Path) -> CheckResult:
 
 def check_matan_repair_contract(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(MATAN_REPAIR_CONTRACT)], timeout=120)
+
+
+def check_matan_repair_checkpoint_chain(_: dict, __: pathlib.Path) -> CheckResult:
+    return run_checked([str(MATAN_REPAIR_CHECKPOINT_CHAIN)], timeout=120)
 
 
 def check_checkpoint_integrity(
@@ -773,6 +780,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "list_flatten_surface": check_list_flatten_surface,
     "matan_constructor_closure": check_matan_constructor_closure,
     "matan_repair_contract": check_matan_repair_contract,
+    "matan_repair_checkpoint_chain": check_matan_repair_checkpoint_chain,
     "checkpoint_integrity": check_checkpoint_integrity,
     "checkpoint_admission_chain": check_checkpoint_admission_chain,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,
