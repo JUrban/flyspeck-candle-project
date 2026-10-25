@@ -20,6 +20,7 @@ dev_runtime=${FAST_NL_DEV_RUNTIME:-/project/flyspeck-candle-runs/nonpromotable-d
 expected_marker=CANDLE_CV_CASE10173_HISTORICAL_REGISTERED_FULL_CALL_ORIGINAL_PROVE_TEST_OK
 numerical_marker=CANDLE_REGISTERED_FULL_CALL_REGISTERED_NUMERICAL_END
 fast_numerical_max_seconds=120
+numerical_watchdog_seconds=180
 
 [[ -f $base_dir/CHECKPOINT-READY ]]
 [[ ! -f $base_dir/CHECKPOINT-FAILED ]]
@@ -42,12 +43,34 @@ ack="CANDLE_RESTORE_INPUT_ACK nonce=$nonce"
 
 cd "$dev_runtime"
 set +e
-/usr/bin/time -v -o "$output_dir/time.log" \
+setsid /usr/bin/time -v -o "$output_dir/time.log" \
   env -i PATH=/project/bin:/usr/local/bin:/usr/bin:/bin LC_ALL=C \
     CML_HEAP_SIZE=32768 DMTCP_TMPDIR="$output_dir/dmtcp-tmp" \
     timeout 21600 dmtcp_restart --new-coordinator --coord-port 0 \
       --port-file "$output_dir/coord.port" "${checkpoints[0]}" \
-      <"$output_dir/stdin.ml" >"$output_dir/runtime.log" 2>&1
+      <"$output_dir/stdin.ml" >"$output_dir/runtime.log" 2>&1 &
+launcher_pid=$!
+numerical_watchdog_triggered=0
+numerical_observed_at=
+while kill -0 "$launcher_pid" 2>/dev/null; do
+  if rg -a -Fq "CANDLE_REGISTERED_FULL_CALL_REGISTERED_NUMERICAL_BEGIN" \
+       "$output_dir/runtime.log" &&
+     ! rg -a -Fq "CANDLE_REGISTERED_FULL_CALL_REGISTERED_NUMERICAL_END" \
+       "$output_dir/runtime.log"
+  then
+    if [[ -z $numerical_observed_at ]]; then
+      numerical_observed_at=$(date +%s)
+    elif (( $(date +%s) - numerical_observed_at >= numerical_watchdog_seconds )); then
+      numerical_watchdog_triggered=1
+      kill -TERM -- "-$launcher_pid" 2>/dev/null || true
+      sleep 2
+      kill -KILL -- "-$launcher_pid" 2>/dev/null || true
+      break
+    fi
+  fi
+  sleep 1
+done
+wait "$launcher_pid"
 runtime_status=$?
 set -e
 
@@ -70,14 +93,15 @@ then
 fi
 status=$runtime_status
 if [[ $ack_count -ne 1 || $marker_count -ne 1 || $failure_count -ne 0 ||
-      $fast_timing_ok -ne 1 ]]; then
+      $numerical_watchdog_triggered -ne 0 || $fast_timing_ok -ne 1 ]]; then
   status=1
 fi
 printf '%s\n' "$status" >"$output_dir/exit.status"
-printf 'runtime_status=%s\nack_count=%s\nmarker_count=%s\nfailure_count=%s\nnumerical_timing_count=%s\nnumerical_seconds=%s\nfast_numerical_max_seconds=%s\nfast_timing_ok=%s\n' \
+printf 'runtime_status=%s\nack_count=%s\nmarker_count=%s\nfailure_count=%s\nnumerical_timing_count=%s\nnumerical_seconds=%s\nfast_numerical_max_seconds=%s\nnumerical_watchdog_seconds=%s\nnumerical_watchdog_triggered=%s\nfast_timing_ok=%s\n' \
   "$runtime_status" "$ack_count" "$marker_count" "$failure_count" \
   "$numerical_timing_count" "$numerical_seconds" \
-  "$fast_numerical_max_seconds" "$fast_timing_ok" \
+  "$fast_numerical_max_seconds" "$numerical_watchdog_seconds" \
+  "$numerical_watchdog_triggered" "$fast_timing_ok" \
   >"$output_dir/result-validation.txt"
 sha256sum "$driver" "$output_dir/stdin.ml" "$output_dir/runtime.log" \
   "$dev_runtime/cake" "$dev_runtime/DEVELOPMENT-NONPROMOTABLE.json" \
