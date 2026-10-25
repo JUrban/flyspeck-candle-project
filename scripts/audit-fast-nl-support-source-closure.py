@@ -2,10 +2,10 @@
 """Audit the literal source-load closure of the first fast-NL support files.
 
 This is a development preflight for the authenticated Candle loader.  It
-resolves literal ``needs``, ``loadt``, ``loads``, and ``#use`` requests using
-the exact support search-path order, walks their transitive closure, and
-compares every resolved node with the source-identity and alias authorities
-installed by the v663 setup.
+resolves literal ``needs``, ``loadt``, ``loads``, ``flyspeck_needs``, and
+``#use`` requests using the exact support search-path order, walks their
+transitive closure, and compares every resolved node with the source-identity
+and alias authorities installed by the v663 setup.
 
 The audit deliberately fails on dynamic or unresolved requests.  It does not
 execute HOL Light and is not theorem evidence; its purpose is to prevent a
@@ -68,8 +68,10 @@ ALIASES = FIXTURE / "fast-nl-source-aliases.ml"
 BASE_IDENTITIES = CANDLE_CURRENT / "candle/flyspeck_source_digests.ml"
 
 LOAD_RE = re.compile(
-    r"(?:\b(?:needs|loadt|loads)\s*(?:\(\s*)?|#use\s+)\"([^\"\\]+)\""
+    r"(?:\b(?:needs|loadt|loads|flyspeck_needs)\s*(?:\(\s*)?|#use\s+)"
+    r"\"([^\"\\]+)\""
 )
+LOAD_CALL_RE = re.compile(r"\b(?:needs|loadt|loads|flyspeck_needs)\b")
 EXTRA_RE = re.compile(
     r'^\s*\("([^\"]+)",\("[^\"]+","([0-9a-f]{32})"\)\);\s*$'
 )
@@ -231,7 +233,7 @@ def main() -> int:
             print(f"parse_error={path}: {error}", file=sys.stderr)
             return 2
         for line_number, line in enumerate(source.splitlines(), start=1):
-            if re.search(r"\b(?:needs|loadt|loads)\b", line) and not LOAD_RE.search(line):
+            if LOAD_CALL_RE.search(line) and not LOAD_RE.search(line):
                 dynamic_markers.append((path, line_number, line.strip()))
         queue.extend((child, path) for child in requests)
 

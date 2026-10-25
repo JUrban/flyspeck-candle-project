@@ -2,11 +2,12 @@
 """Fail-closed audit of the planned fast-NL support load order.
 
 The ordinary source-closure audit follows literal ``needs``/``loadt``/
-``loads``/``#use`` requests.  Some fast-NL files were originally developed
-after an action-296 checkpoint and therefore also depend on modules already
-present in that ambient state.  The v664 replay showed that checking only the
-literal closure is insufficient: ``cv_compute_analytic_dim_jet_matan.ml``
-opened two matan support modules that the action-49 state did not contain.
+``loads``/``flyspeck_needs``/``#use`` requests.  Some fast-NL files were
+originally developed after an action-296 checkpoint and therefore also depend
+on modules already present in that ambient state.  The v664 replay showed that
+checking only the literal closure is insufficient:
+``cv_compute_analytic_dim_jet_matan.ml`` opened two matan support modules that
+the action-49 state did not contain.
 
 This audit validates an explicit, deliberately small replacement for that
 ambient state.  It loads Flyspeck's verifier and matan evaluator umbrellas,
@@ -36,14 +37,38 @@ LITERAL_AUDIT_PATH = PROJECT_REPO / "scripts/audit-fast-nl-support-source-closur
 RUN = PROJECT / "flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001"
 BASE_LOG = RUN / "base.log"
 ACTION_LOG = RUN / "postaction49/runtime.log"
+NORMALIZATION_OVERLAY = (
+    PROJECT
+    / "flyspeck-candle-runs/v355-postsetup-checkpoint-dev-001"
+    / "overlay-data-v355.ml"
+)
+V664_BASE_STRICTBUILD = (
+    PROJECT
+    / "worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df"
+    / "text_formalization/build/strictbuild.hl"
+)
 
 # These four entries replace the ambient action-296 assumptions documented by
 # the matan and verifier support sources.  Entry order is part of the contract.
 PREREQUISITE_ENTRY_REQUESTS = (
+    # One declared umbrella for the legacy verifier, including matan_eval.
     "verifier/m_verifier_main.hl",
-    "trig/matan_eval.hl",
+    # Foundational Candle modules that the matan bridge historically inherited
+    # from the action-296 analytic checkpoint.
+    "candle/cv_compute_polynomial_expr_dim_jet_semantics.ml",
+    "candle/cv_compute_exact_interval_square_core.ml",
+    "candle/cv_compute_exact_rational_inv.ml",
     "candle/cv_compute_exact_interval_matan_series.ml",
     "candle/cv_compute_exact_interval_matan_series_program.ml",
+    # Other source files in the support closure with documented ambient
+    # prerequisites rather than literal loads.
+    "candle/cv_compute_analytic_expr_fixed_scale_historical_dihedral_first_order_sound.ml",
+    "candle/cv_compute_analytic_expr_fixed_scale_historical_root_four_x0_sound.ml",
+    "candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_variable_compact_stack_sound.ml",
+    "candle/cv_compute_analytic_expr_taylor_model_tree_compact_correct.ml",
+    # Authenticate the original logical Flyspeck node; the configured
+    # normalization overlay selects its current compatibility source.
+    "/project/flyspeck-candle-runs/v352-full-boundary-materialization-heap16-dev-005/snapshot/flyspeck/text_formalization/nonlinear/break_case_exec.hl",
 )
 
 # Modules supplied by the compiled runtime or OCaml basis rather than by a
@@ -70,11 +95,14 @@ def load_literal_audit():
 LITERAL = load_literal_audit()
 
 MODULE_PROVIDER_RE = re.compile(
-    r"(?m)^module\s+(?!type\b)([A-Z][A-Za-z0-9_']*)\b"
+    r"(?m)^\s*module\s+(?!type\b)([A-Z][A-Za-z0-9_']*)\b"
 )
 OPEN_RE = re.compile(r"(?m)^\s*open\s+([A-Z][A-Za-z0-9_']*)\b")
 QUALIFIED_RE = re.compile(r"\b([A-Z][A-Za-z0-9_']*)\s*\.")
 LOADING_RE = re.compile(r"^- Loading (.+)$")
+NORMALIZATION_RE = re.compile(
+    r'^\s*\("([^"]+)","([^"]+)","([0-9a-f]{32})"\);\s*$'
+)
 
 
 def mask_strings_and_quotations(text: str) -> str:
@@ -124,9 +152,58 @@ def source_facts(
     literal_loads = LITERAL.LOAD_RE.findall(uncommented)
     dynamic_loads = []
     for line_number, line in enumerate(uncommented.splitlines(), start=1):
-        if re.search(r"\b(?:needs|loadt|loads)\b", line) and not LITERAL.LOAD_RE.search(line):
+        if LITERAL.LOAD_CALL_RE.search(line) and not LITERAL.LOAD_RE.search(line):
             dynamic_loads.append((line_number, line.strip()))
     return providers, references - providers, literal_loads, dynamic_loads
+
+
+def parse_normalization() -> tuple[
+    dict[pathlib.Path, pathlib.Path], list[tuple[pathlib.Path, pathlib.Path, str, str]]
+]:
+    """Return canonical-to-executed sources and any target hash mismatches."""
+
+    mapping: dict[pathlib.Path, pathlib.Path] = {}
+    mismatches: list[tuple[pathlib.Path, pathlib.Path, str, str]] = []
+    for line in NORMALIZATION_OVERLAY.read_text(encoding="utf-8").splitlines():
+        match = NORMALIZATION_RE.match(line)
+        if not match:
+            continue
+        canonical = pathlib.Path(match.group(1)).resolve()
+        target = pathlib.Path(match.group(2)).resolve()
+        expected = match.group(3)
+        # These are the three exact transformations performed by
+        # tools/fast_nl_v664_setup.ml after loading overlay-data-v355.ml.
+        # Assert the old values before applying them so setup drift fails
+        # closed instead of being silently accepted by the static audit.
+        if target == (
+            PROJECT
+            / "worktrees/flyspeck-strictbuild-bootstrap-v1"
+            / "text_formalization/build/strictbuild.hl"
+        ).resolve():
+            if expected != "88364c468334ed91b661cc2ecc8a484a":
+                mismatches.append((canonical, target, "88364c468334ed91b661cc2ecc8a484a", expected))
+            target = V664_BASE_STRICTBUILD.resolve()
+        elif target == (
+            PROJECT
+            / "worktrees/flyspeck-direct-action296-643bfd12"
+            / "text_formalization/general/serialization.hl"
+        ).resolve():
+            if expected != "f8460ac2a26b291b113ffa2ad2ffaace":
+                mismatches.append((canonical, target, "f8460ac2a26b291b113ffa2ad2ffaace", expected))
+            expected = "e0766072204d441da563dd688cfe1a7b"
+        elif target == (
+            PROJECT
+            / "worktrees/flyspeck-direct-action296-643bfd12"
+            / "text_formalization/nonlinear/mk_all_ineq.hl"
+        ).resolve():
+            if expected != "3076e3e4143397c5764911906732abb7":
+                mismatches.append((canonical, target, "3076e3e4143397c5764911906732abb7", expected))
+            expected = "e335cb02c223ba4a0f748a62e7b48d87"
+        mapping[canonical] = target
+        actual = md5(target) if target.is_file() else "MISSING"
+        if actual != expected:
+            mismatches.append((canonical, target, expected, actual))
+    return mapping, mismatches
 
 
 def resolve_logged_path(text: str) -> pathlib.Path | None:
@@ -161,12 +238,18 @@ def md5(path: pathlib.Path) -> str:
 
 
 def main() -> int:
-    for required in (LITERAL_AUDIT_PATH, BASE_LOG, ACTION_LOG):
+    for required in (
+        LITERAL_AUDIT_PATH,
+        BASE_LOG,
+        ACTION_LOG,
+        NORMALIZATION_OVERLAY,
+    ):
         if not required.is_file():
             print(f"missing_input={required}", file=sys.stderr)
             return 2
 
     starting_paths, unresolved_loaded = loaded_paths()
+    normalized_sources, normalization_mismatches = parse_normalization()
     facts: dict[
         pathlib.Path, tuple[set[str], set[str], list[str], list[tuple[int, str]]]
     ] = {}
@@ -175,7 +258,11 @@ def main() -> int:
     def get_facts(path: pathlib.Path):
         if path not in facts:
             try:
-                facts[path] = source_facts(path)
+                # The authenticated loader authorizes the canonical logical
+                # source node, but evaluates the configured normalization
+                # target.  Module and child-load facts must therefore come
+                # from the exact bytes that will execute.
+                facts[path] = source_facts(normalized_sources.get(path, path))
             except (OSError, UnicodeDecodeError, ValueError) as error:
                 parse_errors.append((path, str(error)))
                 facts[path] = set(), set(), [], []
@@ -251,6 +338,7 @@ def main() -> int:
             or missing_modules
             or missing_identities
             or stale_identities
+            or normalization_mismatches
         )
     )
     print(f"status={status}")
@@ -267,6 +355,7 @@ def main() -> int:
     print(f"unresolved_loaded_path_count={len(unresolved_loaded)}")
     print(f"unresolved_request_count={len(unresolved_requests)}")
     print(f"parse_error_count={len(parse_errors)}")
+    print(f"normalization_mismatch_count={len(normalization_mismatches)}")
 
     for index, path in enumerate(entry_paths):
         print(f"entry_path={index}\t{path}")
@@ -284,6 +373,11 @@ def main() -> int:
         print(f"stale_identity={path}\texpected={expected}\tactual={actual}")
     for path, error in parse_errors:
         print(f"parse_error={path}\t{error}")
+    for canonical, target, expected, actual in normalization_mismatches:
+        print(
+            "normalization_mismatch="
+            f"{canonical}\ttarget={target}\texpected={expected}\tactual={actual}"
+        )
 
     return status
 
