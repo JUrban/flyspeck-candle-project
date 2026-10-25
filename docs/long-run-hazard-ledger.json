@@ -523,6 +523,16 @@
       "root_cause": "At historical_dihedral_sound.ml line 4870, the unannotated quoted specialization argument x * y is parsed as cval in Candle's ambient overload context, while the six-variable containment theorem requires real at argument five. The other five argument types and the 6/6 arity match.",
       "check_id": "historical_sound_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-044",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "2026-10-25 compact support closure pre-mortem",
+      "failure_mode": "Exact compact-tree/stack proof files that passed in the earlier v502 Candle state fail only after an expensive restore because the later matan/historical namespace changes overload or unqualified-name resolution.",
+      "root_cause": "Prior execution proves the exact proof bytes but not their behavior under every later ambient open and overload context; LR-043 demonstrated that a variable-only quoted arithmetic term can select cval instead of real in such a context.",
+      "check_id": "compact_support_contract",
+      "enforcement": "preflight"
     }
   ]
 }
