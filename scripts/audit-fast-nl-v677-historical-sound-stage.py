@@ -13,6 +13,7 @@ PROJECT = pathlib.Path("/project/flyspeck-candle-project")
 DRIVER = PROJECT / "tools/fast_nl_v677_historical_sound_stage.ml"
 REPAIR_AUDIT = PROJECT / "scripts/audit-fast-nl-v677-matan-repair.py"
 CHAIN_AUDIT = PROJECT / "scripts/audit-fast-nl-v677-repair-checkpoint-chain.py"
+HISTORICAL_AUDIT = PROJECT / "scripts/audit-fast-nl-v677-historical-sound-contract.py"
 BASE = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v666-fast-nl-canonical-verifier-predecessor-dev-001/"
@@ -20,6 +21,12 @@ BASE = pathlib.Path(
 )
 BASE_SHA256 = "25e7179af6617c2983746666903ed36a2d4d70072a71b36e8be314da44c87e14"
 SOURCE_ROOT = pathlib.Path("/project/worktrees/candle-direct-fast-nl-runtime-v1")
+CANDIDATE_ROOT = pathlib.Path("/project/worktrees/candle-fast-nl-historical-sound-v1")
+CANDIDATE_HEAD = "522e7123471bda68ec3417d728507a5cda829897"
+CANDIDATE_SHA256 = "8c1dccc2662255efce8e27dc7e6fe33d679a617f3e236b9deebfe4f0d72fc1ec"
+REPAIR_LOGICAL = (
+    "candle/cv_compute_analytic_expr_fixed_scale_historical_dihedral_sound.ml"
+)
 ENTRIES = (
     (
         "candle/cv_compute_analytic_expr_fixed_scale_historical_dihedral_first_order_sound.ml",
@@ -40,6 +47,12 @@ def sha256(path: pathlib.Path) -> str:
 
 def md5(path: pathlib.Path) -> str:
     return hashlib.md5(path.read_bytes(), usedforsecurity=False).hexdigest()
+
+
+def git(*arguments: str) -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(CANDIDATE_ROOT), *arguments], text=True
+    ).strip()
 
 
 def receipt(path: pathlib.Path) -> dict[str, str]:
@@ -73,6 +86,7 @@ def main() -> int:
         DRIVER,
         REPAIR_AUDIT,
         CHAIN_AUDIT,
+        HISTORICAL_AUDIT,
         BASE / "CHECKPOINT-READY",
         BASE / "checkpoint.receipt",
         BASE / "runtime.log",
@@ -100,6 +114,17 @@ def main() -> int:
         return fail("repair_audit")
     if not run_audit(CHAIN_AUDIT):
         return fail("checkpoint_chain_audit")
+    if not run_audit(HISTORICAL_AUDIT):
+        return fail("historical_sound_contract")
+    candidate_source = CANDIDATE_ROOT / REPAIR_LOGICAL
+    if (
+        git("rev-parse", "HEAD") != CANDIDATE_HEAD
+        or git("status", "--porcelain")
+        or git("diff", "--name-only", "172d6a14064575a1dabca7e8e16fd9088070f415", "HEAD")
+        != REPAIR_LOGICAL
+        or sha256(candidate_source) != CANDIDATE_SHA256
+    ):
+        return fail("candidate_source")
 
     driver = DRIVER.read_text(encoding="utf-8")
     expected = tuple(logical for logical, _, _ in ENTRIES)
@@ -107,6 +132,14 @@ def main() -> int:
         return fail("driver_boundary")
     if "#use " in driver or driver.count("HISTORICAL_SOUND_CHECKPOINT_READY") != 1:
         return fail("driver_contract")
+    overlay_contract = (
+        str(SOURCE_ROOT / REPAIR_LOGICAL),
+        str(CANDIDATE_ROOT / REPAIR_LOGICAL),
+        "List.length candle_v677_historical_existing_overlay <> 114",
+        "<> 115",
+    )
+    if any(driver.count(item) != 1 for item in overlay_contract):
+        return fail("driver_overlay_contract")
     for logical, expected_md5, expected_sha256 in ENTRIES:
         source = SOURCE_ROOT / logical
         if not source.is_file():
@@ -118,6 +151,7 @@ def main() -> int:
 
     print("status=0")
     print("planned_top_level_load_count=2")
+    print("historical_repair_source_count=1")
     print(f"driver_sha256={sha256(DRIVER)}")
     print(f"base_checkpoint_sha256={BASE_SHA256}")
     return 0

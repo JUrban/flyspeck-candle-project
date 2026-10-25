@@ -23,6 +23,7 @@
         "/project/worktrees/cakeml-direct-fast-nl-integration-v1": "b3fb54e9f822fd462b929843e816d1fa1dd46cfd",
         "/project/worktrees/candle-direct-fast-nl-runtime-v1": "0f9690d3683efca78a60d4607596815245e37578",
         "/project/worktrees/candle-fast-nl-matan-closure-v1": "172d6a14064575a1dabca7e8e16fd9088070f415",
+        "/project/worktrees/candle-fast-nl-historical-sound-v1": "522e7123471bda68ec3417d728507a5cda829897",
         "/project/worktrees/HOL-cakeml-dopen-v13": "bc47e6586a87ac538a71b10206a83c169c171d1a",
         "/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df": "9ae969dfaca95e223d44b50f7cae00df3d2ab949",
         "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5",
@@ -518,7 +519,7 @@
       "classification": "observed",
       "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-historical-sound-v677t/runtime.log",
       "failure_mode": "The first historical dihedral soundness dependency raises Failure SPECL after the fixed-scale angle-polynomial source finishes; the incomplete logical load then makes the ordinary-needs identity check fail closed.",
-      "root_cause": "An explicit SPECL application in the historical dihedral soundness dependency is being given a theorem with fewer leading universal quantifiers than the requested specialization list; the exact call site is not yet localized.",
+      "root_cause": "At historical_dihedral_sound.ml line 4870, the unannotated quoted specialization argument x * y is parsed as cval in Candle's ambient overload context, while the six-variable containment theorem requires real at argument five. The other five argument types and the 6/6 arity match.",
       "check_id": "historical_sound_contract",
       "enforcement": "preflight"
     }
