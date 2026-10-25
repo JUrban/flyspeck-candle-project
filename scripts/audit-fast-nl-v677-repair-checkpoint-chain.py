@@ -14,6 +14,7 @@ ROOT = pathlib.Path(
     "v666-fast-nl-canonical-verifier-predecessor-dev-001"
 )
 REPAIR_AUDIT = PROJECT / "scripts/audit-fast-nl-v677-matan-repair.py"
+HISTORICAL_AUDIT = PROJECT / "scripts/audit-fast-nl-v677-historical-sound-contract.py"
 STAGES = (
     {
         "directory": ROOT / "post-pre-first-jet-v677g",
@@ -115,6 +116,21 @@ STAGES = (
             "- Finished loading candle/cv_compute_analytic_expr_fixed_scale_historical_dihedral_first_order_sound.ml",
         ),
     },
+    {
+        "directory": ROOT / "post-historical-sound-v677w",
+        "kind": "development-fast-nl-v677-historical-sound-checkpoint-v1",
+        "sha256": "0bd11b95aa83a1bf95d5df035f3a4639362c2f0ba076390ff80d3ffc22368bca",
+        "marker": "CANDLE_FLYSPECK_V677_HISTORICAL_SOUND_CHECKPOINT_READY",
+        "driver": PROJECT / "tools/fast_nl_v677_historical_sound_stage.ml",
+        "required": (
+            "- Finished loading candle/cv_compute_analytic_expr_fixed_scale_historical_root_four_x0_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_fixed_scale_historical_dihedral_first_order_sound.ml",
+        ),
+        "forbidden": (
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_variable_compact_stack_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_tree_compact_correct.ml",
+        ),
+    },
 )
 
 
@@ -144,6 +160,13 @@ def main() -> int:
     if completed.returncode != 0 or "status=0" not in completed.stdout.splitlines():
         print(completed.stdout, end="")
         return fail("repair_audit")
+    historical = subprocess.run(
+        [str(HISTORICAL_AUDIT)], cwd=PROJECT, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30, check=False
+    )
+    if historical.returncode != 0 or "status=0" not in historical.stdout.splitlines():
+        print(historical.stdout, end="")
+        return fail("historical_sound_audit")
 
     previous_checkpoint: pathlib.Path | None = None
     for index, stage in enumerate(STAGES):
