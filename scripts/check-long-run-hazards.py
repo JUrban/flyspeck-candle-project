@@ -39,6 +39,9 @@ MULTIVARIATE_CHECKPOINT_FINALIZATION = (
 LIST_FLATTEN_SURFACE = (
     PROJECT / "scripts/audit-fast-nl-v674-list-flatten-surface.py"
 )
+MATAN_CONSTRUCTOR_CLOSURE = (
+    PROJECT / "scripts/audit-fast-nl-matan-constructor-closure.py"
+)
 M_VERIFIER_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v674-checkpoint-finalization.py"
 )
@@ -214,6 +217,10 @@ def check_checkpoint_finalization(_: dict, __: pathlib.Path) -> CheckResult:
 
 def check_list_flatten_surface(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(LIST_FLATTEN_SURFACE)], timeout=30)
+
+
+def check_matan_constructor_closure(_: dict, __: pathlib.Path) -> CheckResult:
+    return run_checked([str(MATAN_CONSTRUCTOR_CLOSURE)], timeout=120)
 
 
 def check_checkpoint_integrity(
@@ -757,6 +764,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "support_stage_boundaries": check_support_stage_boundaries,
     "checkpoint_finalization": check_checkpoint_finalization,
     "list_flatten_surface": check_list_flatten_surface,
+    "matan_constructor_closure": check_matan_constructor_closure,
     "checkpoint_integrity": check_checkpoint_integrity,
     "checkpoint_admission_chain": check_checkpoint_admission_chain,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,

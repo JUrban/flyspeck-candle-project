@@ -373,6 +373,16 @@
       "check_id": "checkpoint_admission_chain",
       "enforcement": "preflight",
       "profiles": ["support-stage"]
+    },
+    {
+      "id": "LR-030",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-scale-v677/runtime.log",
+      "failure_mode": "A recursive analytic-expression or instruction consumer reaches TAC_PROOF with unsolved goals because it covers the pre-matan constructor family but omits the later matan constructor.",
+      "root_cause": "Commit 4631b063 added the reflected matan expression and instruction opcodes to the foundational datatypes without updating every dependent definition and induction proof in the authenticated fast-NL source closure.",
+      "check_id": "matan_constructor_closure",
+      "enforcement": "preflight"
     }
   ]
 }
