@@ -5,6 +5,13 @@ run=/project/flyspeck-candle-runs/v658-fast-nl-compiler64-final-stage-dev-001
 fixture=/project/flyspeck-candle-runs/v656-fast-nl-production-integration-dev-001
 scripts=/project/flyspeck-candle-project/scripts
 
+[[ $(sha256sum "$fixture/action0-through49.ml" | awk '{print $1}') == \
+   0174c32fd75dd9db8027c9dddfef46cd6a98afd58c4f48345203800158ab03ce ]]
+[[ $(sha256sum "$fixture/support.ml" | awk '{print $1}') == \
+   c1933e76dab724e7ea85199e306c4cf91d5f2a4dafbc246d0b469f17493c9d9b ]]
+[[ $(sha256sum "$fixture/exact-one-call.ml" | awk '{print $1}') == \
+   e2129e131a7ce4df7f1d5792f4799c98f111a6ecf54dfab181ba95a8455e8cd8 ]]
+
 "$scripts/run-fast-nl-restored-checkpoint-phase-v1.sh" \
   "$run" "$run/postaction49" "$fixture/action0-through49.ml" \
   'CANDLE_FLYSPECK_V656_ACTION49_CHECKPOINT_READY actions=50 passed=50' \

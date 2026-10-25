@@ -8,6 +8,12 @@ base_source=/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df
 ready_marker=CANDLE_FLYSPECK_V656_FAST_NL_POSTSTRICTBUILD_CHECKPOINT_READY
 setup=$fixture_dir/setup.ml
 
+check_sha() {
+  expected=$1
+  path=$2
+  [[ $(sha256sum "$path" | awk '{print $1}') == "$expected" ]]
+}
+
 [[ ! -e $run_dir/base.log ]]
 [[ -z $(git -C "$base_source" status --short) ]]
 [[ $(git -C "$base_source" rev-parse HEAD) == \
@@ -19,8 +25,20 @@ jq -e '
   .repositories.candle.commit == "0f9690d3683efca78a60d4607596815245e37578" and
   .repositories.hol4.commit == "bc47e6586a87ac538a71b10206a83c169c171d1a"
 ' "$dev_runtime/DEVELOPMENT-NONPROMOTABLE.json" >/dev/null
-[[ $(sha256sum "$setup" | awk '{print $1}') == \
-   f287fc3bfff250d57d5804ba43bcf1287a383e9b029015e905815b770ac1942b ]]
+check_sha f287fc3bfff250d57d5804ba43bcf1287a383e9b029015e905815b770ac1942b \
+  "$setup"
+check_sha d850b246d4b8746362de3b019bc3ab4773a1de5f1da48dd48759c2dde2b270b9 \
+  "$fixture_dir/extra-source-identities.ml"
+check_sha b5eb3e0aa37a30b76ee503874df50390c756b0fb9049e9cd3e5b005cd214d40f \
+  "$fixture_dir/fast-nl-source-aliases.ml"
+check_sha 602f32b933c611bcb745adf596d46042fa51a474dfdb4a60ab974c8b3e2af7d0 \
+  "$fixture_dir/flyspeck_stratum_fast_nl_setup.ml"
+check_sha 0174c32fd75dd9db8027c9dddfef46cd6a98afd58c4f48345203800158ab03ce \
+  "$fixture_dir/action0-through49.ml"
+check_sha c1933e76dab724e7ea85199e306c4cf91d5f2a4dafbc246d0b469f17493c9d9b \
+  "$fixture_dir/support.ml"
+check_sha e2129e131a7ce4df7f1d5792f4799c98f111a6ecf54dfab181ba95a8455e8cd8 \
+  "$fixture_dir/exact-one-call.ml"
 
 mkdir -p "$run_dir/checkpoint" "$run_dir/dmtcp-tmp"
 mkfifo "$run_dir/input.fifo" "$run_dir/output.fifo"
