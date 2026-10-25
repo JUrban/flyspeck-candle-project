@@ -27,14 +27,14 @@
         "/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6": "d6cdcd9f3e45f4ceb5fd1ba08f5b5ec4ce6a65eb"
       },
       "checkpoint_receipts": [
-        "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/checkpoint.receipt",
-        "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/postaction49/checkpoint.receipt"
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v669/checkpoint.receipt"
       ],
       "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
         "receipt": "/project/flyspeck-candle-runs/v667-fast-nl-support-probe-dev-001/SHORT-RUNTIME-PROBE.receipt",
         "maximum_elapsed_seconds": 3600,
-        "predecessor_checkpoint_receipt": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v668/checkpoint.receipt",
+        "predecessor_checkpoint_receipt": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v669/checkpoint.receipt",
         "source_configuration_receipt": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/checkpoint.receipt",
         "source_configuration_inputs": [
           "/project/flyspeck-candle-project/tools/fast_nl_v665_setup.ml",
