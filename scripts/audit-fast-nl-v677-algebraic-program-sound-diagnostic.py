@@ -73,6 +73,8 @@ def main() -> int:
         return fail("driver_boundary")
     if text.count("candle_v677_program_sound_diagnostic") != 3:
         return fail("diagnostic_overlay_contract")
+    if "Alist.lookup" in text or text.count("candle_v677_overlay_lookup") != 4:
+        return fail("diagnostic_lookup_surface")
     print("status=0")
     print("planned_top_level_load_count=1")
     print(f"driver_sha256={sha256(DRIVER)}")

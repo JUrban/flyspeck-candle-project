@@ -479,6 +479,16 @@
       "root_cause": "The matan opcode changed the executable/logical nonlinear and step definitions, but the existing exhaustive representation proof was not independently exercised by the constructor-closure or theorem-shape audits.",
       "check_id": "matan_repair_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-040",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/algebraic-program-sound-diagnostic-v677o/runtime.log",
+      "failure_mode": "The isolated residual-goal diagnostic fails before source substitution because it calls Alist.lookup, which exists inside the loader module but is not exported at the restored top level.",
+      "root_cause": "The diagnostic reused an implementation-local loader helper instead of defining its own checked lookup over the exposed normalization table.",
+      "check_id": "matan_repair_contract",
+      "enforcement": "preflight"
     }
   ]
 }

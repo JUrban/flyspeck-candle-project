@@ -5,14 +5,21 @@ let candle_v677_program_sound_original =
 let candle_v677_program_sound_diagnostic =
   "/project/worktrees/candle-fast-nl-matan-diagnostic-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml";;
 
+let rec candle_v677_overlay_lookup key mappings =
+  match mappings with
+  | [] -> None
+  | (original,current)::rest ->
+      if original = key then Some current
+      else candle_v677_overlay_lookup key rest;;
+
 let candle_v677_inherited_overlay =
   match !Cakeml.normalizationOverlay with
   | None -> failwith "v677 diagnostic normalization overlay absent"
   | Some mappings -> mappings;;
 
 if List.length candle_v677_inherited_overlay <> 114 ||
-   Alist.lookup candle_v677_inherited_overlay
-     candle_v677_program_sound_original <>
+   candle_v677_overlay_lookup candle_v677_program_sound_original
+     candle_v677_inherited_overlay <>
      Some
        "/project/worktrees/candle-fast-nl-matan-closure-v1/candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml" then
   failwith "v677 diagnostic overlay predecessor mismatch";;
@@ -26,8 +33,8 @@ let candle_v677_diagnostic_overlay =
     candle_v677_inherited_overlay;;
 
 if List.length candle_v677_diagnostic_overlay <> 114 ||
-   Alist.lookup candle_v677_diagnostic_overlay
-     candle_v677_program_sound_original <>
+   candle_v677_overlay_lookup candle_v677_program_sound_original
+     candle_v677_diagnostic_overlay <>
      Some candle_v677_program_sound_diagnostic then
   failwith "v677 diagnostic overlay replacement mismatch"
 else
