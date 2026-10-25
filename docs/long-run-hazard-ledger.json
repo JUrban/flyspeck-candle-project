@@ -22,7 +22,7 @@
       "source_worktrees": {
         "/project/worktrees/cakeml-direct-fast-nl-integration-v1": "b3fb54e9f822fd462b929843e816d1fa1dd46cfd",
         "/project/worktrees/candle-direct-fast-nl-runtime-v1": "0f9690d3683efca78a60d4607596815245e37578",
-        "/project/worktrees/candle-fast-nl-matan-closure-v1": "65397eb2d87d817acff962a3e3e4320fb5cdfb68",
+        "/project/worktrees/candle-fast-nl-matan-closure-v1": "7540011a62810755d2c9fdb4bb9dfe9bd933cea1",
         "/project/worktrees/HOL-cakeml-dopen-v13": "bc47e6586a87ac538a71b10206a83c169c171d1a",
         "/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df": "9ae969dfaca95e223d44b50f7cae00df3d2ab949",
         "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5",
@@ -412,6 +412,16 @@
       "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-matan-repair-v677c/runtime.log",
       "failure_mode": "The logical matan certificate patch proves, but the next executable representation source reaches TAC_PROOF with an unidentified residual goal.",
       "root_cause": "The new branch rewrote the executable patch to the unchanged matan instruction but omitted the logical patch definition and FST/SND reductions on the other side of the equality.",
+      "check_id": "matan_repair_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-034",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-matan-repair-v677e/runtime.log",
+      "failure_mode": "The repaired first-jet source reaches an undefined matan-series correctness theorem even though the theorem's source was loaded in the predecessor.",
+      "root_cause": "The theorem is an ML binding inside Candle_cv_exact_interval_matan_series_program; loading that module does not export its unqualified ML values into a later module that never opens it.",
       "check_id": "matan_repair_contract",
       "enforcement": "preflight"
     }

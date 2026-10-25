@@ -133,6 +133,20 @@ def main() -> int:
     )
     if len(representation_branch.findall(compute_patch_text)) != 1:
         return fail("matan_representation_logical_normalization")
+    first_jet_text = (candidate_root / paths[4]).read_text(encoding="utf-8")
+    matan_series_bindings = (
+        "candle_cv_q_interval_matan_series_correct",
+        "candle_cv_q_interval_dmatan_series_correct",
+        "candle_cv_q_interval_matan_series_domain_correct",
+    )
+    if (
+        any(binding not in first_jet_text for binding in matan_series_bindings)
+        or first_jet_text.count(
+            "open Candle_cv_exact_interval_matan_series_program;;"
+        )
+        != 1
+    ):
+        return fail("first_jet_matan_series_module_binding")
 
     overlay = OVERLAY.read_text(encoding="utf-8")
     overlay_pairs = re.findall(
@@ -179,6 +193,7 @@ def main() -> int:
     print(f"candidate_head={candidate['commit']}")
     print("matan_step_premise_delimitation_count=1")
     print("matan_representation_logical_normalization_count=1")
+    print("first_jet_matan_series_module_binding_count=1")
     print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
     print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
     return 0
