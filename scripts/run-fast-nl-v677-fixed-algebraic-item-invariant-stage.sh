@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scripts=/project/flyspeck-candle-project/scripts
+base=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-compile-sound-v677k
+output=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-algebraic-item-invariant-v677m
+runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-005
+driver=/project/flyspeck-candle-project/tools/fast_nl_v677_fixed_algebraic_item_invariant_stage.ml
+marker=CANDLE_FLYSPECK_V677_FIXED_ALGEBRAIC_ITEM_INVARIANT_CHECKPOINT_READY
+
+[[ -f $base/CHECKPOINT-READY ]]
+[[ ! -f $base/CHECKPOINT-FAILED ]]
+[[ ! -e $output ]]
+[[ -f $driver ]]
+[[ -x $runtime/cake ]]
+
+"$scripts/audit-fast-nl-v677-fixed-algebraic-item-invariant-stage.py" |
+  tee /tmp/fast-nl-v677-fixed-algebraic-item-invariant-stage-audit.txt
+grep -Fxq 'status=0' /tmp/fast-nl-v677-fixed-algebraic-item-invariant-stage-audit.txt
+
+export FAST_NL_DEV_RUNTIME=$runtime
+export FAST_NL_PHASE_TIMEOUT_SECONDS=1200
+export FAST_NL_PHASE_DRIVER_MODE=direct
+
+"$scripts/run-fast-nl-restored-checkpoint-phase-v1.sh" \
+  "$base" "$output" "$driver" "$marker" \
+  development-fast-nl-v677-fixed-algebraic-item-invariant-checkpoint-v1

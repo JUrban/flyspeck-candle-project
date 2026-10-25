@@ -22,7 +22,7 @@
       "source_worktrees": {
         "/project/worktrees/cakeml-direct-fast-nl-integration-v1": "b3fb54e9f822fd462b929843e816d1fa1dd46cfd",
         "/project/worktrees/candle-direct-fast-nl-runtime-v1": "0f9690d3683efca78a60d4607596815245e37578",
-        "/project/worktrees/candle-fast-nl-matan-closure-v1": "0d55a53f9d16059a88eaf6ce20a43bcd250fe48d",
+        "/project/worktrees/candle-fast-nl-matan-closure-v1": "06976aa7fb30769e1524d905a451647a61950648",
         "/project/worktrees/HOL-cakeml-dopen-v13": "bc47e6586a87ac538a71b10206a83c169c171d1a",
         "/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df": "9ae969dfaca95e223d44b50f7cae00df3d2ab949",
         "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5",
@@ -447,6 +447,16 @@
       "failure_mode": "A later long run relies on a stale, failed, partially loaded, or source-drifted repair checkpoint even though the current static candidate audit is green.",
       "root_cause": "Static candidate checks and checkpoint readiness are independent evidence unless every staged receipt, driver, lineage edge, fresh-input acknowledgement, selected repair source, and completion marker is audited together.",
       "check_id": "matan_repair_checkpoint_chain",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-037",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-repaired-fixed-scale-v677l/runtime.log",
+      "failure_mode": "A later fixed-algebraic item invariant raises MATCH_MP_TAC: Bad theorem after the earlier generic compile-sound copy of the same defect was repaired.",
+      "root_cause": "The premise-free default-invariant application pattern was copied into five layers of the 19-file closure, but the first repair and static contract covered only the first theorem name and file rather than the semantic failure class.",
+      "check_id": "matan_repair_contract",
       "enforcement": "preflight"
     }
   ]

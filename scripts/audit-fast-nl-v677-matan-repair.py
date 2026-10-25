@@ -147,7 +147,11 @@ def main() -> int:
         != 1
     ):
         return fail("first_jet_matan_series_module_binding")
-    compile_sound_text = (candidate_root / paths[5]).read_text(encoding="utf-8")
+    candidate_texts = {
+        logical: (candidate_root / logical).read_text(encoding="utf-8")
+        for logical in paths
+    }
+    compile_sound_text = candidate_texts[paths[5]]
     premise_free_discharge = re.compile(
         r"REWRITE_TAC\s*"
         r"\[candle_q_dim_taylor_model_result_default_analytic_invariant\]",
@@ -155,13 +159,31 @@ def main() -> int:
     )
     if (
         len(premise_free_discharge.findall(compile_sound_text)) != 1
-        or re.search(
-            r"MATCH_MP_TAC\s*"
-            r"candle_q_dim_taylor_model_result_default_analytic_invariant",
-            compile_sound_text,
-        )
     ):
         return fail("matan_default_invariant_discharge")
+    # LR-035/LR-037: all three default-invariant theorems are universally
+    # quantified propositions without implication premises.  MATCH_MP_TAC
+    # therefore raises Bad theorem.  Scan the complete authenticated repair
+    # closure so copied downstream instances cannot be found one stage at a
+    # time during expensive proof loads.
+    premise_free_invariants = (
+        "candle_q_dim_taylor_model_result_default_analytic_invariant",
+        "candle_fsa_item_matan_default_analytic_invariant",
+        "candle_fsa_logical_item_matan_default_analytic_invariant",
+    )
+    all_candidate_text = "\n".join(candidate_texts.values())
+    for theorem in premise_free_invariants:
+        if re.search(rf"MATCH_MP_TAC\s*{theorem}\b", all_candidate_text):
+            return fail(f"premise_free_match_mp:{theorem}")
+    direct_accepts = re.findall(
+        r"MATCH_ACCEPT_TAC\s*"
+        r"(?:candle_q_dim_taylor_model_result_default_analytic_invariant|"
+        r"candle_fsa_item_matan_default_analytic_invariant|"
+        r"candle_fsa_logical_item_matan_default_analytic_invariant)\b",
+        all_candidate_text,
+    )
+    if len(direct_accepts) != 5:
+        return fail("premise_free_direct_accept_count")
 
     overlay = OVERLAY.read_text(encoding="utf-8")
     overlay_pairs = re.findall(
@@ -210,6 +232,8 @@ def main() -> int:
     print("matan_representation_logical_normalization_count=1")
     print("first_jet_matan_series_module_binding_count=1")
     print("matan_default_invariant_discharge_count=1")
+    print("premise_free_match_mp_count=0")
+    print(f"premise_free_direct_accept_count={len(direct_accepts)}")
     print(f"manifest_sha256={digest(MANIFEST, 'sha256')}")
     print(f"overlay_sha256={digest(OVERLAY, 'sha256')}")
     return 0
