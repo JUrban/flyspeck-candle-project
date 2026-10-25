@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "long_run_threshold_seconds": 3600,
+    "rule": "No run whose declared maximum exceeds the threshold may start without a status=0 receipt from scripts/check-long-run-hazards.py over the exact ledger and controller bytes.",
+    "retry_rule": "Every new long-run failure must be added with an executable discriminator before a retry is permitted.",
+    "unknown_rule": "An active hazard without a registered executable check blocks the run."
+  },
+  "scopes": {
+    "fast-nl-first-original-theorem": {
+      "maximum_total_seconds": 15300,
+      "runtime_dir": "/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-005",
+      "runtime_sha256": "da10797b39eebae4c43a433b331b1c5aa21c32d582371b454e3f37f2e0e0dee5",
+      "x64_receipt": "/project/flyspeck-candle-runs/v662-fast-nl-x64-cv-rep-dev-001/x64-link-v2-controller.receipt",
+      "required_heads": {
+        "cakeml": "b3fb54e9f822fd462b929843e816d1fa1dd46cfd",
+        "compiler_source": "aa7ffbc3a5e30c0f78acfe883f39476d0a3f035a",
+        "candle": "0f9690d3683efca78a60d4607596815245e37578",
+        "hol4": "bc47e6586a87ac538a71b10206a83c169c171d1a"
+      },
+      "source_worktrees": {
+        "/project/worktrees/cakeml-direct-fast-nl-integration-v1": "b3fb54e9f822fd462b929843e816d1fa1dd46cfd",
+        "/project/worktrees/candle-direct-fast-nl-runtime-v1": "0f9690d3683efca78a60d4607596815245e37578",
+        "/project/worktrees/HOL-cakeml-dopen-v13": "bc47e6586a87ac538a71b10206a83c169c171d1a",
+        "/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df": "9ae969dfaca95e223d44b50f7cae00df3d2ab949",
+        "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5"
+      },
+      "checkpoint_receipts": [
+        "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v664-fast-nl-complete-support-closure-dev-001/postaction49/checkpoint.receipt"
+      ],
+      "minimum_available_memory_gib": 24,
+      "maximum_active_matching_controllers": 0,
+      "active_controller_pattern": "run-fast-nl-v[0-9]+-first-theorem-controller.sh"
+    }
+  },
+  "hazards": [
+    {
+      "id": "LR-001",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-24-v4.193-nl-runtime-artifact-identity-gate.md",
+      "failure_mode": "A preserved verified-compiler suffix names an unavailable parent theory identity.",
+      "root_cause": "Generated-theory ancestry drift after rebuilding an upstream translation stage.",
+      "check_id": "runtime_provenance",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-002",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-24-v4.194-nl-verified-runtime-investment-gate.md",
+      "failure_mode": "The final compiler theory composes against stale Candle environment identities.",
+      "root_cause": "Independent handwritten or preserved descendants were not rebuilt from the first changed parent.",
+      "check_id": "runtime_provenance",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-003",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-25-v4.196-nl-x64-cv-representation-boundary.md",
+      "failure_mode": "The x64 bootstrap consumes the wrong CV representation theorem.",
+      "root_cause": "The corrected source and the linked runtime were not treated as one immutable provenance unit.",
+      "check_id": "runtime_provenance",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-004",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v663-fast-nl-current-normalization-dev-001",
+      "failure_mode": "A normalized Flyspeck source has stale path/hash metadata.",
+      "root_cause": "The overlay table predates a source correction.",
+      "check_id": "normalization_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-005",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v663-fast-nl-current-normalization-dev-001/postsupport",
+      "failure_mode": "A transitive literal needs/loadt/loads/#use source is absent from the authenticated identity table.",
+      "root_cause": "Only the four top-level support files were enumerated.",
+      "check_id": "literal_source_closure",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-006",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v664-fast-nl-complete-support-closure-dev-001/postsupport",
+      "failure_mode": "A support source opens a module assumed to exist in an older action-296 checkpoint, but the fresh action-49 state does not contain it.",
+      "root_cause": "The source-closure audit followed literal loads but not ambient module/load-order prerequisites.",
+      "check_id": "module_load_order_closure",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-007",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v664-fast-nl-complete-support-closure-dev-001",
+      "failure_mode": "A partially loaded or failed state is reused for a theorem claim.",
+      "root_cause": "Checkpoint readiness, predecessor identity, or fresh-copy use is not explicit.",
+      "check_id": "checkpoint_integrity",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-008",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "docs/Candle_NL_first_fast_theorem_implementation_plan_2026-10-20.md",
+      "failure_mode": "A slow generic evaluator fallback is reported as a fast specialized theorem.",
+      "root_cause": "Acceptance alone does not prove which dispatch branch executed.",
+      "check_id": "fast_theorem_controller_contract",
+      "enforcement": "controller"
+    },
+    {
+      "id": "LR-009",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "docs/Candle_NL_first_fast_theorem_implementation_plan_2026-10-20.md",
+      "failure_mode": "A theorem with the wrong target, assumptions, or axiom delta is accepted as the milestone.",
+      "root_cause": "The integration test checks only successful evaluation.",
+      "check_id": "fast_theorem_controller_contract",
+      "enforcement": "controller"
+    },
+    {
+      "id": "LR-010",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-24-v4.194-nl-verified-runtime-investment-gate.md",
+      "failure_mode": "A quiet or failed phase runs for many hours without a useful stop boundary.",
+      "root_cause": "The run lacks phase-specific hard timeouts and first-error termination.",
+      "check_id": "bounded_controller",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-011",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-24-v4.194-nl-verified-runtime-investment-gate.md",
+      "failure_mode": "An integration process exhausts memory or competes with a superseded duplicate.",
+      "root_cause": "Resource headroom and already-running matching controllers were not checked immediately before launch.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-012",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "project process rule",
+      "failure_mode": "A long run starts from edited or wrong-head source worktrees.",
+      "root_cause": "The controller authenticates some input files but not all source repositories.",
+      "check_id": "source_worktrees_clean",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-013",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "project checkpoint policy",
+      "failure_mode": "A stale log, incomplete checkpoint, or mismatched predecessor is mistaken for fresh readiness.",
+      "root_cause": "Readiness is inferred from filenames or old output rather than receipt-bound marker and checkpoint hashes.",
+      "check_id": "checkpoint_integrity",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-014",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "project reproducibility policy",
+      "failure_mode": "A completed milestone depends on accidental state from one session.",
+      "root_cause": "The exact theorem call is not repeated from two fresh copies of the same prepared checkpoint.",
+      "check_id": "fast_theorem_controller_contract",
+      "enforcement": "controller"
+    },
+    {
+      "id": "LR-015",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "long-run policy",
+      "failure_mode": "A new long-run target overwrites or resumes an existing run directory.",
+      "root_cause": "The controller does not establish a fresh immutable output target.",
+      "check_id": "fresh_run_target",
+      "enforcement": "preflight"
+    }
+  ]
+}
