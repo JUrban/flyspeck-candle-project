@@ -7,8 +7,9 @@ dev_runtime=${FAST_NL_DEV_RUNTIME:-/project/flyspeck-candle-runs/nonpromotable-d
 x64_receipt=${FAST_NL_X64_RECEIPT:-$run_dir/x64-link-v1-controller.receipt}
 cake_head=${FAST_NL_CAKE_HEAD:-aa7ffbc3a5e30c0f78acfe883f39476d0a3f035a}
 base_source=/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df
-ready_marker=CANDLE_FLYSPECK_V656_FAST_NL_POSTSTRICTBUILD_CHECKPOINT_READY
-setup=$fixture_dir/setup.ml
+ready_marker=${FAST_NL_READY_MARKER:-CANDLE_FLYSPECK_V656_FAST_NL_POSTSTRICTBUILD_CHECKPOINT_READY}
+setup=${FAST_NL_SETUP:-$fixture_dir/setup.ml}
+setup_sha256=${FAST_NL_SETUP_SHA256:-f287fc3bfff250d57d5804ba43bcf1287a383e9b029015e905815b770ac1942b}
 
 check_sha() {
   expected=$1
@@ -27,8 +28,7 @@ jq -e --arg cake_head "$cake_head" '
   .repositories.candle.commit == "0f9690d3683efca78a60d4607596815245e37578" and
   .repositories.hol4.commit == "bc47e6586a87ac538a71b10206a83c169c171d1a"
 ' "$dev_runtime/DEVELOPMENT-NONPROMOTABLE.json" >/dev/null
-check_sha f287fc3bfff250d57d5804ba43bcf1287a383e9b029015e905815b770ac1942b \
-  "$setup"
+check_sha "$setup_sha256" "$setup"
 check_sha d850b246d4b8746362de3b019bc3ab4773a1de5f1da48dd48759c2dde2b270b9 \
   "$fixture_dir/extra-source-identities.ml"
 check_sha b5eb3e0aa37a30b76ee503874df50390c756b0fb9049e9cd3e5b005cd214d40f \
