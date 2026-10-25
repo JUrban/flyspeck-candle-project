@@ -83,6 +83,21 @@ STAGES = (
             "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compile_sound.ml",
         ),
     },
+    {
+        "directory": ROOT / "post-fixed-algebraic-compile-sound-v677r",
+        "kind": "development-fast-nl-v677-fixed-algebraic-compile-sound-checkpoint-v1",
+        "sha256": "4a1209eae1e86f8dbb303318dce66ce43794b277395293d17077cffb09efbcfa",
+        "marker": "CANDLE_FLYSPECK_V677_FIXED_ALGEBRAIC_COMPILE_SOUND_CHECKPOINT_READY",
+        "driver": PROJECT / "tools/fast_nl_v677_fixed_algebraic_compile_sound_stage.ml",
+        "required": (
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_program_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_algebraic_compile_sound.ml",
+        ),
+        "forbidden": (
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_compile_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_nonlinear_compile_sound.ml",
+        ),
+    },
 )
 
 
