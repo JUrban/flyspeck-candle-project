@@ -30,6 +30,9 @@ RUNTIME_SYMBOL_SURFACE = (
 SUPPORT_STAGE_BOUNDARIES = (
     PROJECT / "scripts/audit-fast-nl-v671-support-segmentation.py"
 )
+CHECKPOINT_FINALIZATION = (
+    PROJECT / "scripts/audit-fast-nl-v671-checkpoint-finalization.py"
+)
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
 
@@ -166,6 +169,10 @@ def check_runtime_symbol_surface(_: dict, __: pathlib.Path) -> CheckResult:
 
 def check_support_stage_boundaries(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(SUPPORT_STAGE_BOUNDARIES)], timeout=30)
+
+
+def check_checkpoint_finalization(_: dict, __: pathlib.Path) -> CheckResult:
+    return run_checked([str(CHECKPOINT_FINALIZATION)], timeout=180)
 
 
 def check_checkpoint_integrity(config: dict, _: pathlib.Path) -> CheckResult:
@@ -465,6 +472,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "action_overlay_partition_contract": check_action_overlay_partition,
     "runtime_symbol_surface": check_runtime_symbol_surface,
     "support_stage_boundaries": check_support_stage_boundaries,
+    "checkpoint_finalization": check_checkpoint_finalization,
     "checkpoint_integrity": check_checkpoint_integrity,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,
     "short_runtime_probe": check_short_runtime_probe,

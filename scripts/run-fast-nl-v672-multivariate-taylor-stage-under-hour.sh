@@ -17,6 +17,9 @@ grep -Fxq "expected_marker=CANDLE_FLYSPECK_V671_TAYLOR_INTERVAL_CHECKPOINT_READY
   "$base/checkpoint.receipt"
 sha256sum -c "$base/checkpoint.sha256"
 
+finalization=$($scripts/audit-fast-nl-v671-checkpoint-finalization.py)
+grep -Fxq 'status=0' <<<"$finalization"
+
 segmentation=$($scripts/audit-fast-nl-v671-support-segmentation.py)
 grep -Fxq 'status=0' <<<"$segmentation"
 

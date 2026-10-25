@@ -28,7 +28,8 @@
       },
       "checkpoint_receipts": [
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/checkpoint.receipt",
-        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v669/checkpoint.receipt"
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/postaction49-v669/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/posttaylor-interval-v671/checkpoint.receipt"
       ],
       "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
@@ -272,6 +273,36 @@
       "failure_mode": "A monolithic support probe spends its entire one-hour budget in reusable analytic-library preparation and exits before the support boundary, losing completed Taylor work.",
       "root_cause": "The support plan placed no checkpoint between the two expensive compiled Taylor theories and the remaining verifier closure; a historical Taylor checkpoint has different predecessor/source/runtime lineage and cannot safely replace the current direct state.",
       "check_id": "support_stage_boundaries",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-023",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/posttaylor-interval-v671/runtime.log",
+      "failure_mode": "A checkpoint controller can finalize and hash a checkpoint while the old worker emits a DMTCP coordinator-disconnect assertion during post-marker teardown.",
+      "root_cause": "The success receipt authenticates the finalized bytes but does not by itself distinguish a harmless post-checkpoint coordinator teardown from a corrupt or unrestorable checkpoint.",
+      "check_id": "checkpoint_finalization",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-024",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v671-fast-nl-taylor-interval-restart-probe-dev-001",
+      "failure_mode": "A checkpoint restartability probe with a three-minute budget kills the restored 34 GiB worker before it reaches the fresh-input acknowledgement.",
+      "root_cause": "The probe budget covered steady-state command execution but not the measured restore latency of the larger post-Taylor heap; an empty runtime log and coordinator connection/disconnection timestamps distinguish this from a parser or proof failure.",
+      "check_id": "checkpoint_finalization",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-025",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v671-fast-nl-taylor-interval-restart-probe-dev-002/runtime.log",
+      "failure_mode": "A restart probe consumes fresh input successfully but its controller misses the success marker and would wait to the watchdog.",
+      "root_cause": "The probe required the marker to occupy the whole output line, while Candle's interactive printer prefixes the marker with '# '; exact substring cardinality is the correct discriminator.",
+      "check_id": "checkpoint_finalization",
       "enforcement": "preflight"
     }
   ]
