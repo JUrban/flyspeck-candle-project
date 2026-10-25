@@ -58,6 +58,10 @@ VERIFIER_OVERLAY_ROOT = (
     / "flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37"
     / "overlay"
 )
+V665_RENDERER = PROJECT_REPO / "scripts/render-fast-nl-v665-inputs.py"
+V665_DATA = PROJECT_REPO / "tools/fast_nl_v665_verifier_data.ml"
+V665_COMPAT = PROJECT_REPO / "tools/fast_nl_v665_verifier_runtime_compat.ml"
+V665_SUPPORT = PROJECT_REPO / "tools/fast_nl_v665_support.ml"
 V664_BASE_STRICTBUILD = (
     PROJECT
     / "worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df"
@@ -67,8 +71,12 @@ V664_BASE_STRICTBUILD = (
 # These four entries replace the ambient action-296 assumptions documented by
 # the matan and verifier support sources.  Entry order is part of the contract.
 PREREQUISITE_ENTRY_REQUESTS = (
+    # Runtime-only names used throughout the canonical verifier closure.
+    str(V665_COMPAT),
+    # This must execute before arith_num.hl selects its numeral base.
+    "arith_options.hl",
     # One declared umbrella for the legacy verifier, including matan_eval.
-    str(VERIFIER_FORMAL_ROOT / "verifier/m_verifier_main.hl"),
+    "verifier/m_verifier_main.hl",
     # Foundational Candle modules that the matan bridge historically inherited
     # from the action-296 analytic checkpoint.
     "candle/cv_compute_polynomial_expr_dim_jet_semantics.ml",
@@ -92,7 +100,6 @@ PREREQUISITE_ENTRY_REQUESTS = (
 # source file loaded through HOL Light's authenticated loader.  Keep this list
 # narrow: adding an item requires a runtime probe or direct source evidence.
 RUNTIME_MODULES = {
-    "Big_int",
     "Kernel",
     "Printf",
 }
@@ -307,6 +314,27 @@ def parse_verifier_closure() -> tuple[
     return identities, normalized, errors
 
 
+def authenticate_v665_generated_inputs() -> list[str]:
+    """Require the committed ML fragments to equal their canonical render."""
+
+    try:
+        completed = subprocess.run(
+            [str(V665_RENDERER), "check"],
+            cwd=PROJECT_REPO,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return [f"v665_generated_input_check:{error}"]
+    if completed.returncode != 0:
+        summary = " | ".join(completed.stdout.splitlines()[-4:])
+        return [f"v665_generated_input_check:{summary}"]
+    return []
+
+
 def resolve_logged_path(text: str) -> pathlib.Path | None:
     candidate = pathlib.Path(text)
     if candidate.is_absolute() and candidate.is_file():
@@ -358,6 +386,10 @@ def main() -> int:
         ACTION_LOG,
         NORMALIZATION_OVERLAY,
         VERIFIER_CLOSURE,
+        V665_RENDERER,
+        V665_DATA,
+        V665_COMPAT,
+        V665_SUPPORT,
     ):
         if not required.is_file():
             print(f"missing_input={required}", file=sys.stderr)
@@ -368,6 +400,7 @@ def main() -> int:
     verifier_identities, verifier_normalized, verifier_errors = (
         parse_verifier_closure()
     )
+    verifier_errors.extend(authenticate_v665_generated_inputs())
     normalization_conflicts = sorted(
         set(normalized_sources) & set(verifier_normalized), key=str
     )
@@ -395,7 +428,12 @@ def main() -> int:
         providers, _, _, _ = get_facts(path)
         starting_modules.update(providers)
 
-    entry_requests = PREREQUISITE_ENTRY_REQUESTS + LITERAL.ENTRY_REQUESTS
+    _, _, support_requests, support_dynamic = source_facts(V665_SUPPORT)
+    if tuple(support_requests) != PREREQUISITE_ENTRY_REQUESTS + LITERAL.ENTRY_REQUESTS:
+        verifier_errors.append("v665_support_entry_order")
+    if support_dynamic:
+        verifier_errors.append("v665_support_dynamic_request")
+    entry_requests = tuple(support_requests)
     entry_paths: list[pathlib.Path] = []
     unresolved_requests: list[tuple[pathlib.Path | None, str]] = []
     literal_edges: list[tuple[pathlib.Path, pathlib.Path]] = []
@@ -445,6 +483,13 @@ def main() -> int:
         if path in identities and identities[path] != expected
     )
     identities.update(verifier_identities)
+    for path in (
+        LITERAL.CANDLE_CURRENT / "candle/cv_compute_exact_interval_matan_series.ml",
+        LITERAL.CANDLE_CURRENT
+        / "candle/cv_compute_exact_interval_matan_series_program.ml",
+        V665_COMPAT,
+    ):
+        identities[path.resolve()] = md5(path)
     required_paths = set(execution_order)
     missing_identities = sorted(
         (path for path in required_paths if path not in identities), key=str

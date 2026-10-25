@@ -83,6 +83,15 @@ class FastNlSupportClosureTests(unittest.TestCase):
             ),
         )
 
+    def test_v665_generated_inputs_and_support_order_are_exact(self) -> None:
+        self.assertEqual(MODULE.authenticate_v665_generated_inputs(), [])
+        _, _, requests, dynamic = MODULE.source_facts(MODULE.V665_SUPPORT)
+        self.assertEqual(dynamic, [])
+        self.assertEqual(
+            tuple(requests),
+            MODULE.PREREQUISITE_ENTRY_REQUESTS + MODULE.LITERAL.ENTRY_REQUESTS,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

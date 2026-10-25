@@ -1,0 +1,108 @@
+(* Generated DEVELOPMENT / NON-RELEASE data for the exact canonical
+   nonlinear-verifier closure used by the first fast NL theorem.
+   Regenerate/check with scripts/render-fast-nl-v665-inputs.py. *)
+let candle_fast_nl_v665_verifier_source_identities = [
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/arith_cache.hl",("arith_cache.hl","8c3b8e939f223e79a2baec71b8da943b"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/arith_float.hl",("arith_float.hl","5de3a2497f80e8811645b94da62d4ea2"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/arith_nat.hl",("arith_nat.hl","30cde9ae3a30b4c9b964eab4b168faf6"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/arith_num.hl",("arith_num.hl","ef7d86273cbd40c834ed4ba562406c97"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/eval_interval.hl",("eval_interval.hl","562454290b40a971d9c706901c952cf6"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/float_pow.hl",("float_pow.hl","ea953d32c1a8335e89636d4cb65a944c"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/float_theory.hl",("float_theory.hl","9f97402aa4c6d369ecc2b74006606211"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/interval_arith.hl",("interval_arith.hl","0af2e87c2a753e4736e6bf5078a8dca4"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/more_float.hl",("more_float.hl","31b699146f05c333796249ed3f95a97e"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/num_exp_theory.hl",("num_exp_theory.hl","ccc3712563d364dc36a5d30eb0c57d32"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith_options.hl",("arith_options.hl","01365092b04381e8b7256bc41350d526"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_asn_acs.hl",("informal_asn_acs.hl","4f846a192881a08d24da3561be6f58c0"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_atn.hl",("informal_atn.hl","4e3e6baff2ddd29954e70927f38365a8"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_eval_interval.hl",("informal_eval_interval.hl","5030813c40020894bc7ff6cdc03fcceb"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_exp.hl",("informal_exp.hl","e729654910a5b2489f48bb34fc979f67"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_float.hl",("informal_float.hl","6fce549756c2c8451a0fff516c21bbb5"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_interval.hl",("informal_interval.hl","4ff06eeac6a12a71db55107cf66af6cd"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_log.hl",("informal_log.hl","f47ea374852791408d22e693e7ec95ef"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_matan.hl",("informal_matan.hl","1380503563aebf91bc4d0fde56180ccd"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_nat.hl",("informal_nat.hl","cca66252089add826641630ee7b67c9e"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_poly.hl",("informal_poly.hl","91a7e7c5110bd9bdd5ad5259fe6195bb"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_search.hl",("informal_search.hl","33c739220ec8d6e8c32e457a2d758821"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_sin_cos.hl",("informal_sin_cos.hl","aeaf4fcb6af269c9c6b6fb3bf0d61330"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_taylor.hl",("informal_taylor.hl","85092dea9ab06f4863d9f6e2183263c8"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_verifier.hl",("informal_verifier.hl","13819dcf3d2d99191eaad1146ade9c6d"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/lib/ssrbool.hl",("ssrbool.hl","aa04bba1f6f142aed2a049b4511106d5"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/lib/ssreflect/sections.hl",("sections.hl","4b207a2e7a8b7ab7f86f9cb9ffd80d88"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/lib/ssreflect/ssreflect.hl",("ssreflect.hl","ee9aa6011f0277ca2a4ed190515e99c9"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/lib/ssrfun.hl",("ssrfun.hl","031939698158f77c7913d12396445f35"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/lib/ssrnat.hl",("ssrnat.hl","16500e2d805ccbe7da700138ce14b87e"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/list/list_conversions.hl",("list_conversions.hl","8f95b1f802e3f9ff1b2f487ed0e7403d"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/list/list_float.hl",("list_float.hl","85f89814908a25ca2b5230e2742ccead"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/list/more_list.hl",("more_list.hl","80c975aac71647be75fb69f8859a4912"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/misc/misc_functions.hl",("misc_functions.hl","a84948477d7b296691135c2c6d3b9caa"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/misc/misc_vars.hl",("misc_vars.hl","74887cce49991876672087f6e9812852"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/misc/report.hl",("report.hl","19cf18cda718471efb4d659bf8aff07c"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/taylor/m_taylor.hl",("m_taylor.hl","1223a228b22440c35fb277a1ad6617e7"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/taylor/m_taylor_arith.hl",("m_taylor_arith.hl","c8d56b91bf9c53e0b7a6491b670d2790"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/taylor/m_taylor_arith2.hl",("m_taylor_arith2.hl","88ab14daf046924316e1a37d2648e390"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/taylor/theory/multivariate_taylor-compiled.hl",("multivariate_taylor-compiled.hl","802f2a19f6ad9680040e89e4ae349c78"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/taylor/theory/taylor_interval-compiled.hl",("taylor_interval-compiled.hl","461022ad60f0beaa660e6c8d1df59284"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/tests/log.hl",("log.hl","ad19396e96a66d1ccae3058ea3ed69dd"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/asn_acs_eval.hl",("asn_acs_eval.hl","c168804b55d57f27dd96003fc749c226"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/atn.hl",("atn.hl","b995645fdbedae1c0e4ffba639c96331"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/atn_eval.hl",("atn_eval.hl","4e431a806b7611feb64b7d3290722b19"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/cos_bounds_eval.hl",("cos_bounds_eval.hl","b7947ea0ce64e9a4345f6ab0c08633be"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/cos_eval.hl",("cos_eval.hl","c95dbfe9687190f1a1fd892d460c618a"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/exp_eval.hl",("exp_eval.hl","05cef5a518d65f01713a413fa0e3dfb1"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/exp_log.hl",("exp_log.hl","222dbd1cb26ae1597c6b384cce06e7a0"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/log_eval.hl",("log_eval.hl","ea9b0720afc6f7d2131cccd84f2b2289"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/matan.hl",("matan.hl","900f6f8aeaab2eb44e20fb1f43674890"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/matan_eval.hl",("matan_eval.hl","e45cfe82cb14309ec739dc9d1b40f741"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/poly.hl",("poly.hl","c8999fd65e0098fe7db7cb94e0533a98"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/poly_eval.hl",("poly_eval.hl","30ddca5741d63ee14af3a6d913cc856f"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/series.hl",("series.hl","a586ddb93975e3c1fcb10250f062dd6f"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/sin_cos.hl",("sin_cos.hl","fb5dca7cd42a187975759a45f7910102"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/sin_eval.hl",("sin_eval.hl","dbb9c84eb0deebc6e06efa1539f0fed8"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier/certificate.hl",("certificate.hl","414e218182e84542981db83ab45321e7"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier/m_verifier.hl",("m_verifier.hl","3aea162e079d904a73f18c5962258444"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier/m_verifier_build.hl",("m_verifier_build.hl","a11f4eb2d92ef63f30e685539822895c"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier/m_verifier_main.hl",("m_verifier_main.hl","ca4991873b0c34b2da24a7080c5f521b"));
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier_options.hl",("verifier_options.hl","18978e346e065b1c464d288990ca7cea"));
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_exact_interval_matan_series.ml",("cv_compute_exact_interval_matan_series.ml","7461529a70e5f006cf0ecc8c45ba4297"));
+  ("/project/worktrees/candle-direct-fast-nl-runtime-v1/candle/cv_compute_exact_interval_matan_series_program.ml",("cv_compute_exact_interval_matan_series_program.ml","8baa6fa6c5cb749377f07339d36f3705"));
+  ("/project/flyspeck-candle-project/tools/fast_nl_v665_verifier_runtime_compat.ml",("fast_nl_v665_verifier_runtime_compat.ml","4eb96d11e6a9421b48c9ec7cb7eb5747"));
+];;
+
+if List.length candle_fast_nl_v665_verifier_source_identities <> 65 then
+  failwith "v665 verifier source identity count mismatch";;
+
+let candle_fast_nl_v665_verifier_normalized_sources = [
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/arith_cache.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/arith/arith_cache.hl","4435dbc49c013c948975b7132906172c");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/arith_float.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/arith/arith_float.hl","1bc747f2f7fd60415d6f576be590e4e1");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/arith_num.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/arith/arith_num.hl","d23f7c80b428cbb942fc11f81e083282");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/float_pow.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/arith/float_pow.hl","e2df5f14cb288e663ca0b9b943fc1a99");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/arith/more_float.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/arith/more_float.hl","fd3fcc05bcd37e024f5695726ca4480d");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_atn.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/informal/informal_atn.hl","5232afa2f08dda0815fd14726a864524");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_exp.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/informal/informal_exp.hl","40887d6de477f714027954843694fa32");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_float.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/informal/informal_float.hl","33f1711c245a4a186a4980d948b721ea");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_interval.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/informal/informal_interval.hl","6ec17958658fdeb64ef94011020010a8");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_nat.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/informal/informal_nat.hl","a1487ed87b7c00fff780f92ad4841c58");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_search.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/informal/informal_search.hl","9a652fd4671e82587f12c88c2301627d");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_sin_cos.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/informal/informal_sin_cos.hl","5a1b49c567648090223d0a6b4e117b96");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/informal/informal_verifier.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/informal/informal_verifier.hl","5e167d94ebe2d6344049cfd2dad60c7c");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/lib/ssreflect/ssreflect.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/lib/ssreflect/ssreflect.hl","8335d1120c7196c5ba9694a1b71e2a9e");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/misc/misc_functions.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/misc/misc_functions.hl","c55a512aed20092ef945ae23aae90536");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/misc/report.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/misc/report.hl","859cca73e2c2ff3257c7d57207589b69");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/taylor/m_taylor.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/taylor/m_taylor.hl","22a1d7905301201470d1de278fff63c9");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/taylor/m_taylor_arith.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/taylor/m_taylor_arith.hl","e99d0952e9d694d6c556a300f43f00f9");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/taylor/m_taylor_arith2.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/taylor/m_taylor_arith2.hl","95377d993a9bfa7fd89d8fc17bb54f4e");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/tests/log.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/tests/log.hl","4b03a498fb3cbfeb85d9fcceb7b98d91");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/atn_eval.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/trig/atn_eval.hl","d14a048e24d8f5f3e3348389cd56e119");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/cos_bounds_eval.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/trig/cos_bounds_eval.hl","1eddd1acfeb6762267b34e8b8f3eca5a");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/cos_eval.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/trig/cos_eval.hl","2665899c11a82c73411b64e558d34051");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/exp_eval.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/trig/exp_eval.hl","a142df894fb2e165cca23657f56e8925");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/trig/poly_eval.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/trig/poly_eval.hl","06d5e88506012f84dedb8896d78c4a4e");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier/certificate.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/verifier/certificate.hl","9bd94d5b6be594cf9ca50053197e8ec8");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier/m_verifier.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/verifier/m_verifier.hl","6ea540e78485b46f46b1d9280fdb9651");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier/m_verifier_build.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/verifier/m_verifier_build.hl","fc461c6980c6fff2799d5ff4824666fb");
+  ("/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6/formal_ineqs/verifier/m_verifier_main.hl","/project/flyspeck-candle-runs/cv-first-leaf-predecessor-checkpoint-v37/overlay/flyspeck/formal_ineqs/verifier/m_verifier_main.hl","2602e481db551d5239cda650010bdf96");
+];;
+
+if List.length candle_fast_nl_v665_verifier_normalized_sources <> 29 then
+  failwith "v665 verifier normalization count mismatch";;
