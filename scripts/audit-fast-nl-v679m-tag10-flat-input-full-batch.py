@@ -38,6 +38,7 @@ SURFACE = pathlib.Path(
 )
 BASE_SHA256 = "07c921204ebe48ad01ffce1c8484785af27b767f4df74500fff058eedfb3946d"
 FAILED_LOG_SHA256 = "95ef45b338b808133516a70440b210f835a19a980fc878677d6e308ba159fb7d"
+TIMED_OUT_LOG_SHA256 = "45d156e6060ba585444ca9e8a4a34615675749f13000598330133b008ef2ae63"
 SURFACE_LOG_SHA256 = "1e29b9bd1d7ccddfae55545aa511988cc16960179015448210897865b67cc773"
 SURFACE_MARKER = (
     "CANDLE_FLYSPECK_V679M_KERNEL_COMPUTE_SURFACE_OK "
@@ -87,6 +88,8 @@ def preflight() -> int:
         SURFACE / "PROBE-PASSED",
         SURFACE / "input-probe.receipt",
         SURFACE / "runtime.log",
+        OUTPUT / "CHECKPOINT-FAILED",
+        OUTPUT / "runtime.log",
     )
     if any(not path.is_file() or path.is_symlink() for path in required):
         return fail("missing_or_symlinked_preflight_authority")
@@ -135,6 +138,24 @@ def preflight() -> int:
     ):
         return fail("prepared_input_predecessor_contract")
 
+    timed_out_log_path = OUTPUT / "runtime.log"
+    timed_out_log = timed_out_log_path.read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if (
+        sha256(timed_out_log_path) != TIMED_OUT_LOG_SHA256
+        or timed_out_log.count("v679m-tag10-flat-input-full-compute-begin") != 1
+        or "v679m-tag10-flat-input-full-compute-end" in timed_out_log
+        or MARKER in timed_out_log
+        or any(
+            text in timed_out_log
+            for text in ("EXCEPTION:", "ERROR:", "Parsing failed")
+        )
+        or (OUTPUT / "CHECKPOINT-FAILED").read_text(encoding="utf-8").strip()
+        != "restored runtime exited before the requested boundary"
+    ):
+        return fail("full_batch_timeout_evidence_contract")
+
     runner = RUNNER.read_text(encoding="utf-8")
     driver = DRIVER.read_text(encoding="utf-8")
     surface_driver = SURFACE_DRIVER.read_text(encoding="utf-8")
@@ -157,13 +178,7 @@ def preflight() -> int:
     ):
         return fail("full_batch_source_contract")
 
-    print("status=0")
-    print("cells=4173")
-    print("expected_result=1")
-    print("numerical_compute_count=1")
-    print("timeout_seconds=1200")
-    print(f"predecessor_checkpoint_sha256={BASE_SHA256}")
-    return 0
+    return fail("full_batch_execution_gap_unresolved")
 
 
 def postflight() -> int:

@@ -730,6 +730,16 @@
       "root_cause": "The batch inherited an untested namespace assumption from the older all-in-one v679d controller.  The required trusted operation is only Kernel.compute plus an assumption check and does not require loading the larger proof adapter module.",
       "check_id": "tag10_flat_full_batch_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-064",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "post-tag10-flat-full-batch-v679m-v2/runtime.log",
+      "failure_mode": "The exact authenticated 4,173-cell tag-10 Kernel.compute call starts cleanly but does not return a theorem within the 1,200-second process cap.",
+      "root_cause": "The current in-Candle evaluator path remains orders of magnitude slower than the 7.35-second standalone compiled checker.  Raising the timeout would only conceal the unresolved production execution gap.",
+      "check_id": "tag10_flat_full_batch_contract",
+      "enforcement": "preflight"
     }
   ]
 }
