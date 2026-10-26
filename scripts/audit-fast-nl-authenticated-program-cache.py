@@ -20,10 +20,20 @@ PROGRAM_SOURCE = pathlib.Path(
     "candle/prover/compute/"
     "compute_registeredCase10173Tag10WitnessedFastProgScript.sml"
 )
+CHECKER_SOURCE = pathlib.Path(
+    "/project/worktrees/cakeml-fast-nl-data-dispatch-v1/"
+    "candle/prover/compute/"
+    "compute_registeredCase10173ExternalWitnessedCheckerScript.sml"
+)
+IDENTITY_SOURCE = pathlib.Path(
+    "/project/worktrees/cakeml-fast-nl-data-dispatch-v1/"
+    "candle/prover/compute/"
+    "compute_registeredCase10173ExternalCheckerIdentityScript.sml"
+)
 RUN = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v692-fast-nl-payload4-focused-dev-001/"
-    "external-authenticated-checker-v1"
+    "external-authenticated-checker-v2"
 )
 LOAD_LOG = pathlib.Path(
     "/project/flyspeck-candle-runs/"
@@ -33,7 +43,12 @@ LOAD_LOG = pathlib.Path(
 BUILD_LOG = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v692-fast-nl-payload4-focused-dev-001/"
-    "external-authenticated-prog-build-v5.log"
+    "external-authenticated-prog-build-v6.log"
+)
+IDENTITY_LOG = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v692-fast-nl-payload4-focused-dev-001/"
+    "external-checker-identity-build-v1.log"
 )
 
 
@@ -104,9 +119,45 @@ def main() -> int:
     if any(token in program_text for token in forbidden_program_tokens):
         errors.append("program_embeds_full_case_payload")
 
+    checker_text = (
+        CHECKER_SOURCE.read_text(encoding="utf-8")
+        if CHECKER_SOURCE.is_file()
+        else ""
+    )
+    identity_text = (
+        IDENTITY_SOURCE.read_text(encoding="utf-8")
+        if IDENTITY_SOURCE.is_file()
+        else ""
+    )
+    identity_requirements = (
+        (
+            checker_text,
+            "Definition registered_case10173_external_witnessed_checker_def",
+        ),
+        (
+            program_text,
+            "compute_registeredCase10173ExternalWitnessedCheckerTheory."
+            "registered_case10173_external_witnessed_checker_def",
+        ),
+        (
+            identity_text,
+            "Theorem registered_case10173_external_witnessed_checker_eq_tag10",
+        ),
+        (
+            identity_text,
+            "registered_case10173_tag10_witnessed_checker",
+        ),
+    )
+    if any(token not in text for text, token in identity_requirements):
+        errors.append("external_checker_identity_contract_missing")
+
     evidence_expectations = {
         LOAD_LOG: ("Exit status: 0",),
         BUILD_LOG: ("Exit status: 0",),
+        IDENTITY_LOG: (
+            'Saved theorem _______ "registered_case10173_external_witnessed_checker_eq_tag10"',
+            "Exit status: 0",
+        ),
         RUN / "run-exact.stdout": ("accepted",),
         RUN / "run-exact-repeat.stdout": ("accepted",),
         RUN / "mutation-certificate.stdout": ("rejected",),
@@ -123,6 +174,7 @@ def main() -> int:
     print(f"theory_object_count={len(theory_objects)}")
     print(f"missing_companion_count={len(missing_companions)}")
     print(f"program_dependency_count={len(ordered_program_tokens)}")
+    print(f"identity_requirement_count={len(identity_requirements)}")
     print(f"evidence_file_count={len(evidence_expectations)}")
     print(f"error_count={len(errors)}")
     for path in missing_companions[:20]:

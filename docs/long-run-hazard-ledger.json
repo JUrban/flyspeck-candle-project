@@ -870,6 +870,17 @@
       "check_id": "authenticated_program_cache",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-077",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "2026-10-26 review of the first external authenticated checker executable",
+      "failure_mode": "A compiled development checker accepts the genuine certificate but its locally duplicated wrapper is not explicitly identified with the strengthened tag-10 checker whose evaluator refinement is proved, allowing a later edit to create an unnoticed proof/executable drift.",
+      "root_cause": "The first program declared the external unpacking wrapper inside the translation script instead of importing one shared pure definition, and the evidence relied on manual definitional comparison. The durable contract is one shared checker definition, a checked equality theorem to the tag-10 witnessed checker, a successful theorem-build receipt, and repeat acceptance/rejection tests for the executable built from that shared definition.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }

@@ -105,6 +105,11 @@ class LongRunHazardGateTests(unittest.TestCase):
         self.assertEqual(
             authenticated_cache["check_id"], "authenticated_program_cache"
         )
+        checker_identity = next(item for item in hazards if item["id"] == "LR-077")
+        self.assertEqual(checker_identity["profiles"], ["kernel-build"])
+        self.assertEqual(
+            checker_identity["check_id"], "authenticated_program_cache"
+        )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
