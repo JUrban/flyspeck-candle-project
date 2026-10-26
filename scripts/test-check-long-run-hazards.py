@@ -60,6 +60,11 @@ class LongRunHazardGateTests(unittest.TestCase):
         self.assertEqual(
             bounded_retry["check_id"], "tag10_additive_bridge_contract"
         )
+        parent_cache = next(item for item in hazards if item["id"] == "LR-068")
+        self.assertEqual(parent_cache["profiles"], ["kernel-build"])
+        self.assertEqual(
+            parent_cache["check_id"], "tag10_additive_bridge_contract"
+        )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
