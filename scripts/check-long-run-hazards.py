@@ -96,7 +96,7 @@ MATAN_CHECKPOINT_FINALIZATION = (
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
 KERNEL_PROG_CONTROLLER = (
-    PROJECT / "scripts/build-fast-nl-tag10-kernel-prog-v2.sh"
+    PROJECT / "scripts/build-fast-nl-tag10-kernel-prog-v3.sh"
 )
 LONG_RUN_ADMISSION = PROJECT / "scripts/require-long-run-hazard-preflight.sh"
 LONG_RUN_EXECUTORS = (
@@ -322,7 +322,7 @@ def check_tag10_flat_full_batch_contract(_: dict, __: pathlib.Path) -> CheckResu
 def check_tag10_additive_bridge_contract(
     _: dict, controller: pathlib.Path
 ) -> CheckResult:
-    if controller.name == "build-fast-nl-tag10-kernel-prog-v2.sh":
+    if controller.name == "build-fast-nl-tag10-kernel-prog-v3.sh":
         return run_checked(
             [
                 str(TAG10_ADDITIVE_BRIDGE_CONTRACT),

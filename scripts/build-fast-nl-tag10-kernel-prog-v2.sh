@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+printf '%s\n' \
+  'retired: v681 exposed the parent-cache path defect; use the v3 controller' >&2
+exit 2
+
 project=/project/flyspeck-candle-project
 worktree=/project/worktrees/cakeml-direct-fast-nl-integration-v1
 prover=$worktree/candle/prover

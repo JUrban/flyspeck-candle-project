@@ -221,7 +221,7 @@ def main() -> int:
         controller = args.admission_controller.resolve()
         expected_controller = pathlib.Path(
             "/project/flyspeck-candle-project/scripts/"
-            "build-fast-nl-tag10-kernel-prog-v2.sh"
+            "build-fast-nl-tag10-kernel-prog-v3.sh"
         )
         if controller != expected_controller or not controller.is_file():
             return fail("kernel_controller_identity")
@@ -234,12 +234,15 @@ def main() -> int:
             "--rebuild=cachekey -j1 candle_kernelProgTheory.uo",
             "require-long-run-hazard-preflight.sh",
             "[[ ! -e $run ]]",
+            "loader_receipt_sha256=05ddc47ff130bf2cf695c7b36a148f13e2eaa1d8af2afd0e60a0bc21275c1692",
+            "relocation_receipt_sha256=7e14d409f60c555c900e684e0bfd24845bb372d8798c4c2882c596d8df276196",
+            "audit-fast-nl-tag10-kernel-loader-result.py",
         ):
             if controller_text.count(marker) != 1:
                 return fail(f"kernel_controller_contract:{marker}")
         run = pathlib.Path(
             "/project/flyspeck-candle-runs/"
-            "v681-fast-nl-tag10-kernel-prog-dev-001"
+            "v691-fast-nl-tag10-kernel-prog-dev-001"
         )
         if run.exists():
             return fail("kernel_run_target_not_fresh")
@@ -303,6 +306,7 @@ def main() -> int:
         print("kernel_translation_status=bounded_timeout_at_environment_419")
         print("remaining_translation_count=134")
         print("retry_maximum_seconds=3000")
+        print("loader_probe_required=true")
     print("declared_axiom_growth=0")
     return 0
 
