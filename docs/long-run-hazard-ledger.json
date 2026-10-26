@@ -826,6 +826,17 @@
       "check_id": "tag10_parent_cache_loader_closure",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-073",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v688-fast-nl-tag10-kernel-loader-dev-001/loader.log",
+      "failure_mode": "The first non-mutating loader harness exits in 2.6 seconds before loading any dependency because its synthetic root supplies a .uo dependency manifest but no companion .ui interface manifest.",
+      "root_cause": "Poly's object loader requires both members of the Holmake manifest pair even when a synthetic root exports no interface names; ordinary theory-script .ui files are present but empty.  A corrected probe must use a fresh run directory, preserve this failed receipt, create the required empty .ui, and continue to require a unique end marker plus an unchanged object-tree snapshot.",
+      "check_id": "tag10_parent_cache_loader_closure",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }

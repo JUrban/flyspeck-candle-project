@@ -19,7 +19,7 @@ PROJECT = pathlib.Path("/project/flyspeck-candle-project")
 AUDIT_PATH = PROJECT / "scripts/audit-fast-nl-tag10-kernel-loader-closure.py"
 RUN = pathlib.Path(
     "/project/flyspeck-candle-runs/"
-    "v688-fast-nl-tag10-kernel-loader-dev-001"
+    "v689-fast-nl-tag10-kernel-loader-dev-001"
 )
 CLOSURE_RECEIPT = RUN / "CLOSURE-AUDIT.receipt"
 RELOCATION_RECEIPT = pathlib.Path(
@@ -109,10 +109,14 @@ def main() -> int:
     receipt = RUN / "LOADER-PROBE.receipt"
     log = RUN / "loader.log"
     root_base = RUN / "kernel-dependency-loader"
+    interface = root_base.with_suffix(".ui")
     manifest = root_base.with_suffix(".uo")
     marker_source = RUN / "kernel-dependency-loader-marker.sml"
     try:
-        if any(path.exists() for path in (receipt, log, manifest, marker_source)):
+        if any(
+            path.exists()
+            for path in (receipt, log, interface, manifest, marker_source)
+        ):
             raise ProbeFailure("probe_output_exists")
         require_receipt(
             CLOSURE_RECEIPT,
@@ -149,6 +153,10 @@ def main() -> int:
         marker_source.write_text(
             f'val _ = print "{MARKER}\\n";\n', encoding="utf-8"
         )
+        # Poly's object loader requires the interface manifest even when the
+        # synthetic root exports no interface names.  Holmake emits the same
+        # empty .ui file for ordinary theory scripts.
+        interface.write_text("", encoding="utf-8")
         manifest.write_text(
             "\n".join(str(path) for path in roots)
             + "\n"
@@ -205,6 +213,7 @@ def main() -> int:
                     f"loader_elapsed_seconds={elapsed:.3f}",
                     f"loader_peak_rss_kib={peak_rss_kib}",
                     f"loader_timeout_seconds={TIMEOUT_SECONDS}",
+                    f"loader_interface_sha256={sha256(interface)}",
                     f"loader_manifest_sha256={sha256(manifest)}",
                     f"loader_log_sha256={sha256(log)}",
                     f"closure_receipt_sha256={sha256(CLOSURE_RECEIPT)}",

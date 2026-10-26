@@ -85,6 +85,11 @@ class LongRunHazardGateTests(unittest.TestCase):
         self.assertEqual(
             residual_scratch["check_id"], "tag10_parent_cache_loader_closure"
         )
+        missing_interface = next(item for item in hazards if item["id"] == "LR-073")
+        self.assertEqual(missing_interface["profiles"], ["kernel-build"])
+        self.assertEqual(
+            missing_interface["check_id"], "tag10_parent_cache_loader_closure"
+        )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
