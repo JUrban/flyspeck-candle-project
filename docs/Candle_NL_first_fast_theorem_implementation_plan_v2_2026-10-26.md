@@ -230,6 +230,13 @@ original-theorem handoff is the general rational-enclosure/source-semantics
 lemma.  After that, the next runtime experiment is one direct genuine payload
 through this plan-driven wrapper, followed by the second family/schema test.
 
+The rational-enclosure half is complete at CakeML commit `e6ce0e051`.  A
+general theorem now proves that every successfully compiled positive, zero,
+or negative source rational is enclosed by its valid stored scale-2^40
+interval.  The remaining trusted proof boundary is the source-program
+semantic induction and its composition with the universal analytic checker;
+the runtime experiment remains gated on that result.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

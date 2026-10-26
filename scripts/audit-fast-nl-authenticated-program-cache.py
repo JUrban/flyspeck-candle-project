@@ -89,6 +89,9 @@ GENERIC_PACKED_BUILD_LOGS = (
 GENERIC_PREPARED_SOURCE = (
     COMPUTE / "compute_boundedAnalyticPreparedPlanScript.sml"
 )
+GENERIC_PREPARED_SOUND_SOURCE = (
+    COMPUTE / "compute_boundedAnalyticPreparedPlanSoundScript.sml"
+)
 GENERIC_PREPARED_TRANSLATION_SOURCE = (
     COMPUTE / "compute_boundedAnalyticPreparedPlanProgScript.sml"
 )
@@ -101,6 +104,9 @@ GENERIC_PLAN_BUILD_LOGS = (
     GENERIC_PACKED_RUN / "generic-prepared-plan-prog-v3.log",
     GENERIC_PACKED_RUN / "generic-plan-cv-logic-v2.log",
     GENERIC_PACKED_RUN / "generic-plan-cv-prog-v1.log",
+)
+GENERIC_PREPARED_SOUND_BUILD_LOG = (
+    GENERIC_PACKED_RUN / "generic-prepared-plan-sound-v6.log"
 )
 MULTIFAMILY_RUN = pathlib.Path(
     "/project/flyspeck-candle-runs/"
@@ -346,6 +352,13 @@ def main() -> int:
             "Definition bounded_analytic_recognized_specialization_def",
             "Theorem bounded_analytic_compile_program_case16594",
         ),
+        GENERIC_PREPARED_SOUND_SOURCE: (
+            "Definition bounded_analytic_rational_interval_covers_def",
+            "Theorem bounded_analytic_nat_floor_ceil_bounds",
+            "Theorem bounded_analytic_nonnegative_interval64_values",
+            "Theorem bounded_analytic_negative_interval64_values",
+            "Theorem bounded_analytic_rational_constant64_covers",
+        ),
         GENERIC_PREPARED_TRANSLATION_SOURCE: (
             'translation_extends "compute_boundedPackedAnalyticCheckProg"',
             "bounded_analytic_rational_constant64_def",
@@ -436,6 +449,19 @@ def main() -> int:
         if "has a precondition" in text:
             errors.append(f"generic_plan_translation_has_precondition:{path.name}")
 
+    generic_sound_text = (
+        GENERIC_PREPARED_SOUND_BUILD_LOG.read_text(encoding="utf-8")
+        if GENERIC_PREPARED_SOUND_BUILD_LOG.is_file()
+        else ""
+    )
+    generic_sound_markers = (
+        'Saved theorem _______ "bounded_analytic_rational_constant64_covers"',
+        "Theory \"compute_boundedAnalyticPreparedPlanSound\" took",
+        "Exit status: 0",
+    )
+    if any(marker not in generic_sound_text for marker in generic_sound_markers):
+        errors.append("generic_prepared_sound_build_failed")
+
     multifamily_results = {
         "run-case10173": "accepted",
         "repeat-case10173": "accepted",
@@ -479,6 +505,8 @@ def main() -> int:
             "c5cfcdd2478718987b7ac157058a2e4d0d72786f95e431acbda7adeba2a00aa6",
         GENERIC_PREPARED_SOURCE:
             "af8d8a1f9d7cfe3be77b239c953bbde5d5a070941730479fc39ea15303b7e23e",
+        GENERIC_PREPARED_SOUND_SOURCE:
+            "434bb8ac409f764e1d1a9c1d403e7cecfa193df2976b2602cddbf7cfcdca441d",
         GENERIC_PREPARED_TRANSLATION_SOURCE:
             "bf39d62b591b57cb1e18dd47e07e85bb4415a42515238cc10167caba3fbf044f",
         GENERIC_PLAN_SOURCE:
