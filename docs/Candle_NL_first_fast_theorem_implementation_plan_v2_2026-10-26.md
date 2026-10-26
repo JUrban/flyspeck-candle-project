@@ -237,6 +237,43 @@ interval.  The remaining trusted proof boundary is the source-program
 semantic induction and its composition with the universal analytic checker;
 the runtime experiment remains gated on that result.
 
+The structural compiler induction is complete at CakeML commit `e5d168e7d`.
+It proves that successful compilation preserves constants through the general
+rational-enclosure theorem, preserves variable indices and ordinary operator
+constructors, and admits a specialized delta instruction only through the
+existing exact source-recognition predicate.  This is deliberately a
+**structural** relation.  It is not the still-missing theorem that execution
+of every prepared instruction encloses the value and derivatives of the
+source analytic expression.
+
+CakeML commit `8f04e4baa` fixes the resulting plan-driven executable interface.
+The direct compiled program accepts the unchanged genuine 875-cell case-16594
+certificate in 9.18 seconds and rejects wrong version, dimension, cell count,
+source, and certificate inputs.  This closes the behavioral regression for
+the first generic-plan family.  It does not close R3: a second genuine family
+has not yet passed this same plan compiler, and executable acceptance is not
+an analytic soundness theorem.
+
+The next bounded proof gate is therefore explicit:
+
+1. state the operation-level invariant relating a prepared scale-2^40 jet to
+   the value, gradient, Hessian, and domain of its source instruction;
+2. prove the constant, variable, negation, addition, multiplication, square,
+   and polynomial cases from existing interval/jet lemmas;
+3. prove `sqrt`, inverse, and `atan`, and discharge the exact-recognized delta
+   specializations using their existing general soundness contracts;
+4. lift the invariant through program evaluation and packed-cell acceptance;
+   and
+5. compose it with the universal Taylor/checker theorem before any runtime
+   rebuild is admitted.
+
+Within the first eight focused hours, the target invariant and at least the
+ordinary polynomial/arithmetic slice must build, or the exact representation
+or theorem mismatch must be reported and this estimate revised.  Every proof
+iteration remains capped at ten minutes.  There is no responsible calendar
+estimate for the first fast theorem until that first semantic slice and one
+nonlinear operation pass.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
@@ -288,10 +325,12 @@ Estimated post-runtime effort: **2–8 hours**, excluding the R4 rebuild.
 ## What this plan does and does not claim
 
 The proof evidence justifies continuing: the exact numerical workload passes,
-the semantic refinement is proved, and the original theorem adapters exist.
-The missing work is a trustworthy, reusable runtime boundary and its one-time
-verified build.  The new plan is designed to determine cheaply whether that
-boundary generalizes before paying the build cost.
+the rational and structural compiler refinements are proved, and the original
+theorem adapters exist.  The general operation-level analytic refinement is
+**not** yet proved.  After that proof, the missing work is a trustworthy,
+reusable runtime boundary and its one-time verified build.  The new plan is
+designed to determine cheaply whether that boundary generalizes before paying
+the build cost.
 
 It does **not** yet justify an all-NL runtime estimate.  That estimate requires
 R3, the first repeated fast theorem, and a representative batch with shared

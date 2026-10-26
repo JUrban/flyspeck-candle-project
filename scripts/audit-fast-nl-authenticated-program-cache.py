@@ -92,6 +92,9 @@ GENERIC_PREPARED_SOURCE = (
 GENERIC_PREPARED_SOUND_SOURCE = (
     COMPUTE / "compute_boundedAnalyticPreparedPlanSoundScript.sml"
 )
+GENERIC_PREPARED_REFINEMENT_SOURCE = (
+    COMPUTE / "compute_boundedAnalyticPreparedPlanRefinementScript.sml"
+)
 GENERIC_PREPARED_TRANSLATION_SOURCE = (
     COMPUTE / "compute_boundedAnalyticPreparedPlanProgScript.sml"
 )
@@ -108,6 +111,20 @@ GENERIC_PLAN_BUILD_LOGS = (
 GENERIC_PREPARED_SOUND_BUILD_LOG = (
     GENERIC_PACKED_RUN / "generic-prepared-plan-sound-v6.log"
 )
+GENERIC_PREPARED_REFINEMENT_BUILD_LOG = (
+    GENERIC_PACKED_RUN / "generic-prepared-plan-refinement-v6.log"
+)
+GENERIC_EXTERNAL_PROGRAM_SOURCE = (
+    COMPUTE / "compute_boundedAnalyticPlanExternalProgScript.sml"
+)
+GENERIC_EXTERNAL_EXPORT_SOURCE = (
+    COMPUTE / "compute_boundedAnalyticPlanExternalExportScript.sml"
+)
+GENERIC_EXTERNAL_BUILD_LOGS = (
+    GENERIC_PACKED_RUN / "generic-plan-external-prog-v3.log",
+    GENERIC_PACKED_RUN / "generic-plan-external-export-v2.log",
+)
+GENERIC_EXTERNAL_RUN = GENERIC_PACKED_RUN / "generic-plan-external-v1"
 MULTIFAMILY_RUN = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v692-fast-nl-payload4-focused-dev-001/"
@@ -359,6 +376,13 @@ def main() -> int:
             "Theorem bounded_analytic_negative_interval64_values",
             "Theorem bounded_analytic_rational_constant64_covers",
         ),
+        GENERIC_PREPARED_REFINEMENT_SOURCE: (
+            "Definition bounded_analytic_poly_instruction_refines_def",
+            "Definition bounded_analytic_instruction_refines_def",
+            "Theorem bounded_analytic_compile_poly_refines",
+            "Theorem bounded_analytic_recognized_specialization_sound",
+            "Theorem bounded_analytic_compile_program_refines",
+        ),
         GENERIC_PREPARED_TRANSLATION_SOURCE: (
             'translation_extends "compute_boundedPackedAnalyticCheckProg"',
             "bounded_analytic_rational_constant64_def",
@@ -377,6 +401,18 @@ def main() -> int:
             "bounded_analytic_program_of_cv_def",
             "bounded_analytic_plan_metadata_of_cv_def",
             "bounded_analytic_source_plan_check_def",
+        ),
+        GENERIC_EXTERNAL_PROGRAM_SOURCE: (
+            'translation_extends "compute_boundedAnalyticPlanCVProg"',
+            "case cv_external_parse_one source_text of",
+            "case cv_external_parse_one metadata_text of",
+            "bounded_analytic_source_plan_check",
+            "behavioral/regression boundary only",
+        ),
+        GENERIC_EXTERNAL_EXPORT_SOURCE: (
+            "compute_boundedAnalyticPlanExternalProg",
+            "compute_bounded_analytic_plan_external.sexp",
+            "astToSexprLib.write_ast_to_file",
         ),
     }
     for path, markers in multifamily_sources.items():
@@ -462,6 +498,60 @@ def main() -> int:
     if any(marker not in generic_sound_text for marker in generic_sound_markers):
         errors.append("generic_prepared_sound_build_failed")
 
+    generic_refinement_text = (
+        GENERIC_PREPARED_REFINEMENT_BUILD_LOG.read_text(encoding="utf-8")
+        if GENERIC_PREPARED_REFINEMENT_BUILD_LOG.is_file()
+        else ""
+    )
+    generic_refinement_markers = (
+        'Saved theorem _______ "bounded_analytic_compile_program_refines"',
+        'Theory "compute_boundedAnalyticPreparedPlanRefinement" took',
+        "Exit status: 0",
+    )
+    if any(
+        marker not in generic_refinement_text
+        for marker in generic_refinement_markers
+    ):
+        errors.append("generic_prepared_refinement_build_failed")
+
+    generic_external_build_markers = {
+        GENERIC_EXTERNAL_BUILD_LOGS[0]: (
+            'Saved definition ____ "compute_bounded_analytic_plan_external_prog_def"',
+            "Exit status: 0",
+        ),
+        GENERIC_EXTERNAL_BUILD_LOGS[1]: (
+            "unverified/sexpr-bootstrap",
+            'Theory "compute_boundedAnalyticPlanExternalExport" took',
+            "Exit status: 0",
+        ),
+    }
+    for path, markers in generic_external_build_markers.items():
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if any(marker not in text for marker in markers):
+            errors.append(f"generic_external_build_failed:{path.name}")
+
+    generic_external_results = {
+        "accept-case16594": "accepted",
+        "reject-bad-version": "rejected",
+        "reject-bad-dimension": "rejected",
+        "reject-bad-count": "rejected",
+        "reject-wrong-source": "rejected",
+        "reject-wrong-certificate": "rejected",
+    }
+    for label, expected in generic_external_results.items():
+        stdout_path = GENERIC_EXTERNAL_RUN / f"{label}.stdout"
+        time_path = GENERIC_EXTERNAL_RUN / f"{label}.time"
+        stdout = (
+            stdout_path.read_text(encoding="utf-8").strip()
+            if stdout_path.is_file()
+            else ""
+        )
+        timing = (
+            time_path.read_text(encoding="utf-8") if time_path.is_file() else ""
+        )
+        if stdout != expected or "Exit status: 0" not in timing:
+            errors.append(f"generic_external_behavior_missing:{label}")
+
     multifamily_results = {
         "run-case10173": "accepted",
         "repeat-case10173": "accepted",
@@ -507,12 +597,20 @@ def main() -> int:
             "af8d8a1f9d7cfe3be77b239c953bbde5d5a070941730479fc39ea15303b7e23e",
         GENERIC_PREPARED_SOUND_SOURCE:
             "434bb8ac409f764e1d1a9c1d403e7cecfa193df2976b2602cddbf7cfcdca441d",
+        GENERIC_PREPARED_REFINEMENT_SOURCE:
+            "8fd4ae28f85034efb07239881707125e2be4f1ded459a98b0a1dd3afead96327",
         GENERIC_PREPARED_TRANSLATION_SOURCE:
             "bf39d62b591b57cb1e18dd47e07e85bb4415a42515238cc10167caba3fbf044f",
         GENERIC_PLAN_SOURCE:
             "d3285c575e10a04d2dfa8b74f65115d3ec09d4cf25199c43c819169acb1cf00b",
         GENERIC_PLAN_TRANSLATION_SOURCE:
             "996e30009c5542911edf9acc6f872cbf8383cd3c82657bfe2ce58328b60c1320",
+        GENERIC_EXTERNAL_PROGRAM_SOURCE:
+            "d4d8086e5266edb9e032cd2e649f76229c2732a71aaffac3f33d93b9431e68d3",
+        GENERIC_EXTERNAL_EXPORT_SOURCE:
+            "e670c957cd561bb172e260080ff0bdbfdbf0cfa849276bc0417dc028ad85eb5a",
+        GENERIC_EXTERNAL_RUN / "checker":
+            "76832b1809db2fb36f51e41bd92eff59c46b274813b03b693e736c63b38e48bc",
     }
     for path, expected in expected_hashes.items():
         if sha256(path) != expected:
@@ -526,6 +624,7 @@ def main() -> int:
     print(f"evidence_file_count={len(evidence_expectations)}")
     print(f"multifamily_source_count={len(multifamily_sources)}")
     print(f"multifamily_behavior_count={len(multifamily_results)}")
+    print(f"generic_external_behavior_count={len(generic_external_results)}")
     print(f"multifamily_identity_count={len(expected_hashes)}")
     print(f"error_count={len(errors)}")
     for path in missing_companions[:20]:
