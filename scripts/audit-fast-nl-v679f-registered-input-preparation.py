@@ -17,8 +17,26 @@ REPLACEMENT = pathlib.Path(
     "v679f-fast-nl-registered-input-preparation-probe-dev-001"
 )
 FAILED_LOG_SHA256 = "1d455125df2294ae768c00d064f451dc54829107bd7f2aa92674c5067f05c6aa"
+DIAGNOSTIC = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679f-fast-nl-verification-function-bind-probe-dev-001"
+)
+DIAGNOSTIC_LOG_SHA256 = (
+    "213e8c33593e49d8b84f0d8ba2c3a0aa69329b1c7edc038518b8a1759ef7a3f4"
+)
 MANIFEST_ROOT = pathlib.Path(
     "/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6"
+)
+RUNTIME_COMPAT = PROJECT / "tools/fast_nl_v679f_direct_verifier_runtime_compat.ml"
+DIAGNOSTIC_SOURCE = PROJECT / "tools/fast_nl_v679f_verification_function_bind_probe.ml"
+RUNNER = PROJECT / "scripts/run-fast-nl-v679f-registered-input-preparation-probe.sh"
+VERIFIER_COMPAT = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v455-direct-verifier-mk-funs-overlay-dev-001/flyspeck/"
+    "formal_ineqs/verifier/m_verifier_main.hl"
+)
+VERIFIER_COMPAT_SHA256 = (
+    "19b069069caa6dd3d49cf84a3699588dd76ab77fc3b16c394cf50209dfa74706"
 )
 
 
@@ -63,6 +81,51 @@ def authenticate_failure() -> int:
         or "CANDLE_FLYSPECK_V679D_TAG10_FULL_BATCH_OK" in log
     ):
         return fail("registered_input_preparation_failure_signature")
+
+    diagnostic_marker = DIAGNOSTIC / "PROBE-FAILED"
+    diagnostic_log_path = DIAGNOSTIC / "runtime.log"
+    required_sources = (
+        RUNTIME_COMPAT,
+        DIAGNOSTIC_SOURCE,
+        RUNNER,
+        VERIFIER_COMPAT,
+    )
+    if (
+        not diagnostic_marker.is_file()
+        or diagnostic_marker.is_symlink()
+        or not diagnostic_log_path.is_file()
+        or diagnostic_log_path.is_symlink()
+        or any(not path.is_file() or path.is_symlink() for path in required_sources)
+    ):
+        return fail("registered_input_dimension_failure_authority")
+    if (
+        sha256(diagnostic_log_path) != DIAGNOSTIC_LOG_SHA256
+        or sha256(VERIFIER_COMPAT) != VERIFIER_COMPAT_SHA256
+    ):
+        return fail("registered_input_dimension_failure_identity")
+    diagnostic_log = diagnostic_log_path.read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if (
+        diagnostic_log.count("EXCEPTION: Bind") != 1
+        or diagnostic_log.count("Undefined variable: string_of_bool") != 1
+        or "CANDLE_V679F_BIND_PROBE boundary=verification-functions-failed"
+        not in diagnostic_log
+    ):
+        return fail("registered_input_dimension_failure_signature")
+
+    runtime_compat = RUNTIME_COMPAT.read_text(encoding="utf-8")
+    diagnostic_source = DIAGNOSTIC_SOURCE.read_text(encoding="utf-8")
+    runner = RUNNER.read_text(encoding="utf-8")
+    if (
+        runtime_compat.count("Kernel.dest_type (Kernel.call_type_of tm)") != 1
+        or runtime_compat.count("include M_taylor") != 1
+        or "string_of_bool" in diagnostic_source
+        or runner.count("FAST_NL_INPUT_PROBE_TIMEOUT_SECONDS=900") != 1
+        or runner.count(VERIFIER_COMPAT_SHA256) != 1
+        or runner.count(str(VERIFIER_COMPAT)) != 1
+    ):
+        return fail("registered_input_runtime_compat_contract")
     return 0
 
 

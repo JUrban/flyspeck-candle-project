@@ -647,7 +647,17 @@
       "classification": "observed",
       "first_evidence": "v679e-fast-nl-registered-input-probe-v2-dev-001/runtime.log",
       "failure_mode": "After the normalized verifier source root is selected correctly, registered-input preparation reaches verification-functions-begin and raises Bind before constructing any of the 4,173 records or starting numerical computation.",
-      "root_cause": "A partial binding assumption inside the legacy action-296 verification-function preparation path is violated in the current restored environment; the exact binding site is not yet localized and must not be guessed by another long run.",
+      "root_cause": "The canonical fast-NL source table selected the older v37 m_taylor and m_verifier_main normalizations but omitted the later audited direct-state get_dim and failed-binary-probe overlays.  The old composed type decoder raises Bind even on real^6 before numerical preparation begins.",
+      "check_id": "registered_input_preparation_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-056",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679f-fast-nl-verification-function-bind-probe-dev-001/runtime.log",
+      "failure_mode": "A diagnostic reaches the real get_dim Bind boundary but then uses unsupported string_of_bool and references a value whose top-level binding failed, producing cascading errors that obscure the first cause.",
+      "root_cause": "The diagnostic did not isolate each probe boundary with a local exception handler and used an untested utility outside Candle's supported runtime surface.",
       "check_id": "registered_input_preparation_contract",
       "enforcement": "preflight"
     }
