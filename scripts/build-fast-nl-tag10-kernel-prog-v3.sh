@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# RETIRED 2026-10-26: the exact case-10173 certificate is embedded in
+# candle_kernelProg.  Rebuilding that theory changes a parent of 44 existing
+# generated theories (45 affected theories including the target), through the
+# REPL/compiler/bootstrap chain.  A one-case runtime rebuild is therefore not
+# an admitted use of roughly day-scale resources.  Replace the embedded
+# certificate with a reusable data-driven checker interface and re-audit the
+# complete reverse dependency cone before introducing a new controller.
+printf '%s\n' \
+  'retired: case-specific kernel target has a 44-theory downstream rebuild cone' >&2
+exit 2
+
 project=/project/flyspeck-candle-project
 worktree=/project/worktrees/cakeml-direct-fast-nl-integration-v1
 prover=$worktree/candle/prover

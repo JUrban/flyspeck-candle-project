@@ -24,6 +24,14 @@ same way as observed failures: they need an executable discriminator or they
 block admission.  The ledger cannot enumerate unknowable failures, but an
 unrecorded known concern is never an acceptable reason to start a long run.
 
+For a generated-theory or translated-program target, the pre-mortem must also
+compute its complete reverse dependency cone from the actual object manifests.
+A bounded local target is not a bounded investment when success invalidates a
+large compiler or bootstrap suffix.  The receipt must report the target count,
+downstream theory count, and whether the changed interface is reusable across
+the intended workload.  A case-specific data literal may not justify a
+day-scale reusable-runtime rebuild.
+
 The admission question is answered before committing resources, not after the
 controller starts.  The receipt must therefore cover the exact input bytes and
 must include a bounded faithful runtime probe whenever static checks cannot

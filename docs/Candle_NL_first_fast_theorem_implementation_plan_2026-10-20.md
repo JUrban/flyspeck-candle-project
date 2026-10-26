@@ -4,6 +4,12 @@ Date: 2026-10-20 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+> Superseded on 2026-10-26 by
+> `Candle_NL_first_fast_theorem_implementation_plan_v2_2026-10-26.md`.
+> The proof results recorded below remain valid, but the plan to close over one
+> 4.7 MB certificate inside `candle_kernelProg` was rejected after the complete
+> reverse-dependency audit showed a 44-theory downstream rebuild cone.
+
 ## Purpose and success criterion
 
 This plan covers one milestone only: obtain the literal original Flyspeck

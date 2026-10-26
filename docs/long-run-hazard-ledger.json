@@ -848,6 +848,17 @@
       "check_id": "tag10_parent_cache_loader_closure",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-075",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "2026-10-26 complete reverse-dependency audit of the candle_kernelProg object manifests",
+      "failure_mode": "A nominally one-target candle_kernelProg build succeeds, but its changed generated theory identity invalidates 44 downstream REPL, compiler-translation, and x64-bootstrap theories and commits the project to another roughly day-scale verified runtime rebuild.",
+      "root_cause": "The current tag-10 route embeds the exact 4,707,156-byte case-10173 certificate as a candle_kernelProg literal and adds a compiler64 theorem specifically for that literal.  candle_kernelProg is upstream of the REPL safety translations and the complete compiler/bootstrap chain.  Paying that rebuild for a one-case, non-scalable interface is not an admitted production step.  Before any replacement runtime build, the certificate must be supplied as authenticated input data through a reusable checker interface, a second structurally distinct family must pass the same interface, and the complete reverse dependency cone and total rebuild cost must be re-audited.",
+      "check_id": "kernel_rebuild_scope",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }

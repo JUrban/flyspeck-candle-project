@@ -228,6 +228,8 @@ def main() -> int:
         if controller.is_symlink() or not (controller.stat().st_mode & 0o111):
             return fail("kernel_controller_mode")
         controller_text = controller.read_text(encoding="utf-8")
+        if "RETIRED 2026-10-26" in controller_text:
+            return fail("kernel_controller_retired")
         for marker in (
             "maximum_seconds=3000",
             "--no_prereqs --heap-size=65536",
