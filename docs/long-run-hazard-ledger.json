@@ -837,6 +837,17 @@
       "check_id": "tag10_parent_cache_loader_closure",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-074",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v689-fast-nl-tag10-kernel-loader-dev-001/loader.log",
+      "failure_mode": "The paired-manifest loader harness still exits before theory loading because it writes the synthetic .ui/.uo pair beside the logical root while HOL resolves generated object manifests under the root's .hol/objs directory.",
+      "root_cause": "The successful single-theory smoke test used a normal Holmake logical base and therefore inherited .hol/objs resolution implicitly.  The synthetic aggregate root must reproduce that directory layout rather than placing its manifests at the logical path.  The failed v689 receipt remains immutable; the corrected probe uses a fresh run root with .hol/objs and no project build invocation.",
+      "check_id": "tag10_parent_cache_loader_closure",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }

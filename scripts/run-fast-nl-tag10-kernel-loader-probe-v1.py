@@ -19,7 +19,7 @@ PROJECT = pathlib.Path("/project/flyspeck-candle-project")
 AUDIT_PATH = PROJECT / "scripts/audit-fast-nl-tag10-kernel-loader-closure.py"
 RUN = pathlib.Path(
     "/project/flyspeck-candle-runs/"
-    "v689-fast-nl-tag10-kernel-loader-dev-001"
+    "v690-fast-nl-tag10-kernel-loader-dev-001"
 )
 CLOSURE_RECEIPT = RUN / "CLOSURE-AUDIT.receipt"
 RELOCATION_RECEIPT = pathlib.Path(
@@ -109,8 +109,9 @@ def main() -> int:
     receipt = RUN / "LOADER-PROBE.receipt"
     log = RUN / "loader.log"
     root_base = RUN / "kernel-dependency-loader"
-    interface = root_base.with_suffix(".ui")
-    manifest = root_base.with_suffix(".uo")
+    synthetic_objects = RUN / ".hol/objs"
+    interface = synthetic_objects / "kernel-dependency-loader.ui"
+    manifest = synthetic_objects / "kernel-dependency-loader.uo"
     marker_source = RUN / "kernel-dependency-loader-marker.sml"
     try:
         if any(
@@ -141,6 +142,7 @@ def main() -> int:
         )
         if not HOL.is_file() or not HOL_STATE.is_file():
             raise ProbeFailure("hol_runtime_missing")
+        synthetic_objects.mkdir(parents=True)
 
         modules = AUDIT.direct_modules()
         hints = AUDIT.dependency_hints()
