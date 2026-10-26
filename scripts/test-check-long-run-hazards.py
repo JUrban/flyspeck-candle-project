@@ -98,6 +98,13 @@ class LongRunHazardGateTests(unittest.TestCase):
         rebuild_scope = next(item for item in hazards if item["id"] == "LR-075")
         self.assertEqual(rebuild_scope["profiles"], ["kernel-build"])
         self.assertEqual(rebuild_scope["check_id"], "kernel_rebuild_scope")
+        authenticated_cache = next(
+            item for item in hazards if item["id"] == "LR-076"
+        )
+        self.assertEqual(authenticated_cache["profiles"], ["kernel-build"])
+        self.assertEqual(
+            authenticated_cache["check_id"], "authenticated_program_cache"
+        )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -859,6 +859,17 @@
       "check_id": "kernel_rebuild_scope",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-076",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v692-fast-nl-payload4-focused-dev-001/bounded-signed-focused-repair-v4.log",
+      "failure_mode": "A prepared authenticated-checker cache appears usable because every theory has .ui/.uo manifests, but a descendant program cannot load it because one translated ancestor lacks its generated .sig/.sml/.dat files; after repairing that ancestor, an isolated executable translation repeatedly fails if its complete constant and source-identity translation closure is not enumerated first.",
+      "root_cause": "Dependency manifests are not loadable theory data, and the newer compute_boundedSignedProg source contains decimal translations absent from older complete caches. The combined external-input program also depends on an explicit ordered translation closure: the chunk-limit constant, balanced decoder definitions, compute_exp_to_cv, the closed expected-source term, the source projection, and the authenticated checker. Before any runtime build, require complete generated companions for every cached theory, the current decimal exports, the exact ordered program closure, successful authenticated-parent loading, two exact accepted runs, and same-shape certificate/source/job/root rejections.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }

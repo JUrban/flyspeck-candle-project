@@ -81,6 +81,9 @@ TAG10_PARENT_CACHE_LOADER_CLOSURE = (
 KERNEL_REBUILD_SCOPE = (
     PROJECT / "scripts/audit-fast-nl-kernel-rebuild-scope.py"
 )
+AUTHENTICATED_PROGRAM_CACHE = (
+    PROJECT / "scripts/audit-fast-nl-authenticated-program-cache.py"
+)
 REGISTERED_INPUT_LOADER_CONTRACT = (
     PROJECT / "scripts/audit-fast-nl-v679e-registered-input-loader.py"
 )
@@ -354,6 +357,12 @@ def check_kernel_rebuild_scope(
         ],
         timeout=30,
     )
+
+
+def check_authenticated_program_cache(
+    _: dict, __: pathlib.Path
+) -> CheckResult:
+    return run_checked([str(AUTHENTICATED_PROGRAM_CACHE)], timeout=30)
 
 
 def check_registered_input_loader_contract(_: dict, __: pathlib.Path) -> CheckResult:
@@ -949,6 +958,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "tag10_additive_bridge_contract": check_tag10_additive_bridge_contract,
     "tag10_parent_cache_loader_closure": check_tag10_parent_cache_loader_closure,
     "kernel_rebuild_scope": check_kernel_rebuild_scope,
+    "authenticated_program_cache": check_authenticated_program_cache,
     "registered_input_loader_contract": check_registered_input_loader_contract,
     "registered_input_preparation_contract": check_registered_input_preparation_contract,
     "long_run_admission_guard": check_long_run_admission_guard,
