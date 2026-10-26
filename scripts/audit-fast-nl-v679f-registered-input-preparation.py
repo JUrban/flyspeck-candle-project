@@ -45,6 +45,13 @@ FIRST_REPAIR = pathlib.Path(
 FIRST_REPAIR_LOG_SHA256 = (
     "a3940dd1c6f001ae010d7f950fe99387496e9782b8cd3dd7ebd28ffe2bd85a97"
 )
+SUBTREE_PROBE = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679g-fast-nl-verification-function-subtree-probe-dev-001"
+)
+SUBTREE_PROBE_LOG_SHA256 = (
+    "00f1c7de3ff62d91b69d3ff72fa8d33af29181b81363fcf08ac921dc805de33e"
+)
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -162,6 +169,29 @@ def authenticate_failure() -> int:
         or "CANDLE_REGISTERED_INPUT_CONSTRUCTION_END" in first_repair_log
     ):
         return fail("registered_input_first_repair_failure_signature")
+
+    subtree_passed = SUBTREE_PROBE / "PROBE-PASSED"
+    subtree_receipt = SUBTREE_PROBE / "input-probe.receipt"
+    subtree_log_path = SUBTREE_PROBE / "runtime.log"
+    if (
+        not subtree_passed.is_file()
+        or subtree_passed.is_symlink()
+        or not subtree_receipt.is_file()
+        or subtree_receipt.is_symlink()
+        or not subtree_log_path.is_file()
+        or subtree_log_path.is_symlink()
+        or sha256(subtree_log_path) != SUBTREE_PROBE_LOG_SHA256
+    ):
+        return fail("registered_input_subtree_probe_identity")
+    subtree_log = subtree_log_path.read_text(encoding="utf-8", errors="replace")
+    if (
+        subtree_log.count("boundary=mk-funs-failed") != 1178
+        or "boundary=mk-funs-ok" in subtree_log
+        or subtree_log.count("boundary=term-shape is_abs=true dimension=6") != 1
+        or subtree_log.count("boundary=verification-functions-failed") != 1
+        or any(text in subtree_log for text in ("EXCEPTION:", "ERROR:", "Parsing failed"))
+    ):
+        return fail("registered_input_subtree_probe_contract")
     return 0
 
 

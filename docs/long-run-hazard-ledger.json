@@ -667,7 +667,17 @@
       "classification": "observed",
       "first_evidence": "v679f-fast-nl-registered-input-preparation-probe-dev-001/runtime.log",
       "failure_mode": "The restored-state shim repairs real^6 decoding, but the reloaded verifier dispatch raises dest_const: not a constant while preparing the genuine action-296 function, before certificate construction or any of the 4,173 records.",
-      "root_cause": "The exact expression/operator boundary rejected by the composed current runtime is not yet localized; the historical Failure-or-Bind fallback alone is insufficient in this restored module composition.",
+      "root_cause": "Redefining M_taylor late repairs a direct get_dim call, but already-loaded dependent closures such as M_verifier_build retain the old decoder.  Reloading only m_verifier_main therefore leaves every probed polynomial subtree broken; the compatibility repair must precede the dependent closure or prepared input must be reused by exact identity.",
+      "check_id": "registered_input_preparation_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-058",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679g-fast-nl-verification-function-subtree-probe-dev-001/runtime.log",
+      "failure_mode": "A late module-shadow repair appears to pass its direct smoke test while all 1,178 probed expression subtrees still fail through dependent closures captured before the repair.",
+      "root_cause": "ML module shadowing does not retroactively rebind lexical references held by already-loaded verifier modules; a direct smoke test is not evidence that the transitive consumer closure was repaired.",
       "check_id": "registered_input_preparation_contract",
       "enforcement": "preflight"
     }
