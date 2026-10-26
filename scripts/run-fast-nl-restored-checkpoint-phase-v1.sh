@@ -15,6 +15,9 @@ dev_runtime=${FAST_NL_DEV_RUNTIME:-/project/flyspeck-candle-runs/nonpromotable-d
 phase_timeout_seconds=${FAST_NL_PHASE_TIMEOUT_SECONDS:-21600}
 driver_mode=${FAST_NL_PHASE_DRIVER_MODE:-source}
 
+/project/flyspeck-candle-project/scripts/require-long-run-hazard-preflight.sh \
+  "$phase_timeout_seconds"
+
 [[ -f $base_dir/CHECKPOINT-READY ]]
 [[ ! -f $base_dir/CHECKPOINT-FAILED ]]
 [[ ! -e $output_dir ]]

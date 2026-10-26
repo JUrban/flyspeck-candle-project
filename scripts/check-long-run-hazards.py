@@ -68,6 +68,12 @@ MATAN_CHECKPOINT_FINALIZATION = (
 )
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
+LONG_RUN_ADMISSION = PROJECT / "scripts/require-long-run-hazard-preflight.sh"
+LONG_RUN_EXECUTORS = (
+    PROJECT / "scripts/build-fast-nl-poststrictbuild-checkpoint-v1.sh",
+    PROJECT / "scripts/run-fast-nl-restored-checkpoint-phase-v1.sh",
+    THEOREM_RUNNER,
+)
 
 
 @dataclass
@@ -258,6 +264,34 @@ def check_direct_source_interface_contract(
     _: dict, __: pathlib.Path
 ) -> CheckResult:
     return run_checked([str(DIRECT_SOURCE_INTERFACE_CONTRACT)], timeout=180)
+
+
+def check_long_run_admission_guard(_: dict, __: pathlib.Path) -> CheckResult:
+    if not LONG_RUN_ADMISSION.is_file() or LONG_RUN_ADMISSION.is_symlink():
+        return CheckResult(False, f"admission_guard_missing={LONG_RUN_ADMISSION}")
+    guard = LONG_RUN_ADMISSION.read_text(encoding="utf-8")
+    required_guard = (
+        ".policy.long_run_threshold_seconds",
+        "FAST_NL_HAZARD_PREFLIGHT_RECEIPT",
+        "FAST_NL_HAZARD_CONTROLLER",
+        "FAST_NL_HAZARD_PROFILE",
+        "ledger_sha256=",
+        "controller_sha256=",
+        "failed_check_count=0",
+        "schema_error_count=0",
+    )
+    missing = [item for item in required_guard if item not in guard]
+    if missing:
+        return CheckResult(False, f"admission_guard_contract={missing[0]}")
+    for executor in LONG_RUN_EXECUTORS:
+        if not executor.is_file() or executor.is_symlink():
+            return CheckResult(False, f"long_run_executor_missing={executor}")
+        if str(LONG_RUN_ADMISSION) not in executor.read_text(encoding="utf-8"):
+            return CheckResult(False, f"long_run_executor_unguarded={executor}")
+    return CheckResult(
+        True,
+        f"threshold_source=ledger guarded_executor_count={len(LONG_RUN_EXECUTORS)}",
+    )
 
 
 def check_checkpoint_integrity(
@@ -807,6 +841,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "historical_sound_contract": check_historical_sound_contract,
     "compact_support_contract": check_compact_support_contract,
     "direct_source_interface_contract": check_direct_source_interface_contract,
+    "long_run_admission_guard": check_long_run_admission_guard,
     "checkpoint_integrity": check_checkpoint_integrity,
     "checkpoint_admission_chain": check_checkpoint_admission_chain,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,

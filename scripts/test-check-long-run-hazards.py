@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -89,6 +90,15 @@ class LongRunHazardGateTests(unittest.TestCase):
         controller = ROOT / "scripts/run-fast-nl-v664-first-theorem-controller.sh"
         result = GATE.check_theorem_controller_contract({}, controller)
         self.assertTrue(result.ok, result.detail)
+
+    def test_long_run_executors_have_a_hard_admission_guard(self) -> None:
+        result = GATE.check_long_run_admission_guard({}, ROOT / "unused.sh")
+        self.assertTrue(result.ok, result.detail)
+        guard = ROOT / "scripts/require-long-run-hazard-preflight.sh"
+        short = subprocess.run([str(guard), "1800"], check=False)
+        long = subprocess.run([str(guard), "1801"], check=False)
+        self.assertEqual(short.returncode, 0)
+        self.assertNotEqual(long.returncode, 0)
 
     def test_short_probe_is_bound_to_exact_candidate_bytes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

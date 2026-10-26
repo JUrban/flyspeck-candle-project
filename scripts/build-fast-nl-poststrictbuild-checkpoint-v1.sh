@@ -15,6 +15,9 @@ identity_extension_sha256=${FAST_NL_IDENTITY_EXTENSION_SHA256:-}
 authenticated_source_count=${FAST_NL_AUTHENTICATED_SOURCE_COUNT:-207}
 base_timeout_seconds=${FAST_NL_BASE_TIMEOUT_SECONDS:-21600}
 
+/project/flyspeck-candle-project/scripts/require-long-run-hazard-preflight.sh \
+  "$base_timeout_seconds"
+
 check_sha() {
   expected=$1
   path=$2

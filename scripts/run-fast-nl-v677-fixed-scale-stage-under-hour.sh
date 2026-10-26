@@ -26,6 +26,9 @@ export FAST_NL_PHASE_DRIVER_MODE=direct
   --receipt "$preflight/hazard-preflight.receipt"
 grep -Fxq 'status=0' "$preflight/hazard-preflight.receipt"
 grep -Fxq 'profile=support-stage' "$preflight/hazard-preflight.receipt"
+export FAST_NL_HAZARD_PREFLIGHT_RECEIPT=$preflight/hazard-preflight.receipt
+export FAST_NL_HAZARD_CONTROLLER=$0
+export FAST_NL_HAZARD_PROFILE=support-stage
 
 stage=$("$scripts/audit-fast-nl-v677-fixed-scale-stage.py")
 grep -Fxq 'status=0' <<<"$stage"

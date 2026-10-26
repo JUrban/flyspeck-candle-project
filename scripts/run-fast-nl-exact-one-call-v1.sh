@@ -23,6 +23,9 @@ fast_numerical_max_seconds=120
 numerical_watchdog_seconds=180
 call_timeout_seconds=${FAST_NL_CALL_TIMEOUT_SECONDS:-21600}
 
+/project/flyspeck-candle-project/scripts/require-long-run-hazard-preflight.sh \
+  "$call_timeout_seconds"
+
 [[ -f $base_dir/CHECKPOINT-READY ]]
 [[ ! -f $base_dir/CHECKPOINT-FAILED ]]
 [[ ! -e $output_dir ]]

@@ -556,6 +556,16 @@
       "root_cause": "DMTCP emits the same magic-bits diagnostic when the phase runner intentionally stops the coordinator after a completed checkpoint.  Log appearance alone therefore cannot distinguish a safe teardown from premature coordinator loss or an unusable saved state.",
       "check_id": "checkpoint_admission_chain",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-047",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "2026-10-26 long-run admission bypass review",
+      "failure_mode": "A low-level checkpoint, base-build, or theorem runner is invoked directly with a timeout above 30 minutes and bypasses the controller's hazard-database preflight.",
+      "root_cause": "Controller-level policy is not a hard boundary when reusable execution scripts also accept multi-hour default timeouts.  The executors must independently authenticate a receipt bound to the current ledger, gate, controller, and profile bytes.",
+      "check_id": "long_run_admission_guard",
+      "enforcement": "runtime admission"
     }
   ]
 }
