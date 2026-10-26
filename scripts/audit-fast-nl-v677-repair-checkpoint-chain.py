@@ -149,6 +149,21 @@ STAGES = (
             "- Finished loading candle/benchmark_cv_compute_analytic_expr_case10173_historical_registered_input.ml",
         ),
     },
+    {
+        "directory": ROOT / "post-direct-source-interface-v678",
+        "kind": "development-fast-nl-v678-direct-source-interface-checkpoint-v1",
+        "sha256": "980d06be6fb7b418a018fddfd3cdd0bece5bd5f1ba83695264cc532dd742fce1",
+        "marker": "CANDLE_FLYSPECK_V678_DIRECT_SOURCE_INTERFACE_CHECKPOINT_READY",
+        "driver": PROJECT / "tools/fast_nl_v678_direct_source_interface_stage.ml",
+        "required": (
+            "- Finished loading candle/cv_compute_flyspeck_direct_source_compat.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_case10173_fixture.ml",
+        ),
+        "forbidden": (
+            "- Finished loading text_formalization/general/serialization.hl",
+            "- Flyspeck source action complete: nonlinear/break_case_exec.hl",
+        ),
+    },
 )
 
 

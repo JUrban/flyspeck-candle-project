@@ -16,6 +16,12 @@ ROOT = pathlib.Path(
 )
 BASE = ROOT / "post-compact-support-v677x"
 BASE_SHA256 = "9865171f71ea99bb4277f98f441a331b142cffb9a266e8356d0dad5d3942979f"
+RESULT = ROOT / "post-direct-source-interface-v678"
+RESULT_SHA256 = "980d06be6fb7b418a018fddfd3cdd0bece5bd5f1ba83695264cc532dd742fce1"
+RESTART = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v678-fast-nl-direct-source-interface-restart-probe-dev-001"
+)
 DRIVER = PROJECT / "tools/fast_nl_v678_direct_source_interface_stage.ml"
 CHAIN_AUDIT = PROJECT / "scripts/audit-fast-nl-v677-repair-checkpoint-chain.py"
 SOURCE_AUDIT = PROJECT / "scripts/audit-fast-nl-support-source-closure.py"
@@ -101,6 +107,9 @@ def main() -> int:
         DRIVER, original, candidate, BREAK_CASE_SOURCE, BASE / "checkpoint.receipt",
         FAILED_RUN / "CHECKPOINT-FAILED", FAILED_RUN / "runtime.log",
         DIRECT_ACTION_RUN / "runtime.log", DIRECT_ACTION_TIMING,
+        RESULT / "CHECKPOINT-READY", RESULT / "checkpoint.receipt",
+        RESULT / "runtime.log", RESTART / "PROBE-PASSED",
+        RESTART / "restart-probe.receipt", RESTART / "runtime.log",
     )
     if any(not path.is_file() or path.is_symlink() for path in required):
         return fail("missing_or_symlink_input")
@@ -184,6 +193,63 @@ def main() -> int:
     ):
         return fail("driver_contract")
 
+    result_receipt = receipt(RESULT / "checkpoint.receipt")
+    result_checkpoint = pathlib.Path(result_receipt.get("checkpoint", ""))
+    if (
+        (RESULT / "CHECKPOINT-FAILED").exists()
+        or not result_checkpoint.is_file()
+        or result_receipt.get("receipt_kind")
+        != "development-fast-nl-v678-direct-source-interface-checkpoint-v1"
+        or result_receipt.get("release_evidence") != "false"
+        or result_receipt.get("base_checkpoint")
+        != str(pathlib.Path(observed["checkpoint"]).resolve())
+        or result_receipt.get("driver") != str(DRIVER)
+        or result_receipt.get("driver_sha256") != digest(DRIVER)
+        or result_receipt.get("checkpoint_sha256") != RESULT_SHA256
+        or result_receipt.get("checkpoint_size_bytes")
+        != str(result_checkpoint.stat().st_size)
+    ):
+        return fail("result_checkpoint_receipt")
+    result_log = (RESULT / "runtime.log").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    result_marker = "CANDLE_FLYSPECK_V678_DIRECT_SOURCE_INTERFACE_CHECKPOINT_READY"
+    teardown = "Message: read invalid message, _magicBits mismatch."
+    if (
+        result_log.count("CANDLE_RESTORE_INPUT_ACK nonce=") != 1
+        or result_log.count(result_marker) != 1
+        or result_log.count(teardown) != 1
+        or result_log.index(teardown) < result_log.index(result_marker)
+        or result_log.count(
+            "- Finished loading candle/cv_compute_flyspeck_direct_source_compat.ml"
+        ) != 1
+        or result_log.count(
+            "- Finished loading candle/cv_compute_analytic_expr_case10173_fixture.ml"
+        ) != 1
+        or "ERROR:" in result_log
+        or "EXCEPTION:" in result_log
+    ):
+        return fail("result_runtime_log")
+
+    restart_receipt = receipt(RESTART / "restart-probe.receipt")
+    restart_log = (RESTART / "runtime.log").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    restart_ack = restart_receipt.get("fresh_ack", "")
+    restart_marker = "CANDLE_FLYSPECK_V678_DIRECT_SOURCE_INTERFACE_RESTART_PROBE_OK"
+    if (
+        (RESTART / "PROBE-FAILED").exists()
+        or restart_receipt.get("receipt_kind")
+        != "development-fast-nl-checkpoint-restart-probe-v1"
+        or restart_receipt.get("base_checkpoint") != str(result_checkpoint)
+        or restart_receipt.get("base_checkpoint_sha256") != RESULT_SHA256
+        or restart_receipt.get("expected_marker") != restart_marker
+        or not restart_ack
+        or restart_log.count(restart_ack) != 1
+        or restart_log.count(restart_marker) != 1
+    ):
+        return fail("result_restart_probe")
+
     print("status=0")
     print("logical_support_load_count=2")
     print("copied_theorem_statement_count=6")
@@ -192,6 +258,9 @@ def main() -> int:
     print(f"driver_sha256={digest(DRIVER)}")
     print(f"candidate_sha256={CANDIDATE_SHA256}")
     print(f"base_checkpoint_sha256={BASE_SHA256}")
+    print(f"result_checkpoint_sha256={RESULT_SHA256}")
+    print(f"result_checkpoint_size_bytes={result_checkpoint.stat().st_size}")
+    print(f"restart_elapsed_seconds={restart_receipt['elapsed_seconds']}")
     return 0
 
 

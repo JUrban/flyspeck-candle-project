@@ -46,7 +46,8 @@
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-algebraic-compile-sound-v677r/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-outer-nonlinear-compile-sound-v677s/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-historical-sound-v677w/checkpoint.receipt",
-        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-compact-support-v677x/checkpoint.receipt"
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-compact-support-v677x/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-direct-source-interface-v678/checkpoint.receipt"
       ],
       "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
@@ -67,17 +68,17 @@
         ]
       },
       "support_stage_predecessor": {
-        "base": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-matan-v676",
-        "receipt_kind": "development-fast-nl-v676-matan-checkpoint-v1",
-        "checkpoint_sha256": "014ac019edcb782bb4cc9aca77553bd541ea184aea0f64c29b6c6d6e865f5b0d",
-        "driver_sha256": "4df318a9f9d752c834a193b59b9581aaf26f987cb9a6e694b1d66d9e95697eb2",
-        "marker": "CANDLE_FLYSPECK_V676_MATAN_CHECKPOINT_READY",
+        "base": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-direct-source-interface-v678",
+        "receipt_kind": "development-fast-nl-v678-direct-source-interface-checkpoint-v1",
+        "checkpoint_sha256": "980d06be6fb7b418a018fddfd3cdd0bece5bd5f1ba83695264cc532dd742fce1",
+        "driver_sha256": "864fa15b7bd130d156c24a6dc1e4065c5c477690f16c1403420db520d5643d34",
+        "marker": "CANDLE_FLYSPECK_V678_DIRECT_SOURCE_INTERFACE_CHECKPOINT_READY",
         "required_logs": [
-          "- Finished loading candle/cv_compute_exact_interval_matan_series.ml",
-          "- Finished loading candle/cv_compute_exact_interval_matan_series_program.ml"
+          "- Finished loading candle/cv_compute_flyspeck_direct_source_compat.ml",
+          "- Finished loading candle/cv_compute_analytic_expr_case10173_fixture.ml"
         ],
-        "probe": "/project/flyspeck-candle-runs/v676-fast-nl-matan-restart-probe-dev-001",
-        "probe_marker": "CANDLE_FLYSPECK_V676_MATAN_RESTART_PROBE_OK"
+        "probe": "/project/flyspeck-candle-runs/v678-fast-nl-direct-source-interface-restart-probe-dev-001",
+        "probe_marker": "CANDLE_FLYSPECK_V678_DIRECT_SOURCE_INTERFACE_RESTART_PROBE_OK"
       },
       "minimum_available_memory_gib": 24,
       "maximum_active_matching_controllers": 0,
@@ -544,6 +545,16 @@
       "failure_mode": "Loading break_case_exec.hl from the action-49-derived fast-NL state reaches a disabled dynamic use_file_b for nonlinear/prep.hl; naively preloading its three dependencies would then repeat the historical multi-hour nonlinear source computation.",
       "root_cause": "The static module-closure audit treated literal flyspeck_needs edges as ordinary recursive loads and therefore missed both the fail-closed runtime loader distinction and Break_case_exec's top-level legacy verification cost.  The fast source fixture needs only five small rewrite theorems, not the complete effectful module.",
       "check_id": "direct_source_interface_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-046",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-direct-source-interface-v678/runtime.log",
+      "failure_mode": "A checkpoint is admitted even though its DMTCP coordinator died before the proof marker or produced an image that cannot consume fresh input; the usual intentional post-checkpoint coordinator shutdown message can otherwise hide this distinction.",
+      "root_cause": "DMTCP emits the same magic-bits diagnostic when the phase runner intentionally stops the coordinator after a completed checkpoint.  Log appearance alone therefore cannot distinguish a safe teardown from premature coordinator loss or an unusable saved state.",
+      "check_id": "checkpoint_admission_chain",
       "enforcement": "preflight"
     }
   ]
