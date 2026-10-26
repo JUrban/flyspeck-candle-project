@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import os
 import pathlib
+import subprocess
 
 
 PROJECT = pathlib.Path("/project/flyspeck-candle-project")
@@ -13,9 +14,8 @@ FAILED = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v679e-fast-nl-registered-input-probe-v2-dev-001"
 )
-REPLACEMENT = pathlib.Path(
-    "/project/flyspeck-candle-runs/"
-    "v679g-fast-nl-registered-input-preparation-probe-dev-001"
+IMPORT_AUDIT = (
+    PROJECT / "scripts/audit-fast-nl-v679l-import-prepared-input-flat.py"
 )
 FAILED_LOG_SHA256 = "1d455125df2294ae768c00d064f451dc54829107bd7f2aa92674c5067f05c6aa"
 DIAGNOSTIC = pathlib.Path(
@@ -281,43 +281,35 @@ def main() -> int:
     if authenticate_failure() != 0:
         return 1
 
-    receipt = REPLACEMENT / "preparation-probe.receipt"
-    log_path = REPLACEMENT / "runtime.log"
-    if (
-        not receipt.is_file()
-        or receipt.is_symlink()
-        or not log_path.is_file()
-        or log_path.is_symlink()
-    ):
-        return fail("bounded_registered_input_preparation_repair_missing")
-
-    receipt_fields = {}
-    for line in receipt.read_text(encoding="utf-8").splitlines():
-        if "=" in line:
-            key, value = line.split("=", 1)
-            receipt_fields[key] = value
-    log = log_path.read_text(encoding="utf-8", errors="replace")
-    marker = (
-        "CANDLE_FLYSPECK_V679F_REGISTERED_INPUT_PREPARATION_OK "
-        "DEVELOPMENT_NON_RELEASE cells=4173 numerical_compute=0"
+    if not IMPORT_AUDIT.is_file() or IMPORT_AUDIT.is_symlink():
+        return fail("bounded_registered_input_preparation_audit_missing")
+    completed = subprocess.run(
+        [str(IMPORT_AUDIT)],
+        cwd=PROJECT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=180,
+        check=False,
     )
+    output = completed.stdout
     if (
-        receipt_fields.get("status") != "0"
-        or receipt_fields.get("cells") != "4173"
-        or receipt_fields.get("numerical_compute") != "0"
-        or receipt_fields.get("runtime_log_sha256") != sha256(log_path)
-        or log.count(marker) != 1
-        or "CANDLE_REGISTERED_INPUT_CONSTRUCTION_END cells=4173 numerical_compute=0"
-        not in log
-        or any(text in log for text in ("EXCEPTION:", "ERROR:", "Parsing failed"))
+        completed.returncode != 0
+        or output.splitlines().count("status=0") != 2
+        or output.splitlines().count("cells=4173") != 2
+        or output.splitlines().count("numerical_compute=0") != 2
+        or "assumptions=0" not in output
+        or "axiom_growth=0" not in output
     ):
         return fail("bounded_registered_input_preparation_repair_contract")
 
     print("status=0")
-    print("failed_boundary=verification-functions-begin")
+    print("repair=authenticated_flat_input_reuse")
     print("replacement_cells=4173")
     print("replacement_numerical_compute=0")
-    print(f"replacement_runtime_log_sha256={sha256(log_path)}")
+    for line in output.splitlines():
+        if line.startswith(("checkpoint_sha256=", "runtime_log_sha256=")):
+            print(f"replacement_{line}")
     return 0
 
 
