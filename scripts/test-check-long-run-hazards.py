@@ -33,7 +33,9 @@ class LongRunHazardGateTests(unittest.TestCase):
             profiles = item.get("profiles", ["theorem", "support-stage"])
             self.assertTrue(profiles)
             self.assertTrue(
-                set(profiles).issubset({"theorem", "support-stage"})
+                set(profiles).issubset(
+                    {"theorem", "support-stage", "kernel-build"}
+                )
             )
         latest = next(item for item in hazards if item["id"] == "LR-048")
         self.assertEqual(
@@ -48,6 +50,15 @@ class LongRunHazardGateTests(unittest.TestCase):
         additive = next(item for item in hazards if item["id"] == "LR-065")
         self.assertEqual(
             additive["check_id"], "tag10_additive_bridge_contract"
+        )
+        in_module = next(item for item in hazards if item["id"] == "LR-066")
+        self.assertEqual(
+            in_module["check_id"], "tag10_additive_bridge_contract"
+        )
+        bounded_retry = next(item for item in hazards if item["id"] == "LR-067")
+        self.assertEqual(bounded_retry["profiles"], ["kernel-build"])
+        self.assertEqual(
+            bounded_retry["check_id"], "tag10_additive_bridge_contract"
         )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:

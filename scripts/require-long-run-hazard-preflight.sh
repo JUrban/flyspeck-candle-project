@@ -22,7 +22,7 @@ controller=${FAST_NL_HAZARD_CONTROLLER:-}
 profile=${FAST_NL_HAZARD_PROFILE:-}
 [[ -n $receipt && -f $receipt && ! -L $receipt ]]
 [[ -n $controller && -f $controller && ! -L $controller ]]
-[[ $profile == theorem || $profile == support-stage ]]
+[[ $profile == theorem || $profile == support-stage || $profile == kernel-build ]]
 
 receipt=$(realpath "$receipt")
 controller=$(realpath "$controller")

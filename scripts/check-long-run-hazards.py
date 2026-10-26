@@ -92,11 +92,15 @@ MATAN_CHECKPOINT_FINALIZATION = (
 )
 THEOREM_GATE = PROJECT / "scripts/run-fast-nl-first-original-theorem-gate-v1.sh"
 THEOREM_RUNNER = PROJECT / "scripts/run-fast-nl-exact-one-call-v1.sh"
+KERNEL_PROG_CONTROLLER = (
+    PROJECT / "scripts/build-fast-nl-tag10-kernel-prog-v2.sh"
+)
 LONG_RUN_ADMISSION = PROJECT / "scripts/require-long-run-hazard-preflight.sh"
 LONG_RUN_EXECUTORS = (
     PROJECT / "scripts/build-fast-nl-poststrictbuild-checkpoint-v1.sh",
     PROJECT / "scripts/run-fast-nl-restored-checkpoint-phase-v1.sh",
     THEOREM_RUNNER,
+    KERNEL_PROG_CONTROLLER,
 )
 
 
@@ -313,8 +317,17 @@ def check_tag10_flat_full_batch_contract(_: dict, __: pathlib.Path) -> CheckResu
 
 
 def check_tag10_additive_bridge_contract(
-    _: dict, __: pathlib.Path
+    _: dict, controller: pathlib.Path
 ) -> CheckResult:
+    if controller.name == "build-fast-nl-tag10-kernel-prog-v2.sh":
+        return run_checked(
+            [
+                str(TAG10_ADDITIVE_BRIDGE_CONTRACT),
+                "--admission-controller",
+                str(controller),
+            ],
+            timeout=30,
+        )
     return run_checked([str(TAG10_ADDITIVE_BRIDGE_CONTRACT)], timeout=30)
 
 
@@ -928,7 +941,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--scope", required=True)
     parser.add_argument(
-        "--profile", choices=("theorem", "support-stage"), default="theorem"
+        "--profile",
+        choices=("theorem", "support-stage", "kernel-build"),
+        default="theorem",
     )
     parser.add_argument("--controller", required=True, type=pathlib.Path)
     parser.add_argument("--ledger", type=pathlib.Path, default=DEFAULT_LEDGER)
@@ -976,7 +991,10 @@ def main() -> int:
         if (
             not isinstance(profiles, (list, tuple))
             or not profiles
-            or any(item not in ("theorem", "support-stage") for item in profiles)
+            or any(
+                item not in ("theorem", "support-stage", "kernel-build")
+                for item in profiles
+            )
         ):
             schema_errors.append(f"{hazard.get('id','<unknown>')}:invalid_profiles")
 

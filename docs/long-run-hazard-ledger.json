@@ -750,6 +750,27 @@
       "root_cause": "The generated theory bundles two different identities: the complete checked input expression, which is unchanged, and the evaluator equation environment, which changes for the private tag-10 migration.  Replacing the whole theory makes Holmake conservatively rebuild both proof cones.  A focused HOL theorem establishes that the input and expected result are identical while only the equation list differs, so the durable repair is an additive tag-10 equation/evaluator bridge that reuses the frozen input and certificate theories.",
       "check_id": "tag10_additive_bridge_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-066",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "tag10-kernel-translation-probe-build-v2.log",
+      "failure_mode": "Extending the already-closed candle_kernelProg and translating the additive tag-10 equation constants fails before the new checker is translated, at lookup of the private Kernel cv constructor stamps.",
+      "root_cause": "The private cv constructors receive exact stamps while the Kernel module is open.  A post-module translator extension cannot recreate those identities safely.  The additive equations, checker, evaluation chain, and public compute alias must therefore be translated inside candle_kernelProg before close_local_blocks; aliases or post-closure retries are forbidden.",
+      "check_id": "tag10_additive_bridge_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-067",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "tag10-kernel-prog-build-v1.log",
+      "failure_mode": "The exact one-target candle_kernelProg translation reaches environment 419 without a proof error but is terminated by its 1,800-second exploratory cap before reaching the tag-10 tail or exporting a new theory artifact.",
+      "root_cause": "The cap was based on an older kernel-program timing and did not account for the current 542 translation-bearing production source lines plus its large registered constants.  The observed run completed the prefix through environment 419 and the frozen source has 134 translation sites remaining.  A retry is permitted only through the exact one-target, one-core controller with a 3,000-second cap, fresh output, authenticated source/proof identities, the preserved timeout log, and at least 64 GiB available memory.",
+      "check_id": "tag10_additive_bridge_contract",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }
