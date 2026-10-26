@@ -47,7 +47,8 @@
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-fixed-outer-nonlinear-compile-sound-v677s/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-historical-sound-v677w/checkpoint.receipt",
         "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-compact-support-v677x/checkpoint.receipt",
-        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-direct-source-interface-v678/checkpoint.receipt"
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-direct-source-interface-v678/checkpoint.receipt",
+        "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-historical-checked-sound-v679a/checkpoint.receipt"
       ],
       "required_authenticated_fast_nl_source_count": 283,
       "short_runtime_probe": {
@@ -68,17 +69,20 @@
         ]
       },
       "support_stage_predecessor": {
-        "base": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-direct-source-interface-v678",
-        "receipt_kind": "development-fast-nl-v678-direct-source-interface-checkpoint-v1",
-        "checkpoint_sha256": "980d06be6fb7b418a018fddfd3cdd0bece5bd5f1ba83695264cc532dd742fce1",
-        "driver_sha256": "864fa15b7bd130d156c24a6dc1e4065c5c477690f16c1403420db520d5643d34",
-        "marker": "CANDLE_FLYSPECK_V678_DIRECT_SOURCE_INTERFACE_CHECKPOINT_READY",
+        "base": "/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-historical-checked-sound-v679a",
+        "receipt_kind": "development-fast-nl-v679a-historical-checked-sound-checkpoint-v1",
+        "checkpoint_sha256": "7cbbab99a519adc6b939900dd4eca08db33106de38a563fc3fd63121c436623a",
+        "driver_sha256": "759831ad3d5bda2232b5a66d6fa01b4c32f2495cf23188c1fbde9a74c592eb68",
+        "marker": "CANDLE_FLYSPECK_V679A_HISTORICAL_CHECKED_SOUND_CHECKPOINT_READY",
         "required_logs": [
-          "- Finished loading candle/cv_compute_flyspeck_direct_source_compat.ml",
-          "- Finished loading candle/cv_compute_analytic_expr_case10173_fixture.ml"
+          "- Finished loading candle/cv_compute_analytic_expr_case10173_historical_dihedral_program_compute.ml",
+          "- Finished loading candle/cv_compute_analytic_expr_fixed_scale_historical_root_certificate_sound.ml",
+          "- Finished loading candle/cv_compute_analytic_expr_fixed_scale_historical_root_certificate_compute.ml",
+          "- Finished loading candle/cv_compute_analytic_expr_case10173_historical_dihedral_checked_compute.ml",
+          "- Finished loading candle/cv_compute_analytic_expr_case10173_historical_dihedral_checked_sound.ml"
         ],
-        "probe": "/project/flyspeck-candle-runs/v678-fast-nl-direct-source-interface-restart-probe-dev-001",
-        "probe_marker": "CANDLE_FLYSPECK_V678_DIRECT_SOURCE_INTERFACE_RESTART_PROBE_OK"
+        "probe": "/project/flyspeck-candle-runs/v679a-fast-nl-historical-checked-sound-restart-probe-dev-001",
+        "probe_marker": "CANDLE_FLYSPECK_V679A_HISTORICAL_CHECKED_SOUND_RESTART_PROBE_OK"
       },
       "minimum_available_memory_gib": 24,
       "maximum_active_matching_controllers": 0,
