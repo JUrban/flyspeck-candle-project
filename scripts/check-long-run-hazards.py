@@ -76,7 +76,7 @@ TAG10_ADDITIVE_BRIDGE_CONTRACT = (
     PROJECT / "scripts/audit-fast-nl-tag10-additive-bridge.py"
 )
 TAG10_PARENT_CACHE_LOADER_CLOSURE = (
-    PROJECT / "scripts/audit-fast-nl-tag10-kernel-loader-closure.py"
+    PROJECT / "scripts/audit-fast-nl-tag10-kernel-loader-result.py"
 )
 REGISTERED_INPUT_LOADER_CONTRACT = (
     PROJECT / "scripts/audit-fast-nl-v679e-registered-input-loader.py"
