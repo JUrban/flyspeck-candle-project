@@ -793,6 +793,17 @@
       "check_id": "tag10_additive_bridge_contract",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-070",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v683-fast-nl-tag10-parent-relocation-dev-001/parent-relocation.log",
+      "failure_mode": "Holmake --relocbuild still expands the four generated-theory relocation targets to 238 local proof theories; the supervised run is stopped after 12 seconds.",
+      "root_cause": "In this Poly/Holmake configuration, exported .ui and .uo files are textual dependency manifests, while --relocbuild changes compilation timestamp treatment but still constructs the full source dependency graph.  Re-exporting proofs is unnecessary for relocation.  The replacement must byte-copy the authenticated generated .sml, .sig, .dat, and cachekey files and mechanically rewrite only the scratch path component in the textual .ui/.uo manifests, followed by an actual bounded kernel-loader smoke test.",
+      "check_id": "tag10_additive_bridge_contract",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }

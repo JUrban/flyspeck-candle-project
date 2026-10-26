@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+printf '%s\n' \
+  'retired: --relocbuild expanded this controller to 238 local theories' >&2
+exit 2
+
 worktree=/project/worktrees/cakeml-direct-fast-nl-integration-v1
 compute=$worktree/candle/prover/compute
 scratch=$compute/tag10_probe_scratch

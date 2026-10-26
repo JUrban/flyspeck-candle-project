@@ -70,6 +70,11 @@ class LongRunHazardGateTests(unittest.TestCase):
         self.assertEqual(
             recursive_cache["check_id"], "tag10_additive_bridge_contract"
         )
+        relocbuild = next(item for item in hazards if item["id"] == "LR-070")
+        self.assertEqual(relocbuild["profiles"], ["kernel-build"])
+        self.assertEqual(
+            relocbuild["check_id"], "tag10_additive_bridge_contract"
+        )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
