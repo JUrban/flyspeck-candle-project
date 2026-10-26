@@ -52,6 +52,13 @@ SUBTREE_PROBE = pathlib.Path(
 SUBTREE_PROBE_LOG_SHA256 = (
     "00f1c7de3ff62d91b69d3ff72fa8d33af29181b81363fcf08ac921dc805de33e"
 )
+FAILED_EXPORT = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679h-fast-nl-prepared-input-export-dev-001"
+)
+FAILED_EXPORT_LOG_SHA256 = (
+    "bb9de7576f1e924dbc7687d4e5e074513f281a5aa39f5195594a8f5579fbe51a"
+)
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -192,6 +199,25 @@ def authenticate_failure() -> int:
         or any(text in subtree_log for text in ("EXCEPTION:", "ERROR:", "Parsing failed"))
     ):
         return fail("registered_input_subtree_probe_contract")
+
+    failed_export_marker = FAILED_EXPORT / "PROBE-FAILED"
+    failed_export_log_path = FAILED_EXPORT / "runtime.log"
+    if (
+        not failed_export_marker.is_file()
+        or failed_export_marker.is_symlink()
+        or not failed_export_log_path.is_file()
+        or failed_export_log_path.is_symlink()
+        or sha256(failed_export_log_path) != FAILED_EXPORT_LOG_SHA256
+    ):
+        return fail("prepared_input_export_failure_identity")
+    failed_export_log = failed_export_log_path.read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if (
+        failed_export_log.count("Undefined variable: Stdlib.output_char") != 1
+        or "CANDLE_FLYSPECK_V679H_PREPARED_INPUT_EXPORT_OK" in failed_export_log
+    ):
+        return fail("prepared_input_export_failure_signature")
     return 0
 
 

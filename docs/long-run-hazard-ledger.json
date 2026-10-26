@@ -680,6 +680,16 @@
       "root_cause": "ML module shadowing does not retroactively rebind lexical references held by already-loaded verifier modules; a direct smoke test is not evidence that the transitive consumer closure was repaired.",
       "check_id": "registered_input_preparation_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-059",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679h-fast-nl-prepared-input-export-dev-001/runtime.log",
+      "failure_mode": "The prepared-input exporter uses unsupported Stdlib.output_char and binds the enormous cached input at top level, causing a fast API failure plus a 47 MiB diagnostic log.",
+      "root_cause": "The exporter did not restrict itself to the already tested Candle channel API and did not keep the large data value inside a discarded-result scope.",
+      "check_id": "registered_input_preparation_contract",
+      "enforcement": "preflight"
     }
   ]
 }
