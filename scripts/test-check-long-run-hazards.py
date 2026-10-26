@@ -63,22 +63,27 @@ class LongRunHazardGateTests(unittest.TestCase):
         parent_cache = next(item for item in hazards if item["id"] == "LR-068")
         self.assertEqual(parent_cache["profiles"], ["kernel-build"])
         self.assertEqual(
-            parent_cache["check_id"], "tag10_additive_bridge_contract"
+            parent_cache["check_id"], "tag10_parent_cache_loader_closure"
         )
         recursive_cache = next(item for item in hazards if item["id"] == "LR-069")
         self.assertEqual(recursive_cache["profiles"], ["kernel-build"])
         self.assertEqual(
-            recursive_cache["check_id"], "tag10_additive_bridge_contract"
+            recursive_cache["check_id"], "tag10_parent_cache_loader_closure"
         )
         relocbuild = next(item for item in hazards if item["id"] == "LR-070")
         self.assertEqual(relocbuild["profiles"], ["kernel-build"])
         self.assertEqual(
-            relocbuild["check_id"], "tag10_additive_bridge_contract"
+            relocbuild["check_id"], "tag10_parent_cache_loader_closure"
         )
         damaged_cache = next(item for item in hazards if item["id"] == "LR-071")
         self.assertEqual(damaged_cache["profiles"], ["kernel-build"])
         self.assertEqual(
-            damaged_cache["check_id"], "tag10_additive_bridge_contract"
+            damaged_cache["check_id"], "tag10_parent_cache_loader_closure"
+        )
+        residual_scratch = next(item for item in hazards if item["id"] == "LR-072")
+        self.assertEqual(residual_scratch["profiles"], ["kernel-build"])
+        self.assertEqual(
+            residual_scratch["check_id"], "tag10_parent_cache_loader_closure"
         )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:

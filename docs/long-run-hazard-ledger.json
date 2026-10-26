@@ -779,7 +779,7 @@
       "first_evidence": "v681-fast-nl-tag10-kernel-prog-dev-001/kernel-prog.log",
       "failure_mode": "The admitted kernel build stops after 2 minutes 5 seconds because its freshly linked script requests compute_registeredCase10173HistoricalChunk16Tag10DataTheory.ui from the parent compute object directory, where that object is absent.",
       "root_cause": "The first bounded build resolved four early exported bridge theories from the isolated scratch cache before the corresponding source commit was added to the integration worktree.  Once those sources exist in the parent compute directory, a fresh Holmake dependency scan assigns that logical source location and no longer treats the scratch object path as the durable artifact location.  Before another kernel attempt, exactly those four missing byte-identical exported sources must be built into the parent object directory, their cache keys must match the validated scratch artifacts, and a bounded kernel load smoke test must pass the former missing-object boundary.",
-      "check_id": "tag10_additive_bridge_contract",
+      "check_id": "tag10_parent_cache_loader_closure",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
     },
@@ -790,7 +790,7 @@
       "first_evidence": "v682-fast-nl-tag10-parent-cache-dev-001/parent-cache.log",
       "failure_mode": "A requested four-target parent-cache normalization expands to 239 current-directory theory builds even though Holmake --no_action listed only the four requested generated outputs; the run is stopped after 47 seconds.",
       "root_cause": "Holmake --no_prereqs suppresses recursive builds in include directories but does not suppress prerequisites whose sources are in the current directory, and the no-action output is not a reliable theory-target cardinality receipt.  The failed controller is retired.  Any replacement must relocate the four already-exported generated theory data and compile only their generated interfaces/objects, then prove the production kernel loader crosses the former missing-object boundary under a short cap before another long kernel build.",
-      "check_id": "tag10_additive_bridge_contract",
+      "check_id": "tag10_parent_cache_loader_closure",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
     },
@@ -801,7 +801,7 @@
       "first_evidence": "v683-fast-nl-tag10-parent-relocation-dev-001/parent-relocation.log",
       "failure_mode": "Holmake --relocbuild still expands the four generated-theory relocation targets to 238 local proof theories; the supervised run is stopped after 12 seconds.",
       "root_cause": "In this Poly/Holmake configuration, exported .ui and .uo files are textual dependency manifests, while --relocbuild changes compilation timestamp treatment but still constructs the full source dependency graph.  Re-exporting proofs is unnecessary for relocation.  The replacement must byte-copy the authenticated generated .sml, .sig, .dat, and cachekey files and mechanically rewrite only the scratch path component in the textual .ui/.uo manifests, followed by an actual bounded kernel-loader smoke test.",
-      "check_id": "tag10_additive_bridge_contract",
+      "check_id": "tag10_parent_cache_loader_closure",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
     },
@@ -812,7 +812,18 @@
       "first_evidence": "v685-fast-nl-tag10-kernel-loader-probe-dev-001/kernel-loader.log",
       "failure_mode": "The bounded kernel-loader probe stops after 52 seconds at a missing compute_evalPureTheory.sig, before creating candle_kernelProg.",
       "root_cause": "The earlier aborted 239-theory parent-cache attempt started three local jobs and removed their prior generated .sml, .sig, .dat, and cachekey outputs before it was terminated: compute_evalPure, compute_registeredCase10173Tag10HistItemCongruence, and compute_registeredCase10173Tag10OrdinaryReachable.  This is generated-cache damage caused by the normalization experiment, not an NL proof failure.  No further loader or kernel run is allowed until those exact three artifact sets are restored from authenticated byte-identical donors, all other parent artifacts are inventoried as unchanged, and a non-mutating loader preflight passes.",
-      "check_id": "tag10_additive_bridge_contract",
+      "check_id": "tag10_parent_cache_loader_closure",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-072",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "complete parent-cache closure audit after v686 recovery",
+      "failure_mode": "The nominal parent cache contains 68 .ui/.uo manifests for 34 tag-10 theories whose absolute dependency paths still point into tag10_probe_scratch; a direct loader can therefore appear green while silently consuming the scratch cache.",
+      "root_cause": "The first direct relocation normalized only four early bridge theories.  Their 34 downstream parent-cache theories retained the absolute directory where they were originally exported even though their scripts, generated ML, interfaces, proof data, and cache keys are byte-identical in the parent cache.  Before an actual loader or kernel build, all 68 textual manifests must undergo the same mechanically bounded path-component relocation, all non-manifest bytes must remain unchanged, no scratch reference may remain in the reachable closure, and the production dependency set must load without invoking Holmake.",
+      "check_id": "tag10_parent_cache_loader_closure",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
     }
