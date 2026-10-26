@@ -24,6 +24,7 @@
         "/project/worktrees/candle-direct-fast-nl-runtime-v1": "0f9690d3683efca78a60d4607596815245e37578",
         "/project/worktrees/candle-fast-nl-matan-closure-v1": "172d6a14064575a1dabca7e8e16fd9088070f415",
         "/project/worktrees/candle-fast-nl-historical-sound-v1": "522e7123471bda68ec3417d728507a5cda829897",
+        "/project/worktrees/candle-fast-nl-direct-source-interface-v1": "5ca0e5770ce66925c3a5efd01073fb394f9105b4",
         "/project/worktrees/HOL-cakeml-dopen-v13": "bc47e6586a87ac538a71b10206a83c169c171d1a",
         "/project/worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df": "9ae969dfaca95e223d44b50f7cae00df3d2ab949",
         "/project/worktrees/flyspeck-direct-action296-643bfd12": "d8adac7fe1dbb1e07d417995f786fa77fa1c80a5",
@@ -533,6 +534,16 @@
       "failure_mode": "Exact compact-tree/stack proof files that passed in the earlier v502 Candle state fail only after an expensive restore because the later matan/historical namespace changes overload or unqualified-name resolution.",
       "root_cause": "Prior execution proves the exact proof bytes but not their behavior under every later ambient open and overload context; LR-043 demonstrated that a variable-only quoted arithmetic term can select cval instead of real in such a context.",
       "check_id": "compact_support_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-045",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v666-fast-nl-canonical-verifier-predecessor-dev-001/post-direct-bridge-v677y/runtime.log",
+      "failure_mode": "Loading break_case_exec.hl from the action-49-derived fast-NL state reaches a disabled dynamic use_file_b for nonlinear/prep.hl; naively preloading its three dependencies would then repeat the historical multi-hour nonlinear source computation.",
+      "root_cause": "The static module-closure audit treated literal flyspeck_needs edges as ordinary recursive loads and therefore missed both the fail-closed runtime loader distinction and Break_case_exec's top-level legacy verification cost.  The fast source fixture needs only five small rewrite theorems, not the complete effectful module.",
+      "check_id": "direct_source_interface_contract",
       "enforcement": "preflight"
     }
   ]

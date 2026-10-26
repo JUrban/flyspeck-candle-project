@@ -12,10 +12,13 @@ the action-49 state did not contain.
 This audit validates an explicit, deliberately small replacement for that
 ambient state.  It loads Flyspeck's verifier and matan evaluator umbrellas,
 then the two Candle matan bridge files, before the four existing support
-entries.  Their declared literal dependency graphs determine the exact load
-order.  Every source node must be authenticated, every hash must match, and
-every source-level module reference must be available before its consumer is
-evaluated.  The audit never guesses a provider from an unrelated test file.
+entries.  The direct-source compatibility node is evaluated through a narrow
+proved rewrite interface, avoiding the multi-hour top-level replay performed
+by the complete Break_case_exec module.  The declared literal dependency
+graphs determine the exact load order.  Every source node must be
+authenticated, every hash must match, and every source-level module reference
+must be available before its consumer is evaluated.  The audit never guesses
+a provider from an unrelated test file.
 
 The authenticated v664 base and action-49 logs are the authority for the
 starting state.  This is DEVELOPMENT / NON-RELEASE preflight evidence, not
@@ -67,6 +70,21 @@ V664_BASE_STRICTBUILD = (
     / "worktrees/flyspeck-strictbuild-checkpoint-base-9ae969df"
     / "text_formalization/build/strictbuild.hl"
 )
+DIRECT_SOURCE_INTERFACE_ROOT = (
+    PROJECT / "worktrees/candle-fast-nl-direct-source-interface-v1"
+)
+DIRECT_SOURCE_INTERFACE_HEAD = "5ca0e5770ce66925c3a5efd01073fb394f9105b4"
+DIRECT_SOURCE_INTERFACE_ORIGINAL = (
+    PROJECT
+    / "worktrees/candle-direct-fast-nl-runtime-v1"
+    / "candle/cv_compute_flyspeck_direct_source_compat.ml"
+).resolve()
+DIRECT_SOURCE_INTERFACE_CANDIDATE = (
+    DIRECT_SOURCE_INTERFACE_ROOT
+    / "candle/cv_compute_flyspeck_direct_source_compat.ml"
+).resolve()
+DIRECT_SOURCE_INTERFACE_ORIGINAL_MD5 = "6da54e8de2098d8281bc7e4a8a4dd62a"
+DIRECT_SOURCE_INTERFACE_CANDIDATE_MD5 = "9c9f370e594809f955f3c9b6a1e1261d"
 
 # These four entries replace the ambient action-296 assumptions documented by
 # the matan and verifier support sources.  Entry order is part of the contract.
@@ -90,8 +108,8 @@ PREREQUISITE_ENTRY_REQUESTS = (
     "candle/cv_compute_analytic_expr_fixed_scale_historical_root_four_x0_sound.ml",
     "candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_variable_compact_stack_sound.ml",
     "candle/cv_compute_analytic_expr_taylor_model_tree_compact_correct.ml",
-    # Authenticate the original logical Flyspeck nodes; the configured
-    # normalization overlay selects their current compatibility sources.
+)
+SUPERSEDED_LEGACY_REPLAY_REQUESTS = (
     "/project/flyspeck-candle-runs/v352-full-boundary-materialization-heap16-dev-005/snapshot/flyspeck/text_formalization/general/serialization.hl",
     "/project/flyspeck-candle-runs/v352-full-boundary-materialization-heap16-dev-005/snapshot/flyspeck/text_formalization/nonlinear/break_case_exec.hl",
 )
@@ -390,6 +408,7 @@ def main() -> int:
         V665_DATA,
         V665_COMPAT,
         V665_SUPPORT,
+        DIRECT_SOURCE_INTERFACE_CANDIDATE,
     ):
         if not required.is_file():
             print(f"missing_input={required}", file=sys.stderr)
@@ -397,6 +416,43 @@ def main() -> int:
 
     starting_paths, unresolved_loaded = loaded_paths()
     normalized_sources, normalization_mismatches = parse_normalization()
+    try:
+        interface_head = subprocess.check_output(
+            ["git", "-C", str(DIRECT_SOURCE_INTERFACE_ROOT), "rev-parse", "HEAD"],
+            text=True,
+        ).strip()
+        interface_status = subprocess.check_output(
+            ["git", "-C", str(DIRECT_SOURCE_INTERFACE_ROOT), "status", "--porcelain"],
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as error:
+        interface_head = f"ERROR:{error}"
+        interface_status = "ERROR"
+    if interface_head != DIRECT_SOURCE_INTERFACE_HEAD:
+        normalization_mismatches.append(
+            (DIRECT_SOURCE_INTERFACE_ORIGINAL, DIRECT_SOURCE_INTERFACE_CANDIDATE,
+             DIRECT_SOURCE_INTERFACE_HEAD, interface_head)
+        )
+    if interface_status:
+        normalization_mismatches.append(
+            (DIRECT_SOURCE_INTERFACE_ORIGINAL, DIRECT_SOURCE_INTERFACE_CANDIDATE,
+             "clean_worktree", "dirty_worktree")
+        )
+    original_md5 = md5(DIRECT_SOURCE_INTERFACE_ORIGINAL)
+    candidate_md5 = md5(DIRECT_SOURCE_INTERFACE_CANDIDATE)
+    if original_md5 != DIRECT_SOURCE_INTERFACE_ORIGINAL_MD5:
+        normalization_mismatches.append(
+            (DIRECT_SOURCE_INTERFACE_ORIGINAL, DIRECT_SOURCE_INTERFACE_ORIGINAL,
+             DIRECT_SOURCE_INTERFACE_ORIGINAL_MD5, original_md5)
+        )
+    if candidate_md5 != DIRECT_SOURCE_INTERFACE_CANDIDATE_MD5:
+        normalization_mismatches.append(
+            (DIRECT_SOURCE_INTERFACE_ORIGINAL, DIRECT_SOURCE_INTERFACE_CANDIDATE,
+             DIRECT_SOURCE_INTERFACE_CANDIDATE_MD5, candidate_md5)
+        )
+    normalized_sources[DIRECT_SOURCE_INTERFACE_ORIGINAL] = (
+        DIRECT_SOURCE_INTERFACE_CANDIDATE
+    )
     verifier_identities, verifier_normalized, verifier_errors = (
         parse_verifier_closure()
     )
@@ -429,11 +485,18 @@ def main() -> int:
         starting_modules.update(providers)
 
     _, _, support_requests, support_dynamic = source_facts(V665_SUPPORT)
-    if tuple(support_requests) != PREREQUISITE_ENTRY_REQUESTS + LITERAL.ENTRY_REQUESTS:
+    if tuple(support_requests) != (
+        PREREQUISITE_ENTRY_REQUESTS
+        + SUPERSEDED_LEGACY_REPLAY_REQUESTS
+        + LITERAL.ENTRY_REQUESTS
+    ):
         verifier_errors.append("v665_support_entry_order")
     if support_dynamic:
         verifier_errors.append("v665_support_dynamic_request")
-    entry_requests = tuple(support_requests)
+    # The historical v665 file is retained as evidence.  Its two expensive
+    # ambient-state entries are superseded by the proved direct-source
+    # interface above; do not silently execute either one in the current plan.
+    entry_requests = PREREQUISITE_ENTRY_REQUESTS + LITERAL.ENTRY_REQUESTS
     entry_paths: list[pathlib.Path] = []
     unresolved_requests: list[tuple[pathlib.Path | None, str]] = []
     literal_edges: list[tuple[pathlib.Path, pathlib.Path]] = []

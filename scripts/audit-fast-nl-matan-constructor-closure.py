@@ -95,6 +95,9 @@ def planned_paths() -> tuple[set[pathlib.Path], list[str]]:
 
     starting, unresolved_loaded = MODULE.loaded_paths()
     normalized, normalization_mismatches = MODULE.parse_normalization()
+    normalized[MODULE.DIRECT_SOURCE_INTERFACE_ORIGINAL] = (
+        MODULE.DIRECT_SOURCE_INTERFACE_CANDIDATE
+    )
     _, verifier_normalized, verifier_errors = MODULE.parse_verifier_closure()
     normalized.update(verifier_normalized)
     _, _, requests, dynamic = MODULE.source_facts(MODULE.V665_SUPPORT)
@@ -102,9 +105,12 @@ def planned_paths() -> tuple[set[pathlib.Path], list[str]]:
     errors.extend(f"normalization:{item}" for item in normalization_mismatches)
     errors.extend(f"support_dynamic:{item}" for item in dynamic)
     if tuple(requests) != (
-        MODULE.PREREQUISITE_ENTRY_REQUESTS + MODULE.LITERAL.ENTRY_REQUESTS
+        MODULE.PREREQUISITE_ENTRY_REQUESTS
+        + MODULE.SUPERSEDED_LEGACY_REPLAY_REQUESTS
+        + MODULE.LITERAL.ENTRY_REQUESTS
     ):
         errors.append("support_entry_order")
+    requests = list(MODULE.PREREQUISITE_ENTRY_REQUESTS + MODULE.LITERAL.ENTRY_REQUESTS)
 
     visited = set(starting)
     visiting: set[pathlib.Path] = set()

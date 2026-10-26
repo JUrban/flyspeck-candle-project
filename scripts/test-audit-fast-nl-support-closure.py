@@ -89,8 +89,19 @@ class FastNlSupportClosureTests(unittest.TestCase):
         self.assertEqual(dynamic, [])
         self.assertEqual(
             tuple(requests),
-            MODULE.PREREQUISITE_ENTRY_REQUESTS + MODULE.LITERAL.ENTRY_REQUESTS,
+            MODULE.PREREQUISITE_ENTRY_REQUESTS
+            + MODULE.SUPERSEDED_LEGACY_REPLAY_REQUESTS
+            + MODULE.LITERAL.ENTRY_REQUESTS,
         )
+
+    def test_current_interface_removes_break_case_module_dependency(self) -> None:
+        providers, references, loads, dynamic = MODULE.source_facts(
+            MODULE.DIRECT_SOURCE_INTERFACE_CANDIDATE
+        )
+        self.assertIn("Candle_cv_flyspeck_direct_source_compat", providers)
+        self.assertNotIn("Break_case_exec", references)
+        self.assertEqual(loads, [])
+        self.assertEqual(dynamic, [])
 
 
 if __name__ == "__main__":

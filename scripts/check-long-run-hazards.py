@@ -54,6 +54,9 @@ HISTORICAL_SOUND_CONTRACT = (
 COMPACT_SUPPORT_CONTRACT = (
     PROJECT / "scripts/audit-fast-nl-v677-compact-support-contract.py"
 )
+DIRECT_SOURCE_INTERFACE_CONTRACT = (
+    PROJECT / "scripts/audit-fast-nl-v678-direct-source-interface.py"
+)
 M_VERIFIER_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v674-checkpoint-finalization.py"
 )
@@ -249,6 +252,12 @@ def check_historical_sound_contract(_: dict, __: pathlib.Path) -> CheckResult:
 
 def check_compact_support_contract(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(COMPACT_SUPPORT_CONTRACT)], timeout=30)
+
+
+def check_direct_source_interface_contract(
+    _: dict, __: pathlib.Path
+) -> CheckResult:
+    return run_checked([str(DIRECT_SOURCE_INTERFACE_CONTRACT)], timeout=180)
 
 
 def check_checkpoint_integrity(
@@ -797,6 +806,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "matan_repair_checkpoint_chain": check_matan_repair_checkpoint_chain,
     "historical_sound_contract": check_historical_sound_contract,
     "compact_support_contract": check_compact_support_contract,
+    "direct_source_interface_contract": check_direct_source_interface_contract,
     "checkpoint_integrity": check_checkpoint_integrity,
     "checkpoint_admission_chain": check_checkpoint_admission_chain,
     "predecessor_identity_coverage": check_predecessor_identity_coverage,
