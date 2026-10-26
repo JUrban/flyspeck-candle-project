@@ -14,7 +14,7 @@ FAILED = pathlib.Path(
 )
 REPLACEMENT = pathlib.Path(
     "/project/flyspeck-candle-runs/"
-    "v679f-fast-nl-registered-input-preparation-probe-dev-001"
+    "v679g-fast-nl-registered-input-preparation-probe-dev-001"
 )
 FAILED_LOG_SHA256 = "1d455125df2294ae768c00d064f451dc54829107bd7f2aa92674c5067f05c6aa"
 DIAGNOSTIC = pathlib.Path(
@@ -37,6 +37,13 @@ VERIFIER_COMPAT = pathlib.Path(
 )
 VERIFIER_COMPAT_SHA256 = (
     "19b069069caa6dd3d49cf84a3699588dd76ab77fc3b16c394cf50209dfa74706"
+)
+FIRST_REPAIR = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679f-fast-nl-registered-input-preparation-probe-dev-001"
+)
+FIRST_REPAIR_LOG_SHA256 = (
+    "a3940dd1c6f001ae010d7f950fe99387496e9782b8cd3dd7ebd28ffe2bd85a97"
 )
 
 
@@ -126,6 +133,35 @@ def authenticate_failure() -> int:
         or runner.count(str(VERIFIER_COMPAT)) != 1
     ):
         return fail("registered_input_runtime_compat_contract")
+
+    first_repair_marker = FIRST_REPAIR / "PROBE-FAILED"
+    first_repair_log_path = FIRST_REPAIR / "runtime.log"
+    if (
+        not first_repair_marker.is_file()
+        or first_repair_marker.is_symlink()
+        or not first_repair_log_path.is_file()
+        or first_repair_log_path.is_symlink()
+        or sha256(first_repair_log_path) != FIRST_REPAIR_LOG_SHA256
+    ):
+        return fail("registered_input_first_repair_failure_identity")
+    first_repair_log = first_repair_log_path.read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if (
+        first_repair_log.count(
+            "CANDLE_V679F_DIRECT_VERIFIER_RUNTIME_COMPAT dimension=6"
+        )
+        != 1
+        or first_repair_log.count(
+            "CANDLE_CERT_PROFILE lane=action296-plan "
+            "phase=verification-functions-begin"
+        )
+        != 1
+        or first_repair_log.count('EXCEPTION: Failure "dest_const: not a constant"')
+        != 1
+        or "CANDLE_REGISTERED_INPUT_CONSTRUCTION_END" in first_repair_log
+    ):
+        return fail("registered_input_first_repair_failure_signature")
     return 0
 
 

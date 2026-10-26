@@ -660,6 +660,16 @@
       "root_cause": "The diagnostic did not isolate each probe boundary with a local exception handler and used an untested utility outside Candle's supported runtime surface.",
       "check_id": "registered_input_preparation_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-057",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679f-fast-nl-registered-input-preparation-probe-dev-001/runtime.log",
+      "failure_mode": "The restored-state shim repairs real^6 decoding, but the reloaded verifier dispatch raises dest_const: not a constant while preparing the genuine action-296 function, before certificate construction or any of the 4,173 records.",
+      "root_cause": "The exact expression/operator boundary rejected by the composed current runtime is not yet localized; the historical Failure-or-Bind fallback alone is insufficient in this restored module composition.",
+      "check_id": "registered_input_preparation_contract",
+      "enforcement": "preflight"
     }
   ]
 }
