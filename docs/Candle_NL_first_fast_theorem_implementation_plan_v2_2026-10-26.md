@@ -183,6 +183,33 @@ Estimated effort: **1–3 focused days**, with high uncertainty because this is
 the first real generality test.  A discovered new expression family causes a
 written re-estimate rather than an automatic long build.
 
+#### R3 result and correction, 2026-10-26
+
+The stable four-payload executable accepted two structurally different
+genuine families twice each, but inspection found that its implementation was
+an explicit disjunction of the two named family checkers.  The call shape is
+reusable; the runtime implementation is not yet an all-NL checker.  R3
+therefore remains open and R4 remains forbidden.
+
+The first corrective slice is complete at CakeML commit `6b3c5b0fc`:
+
+- the packed input parser is parameterized by dimension and certificate count;
+- the header and traversal are parameterized by cell and certificate counts;
+- the numerical evaluator takes an explicit prepared analytic program;
+- a HOL theorem proves the specialization at `(6,875,31)` and the current
+  case-16594 prepared program exactly equals the established 875-cell checker;
+  and
+- the complete generic core translates to CakeML in one focused 3m03s build.
+
+This removes the family name from the cell-evaluation and streaming layer.  It
+does not yet authenticate an arbitrary decoded source program or evidence
+plan.  The remaining R3 work is a versioned plan decoder and checked generic
+source-to-prepared-program compiler, followed by both genuine fixtures through
+that single implementation.  The current case-specific checkers remain
+regression oracles.  If the first plan schema cannot represent both fixtures
+within eight focused development hours, stop for a schema/proof-gap review;
+do not compensate with a longer runtime build.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

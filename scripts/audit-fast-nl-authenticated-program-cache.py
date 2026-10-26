@@ -72,6 +72,20 @@ MULTIFAMILY_PROGRAM_SOURCE = (
 CASE16594_SOURCE_DATA = (
     COMPUTE / "compute_boundedCase16594SourceCVDataScript.sml"
 )
+GENERIC_PACKED_CHECKER_SOURCE = (
+    COMPUTE / "compute_boundedPackedAnalyticCheckScript.sml"
+)
+GENERIC_PACKED_TRANSLATION_SOURCE = (
+    COMPUTE / "compute_boundedPackedAnalyticCheckProgScript.sml"
+)
+GENERIC_PACKED_RUN = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v693-nl-generic-checker-core-dev-001"
+)
+GENERIC_PACKED_BUILD_LOGS = (
+    GENERIC_PACKED_RUN / "holmake-focused-v8.log",
+    GENERIC_PACKED_RUN / "holmake-prog-focused-v3.log",
+)
 MULTIFAMILY_RUN = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v692-fast-nl-payload4-focused-dev-001/"
@@ -286,6 +300,27 @@ def main() -> int:
             "Theorem bounded_case16594_source_program_cv_decodes",
             "SOME bounded_case16594_program",
         ),
+        GENERIC_PACKED_CHECKER_SOURCE: (
+            "Definition bounded_packed_chars_analytic_input_def",
+            "Definition bounded_packed_chars_analytic_cell_def",
+            "Definition bounded_packed_chars_analytic_header_def",
+            "Definition bounded_packed_chars_analytic_eval_cell_def",
+            "Definition bounded_packed_chars_analytic_check_cells_def",
+            "Definition bounded_packed_chars_analytic_complete_check_def",
+            "cell_count < 4294967296",
+            "certificate_count < 4294967296",
+            "Theorem bounded_packed_chars_analytic_complete_check_case16594",
+            "Theorem bounded_packed_chars_analytic_eval_cell_success_well_formed",
+        ),
+        GENERIC_PACKED_TRANSLATION_SOURCE: (
+            'translation_extends "compute_boundedPackedSequentialCase16594CheckProg"',
+            "bounded_packed_chars_analytic_input_def",
+            "bounded_packed_chars_analytic_cell_def",
+            "bounded_packed_chars_analytic_header_def",
+            "bounded_packed_chars_analytic_eval_cell_def",
+            "bounded_packed_chars_analytic_check_cells_def",
+            "bounded_packed_chars_analytic_complete_check_def",
+        ),
     }
     for path, markers in multifamily_sources.items():
         text = path.read_text(encoding="utf-8") if path.is_file() else ""
@@ -316,6 +351,21 @@ def main() -> int:
     export_text = MULTIFAMILY_BUILD_LOGS[-1].read_text(encoding="utf-8")
     if "unverified/sexpr-bootstrap" not in export_text:
         errors.append("multifamily_export_bootstrap_include_missing")
+
+    generic_build_markers = {
+        GENERIC_PACKED_BUILD_LOGS[0]: (
+            'Saved theorem _______ "bounded_packed_chars_analytic_complete_check_case16594"',
+            "Exit status: 0",
+        ),
+        GENERIC_PACKED_BUILD_LOGS[1]: (
+            'Saved theorem _______ "bounded_packed_chars_analytic_complete_check_v_thm"',
+            "Exit status: 0",
+        ),
+    }
+    for path, markers in generic_build_markers.items():
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if any(marker not in text for marker in markers):
+            errors.append(f"generic_packed_build_failed:{path.name}")
 
     multifamily_results = {
         "run-case10173": "accepted",
@@ -354,6 +404,10 @@ def main() -> int:
             "82f5c7f81b7a6ec292b6426caddaddb1ce7fde5dfbd83c2900a072f679a28dcb",
         MULTIFAMILY_RUN / "checker":
             "2bef10702774f960f709285effb88570df766670af07974ba46dc068f7336277",
+        GENERIC_PACKED_CHECKER_SOURCE:
+            "0c529d2f0b3247063efc5825be8e1aa8e2269017b3ab18096ff1f7c8e7543118",
+        GENERIC_PACKED_TRANSLATION_SOURCE:
+            "c5cfcdd2478718987b7ac157058a2e4d0d72786f95e431acbda7adeba2a00aa6",
     }
     for path, expected in expected_hashes.items():
         if sha256(path) != expected:

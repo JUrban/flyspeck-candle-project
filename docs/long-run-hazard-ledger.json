@@ -925,6 +925,61 @@
       "check_id": "authenticated_program_cache",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-082",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "v693-nl-generic-checker-core-dev-001/holmake.log",
+      "failure_mode": "A focused generic-checker proof command exits immediately because it invokes the repository default HOL binary, which rejects the current CakeML Holmakefile syntax as bogus.",
+      "root_cause": "The workspace contains multiple HOL installations and only the pinned HOL-cakeml-dopen-v13 installation matches this CakeML worktree. Every focused proof or translation controller must record and invoke the exact HOLDIR, Holmake path, CAKEMLDIR, and include set before allocating build resources.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-083",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "v693-nl-generic-checker-core-dev-001/holmake-v2.log",
+      "failure_mode": "Requesting the new one-theory target from the integration source directory proposes 37 ancestor theory builds and begins rebuilding compute_bounded instead of testing only the new slice.",
+      "root_cause": "The integration worktree contains the current sources but not the complete generated ancestor cache. Holmake --no_prereqs does not suppress current-directory prerequisites, and a cross-worktree source include conflicts with CAKEMLDIR project identity. Focused work must first hash-match direct ancestor sources, then run from the existing disposable probe directory inside the cache-owning worktree with the candidate source linked in and the parent cache supplied by -I ..; a proposed target count greater than the declared slice is a stop condition.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-084",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "v693-nl-generic-checker-core-dev-001/holmake-focused-v5.log",
+      "failure_mode": "A header-equivalence proof using a broad reverse w2n injectivity rewrite consumes about 5.5 GiB and remains CPU-bound after roughly 100 seconds on a two-field comparison.",
+      "root_cause": "Applying GSYM w2n_11 through a large case expression causes pathological simplifier expansion. The format already stores word values, so the durable representation compares words directly and enforces the natural-number 2^32 format bound once at the outer checker. Focused proofs must stop on rapid memory growth before increasing a timeout.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-085",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "v693-nl-generic-checker-core-dev-001/holmake-prog-focused-v1.log",
+      "failure_mode": "The first one-theory translation exits before translation because ml_translatorLib, ml_progLib, and basis are absent from the focused Holmake search path.",
+      "root_cause": "A logical-theory focused command was reused for a program-translation target without the translator and basis include directories. Translation preflight must use the exact previously successful environment: pinned HOLDIR and CAKEMLDIR plus explicit translator, basis, misc, and parent-cache include paths.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-086",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "v693-nl-generic-checker-core-dev-001/holmake-prog-focused-v2.log",
+      "failure_mode": "Six generic checker functions translate, but translation of the complete-check wrapper raises Subscript immediately after attempting to add the type :64 itself.",
+      "root_cause": "The runtime definition exposed dimword (:64) as a polymorphic word-dimension expression to the translator even though the packed format has 32-bit count fields. Replacing it with the explicit 4294967296 format bound preserves the fail-closed contract and translates. New runtime definitions must avoid exposing type-level word-size operations when the wire-format bound is concrete.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
