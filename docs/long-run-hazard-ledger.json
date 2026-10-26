@@ -710,6 +710,16 @@
       "root_cause": "The dominant cost is the general HOL term parser and type reconstruction, not only nesting depth.  Prepared cval data needs a simple canonical data codec decoded by constructors rather than repeated HOL syntax parsing.",
       "check_id": "registered_input_preparation_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-062",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "run-fast-nl-v679k-export-prepared-input-flat.sh initial launch",
+      "failure_mode": "The bounded flat-data probe controller is committed without its executable bit and fails before restoring Candle.",
+      "root_cause": "A newly added shell controller had mode 0644, while static bash syntax and content checks did not validate launch permissions.",
+      "check_id": "registered_input_preparation_contract",
+      "enforcement": "preflight"
     }
   ]
 }

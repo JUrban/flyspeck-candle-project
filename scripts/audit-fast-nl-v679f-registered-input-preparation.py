@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import pathlib
 
 
@@ -72,6 +73,9 @@ CHUNK_EXPORT = pathlib.Path(
 )
 CHUNK_EXPORT_LOG_SHA256 = (
     "e778445595cefdf7de55a71edc515f809f93b4b33526e1d9a75e2ec104252bc5"
+)
+FLAT_EXPORT_RUNNER = (
+    PROJECT / "scripts/run-fast-nl-v679k-export-prepared-input-flat.sh"
 )
 
 
@@ -264,6 +268,12 @@ def authenticate_failure() -> int:
         or "roughly 50-minute" not in chunk_stopped.read_text(encoding="utf-8")
     ):
         return fail("prepared_input_chunk_parse_rate_contract")
+    if (
+        not FLAT_EXPORT_RUNNER.is_file()
+        or FLAT_EXPORT_RUNNER.is_symlink()
+        or not os.access(FLAT_EXPORT_RUNNER, os.X_OK)
+    ):
+        return fail("prepared_input_flat_export_runner_executable")
     return 0
 
 
