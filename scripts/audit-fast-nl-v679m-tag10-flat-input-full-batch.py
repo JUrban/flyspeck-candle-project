@@ -28,11 +28,21 @@ FAILED = pathlib.Path(
 )
 RUNNER = PROJECT / "scripts/run-fast-nl-v679m-tag10-flat-input-full-batch.sh"
 DRIVER = PROJECT / "tools/fast_nl_v679m_tag10_flat_input_full_batch.ml"
+SURFACE_DRIVER = PROJECT / "tools/fast_nl_v679m_kernel_compute_surface_probe.ml"
 PREDECESSOR_AUDIT = (
     PROJECT / "scripts/audit-fast-nl-v679l-import-prepared-input-flat.py"
 )
+SURFACE = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679m-fast-nl-kernel-compute-surface-probe-dev-001"
+)
 BASE_SHA256 = "07c921204ebe48ad01ffce1c8484785af27b767f4df74500fff058eedfb3946d"
 FAILED_LOG_SHA256 = "95ef45b338b808133516a70440b210f835a19a980fc878677d6e308ba159fb7d"
+SURFACE_LOG_SHA256 = "1e29b9bd1d7ccddfae55545aa511988cc16960179015448210897865b67cc773"
+SURFACE_MARKER = (
+    "CANDLE_FLYSPECK_V679M_KERNEL_COMPUTE_SURFACE_OK "
+    "DEVELOPMENT_NON_RELEASE result=1 assumptions=0"
+)
 MARKER = (
     "CANDLE_FLYSPECK_V679M_TAG10_FLAT_INPUT_FULL_BATCH_READY "
     "DEVELOPMENT_NON_RELEASE cells=4173 result=1 "
@@ -67,12 +77,16 @@ def preflight() -> int:
     required = (
         RUNNER,
         DRIVER,
+        SURFACE_DRIVER,
         PREDECESSOR_AUDIT,
         BASE / "CHECKPOINT-READY",
         BASE / "checkpoint.receipt",
         BASE / "checkpoint.sha256",
         FAILED / "CHECKPOINT-FAILED",
         FAILED / "runtime.log",
+        SURFACE / "PROBE-PASSED",
+        SURFACE / "input-probe.receipt",
+        SURFACE / "runtime.log",
     )
     if any(not path.is_file() or path.is_symlink() for path in required):
         return fail("missing_or_symlinked_preflight_authority")
@@ -91,6 +105,20 @@ def preflight() -> int:
         not in (FAILED / "CHECKPOINT-FAILED").read_text(encoding="utf-8")
     ):
         return fail("full_batch_namespace_failure_contract")
+    surface_receipt = fields(SURFACE / "input-probe.receipt")
+    surface_log_path = SURFACE / "runtime.log"
+    surface_log = surface_log_path.read_text(encoding="utf-8", errors="replace")
+    if (
+        sha256(surface_log_path) != SURFACE_LOG_SHA256
+        or surface_receipt.get("base_checkpoint_sha256") != BASE_SHA256
+        or surface_receipt.get("driver_sha256") != sha256(SURFACE_DRIVER)
+        or surface_receipt.get("expected_marker") != SURFACE_MARKER
+        or int(surface_receipt.get("elapsed_seconds", "601")) > 600
+        or surface_log.count(SURFACE_MARKER) != 1
+        or "|- " not in surface_log
+        or any(text in surface_log for text in ("EXCEPTION:", "ERROR:", "Parsing failed"))
+    ):
+        return fail("kernel_compute_surface_probe_contract")
     predecessor = subprocess.run(
         [str(PREDECESSOR_AUDIT)],
         cwd=PROJECT,
@@ -109,14 +137,19 @@ def preflight() -> int:
 
     runner = RUNNER.read_text(encoding="utf-8")
     driver = DRIVER.read_text(encoding="utf-8")
+    surface_driver = SURFACE_DRIVER.read_text(encoding="utf-8")
     if (
         runner.count("FAST_NL_PHASE_TIMEOUT_SECONDS=1200") != 1
         or runner.count("audit-fast-nl-v679m-tag10-flat-input-full-batch.py") != 1
         or runner.count("$audit") != 2
         or runner.count("run-fast-nl-restored-checkpoint-phase-v1.sh") != 1
-        or driver.count("Kernel.compute") != 1
+        or driver.count("let theorem = Kernel.compute") != 1
         or "Candle_cv_analytic_expr_jet_prove" in driver
         or driver.count("let candle_v679m_compute equations tm") != 1
+        or surface_driver.count("let theorem = Kernel.compute") != 1
+        or "Candle_cv_analytic_expr_jet_prove" in surface_driver
+        or "if hyp theorem <> [] then" not in driver
+        or "if hyp theorem <> [] then" not in surface_driver
         or driver.count("candle_v679l_checked_call") != 2
         or driver.count(MARKER) != 1
         or driver.count("axioms ()") != 2
