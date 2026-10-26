@@ -610,6 +610,16 @@
       "root_cause": "The boot-time diagnostic validates the ordinary CakeML parser surface but does not install HOL Light's runtime quotation parser.  It is valid for quotation-free controller glue, not for HOL proof files containing term quotations; those exact bytes must be parsed in a bounded restored HOL session.",
       "check_id": "tag10_fragment_probe_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-052",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "tag-10 migration review after v679c logical proof",
+      "failure_mode": "The private-tag migration repairs the isolated logical step theorem but changes the executable source splice, breaks one of the 4,173 authenticated checked records, or invalidates a downstream program, invariant, analytic, or production-contract theorem.",
+      "root_cause": "The historical private sentinel crosses executable encoding, checked-root computation, logical semantics, source-program correctness, and analytic invariants.  An isolated theorem does not cover the complete cross-layer contract.",
+      "check_id": "tag10_full_candidate_contract",
+      "enforcement": "preflight"
     }
   ]
 }
