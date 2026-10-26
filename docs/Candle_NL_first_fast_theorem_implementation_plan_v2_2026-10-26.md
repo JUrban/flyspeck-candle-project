@@ -4,6 +4,45 @@ Date: 2026-10-26 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## R3 execution update — 2026-10-26
+
+The empirical two-family part of R3 is green.  CakeML commit `e49324121`
+builds one four-payload executable that accepts the unchanged genuine
+case-10173 certificate and the structurally different genuine case-16594
+certificate twice each.  The same binary rejects certificate, source, job,
+root, and cross-family substitutions.  No runtime/compiler rebuild was used.
+
+The experiment also found the intended architectural discriminator: although
+the command-line interface is shared, the checker body still contains an
+explicit disjunction of the case-10173 and case-16594 checkers.  Adding a third
+family would therefore change verified runtime source.  This is evidence that
+the interface shape is viable, but it is not yet the general all-NL runtime
+required by the production design rule below.  R4 remains **not admitted**.
+
+The replacement bounded gate is to move family identity out of runtime
+dispatch: decode an arbitrary supported source program and versioned evidence
+plan, prove checker acceptance sound for that decoded program, and keep each
+Flyspeck source-to-program correspondence theorem outside the runtime.  The
+two current family-specific checkers remain exact regression oracles.  The
+same generic source must reproduce both positive runs and all substitutions
+before this plan advances to R4.
+
+The selected-language routes are now explicit but not yet all present in that
+generic checker:
+
+- `hminus` uses the already-proved extra-coordinate/interval-parameter
+  fallback and the general append-parameter theorem;
+- `matan` becomes a general checked instruction using the existing exact
+  series, dimension-jet soundness, fixed-scale handoff, and genuine original
+  theorem evidence; and
+- the five `asn`/`acs`/`arc_hhn` leaves use guarded formal normalization
+  through `ASN_ATN`/`ACS_ATN`, with `arc_hhn` unfolded, into the existing
+  `atan`/`sqrt` language.
+
+This classification is not a claim that all 7,814 selected leaves have run.
+It prevents those operations from being introduced as case-specific branches
+during a long runtime build.
+
 ## Decision and present status
 
 The first fast original Flyspeck NL theorem remains **0/1**.  The mathematical

@@ -881,6 +881,50 @@
       "check_id": "authenticated_program_cache",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-078",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v692-fast-nl-payload4-focused-dev-001/external-multifamily-checker-v1/run-case16594.stdout",
+      "failure_mode": "The second genuine family is accepted by its earlier family-specific executable but is rejected immediately by the first shared four-payload executable, before the numerical cell traversal.",
+      "root_cause": "The case-10173 external files use the canonical flat `P N ...` cv spelling while the genuine case-16594 source artifact uses the compact native `p(n...,...)` spelling. The first shared wrapper recognized only the flat syntax. The correction is one bounded parser for the exact native grammar followed by the same general logical source decoder and complete source-program equality; basenames, family tags, and arbitrary aliases remain forbidden. Before a runtime build, require both genuine source spellings to pass the same executable twice and require certificate/source/job/root substitutions to reject.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-079",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v692-fast-nl-payload4-focused-dev-001/multifamily-external-checker-prog-build-v2.log",
+      "failure_mode": "After adding the native source parser, the translated shared checker fails at `cv_pack_byte_chunk_aux_def` even though the packing runtime had translated successfully in the preceding version.",
+      "root_cause": "The revised theory ancestor declaration replaced the direct `compute_cvPackedBytesRuntime` ancestor with `compute_cvNativeRuntime` instead of retaining both. Transitive theory ancestry did not recreate the unqualified ML binding used by the translation script. The shared translation must name both ancestors explicitly, and the preflight must check the complete ordered packing, parser, decoder, and family-checker translation closure.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-080",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v692-fast-nl-payload4-focused-dev-001/multifamily-external-fast-export-build-v1.log",
+      "failure_mode": "The translated shared checker and command-line program build, but AST export fails because `astToSexprLib` is unavailable in the focused Holmake environment.",
+      "root_cause": "The focused export invocation omitted CakeML's `unverified/sexpr-bootstrap` include directory. The export source itself was valid. Any reusable checker export receipt must show the explicit bootstrap include path, a status-zero export, and subsequent direct compiler and link identities.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-081",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v692-fast-nl-payload4-focused-dev-001/case16594-sequential-prog-build-v1.log",
+      "failure_mode": "A nominal final case-16594 translation target expands to 25 missing translation stages and reaches its ten-minute cap after only six stages, providing no final artifact.",
+      "root_cause": "The prepared cache contained the logical case-16594 theories but not the complete current generated program-translation suffix, and older complete donors had incompatible cache keys and predated two required translations. The correction is to authenticate the exact missing stage list and build it in restartable sub-ten-minute groups, preserving each exported boundary; a timeout increase or blind monolithic retry is forbidden.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }
