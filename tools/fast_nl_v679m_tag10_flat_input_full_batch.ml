@@ -4,24 +4,25 @@
 
 module Candle_fast_nl_v679m_tag10_full_batch = struct
 
-open Candle_cv_analytic_expr_jet_prove;;
 open Candle_cv_analytic_expr_case10173_historical_dihedral_checked_compute;;
 open Candle_fast_nl_v679l_prepared_input;;
 
 let candle_v679m_axioms_before = axioms ();;
 
-let _ =
-  candle_q_dim_analytic_jet_profile_event
-    "v679m-tag10-flat-input-full-compute-begin";;
+let candle_v679m_compute equations tm =
+  let theorem = Kernel.compute (COMPUTE_INIT_THMS,equations) tm in
+  if hyp theorem <> [] then
+    failwith "v679m computed theorem has assumptions";
+  theorem;;
+
+let _ = print_endline "v679m-tag10-flat-input-full-compute-begin";;
 
 let candle_v679m_full_theorem =
-  candle_q_dim_analytic_jet_compute
+  candle_v679m_compute
     candle_cv_case10173_hist_checked_program_compute_eqs
     candle_v679l_checked_call;;
 
-let _ =
-  candle_q_dim_analytic_jet_profile_event
-    "v679m-tag10-flat-input-full-compute-end";;
+let _ = print_endline "v679m-tag10-flat-input-full-compute-end";;
 
 let candle_v679m_valid =
   hyp candle_v679m_full_theorem = [] &&

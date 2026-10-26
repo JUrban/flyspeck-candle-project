@@ -19,6 +19,11 @@ BASE = pathlib.Path(
 OUTPUT = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v666-fast-nl-canonical-verifier-predecessor-dev-001/"
+    "post-tag10-flat-full-batch-v679m-v2"
+)
+FAILED = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v666-fast-nl-canonical-verifier-predecessor-dev-001/"
     "post-tag10-flat-full-batch-v679m"
 )
 RUNNER = PROJECT / "scripts/run-fast-nl-v679m-tag10-flat-input-full-batch.sh"
@@ -27,6 +32,7 @@ PREDECESSOR_AUDIT = (
     PROJECT / "scripts/audit-fast-nl-v679l-import-prepared-input-flat.py"
 )
 BASE_SHA256 = "07c921204ebe48ad01ffce1c8484785af27b767f4df74500fff058eedfb3946d"
+FAILED_LOG_SHA256 = "95ef45b338b808133516a70440b210f835a19a980fc878677d6e308ba159fb7d"
 MARKER = (
     "CANDLE_FLYSPECK_V679M_TAG10_FLAT_INPUT_FULL_BATCH_READY "
     "DEVELOPMENT_NON_RELEASE cells=4173 result=1 "
@@ -65,11 +71,26 @@ def preflight() -> int:
         BASE / "CHECKPOINT-READY",
         BASE / "checkpoint.receipt",
         BASE / "checkpoint.sha256",
+        FAILED / "CHECKPOINT-FAILED",
+        FAILED / "runtime.log",
     )
     if any(not path.is_file() or path.is_symlink() for path in required):
         return fail("missing_or_symlinked_preflight_authority")
     if not os.access(RUNNER, os.X_OK):
         return fail("runner_not_executable")
+    failed_log = FAILED / "runtime.log"
+    failed_text = failed_log.read_text(encoding="utf-8", errors="replace")
+    if (
+        sha256(failed_log) != FAILED_LOG_SHA256
+        or failed_text.count(
+            "ERROR: Undefined module: Candle_cv_analytic_expr_jet_prove"
+        )
+        != 1
+        or "v679m-tag10-flat-input-full-compute-begin" in failed_text
+        or "restored runtime reported an error before the requested boundary"
+        not in (FAILED / "CHECKPOINT-FAILED").read_text(encoding="utf-8")
+    ):
+        return fail("full_batch_namespace_failure_contract")
     predecessor = subprocess.run(
         [str(PREDECESSOR_AUDIT)],
         cwd=PROJECT,
@@ -93,7 +114,9 @@ def preflight() -> int:
         or runner.count("audit-fast-nl-v679m-tag10-flat-input-full-batch.py") != 1
         or runner.count("$audit") != 2
         or runner.count("run-fast-nl-restored-checkpoint-phase-v1.sh") != 1
-        or driver.count("candle_q_dim_analytic_jet_compute") != 1
+        or driver.count("Kernel.compute") != 1
+        or "Candle_cv_analytic_expr_jet_prove" in driver
+        or driver.count("let candle_v679m_compute equations tm") != 1
         or driver.count("candle_v679l_checked_call") != 2
         or driver.count(MARKER) != 1
         or driver.count("axioms ()") != 2

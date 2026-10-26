@@ -720,6 +720,16 @@
       "root_cause": "A newly added shell controller had mode 0644, while static bash syntax and content checks did not validate launch permissions.",
       "check_id": "registered_input_preparation_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-063",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "post-tag10-flat-full-batch-v679m/runtime.log",
+      "failure_mode": "The exact numerical batch restores successfully but fails before computation because it opens Candle_cv_analytic_expr_jet_prove, a module absent from the prepared-input checkpoint.",
+      "root_cause": "The batch inherited an untested namespace assumption from the older all-in-one v679d controller.  The required trusted operation is only Kernel.compute plus an assumption check and does not require loading the larger proof adapter module.",
+      "check_id": "tag10_flat_full_batch_contract",
+      "enforcement": "preflight"
     }
   ]
 }

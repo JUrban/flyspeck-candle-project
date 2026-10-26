@@ -3,7 +3,7 @@ set -euo pipefail
 
 project=/project/flyspeck-candle-project
 base=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-tag10-flat-input-v679l
-output=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-tag10-flat-full-batch-v679m
+output=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-tag10-flat-full-batch-v679m-v2
 runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-005
 driver=$project/tools/fast_nl_v679m_tag10_flat_input_full_batch.ml
 audit=$project/scripts/audit-fast-nl-v679m-tag10-flat-input-full-batch.py
