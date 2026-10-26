@@ -45,6 +45,10 @@ class LongRunHazardGateTests(unittest.TestCase):
         self.assertEqual(
             preparation["check_id"], "registered_input_preparation_contract"
         )
+        additive = next(item for item in hazards if item["id"] == "LR-065")
+        self.assertEqual(
+            additive["check_id"], "tag10_additive_bridge_contract"
+        )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -740,6 +740,16 @@
       "root_cause": "The installed fast dispatcher requires byte-for-byte equality with registered_case10173_historical_chunk16_ceqs, whose frozen historical splice and step use private tag 9.  The corrected restored Candle state supplies equations whose historical splice and step use private tag 10 after public matan claimed tag 9.  The fast branch therefore rejects the equation environment and Kernel.compute falls back to the generic evaluator.  This run does not measure the fast checker.  Raising the timeout or retrying is forbidden until the registered dispatcher and its refinement proof are rebuilt for the corrected tag-10 equation identity and a bounded positive branch-hit probe passes.",
       "check_id": "tag10_flat_full_batch_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-065",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "tag10-hist-step-bounded-build.log",
+      "failure_mode": "Replacing the combined registration-data theory in place invalidates unchanged concrete-input and certificate-binding descendants; a bounded HistStep build spends its 900-second cap replaying the inherited decimal-input proof before reaching the tag-sensitive evaluator theorem.",
+      "root_cause": "The generated theory bundles two different identities: the complete checked input expression, which is unchanged, and the evaluator equation environment, which changes for the private tag-10 migration.  Replacing the whole theory makes Holmake conservatively rebuild both proof cones.  A focused HOL theorem establishes that the input and expected result are identical while only the equation list differs, so the durable repair is an additive tag-10 equation/evaluator bridge that reuses the frozen input and certificate theories.",
+      "check_id": "tag10_additive_bridge_contract",
+      "enforcement": "preflight"
     }
   ]
 }

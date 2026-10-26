@@ -72,6 +72,9 @@ TAG10_FULL_CANDIDATE_CONTRACT = (
 TAG10_FLAT_FULL_BATCH_CONTRACT = (
     PROJECT / "scripts/audit-fast-nl-v679m-tag10-flat-input-full-batch.py"
 )
+TAG10_ADDITIVE_BRIDGE_CONTRACT = (
+    PROJECT / "scripts/audit-fast-nl-tag10-additive-bridge.py"
+)
 REGISTERED_INPUT_LOADER_CONTRACT = (
     PROJECT / "scripts/audit-fast-nl-v679e-registered-input-loader.py"
 )
@@ -307,6 +310,12 @@ def check_tag10_full_candidate_contract(_: dict, __: pathlib.Path) -> CheckResul
 
 def check_tag10_flat_full_batch_contract(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(TAG10_FLAT_FULL_BATCH_CONTRACT)], timeout=180)
+
+
+def check_tag10_additive_bridge_contract(
+    _: dict, __: pathlib.Path
+) -> CheckResult:
+    return run_checked([str(TAG10_ADDITIVE_BRIDGE_CONTRACT)], timeout=30)
 
 
 def check_registered_input_loader_contract(_: dict, __: pathlib.Path) -> CheckResult:
@@ -899,6 +908,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "tag10_fragment_probe_contract": check_tag10_fragment_probe_contract,
     "tag10_full_candidate_contract": check_tag10_full_candidate_contract,
     "tag10_flat_full_batch_contract": check_tag10_flat_full_batch_contract,
+    "tag10_additive_bridge_contract": check_tag10_additive_bridge_contract,
     "registered_input_loader_contract": check_registered_input_loader_contract,
     "registered_input_preparation_contract": check_registered_input_preparation_contract,
     "long_run_admission_guard": check_long_run_admission_guard,
