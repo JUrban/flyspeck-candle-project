@@ -782,6 +782,17 @@
       "check_id": "tag10_additive_bridge_contract",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-069",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v682-fast-nl-tag10-parent-cache-dev-001/parent-cache.log",
+      "failure_mode": "A requested four-target parent-cache normalization expands to 239 current-directory theory builds even though Holmake --no_action listed only the four requested generated outputs; the run is stopped after 47 seconds.",
+      "root_cause": "Holmake --no_prereqs suppresses recursive builds in include directories but does not suppress prerequisites whose sources are in the current directory, and the no-action output is not a reliable theory-target cardinality receipt.  The failed controller is retired.  Any replacement must relocate the four already-exported generated theory data and compile only their generated interfaces/objects, then prove the production kernel loader crosses the former missing-object boundary under a short cap before another long kernel build.",
+      "check_id": "tag10_additive_bridge_contract",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }
