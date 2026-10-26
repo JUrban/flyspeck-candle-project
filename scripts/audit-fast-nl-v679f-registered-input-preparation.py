@@ -66,6 +66,13 @@ MONOLITH_EXPORT = pathlib.Path(
 MONOLITH_EXPORT_LOG_SHA256 = (
     "403db71cb4536177e04ac779a3e9cfb663317680e0a66ced2d4208d38581f95d"
 )
+CHUNK_EXPORT = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679j-fast-nl-prepared-input-chunks-dev-001"
+)
+CHUNK_EXPORT_LOG_SHA256 = (
+    "e778445595cefdf7de55a71edc515f809f93b4b33526e1d9a75e2ec104252bc5"
+)
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -243,6 +250,20 @@ def authenticate_failure() -> int:
         not in monolith_failed.read_text(encoding="utf-8")
     ):
         return fail("prepared_input_monolith_timeout_contract")
+
+    chunk_stopped = CHUNK_EXPORT / "PROBE-STOPPED"
+    chunk_log_path = CHUNK_EXPORT / "runtime.log"
+    if (
+        not chunk_stopped.is_file()
+        or chunk_stopped.is_symlink()
+        or not chunk_log_path.is_file()
+        or chunk_log_path.is_symlink()
+        or sha256(chunk_log_path) != CHUNK_EXPORT_LOG_SHA256
+        or len(list(CHUNK_EXPORT.glob("jobs-*.term"))) != 9
+        or list(CHUNK_EXPORT.glob("roots-*.term"))
+        or "roughly 50-minute" not in chunk_stopped.read_text(encoding="utf-8")
+    ):
+        return fail("prepared_input_chunk_parse_rate_contract")
     return 0
 
 

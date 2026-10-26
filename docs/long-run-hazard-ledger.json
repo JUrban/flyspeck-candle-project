@@ -700,6 +700,16 @@
       "root_cause": "A monolithic textual HOL term creates an impractical deep-parser path; the existing 16-record ledger partition must be preserved across export/import instead of flattened into one parse unit.",
       "check_id": "registered_input_preparation_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-061",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679j-fast-nl-prepared-input-chunks-dev-001",
+      "failure_mode": "Splitting the textual HOL term into 16-record chunks avoids one deep parse but still measures 11 to 15 seconds per chunk, projecting roughly 50 minutes for export validation alone.",
+      "root_cause": "The dominant cost is the general HOL term parser and type reconstruction, not only nesting depth.  Prepared cval data needs a simple canonical data codec decoded by constructors rather than repeated HOL syntax parsing.",
+      "check_id": "registered_input_preparation_contract",
+      "enforcement": "preflight"
     }
   ]
 }
