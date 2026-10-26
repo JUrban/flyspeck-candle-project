@@ -131,6 +131,24 @@ STAGES = (
             "- Finished loading candle/cv_compute_analytic_expr_taylor_model_tree_compact_correct.ml",
         ),
     },
+    {
+        "directory": ROOT / "post-compact-support-v677x",
+        "kind": "development-fast-nl-v677-compact-support-checkpoint-v1",
+        "sha256": "9865171f71ea99bb4277f98f441a331b142cffb9a266e8356d0dad5d3942979f",
+        "marker": "CANDLE_FLYSPECK_V677_COMPACT_SUPPORT_CHECKPOINT_READY",
+        "driver": PROJECT / "tools/fast_nl_v677_compact_support_stage.ml",
+        "required": (
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_tree_compact_compute.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_tree_compact_correct.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_tree_compact_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_variable_tree_sound.ml",
+            "- Finished loading candle/cv_compute_analytic_expr_taylor_model_program_fixed_outer_variable_compact_stack_sound.ml",
+        ),
+        "forbidden": (
+            "- Finished loading candle/cv_compute_analytic_expr_case10173_historical_registered_original_prove.ml",
+            "- Finished loading candle/benchmark_cv_compute_analytic_expr_case10173_historical_registered_input.ml",
+        ),
+    },
 )
 
 
