@@ -630,6 +630,16 @@
       "root_cause": "Two byte-identical raw verifier trees occur in the restored search path, but the normalization authority is attached to the verifier-manifest source context.  The registered-input closure did not establish that context as its lexical search-path root before its first still-unloaded verifier dependency.",
       "check_id": "registered_input_loader_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-054",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679e-fast-nl-registered-input-probe-dev-001/runtime.log",
+      "failure_mode": "The focused registered-input probe resolves the intended verifier paths but its preamble compares a string with an unparenthesized concatenation, which Candle groups into a string/bool type mismatch before loading any dependency.",
+      "root_cause": "The new guard relied on visual line layout instead of explicit parentheses across the comparison and string-concatenation operators.  Quotation-free parser acceptance checks syntax only and therefore did not establish the top-level type contract.",
+      "check_id": "registered_input_loader_contract",
+      "enforcement": "preflight"
     }
   ]
 }

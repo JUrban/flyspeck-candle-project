@@ -15,9 +15,13 @@ FAILED = pathlib.Path(
 )
 INPUT = pathlib.Path(
     "/project/flyspeck-candle-runs/"
-    "v679e-fast-nl-registered-input-probe-input-dev-001"
+    "v679e-fast-nl-registered-input-probe-input-v2-dev-001"
 )
 OUTPUT = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679e-fast-nl-registered-input-probe-v2-dev-001"
+)
+TYPED_FAILED = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v679e-fast-nl-registered-input-probe-dev-001"
 )
@@ -59,6 +63,8 @@ def preflight() -> int:
     required = (
         FAILED / "PROBE-FAILED",
         FAILED / "runtime.log",
+        TYPED_FAILED / "PROBE-FAILED",
+        TYPED_FAILED / "runtime.log",
         PREAMBLE,
         POSTCHECK,
         RUNNER,
@@ -83,6 +89,17 @@ def preflight() -> int:
         or "CANDLE_FLYSPECK_V679D_TAG10_FULL_BATCH_OK" in log
     ):
         return fail("failed_registered_input_signature")
+    typed_failed_log = (TYPED_FAILED / "runtime.log").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if (
+        typed_failed_log.count("Type mismatch between string and bool at line 3")
+        != 1
+        or typed_failed_log.count(str(MANIFEST_ROOT)) < 3
+        or "verifier/certificate.hl ->" in typed_failed_log
+        or "CANDLE_REGISTERED_INPUT_CONSTRUCTION_BEGIN" in typed_failed_log
+    ):
+        return fail("typed_preamble_failure_signature")
 
     preamble = PREAMBLE.read_text(encoding="utf-8")
     if (
@@ -90,6 +107,9 @@ def preflight() -> int:
         or "formal_ineqs/verifier/certificate.hl" not in preamble
         or "formal_ineqs/misc/report.hl" not in preamble
         or "verifier source-root precedence" not in preamble
+        or preamble.count(
+            '(candle_v679d_verifier_source_root ^\n'
+        ) != 2
     ):
         return fail("verifier_source_root_precedence_contract")
     runner = RUNNER.read_text(encoding="utf-8")
@@ -110,6 +130,7 @@ def preflight() -> int:
     print("status=0")
     print("failed_stage=registered_input_dependency_load")
     print("failed_numerical_compute_started=false")
+    print("preamble_precedence_failure_count=1")
     print("replacement_timeout_seconds=600")
     print("replacement_preferred_source_root=verifier_manifest")
     return 0

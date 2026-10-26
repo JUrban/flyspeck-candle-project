@@ -16,11 +16,11 @@ let candle_v679d_report_source =
   file_on_path (!load_path) "formal_ineqs/misc/report.hl";;
 
 if candle_v679d_certificate_source <>
-     candle_v679d_verifier_source_root ^
-       "/formal_ineqs/verifier/certificate.hl" ||
+     (candle_v679d_verifier_source_root ^
+       "/formal_ineqs/verifier/certificate.hl") ||
    candle_v679d_report_source <>
-     candle_v679d_verifier_source_root ^
-       "/formal_ineqs/misc/report.hl" then
+     (candle_v679d_verifier_source_root ^
+       "/formal_ineqs/misc/report.hl") then
   failwith "v679d verifier source-root precedence";;
 
 let candle_v679d_target_names =

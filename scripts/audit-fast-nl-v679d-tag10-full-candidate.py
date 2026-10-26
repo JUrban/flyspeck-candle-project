@@ -30,7 +30,7 @@ OUTPUT = pathlib.Path(
 )
 REGISTERED_INPUT_PROBE = pathlib.Path(
     "/project/flyspeck-candle-runs/"
-    "v679e-fast-nl-registered-input-probe-dev-001"
+    "v679e-fast-nl-registered-input-probe-v2-dev-001"
 )
 RUNNER = PROJECT / "scripts/run-fast-nl-v679d-tag10-full-candidate.sh"
 GLUE = (
