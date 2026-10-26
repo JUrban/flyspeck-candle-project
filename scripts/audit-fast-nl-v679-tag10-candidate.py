@@ -12,17 +12,19 @@ PROJECT = pathlib.Path("/project/flyspeck-candle-project")
 CANDIDATE = pathlib.Path("/project/worktrees/candle-fast-nl-historical-tag10-v1")
 BASE = pathlib.Path(
     "/project/flyspeck-candle-runs/"
-    "cv-historical-checked-stable-5aa38ffb-checkpoint-v1-dev-001"
+    "v666-fast-nl-canonical-verifier-predecessor-dev-001/"
+    "post-direct-source-interface-v678"
 )
 RESIDUAL = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v679b-fast-nl-tag9-residual-diagnostic-dev-001"
 )
-DRIVER = PROJECT / "tools/fast_nl_v679c_tag10_logical_probe.ml"
+PREAMBLE = PROJECT / "tools/fast_nl_v679c_tag10_fragment_preamble.ml"
+POSTCHECK = PROJECT / "tools/fast_nl_v679c_tag10_fragment_postcheck.ml"
 HEAD = "85276ec10e3fd2f6df6114350aa773da9b327a4e"
 BASE_HEAD = "172d6a14064575a1dabca7e8e16fd9088070f415"
 BASE_SHA256 = (
-    "48a67f3189bab4c3910fcffe924be38cd64986cef9f9b57b5cb977e9d72979d9"
+    "980d06be6fb7b418a018fddfd3cdd0bece5bd5f1ba83695264cc532dd742fce1"
 )
 FILES = {
     "candle/cv_compute_analytic_expr_case10173_historical_dihedral_program_compute.ml":
@@ -48,10 +50,11 @@ def fail(message: str) -> int:
 
 def main() -> int:
     required = (
-        DRIVER,
+        PREAMBLE,
+        POSTCHECK,
         BASE / "CHECKPOINT-READY",
         BASE / "checkpoint.sha256",
-        BASE / "checkpoint-seal.receipt",
+        BASE / "checkpoint.receipt",
         RESIDUAL / "PROBE-PASSED",
         RESIDUAL / "tag9-residual.receipt",
         RESIDUAL / "runtime.log",
@@ -105,14 +108,16 @@ def main() -> int:
     ):
         return fail("residual_goal_evidence")
 
-    driver = DRIVER.read_text(encoding="utf-8")
+    preamble = PREAMBLE.read_text(encoding="utf-8")
+    postcheck = POSTCHECK.read_text(encoding="utf-8")
     if (
-        driver.count(str(CANDIDATE)) != 1
-        or driver.count("TAG10_LOGICAL_PROOF_OK") != 1
-        or driver.count("axioms ()") != 2
-        or "new_axiom" in driver
+        preamble.count("axioms ()") != 1
+        or postcheck.count("axioms ()") != 1
+        or postcheck.count("TAG10_FRAGMENT_LOGICAL_PROOF_OK") != 1
+        or "new_axiom" in preamble
+        or "new_axiom" in postcheck
     ):
-        return fail("driver_contract")
+        return fail("fragment_driver_contract")
 
     print("status=0")
     print("changed_source_count=4")
@@ -121,7 +126,8 @@ def main() -> int:
     print("residual_matan_goal_count=1")
     print("declared_axiom_growth=0")
     print(f"candidate_head={HEAD}")
-    print(f"driver_sha256={sha256(DRIVER)}")
+    print(f"preamble_sha256={sha256(PREAMBLE)}")
+    print(f"postcheck_sha256={sha256(POSTCHECK)}")
     print(f"base_checkpoint_sha256={BASE_SHA256}")
     return 0
 

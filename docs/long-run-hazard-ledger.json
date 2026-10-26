@@ -590,6 +590,26 @@
       "root_cause": "The generic fixed-nonlinear instruction semantics now assigns matan to tag 9, while the historical case-10173 splice independently reserved raw tag 9 for its private item.  The older exact proof evidence used the pre-matan generic semantics and therefore did not cover this collision.",
       "check_id": "historical_tag9_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-050",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679c-fast-nl-tag10-logical-probe-dev-001/runtime.log",
+      "failure_mode": "A focused candidate proof probe restores an old authenticated checkpoint and calls needs on a new isolated-worktree path; the loader rejects the unauthenticated source before any candidate theorem is attempted, but the later undefined theorem can be mistaken for a proof failure.",
+      "root_cause": "Authenticated checkpoint source authority is intentionally frozen.  Unpromoted proof candidates must be supplied as exact hash-recorded fragment bytes from a compatible predecessor, not discovered through ordinary path-based needs loading.",
+      "check_id": "tag10_fragment_probe_contract",
+      "enforcement": "preflight"
+    },
+    {
+      "id": "LR-051",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679c-fast-nl-tag10-logical-fragment-input-dev-001/driver.ml",
+      "failure_mode": "The fast boot-time parser diagnostic rejects a directly assembled proof-source fragment at its first HOL backtick quotation before the bounded restored proof probe starts.",
+      "root_cause": "The boot-time diagnostic validates the ordinary CakeML parser surface but does not install HOL Light's runtime quotation parser.  It is valid for quotation-free controller glue, not for HOL proof files containing term quotations; those exact bytes must be parsed in a bounded restored HOL session.",
+      "check_id": "tag10_fragment_probe_contract",
+      "enforcement": "preflight"
     }
   ]
 }
