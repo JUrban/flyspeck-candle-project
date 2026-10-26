@@ -580,6 +580,16 @@
       "root_cause": "Candle records loaded-source authority as basename plus content MD5 after authenticated relocation, whereas the preliminary comparison used run-local absolute paths.  Absolute-path equality is not the loader contract.",
       "check_id": "remaining_support_partition_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-049",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "post-historical-production-contract-v679b/runtime.log",
+      "failure_mode": "The exact historical logical-program proof that passed before the matan repair now leaves unsolved goals immediately after its item-sound dependency loads.",
+      "root_cause": "The generic fixed-nonlinear instruction semantics now assigns matan to tag 9, while the historical case-10173 splice independently reserved raw tag 9 for its private item.  The older exact proof evidence used the pre-matan generic semantics and therefore did not cover this collision.",
+      "check_id": "historical_tag9_contract",
+      "enforcement": "preflight"
     }
   ]
 }

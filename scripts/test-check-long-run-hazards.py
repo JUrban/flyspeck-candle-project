@@ -39,6 +39,8 @@ class LongRunHazardGateTests(unittest.TestCase):
         self.assertEqual(
             latest["check_id"], "remaining_support_partition_contract"
         )
+        tag9 = next(item for item in hazards if item["id"] == "LR-049")
+        self.assertEqual(tag9["check_id"], "historical_tag9_contract")
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

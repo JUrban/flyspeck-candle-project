@@ -60,6 +60,9 @@ DIRECT_SOURCE_INTERFACE_CONTRACT = (
 REMAINING_SUPPORT_PARTITION = (
     PROJECT / "scripts/audit-fast-nl-v679-remaining-support-partition.py"
 )
+HISTORICAL_TAG9_CONTRACT = (
+    PROJECT / "scripts/audit-fast-nl-v679-tag9-collision.py"
+)
 M_VERIFIER_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v674-checkpoint-finalization.py"
 )
@@ -273,6 +276,10 @@ def check_remaining_support_partition(
     _: dict, __: pathlib.Path
 ) -> CheckResult:
     return run_checked([str(REMAINING_SUPPORT_PARTITION)], timeout=180)
+
+
+def check_historical_tag9_contract(_: dict, __: pathlib.Path) -> CheckResult:
+    return run_checked([str(HISTORICAL_TAG9_CONTRACT)], timeout=30)
 
 
 def check_long_run_admission_guard(_: dict, __: pathlib.Path) -> CheckResult:
@@ -851,6 +858,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "compact_support_contract": check_compact_support_contract,
     "direct_source_interface_contract": check_direct_source_interface_contract,
     "remaining_support_partition_contract": check_remaining_support_partition,
+    "historical_tag9_contract": check_historical_tag9_contract,
     "long_run_admission_guard": check_long_run_admission_guard,
     "checkpoint_integrity": check_checkpoint_integrity,
     "checkpoint_admission_chain": check_checkpoint_admission_chain,
