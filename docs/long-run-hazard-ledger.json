@@ -980,6 +980,17 @@
       "check_id": "authenticated_program_cache",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-087",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "v693-nl-generic-checker-core-dev-001/generic-prepared-plan-prog-v1.log",
+      "failure_mode": "The first generic source compiler translates successfully but every caller inherits a generated precondition because its reusable ceiling-division helper applies DIV and MOD to an unconstrained divisor.",
+      "root_cause": "Although the source rational format always supplies SUC denominator_predecessor, the standalone helper was partial at zero and the translator correctly preserved that obligation through the call graph. The helper is now explicitly total with a zero-divisor rejection value, the real compiler path remains unchanged, and the final compiler/plan translation logs must contain no `has a precondition` warning before any runtime build.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

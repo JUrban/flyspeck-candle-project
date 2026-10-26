@@ -210,6 +210,26 @@ regression oracles.  If the first plan schema cannot represent both fixtures
 within eight focused development hours, stop for a schema/proof-gap review;
 do not compensate with a longer runtime build.
 
+The next source-to-plan slice is complete at CakeML commit `3b1f875aa`:
+
+- every source rational is rounded outward at 2^40 by one total, checked
+  compiler rather than a finite case-16594 constant table;
+- overflow and out-of-dimension variables reject;
+- the six proved delta optimizations are recognized only by exact source
+  polynomial identity;
+- the compiler reproduces the entire established case-16594 prepared program
+  and specialization ledger exactly;
+- version-1 plan metadata carries only dimension and cell count, while the
+  certificate-record count is derived from the compiled program; and
+- the genuine case-16594 source CV plus its versioned metadata is proved
+  equivalent to the established complete checker, with the whole path
+  translated without side conditions.
+
+The remaining proof obligation before promoting this compiler into the
+original-theorem handoff is the general rational-enclosure/source-semantics
+lemma.  After that, the next runtime experiment is one direct genuine payload
+through this plan-driven wrapper, followed by the second family/schema test.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

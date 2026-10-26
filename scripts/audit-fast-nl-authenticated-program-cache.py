@@ -86,6 +86,22 @@ GENERIC_PACKED_BUILD_LOGS = (
     GENERIC_PACKED_RUN / "holmake-focused-v8.log",
     GENERIC_PACKED_RUN / "holmake-prog-focused-v3.log",
 )
+GENERIC_PREPARED_SOURCE = (
+    COMPUTE / "compute_boundedAnalyticPreparedPlanScript.sml"
+)
+GENERIC_PREPARED_TRANSLATION_SOURCE = (
+    COMPUTE / "compute_boundedAnalyticPreparedPlanProgScript.sml"
+)
+GENERIC_PLAN_SOURCE = COMPUTE / "compute_boundedAnalyticPlanCVScript.sml"
+GENERIC_PLAN_TRANSLATION_SOURCE = (
+    COMPUTE / "compute_boundedAnalyticPlanCVProgScript.sml"
+)
+GENERIC_PLAN_BUILD_LOGS = (
+    GENERIC_PACKED_RUN / "generic-prepared-plan-logic-v4.log",
+    GENERIC_PACKED_RUN / "generic-prepared-plan-prog-v3.log",
+    GENERIC_PACKED_RUN / "generic-plan-cv-logic-v2.log",
+    GENERIC_PACKED_RUN / "generic-plan-cv-prog-v1.log",
+)
 MULTIFAMILY_RUN = pathlib.Path(
     "/project/flyspeck-candle-runs/"
     "v692-fast-nl-payload4-focused-dev-001/"
@@ -321,6 +337,34 @@ def main() -> int:
             "bounded_packed_chars_analytic_check_cells_def",
             "bounded_packed_chars_analytic_complete_check_def",
         ),
+        GENERIC_PREPARED_SOURCE: (
+            "Definition bounded_analytic_nat_ceil_div_def",
+            "if denominator = 0 then 0",
+            "Definition bounded_analytic_rational_constant64_def",
+            "ceiling_magnitude < 18446744073709551616",
+            "Definition bounded_analytic_compile_program_def",
+            "Definition bounded_analytic_recognized_specialization_def",
+            "Theorem bounded_analytic_compile_program_case16594",
+        ),
+        GENERIC_PREPARED_TRANSLATION_SOURCE: (
+            'translation_extends "compute_boundedPackedAnalyticCheckProg"',
+            "bounded_analytic_rational_constant64_def",
+            "bounded_analytic_compile_program_def",
+        ),
+        GENERIC_PLAN_SOURCE: (
+            "Datatype:",
+            "bounded_analytic_plan_metadata",
+            "if version = 1 then",
+            "Definition bounded_analytic64_certificate_count_def",
+            "Definition bounded_analytic_source_plan_check_def",
+            "Theorem bounded_analytic_source_plan_check_case16594",
+        ),
+        GENERIC_PLAN_TRANSLATION_SOURCE: (
+            'translation_extends "compute_boundedAnalyticPreparedPlanProg"',
+            "bounded_analytic_program_of_cv_def",
+            "bounded_analytic_plan_metadata_of_cv_def",
+            "bounded_analytic_source_plan_check_def",
+        ),
     }
     for path, markers in multifamily_sources.items():
         text = path.read_text(encoding="utf-8") if path.is_file() else ""
@@ -367,6 +411,31 @@ def main() -> int:
         if any(marker not in text for marker in markers):
             errors.append(f"generic_packed_build_failed:{path.name}")
 
+    generic_plan_build_markers = {
+        GENERIC_PLAN_BUILD_LOGS[0]: (
+            'Saved theorem _______ "bounded_analytic_compile_program_case16594"',
+            "Exit status: 0",
+        ),
+        GENERIC_PLAN_BUILD_LOGS[1]: (
+            'Saved theorem _______ "bounded_analytic_compile_program_v_thm"',
+            "Exit status: 0",
+        ),
+        GENERIC_PLAN_BUILD_LOGS[2]: (
+            'Saved theorem _______ "bounded_analytic_source_plan_check_case16594"',
+            "Exit status: 0",
+        ),
+        GENERIC_PLAN_BUILD_LOGS[3]: (
+            'Saved theorem _______ "bounded_analytic_source_plan_check_v_thm"',
+            "Exit status: 0",
+        ),
+    }
+    for path, markers in generic_plan_build_markers.items():
+        text = path.read_text(encoding="utf-8") if path.is_file() else ""
+        if any(marker not in text for marker in markers):
+            errors.append(f"generic_plan_build_failed:{path.name}")
+        if "has a precondition" in text:
+            errors.append(f"generic_plan_translation_has_precondition:{path.name}")
+
     multifamily_results = {
         "run-case10173": "accepted",
         "repeat-case10173": "accepted",
@@ -408,6 +477,14 @@ def main() -> int:
             "0c529d2f0b3247063efc5825be8e1aa8e2269017b3ab18096ff1f7c8e7543118",
         GENERIC_PACKED_TRANSLATION_SOURCE:
             "c5cfcdd2478718987b7ac157058a2e4d0d72786f95e431acbda7adeba2a00aa6",
+        GENERIC_PREPARED_SOURCE:
+            "af8d8a1f9d7cfe3be77b239c953bbde5d5a070941730479fc39ea15303b7e23e",
+        GENERIC_PREPARED_TRANSLATION_SOURCE:
+            "bf39d62b591b57cb1e18dd47e07e85bb4415a42515238cc10167caba3fbf044f",
+        GENERIC_PLAN_SOURCE:
+            "d3285c575e10a04d2dfa8b74f65115d3ec09d4cf25199c43c819169acb1cf00b",
+        GENERIC_PLAN_TRANSLATION_SOURCE:
+            "996e30009c5542911edf9acc6f872cbf8383cd3c82657bfe2ce58328b60c1320",
     }
     for path, expected in expected_hashes.items():
         if sha256(path) != expected:
