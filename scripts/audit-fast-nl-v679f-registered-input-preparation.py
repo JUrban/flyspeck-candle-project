@@ -59,6 +59,13 @@ FAILED_EXPORT = pathlib.Path(
 FAILED_EXPORT_LOG_SHA256 = (
     "bb9de7576f1e924dbc7687d4e5e074513f281a5aa39f5195594a8f5579fbe51a"
 )
+MONOLITH_EXPORT = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679i-fast-nl-prepared-input-export-dev-001"
+)
+MONOLITH_EXPORT_LOG_SHA256 = (
+    "403db71cb4536177e04ac779a3e9cfb663317680e0a66ced2d4208d38581f95d"
+)
 
 
 def sha256(path: pathlib.Path) -> str:
@@ -218,6 +225,24 @@ def authenticate_failure() -> int:
         or "CANDLE_FLYSPECK_V679H_PREPARED_INPUT_EXPORT_OK" in failed_export_log
     ):
         return fail("prepared_input_export_failure_signature")
+
+    monolith_failed = MONOLITH_EXPORT / "PROBE-FAILED"
+    monolith_log_path = MONOLITH_EXPORT / "runtime.log"
+    monolith_jobs = MONOLITH_EXPORT / "encoded-jobs.term"
+    monolith_roots = MONOLITH_EXPORT / "roots.term"
+    if (
+        not monolith_failed.is_file()
+        or monolith_failed.is_symlink()
+        or not monolith_log_path.is_file()
+        or monolith_log_path.is_symlink()
+        or sha256(monolith_log_path) != MONOLITH_EXPORT_LOG_SHA256
+        or not monolith_jobs.is_file()
+        or monolith_jobs.stat().st_size != 11733780
+        or monolith_roots.exists()
+        or "exited before fresh markers"
+        not in monolith_failed.read_text(encoding="utf-8")
+    ):
+        return fail("prepared_input_monolith_timeout_contract")
     return 0
 
 

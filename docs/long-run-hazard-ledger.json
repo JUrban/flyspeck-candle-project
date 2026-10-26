@@ -690,6 +690,16 @@
       "root_cause": "The exporter did not restrict itself to the already tested Candle channel API and did not keep the large data value inside a discarded-result scope.",
       "check_id": "registered_input_preparation_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-060",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679i-fast-nl-prepared-input-export-dev-001",
+      "failure_mode": "Printing the 11.7 MiB 4,173-job term succeeds, but parsing that single deeply nested list does not finish within the 15-minute bounded probe and never reaches the roots export.",
+      "root_cause": "A monolithic textual HOL term creates an impractical deep-parser path; the existing 16-record ledger partition must be preserved across export/import instead of flattened into one parse unit.",
+      "check_id": "registered_input_preparation_contract",
+      "enforcement": "preflight"
     }
   ]
 }
