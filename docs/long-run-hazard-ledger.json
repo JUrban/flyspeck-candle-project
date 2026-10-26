@@ -804,6 +804,17 @@
       "check_id": "tag10_additive_bridge_contract",
       "enforcement": "preflight",
       "profiles": ["kernel-build"]
+    },
+    {
+      "id": "LR-071",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v685-fast-nl-tag10-kernel-loader-probe-dev-001/kernel-loader.log",
+      "failure_mode": "The bounded kernel-loader probe stops after 52 seconds at a missing compute_evalPureTheory.sig, before creating candle_kernelProg.",
+      "root_cause": "The earlier aborted 239-theory parent-cache attempt started three local jobs and removed their prior generated .sml, .sig, .dat, and cachekey outputs before it was terminated: compute_evalPure, compute_registeredCase10173Tag10HistItemCongruence, and compute_registeredCase10173Tag10OrdinaryReachable.  This is generated-cache damage caused by the normalization experiment, not an NL proof failure.  No further loader or kernel run is allowed until those exact three artifact sets are restored from authenticated byte-identical donors, all other parent artifacts are inventoried as unchanged, and a non-mutating loader preflight passes.",
+      "check_id": "tag10_additive_bridge_contract",
+      "enforcement": "preflight",
+      "profiles": ["kernel-build"]
     }
   ]
 }
