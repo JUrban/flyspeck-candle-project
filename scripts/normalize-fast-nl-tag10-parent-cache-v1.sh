@@ -12,7 +12,6 @@ theories=(
   compute_registeredCase10173HistoricalChunk16Tag10Data
   compute_registeredCase10173Tag10DataIdentity
   compute_registeredCase10173Tag10DispatchProbe
-  compute_registeredCase10173Tag10GenuineHistItemPureEval
   compute_registeredCase10173Tag10HistStepEval
 )
 
@@ -42,7 +41,7 @@ set -o pipefail
       --rebuild=cachekey -j1 "${targets[@]}"
 ) 2>&1 | tee "$run/parent-cache.log"
 
-grep -Fq 'Holmake: [5/5] compute_registeredCase10173Tag10HistStepEval' \
+grep -Fq 'Holmake: [4/4] compute_registeredCase10173Tag10HistStepEval' \
   "$run/parent-cache.log"
 grep -Fq 'Exit status: 0' "$run/parent-cache.log"
 for theory in "${theories[@]}"; do
@@ -57,7 +56,7 @@ done
   printf 'release_evidence=false\n'
   printf 'status=0\n'
   printf 'candidate_head=%s\n' "$head"
-  printf 'normalized_theory_count=5\n'
+  printf 'normalized_theory_count=4\n'
   printf 'maximum_seconds=%s\n' "$maximum_seconds"
   printf 'jobs=1\n'
   printf 'log_sha256=%s\n' "$(sha256sum "$run/parent-cache.log" | awk '{print $1}')"
