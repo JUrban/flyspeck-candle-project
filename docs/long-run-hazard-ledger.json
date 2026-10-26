@@ -640,6 +640,16 @@
       "root_cause": "The new guard relied on visual line layout instead of explicit parentheses across the comparison and string-concatenation operators.  Quotation-free parser acceptance checks syntax only and therefore did not establish the top-level type contract.",
       "check_id": "registered_input_loader_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-055",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679e-fast-nl-registered-input-probe-v2-dev-001/runtime.log",
+      "failure_mode": "After the normalized verifier source root is selected correctly, registered-input preparation reaches verification-functions-begin and raises Bind before constructing any of the 4,173 records or starting numerical computation.",
+      "root_cause": "A partial binding assumption inside the legacy action-296 verification-function preparation path is violated in the current restored environment; the exact binding site is not yet localized and must not be guessed by another long run.",
+      "check_id": "registered_input_preparation_contract",
+      "enforcement": "preflight"
     }
   ]
 }
