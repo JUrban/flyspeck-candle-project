@@ -178,7 +178,13 @@ def preflight() -> int:
     ):
         return fail("full_batch_source_contract")
 
-    return fail("full_batch_execution_gap_unresolved")
+    # The runtime's registered dispatcher is frozen against the pre-matan
+    # private-tag-9 equation environment.  This restored state deliberately
+    # carries the corrected private-tag-10 equations, so exact ceq equality
+    # makes a fast hit impossible and the observed computation is generic
+    # fallback.  Do not retry or increase the timeout: rebuild and positively
+    # probe the registered dispatcher against the corrected identity first.
+    return fail("registered_fast_dispatch_tag10_identity_mismatch")
 
 
 def postflight() -> int:

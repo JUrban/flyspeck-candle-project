@@ -737,7 +737,7 @@
       "classification": "observed",
       "first_evidence": "post-tag10-flat-full-batch-v679m-v2/runtime.log",
       "failure_mode": "The exact authenticated 4,173-cell tag-10 Kernel.compute call starts cleanly but does not return a theorem within the 1,200-second process cap.",
-      "root_cause": "The current in-Candle evaluator path remains orders of magnitude slower than the 7.35-second standalone compiled checker.  Raising the timeout would only conceal the unresolved production execution gap.",
+      "root_cause": "The installed fast dispatcher requires byte-for-byte equality with registered_case10173_historical_chunk16_ceqs, whose frozen historical splice and step use private tag 9.  The corrected restored Candle state supplies equations whose historical splice and step use private tag 10 after public matan claimed tag 9.  The fast branch therefore rejects the equation environment and Kernel.compute falls back to the generic evaluator.  This run does not measure the fast checker.  Raising the timeout or retrying is forbidden until the registered dispatcher and its refinement proof are rebuilt for the corrected tag-10 equation identity and a bounded positive branch-hit probe passes.",
       "check_id": "tag10_flat_full_batch_contract",
       "enforcement": "preflight"
     }
