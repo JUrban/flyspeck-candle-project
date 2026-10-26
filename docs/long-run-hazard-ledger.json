@@ -566,6 +566,16 @@
       "root_cause": "Controller-level policy is not a hard boundary when reusable execution scripts also accept multi-hour default timeouts.  The executors must independently authenticate a receipt bound to the current ledger, gate, controller, and profile bytes.",
       "check_id": "long_run_admission_guard",
       "enforcement": "runtime admission"
+    },
+    {
+      "id": "LR-048",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679-fast-nl-loaded-source-ledger-probe-dev-001",
+      "failure_mode": "A support-stage plan classifies already-loaded sources by absolute worktree or snapshot path, overstates the remaining closure, and risks paying again for sources whose authenticated logical identities are already present.",
+      "root_cause": "Candle records loaded-source authority as basename plus content MD5 after authenticated relocation, whereas the preliminary comparison used run-local absolute paths.  Absolute-path equality is not the loader contract.",
+      "check_id": "remaining_support_partition_contract",
+      "enforcement": "preflight"
     }
   ]
 }

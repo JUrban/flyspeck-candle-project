@@ -16,6 +16,22 @@ evidence, enforcement phase, and executable check.  An entry without a known
 check blocks the gate.  A new failure must be appended to the ledger and must
 receive a cheap discriminator before a retry is allowed.
 
+Before proposing any run above the threshold, perform an explicit pre-mortem:
+compare the proposed source, predecessor, execution mechanism, resource shape,
+and expected outputs with every observed entry and add every newly credible
+failure mode as an anticipated entry.  Anticipated entries are binding in the
+same way as observed failures: they need an executable discriminator or they
+block admission.  The ledger cannot enumerate unknowable failures, but an
+unrecorded known concern is never an acceptable reason to start a long run.
+
+The admission question is answered before committing resources, not after the
+controller starts.  The receipt must therefore cover the exact input bytes and
+must include a bounded faithful runtime probe whenever static checks cannot
+decide the risk.  A stale receipt, a source edit, or a different predecessor
+invalidates admission.  Repeated runs are admitted independently; success of
+an older run is evidence only when its exact relevant bytes and ambient-state
+contract still match.
+
 The checks are deliberately layered.  Purely static checks establish source
 identity, normalization, literal-load, module, and load-order closure.  A
 bounded disposable runtime probe must then restore the real predecessor and

@@ -35,6 +35,10 @@ class LongRunHazardGateTests(unittest.TestCase):
             self.assertTrue(
                 set(profiles).issubset({"theorem", "support-stage"})
             )
+        latest = next(item for item in hazards if item["id"] == "LR-048")
+        self.assertEqual(
+            latest["check_id"], "remaining_support_partition_contract"
+        )
 
     def test_parse_receipt_splits_only_first_equals(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
