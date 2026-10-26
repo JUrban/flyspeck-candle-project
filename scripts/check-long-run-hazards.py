@@ -69,6 +69,9 @@ TAG10_FRAGMENT_PROBE_CONTRACT = (
 TAG10_FULL_CANDIDATE_CONTRACT = (
     PROJECT / "scripts/audit-fast-nl-v679d-tag10-full-candidate.py"
 )
+REGISTERED_INPUT_LOADER_CONTRACT = (
+    PROJECT / "scripts/audit-fast-nl-v679e-registered-input-loader.py"
+)
 M_VERIFIER_CHECKPOINT_FINALIZATION = (
     PROJECT / "scripts/audit-fast-nl-v674-checkpoint-finalization.py"
 )
@@ -294,6 +297,10 @@ def check_tag10_fragment_probe_contract(_: dict, __: pathlib.Path) -> CheckResul
 
 def check_tag10_full_candidate_contract(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(TAG10_FULL_CANDIDATE_CONTRACT)], timeout=30)
+
+
+def check_registered_input_loader_contract(_: dict, __: pathlib.Path) -> CheckResult:
+    return run_checked([str(REGISTERED_INPUT_LOADER_CONTRACT)], timeout=30)
 
 
 def check_long_run_admission_guard(_: dict, __: pathlib.Path) -> CheckResult:
@@ -875,6 +882,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "historical_tag9_contract": check_historical_tag9_contract,
     "tag10_fragment_probe_contract": check_tag10_fragment_probe_contract,
     "tag10_full_candidate_contract": check_tag10_full_candidate_contract,
+    "registered_input_loader_contract": check_registered_input_loader_contract,
     "long_run_admission_guard": check_long_run_admission_guard,
     "checkpoint_integrity": check_checkpoint_integrity,
     "checkpoint_admission_chain": check_checkpoint_admission_chain,

@@ -4,8 +4,8 @@ set -euo pipefail
 project=/project/flyspeck-candle-project
 candidate=/project/worktrees/candle-fast-nl-historical-tag10-v1
 base=/project/flyspeck-candle-runs/v666-fast-nl-canonical-verifier-predecessor-dev-001/post-direct-source-interface-v678
-input=/project/flyspeck-candle-runs/v679d-fast-nl-tag10-full-input-dev-001
-output=/project/flyspeck-candle-runs/v679d-fast-nl-tag10-full-candidate-dev-001
+input=/project/flyspeck-candle-runs/v679d-fast-nl-tag10-full-input-v2-dev-001
+output=/project/flyspeck-candle-runs/v679d-fast-nl-tag10-full-candidate-v2-dev-001
 runtime=/project/flyspeck-candle-runs/nonpromotable-dev-link-direct-fast-nl-b3fb54e-0f9690d-bc47e65-attempt-005
 preamble=$project/tools/fast_nl_v679d_tag10_full_preamble.ml
 batch=$project/tools/fast_nl_v679d_tag10_full_batch.ml

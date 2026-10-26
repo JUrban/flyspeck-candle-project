@@ -1,5 +1,28 @@
 (* DEVELOPMENT / NON-RELEASE preamble for the complete tag-10 candidate. *)
 
+let candle_v679d_verifier_source_root =
+  "/project/worktrees/flyspeck-cv-nonlinear-closure-v11-manifest-d6";;
+
+load_path :=
+  candle_v679d_verifier_source_root ::
+  List.filter
+    (fun path -> path <> candle_v679d_verifier_source_root)
+    !load_path;;
+
+let candle_v679d_certificate_source =
+  file_on_path (!load_path) "formal_ineqs/verifier/certificate.hl";;
+
+let candle_v679d_report_source =
+  file_on_path (!load_path) "formal_ineqs/misc/report.hl";;
+
+if candle_v679d_certificate_source <>
+     candle_v679d_verifier_source_root ^
+       "/formal_ineqs/verifier/certificate.hl" ||
+   candle_v679d_report_source <>
+     candle_v679d_verifier_source_root ^
+       "/formal_ineqs/misc/report.hl" then
+  failwith "v679d verifier source-root precedence";;
+
 let candle_v679d_target_names =
   ["cv_compute_analytic_expr_case10173_historical_dihedral_program_compute.ml";
    "cv_compute_analytic_expr_fixed_scale_historical_root_certificate_sound.ml";

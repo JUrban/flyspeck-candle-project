@@ -620,6 +620,16 @@
       "root_cause": "The historical private sentinel crosses executable encoding, checked-root computation, logical semantics, source-program correctness, and analytic invariants.  An isolated theorem does not cover the complete cross-layer contract.",
       "check_id": "tag10_full_candidate_contract",
       "enforcement": "preflight"
+    },
+    {
+      "id": "LR-053",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "v679d-fast-nl-tag10-full-candidate-dev-001/runtime.log",
+      "failure_mode": "Registered-input preparation resolves verifier/certificate.hl from the earlier strictbuild load-path root, bypasses the authenticated normalized verifier copy, and stops at undefined sprintf before constructing any of the 4,173 records.",
+      "root_cause": "Two byte-identical raw verifier trees occur in the restored search path, but the normalization authority is attached to the verifier-manifest source context.  The registered-input closure did not establish that context as its lexical search-path root before its first still-unloaded verifier dependency.",
+      "check_id": "registered_input_loader_contract",
+      "enforcement": "preflight"
     }
   ]
 }

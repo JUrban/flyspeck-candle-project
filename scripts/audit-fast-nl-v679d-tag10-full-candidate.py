@@ -22,11 +22,15 @@ PRIOR = pathlib.Path(
 )
 INPUT = pathlib.Path(
     "/project/flyspeck-candle-runs/"
-    "v679d-fast-nl-tag10-full-input-dev-001"
+    "v679d-fast-nl-tag10-full-input-v2-dev-001"
 )
 OUTPUT = pathlib.Path(
     "/project/flyspeck-candle-runs/"
-    "v679d-fast-nl-tag10-full-candidate-dev-001"
+    "v679d-fast-nl-tag10-full-candidate-v2-dev-001"
+)
+REGISTERED_INPUT_PROBE = pathlib.Path(
+    "/project/flyspeck-candle-runs/"
+    "v679e-fast-nl-registered-input-probe-dev-001"
 )
 RUNNER = PROJECT / "scripts/run-fast-nl-v679d-tag10-full-candidate.sh"
 GLUE = (
@@ -81,6 +85,9 @@ def preflight() -> int:
         PRIOR / "PROBE-PASSED",
         PRIOR / "input-probe.receipt",
         PRIOR / "runtime.log",
+        REGISTERED_INPUT_PROBE / "PROBE-PASSED",
+        REGISTERED_INPUT_PROBE / "input-probe.receipt",
+        REGISTERED_INPUT_PROBE / "runtime.log",
     )
     if any(not path.is_file() or path.is_symlink() for path in required):
         return fail("missing_or_symlinked_preflight_authority")
@@ -110,6 +117,15 @@ def preflight() -> int:
         or "ERROR:" in prior_log
     ):
         return fail("prior_logical_proof_contract")
+    input_probe_log = (REGISTERED_INPUT_PROBE / "runtime.log").read_text(
+        encoding="utf-8", errors="replace"
+    )
+    if (
+        input_probe_log.count("CANDLE_FLYSPECK_V679E_REGISTERED_INPUT_OK") != 1
+        or "EXCEPTION:" in input_probe_log
+        or "ERROR:" in input_probe_log
+    ):
+        return fail("registered_input_probe_contract")
 
     runner = RUNNER.read_text(encoding="utf-8")
     if (
