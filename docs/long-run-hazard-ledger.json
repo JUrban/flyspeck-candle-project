@@ -1035,6 +1035,17 @@
       "check_id": "authenticated_program_cache",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-092",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.237-nl-current-proof-environment-audit.md",
+      "failure_mode": "Holmake --json, expected to be a read-only dependency query, started a 47-theory build; after a bounded partial refresh, a no-action result could be empty even though no local root artifact had been materialized.",
+      "root_cause": "The active Holmake environment searches external object locations as well as the current worktree, so an externally resolved target can satisfy or shadow a requested local target. Source presence and an empty no-action plan do not authenticate the theorem bytes or prove that the local current-source artifact exists. Supposedly read-only Holmake queries must be wrapped in a short timeout, and build preflight must record the exact local source, artifact, cache key, parent theory identities, and proposed target set. Do not use --json on a shared worktree as an unguarded graph query, and do not infer a coherent proof environment from path order or no-action output alone.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
