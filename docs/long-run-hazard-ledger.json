@@ -1376,6 +1376,28 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-123",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.262-nl-ordinary-source-dispatch.md",
+      "failure_mode": "A focused child Holmake invocation scans the enclosing CakeML holproject and rejects duplicate probe filenames in the deliberately isolated scratch hierarchy before checking the requested child.",
+      "root_cause": "The disposable child already receives every authenticated parent through explicit same-worktree include directories; project-wide source discovery is neither needed nor appropriate there. Invoke Holmake with --no-project and the complete explicit include list, then verify that exactly the intended child is built. A project-discovery ambiguity in an isolated harness is a harness preflight failure, not permission to rename or delete sibling evidence and not a reason to widen the build.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-124",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.262-nl-ordinary-source-dispatch.md",
+      "failure_mode": "A binary-stack dispatcher applies Cases_on to the tail immediately after splitting the input list, so the tactic is also sent to the empty branch where that tail variable does not exist.",
+      "root_cause": "Normalize the successful real evaluator equation first: its option result eliminates underflow and exposes the exact unary or binary operand shape. Only then normalize the word/object stack relation and instantiate the constructor-specific theorem. Do not manually destruct a tail across all branches before the executor has removed impossible shapes; the resulting missing-variable error is proof staging, not a semantic or datatype defect.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

@@ -351,6 +351,15 @@ named theorems.  The two recognized delta instructions remain the explicit
 separate gate before program induction; packed acceptance, multi-family
 evidence, and the original theorem remain open.  No runtime build is admitted.
 
+CakeML commit `0bcbb58f3` closes the ordinary source/prepared dispatcher.  The
+nine constructor-specific theorems are now exposed through one shallow theorem
+over the authenticated instruction relation, and the predicate explicitly
+excludes both recognized delta implementations.  The final one-child build
+took 33.78 seconds and 1,018,400 KiB peak RSS.  The next bounded gate is the two
+exact recognized-delta refinements, followed by analytic-program induction.
+Packed acceptance, the genuine multi-family gate, and the original theorem
+remain open; no runtime build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
