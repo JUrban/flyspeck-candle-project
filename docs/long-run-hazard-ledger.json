@@ -1046,6 +1046,17 @@
       "check_id": "authenticated_program_cache",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-093",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.238-nl-taylor-value-completion-and-proof-harness-identity.md",
+      "failure_mode": "A byte-identical foundational theory rebuilt from a disposable scratch source receives a scratch-location theory identity that cannot compose with cached descendants of the parent identity; a retired scratch directory left beneath the project root also makes Holmake reject duplicate source names before the requested build starts.",
+      "root_cause": "HOL theory identity is tied to the authenticated build/source location as well as the source bytes. A focused proof harness must therefore contain only genuinely new child theories; unchanged parents must resolve from one coherent authenticated cache, and no retired scratch directory may remain reachable beneath the active holproject root. The executable preflight rejects every active scratch source basename that also occurs anywhere else below that root.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

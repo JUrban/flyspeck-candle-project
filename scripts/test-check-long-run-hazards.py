@@ -117,6 +117,48 @@ class LongRunHazardGateTests(unittest.TestCase):
             path.write_text("status=0\nmarker=a=b\n", encoding="utf-8")
             self.assertEqual(GATE.parse_receipt(path), {"status": "0", "marker": "a=b"})
 
+    def test_proof_harness_identity_rejects_parent_source_shadowing(self) -> None:
+        audit = ROOT / "scripts/audit-fast-nl-proof-harness-identity.py"
+        with tempfile.TemporaryDirectory() as directory:
+            project = pathlib.Path(directory)
+            scratch = project / "scratch"
+            parent = project / "parent"
+            scratch.mkdir()
+            parent.mkdir()
+            source = "ExampleScript.sml"
+            (scratch / source).write_text("Theory Example\n", encoding="utf-8")
+
+            clear = subprocess.run(
+                [
+                    str(audit),
+                    "--project-root",
+                    str(project),
+                    "--scratch",
+                    str(scratch),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                check=False,
+            )
+            self.assertEqual(clear.returncode, 0, clear.stdout)
+            self.assertIn("duplicate_source_name_count=0", clear.stdout)
+
+            (parent / source).write_text("Theory Example\n", encoding="utf-8")
+            shadowed = subprocess.run(
+                [
+                    str(audit),
+                    "--project-root",
+                    str(project),
+                    "--scratch",
+                    str(scratch),
+                ],
+                text=True,
+                stdout=subprocess.PIPE,
+                check=False,
+            )
+            self.assertNotEqual(shadowed.returncode, 0)
+            self.assertIn("duplicate_source_name_count=1", shadowed.stdout)
+
     def test_controller_target_must_be_literal_absolute_path(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
