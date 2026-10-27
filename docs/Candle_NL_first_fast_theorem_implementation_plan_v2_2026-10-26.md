@@ -330,6 +330,17 @@ instructions remain a separate explicit gate.  Packed acceptance,
 multi-family evidence, and the original theorem are still open; no long build
 is admitted.
 
+CakeML commit `25d181bb4` packages the remaining ordinary nonlinear
+operation conclusions into the same object-rational Taylor-state vocabulary.
+Successful square-root, inverse, and arctangent executions now produce named
+complete object states while preserving their explicit certificate contracts;
+the concrete pi/2 constant has the corresponding valid exact-endpoint state.
+The final one-child build took 38.46 seconds and 764,000 KiB peak RSS.  The
+next child is the ordinary outer-instruction stack dispatcher.  Recognized
+delta instructions, full program induction, packed acceptance, multi-family
+evidence, and the original theorem remain separate open gates.  No runtime
+build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

@@ -1332,6 +1332,28 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-119",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.260-nl-outer-analytic-object-semantics.md",
+      "failure_mode": "A packaged object-state definition uses a result_center identifier although the declared argument is center_result, and HOL rejects the definition as schematic before any theorem proof runs.",
+      "root_cause": "HOL reports a free right-hand-side identifier as a schematic-definition error. Compare every definition argument against every right-hand-side identifier before interpreting this as a type or ancestor problem. This is a local naming defect and must be fixed in the short child target; it never justifies widening or lengthening a build.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-120",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.260-nl-outer-analytic-object-semantics.md",
+      "failure_mode": "An operation theorem returns an existential radius-weight list while the wrapper already carries a named weight list, leaving two syntactically different completion states after the large field-wise conclusion is unfolded.",
+      "root_cause": "First expose the packaged covers relation, apply the operation theorem, then use equality of the two SOME results to normalize the existential weights before unfolding the object-state constructor. A residual state differing only in weights is option-result determinism and proof-order debt, not a numerical or semantic mismatch.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
