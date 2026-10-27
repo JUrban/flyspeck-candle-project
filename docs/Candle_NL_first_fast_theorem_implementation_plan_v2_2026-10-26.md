@@ -432,6 +432,24 @@ interval rejects in 0.08 seconds. The remaining R3 proof is the universal
 analytic/Taylor and original-statement handoff plus the genuine second-family
 semantic gate. R4 remains forbidden and the first theorem remains **0/1**.
 
+CakeML commit `6a9272048` closes the missing internal geometry guard. Every
+packed center interval must lie inside its whole-box interval, and expansion
+by the supplied radius must cover that interval without signed-word overflow.
+The guard is proved to imply exact integer coverage inequalities, which are
+retained in every accepted-cell object witness. The genuine case-16594
+fixture satisfies exact expansion in all 5,250 coordinates, passes in 7.92
+seconds, and rejects a one-unit-too-small first radius in 0.08 seconds.
+
+The handoff audit also separates two obligations that the phrase “universal
+analytic/Taylor handoff” previously hid. First, the packed geometry and a
+per-family source-box correspondence must establish the arbitrary-center
+`m_cell_domain` premises of the existing theorem
+`candle_fs_result_complete_proxy_analytic_contains_box`. Second, the accepted
+leaf batch must be consumed by the authenticated subdivision topology; 875
+accepted cells and a matching count do not alone prove root-domain coverage.
+Both are proof-only short-loop gates before the genuine second-family gate or
+R4. The first original theorem remains **0/1**.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

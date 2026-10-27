@@ -1629,6 +1629,61 @@
       "check_id": "proof_shape_cartesian_case_split",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-146",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.271-nl-generic-geometry-and-handoff-audit.md",
+      "failure_mode": "The validated generic packed checker checks dimension and endpoint ordering but permits the supplied center environment and Taylor radii to be unrelated to the whole-box environment used for Hessian evaluation.",
+      "root_cause": "Input shape, interval validity, and Taylor geometry were treated as one boundary although they are independent obligations. The production wrapper now requires the center interval to lie inside the whole-box interval and its radius expansion to cover that box, rejects checked-add overflow, and retains the proved integer inequalities through every accepted-cell witness. No accepted packed result may enter the analytic handoff without this geometry contract.",
+      "check_id": "fast_nl_packed_semantic_contract",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-147",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed-repeat",
+      "first_evidence": "docs/progress/2026-10-27-v4.271-nl-generic-geometry-and-handoff-audit.md",
+      "failure_mode": "A downstream generic-checker export repeats LR-080: all program translations rebuild, then the final export fails because astToSexprLib is absent from the Holmake search path.",
+      "root_cause": "The translation launcher contract recorded translator, basis, and misc paths but the export-specific unverified/sexpr-bootstrap dependency was again recalled rather than preflighted from the target's Libs declaration. Before any export target, inspect its Libs stanza and require the exact sexpr-bootstrap include path; a translation-only green command is not an export launcher authority.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-148",
+      "scope": "fast-nl-fixture-identity",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.271-nl-generic-geometry-and-handoff-audit.md",
+      "failure_mode": "A freshly built generic checker is invoked with SOURCE, METADATA, CERTIFICATE paths although its declared interface is CERTIFICATE, SOURCE, METADATA, producing an immediate rejection that can be mistaken for a semantic regression.",
+      "root_cause": "Payload roles were taken from conversational memory rather than the executable's checked argument contract. Every behavioral receipt must pin the ordered role vector as well as path and SHA-256, and the launcher must compare it with the program source or usage string before execution. A fast unexpected rejection first triggers role-order and identity checks, not source edits.",
+      "check_id": "fast_nl_fixture_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-149",
+      "scope": "fast-nl-generic-checker",
+      "classification": "anticipated",
+      "first_evidence": "docs/progress/2026-10-27-v4.271-nl-generic-geometry-and-handoff-audit.md",
+      "failure_mode": "A complete packed run accepts the declared number of numerical cells and is treated as if this alone proved that the cells form the authenticated subdivision covering the original Flyspeck root domain.",
+      "root_cause": "The current packed schema authenticates cell count and leaf calculations, not the subdivision topology or root coverage. The original-theorem handoff must consume an authenticated topology/partition proof, reusing the existing case-16594 compact topology adapter where applicable. Count equality, fixture identity, and per-cell negativity are not substitutes for the root coverage theorem.",
+      "check_id": "fast_nl_packed_semantic_contract",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-150",
+      "scope": "fast-nl-source-identity",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.271-nl-generic-geometry-and-handoff-audit.md",
+      "failure_mode": "The authenticated-program-cache audit is run against the current generic checker branch but still pins source hashes and marker contracts from an earlier pre-semantic-bridge milestone, so it reports eight expected identity/contract mismatches and cannot authorize the current chain.",
+      "root_cause": "A prior milestone's immutable source-identity audit was reused as though it were a rolling authority for an evolving proof branch. Do not refresh individual hashes in place. Before R4, freeze the exact generic checker commit, enumerate the complete proved source closure into a versioned manifest, review the coherent diff from the prior authority, and run a fresh commit-specific audit. A stale audit failure neither proves a semantic regression nor permits a long rebuild.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
