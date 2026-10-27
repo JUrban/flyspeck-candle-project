@@ -1409,6 +1409,17 @@
       "check_id": "proof_harness_source_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-126",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.264-nl-delta-linear-refinement.md",
+      "failure_mode": "A generic match_mp_tac application of the sum-auxiliary refinement leaves existential word-list and accumulator witnesses even though the enclosing definition fixes all five quantified arguments.",
+      "root_cause": "The theorem has an explicit leading universal quantifier and the rewritten goal does not force HOL's matcher to choose every intended witness. Instantiate the word values, object values, concrete zero accumulator, exact object zero, and result explicitly with Q.SPECL before applying the implication. A residual existential over already-known executor inputs is an instantiation ambiguity, not a missing semantic lemma and never justifies widening the build.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

@@ -372,6 +372,16 @@ next bounded gate is now to state the smallest honest specialized helper
 contract and compare its proof scope against a correctly preflighted ordinary
 fallback benchmark.  No hour-scale build is admitted by this finding.
 
+CakeML commit `62b82c20b` closes the first specialized-helper slice.  Exact
+object-rational refinements now cover successful interval sums,
+scale-by-four, list scale-by-four, nested sums, and indexed updates, preserving
+the executable association order.  The final isolated build took 32.68
+seconds and 830,984 KiB peak RSS.  The next short target is the multiplication
+and fixed delta product/value layer, then the gradient and Hessian assemblies;
+the two complete delta Taylor states, analytic-program induction, packed
+acceptance, multi-family gate, and first original theorem remain open.  No
+runtime or compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
