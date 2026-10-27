@@ -1684,6 +1684,50 @@
       "check_id": "authenticated_program_cache",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-151",
+      "scope": "fast-nl-analytic-handoff",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.272-nl-exact-rational-taylor-handoff.md",
+      "failure_mode": "A HOL Light analytic theorem tied to decimal fixed scale 10^12 is treated as the handoff for a packed checker whose verified arithmetic uses scale 2^40.",
+      "root_cause": "Two fixed-scale representations were conflated because both eventually describe Taylor bounds. The only reusable common boundary is the exact candle_q value before either encoding. Preflight must reject a packed-to-analytic bridge that identifies unequal scale representations directly; it must consume the scale-independent exact-rational theorem or prove an explicit conversion.",
+      "check_id": "fast_nl_packed_semantic_contract",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-152",
+      "scope": "fast-nl-analytic-handoff",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.272-nl-exact-rational-taylor-handoff.md",
+      "failure_mode": "The packed checker returns 21 upper-triangular Hessian entries, but the analytic handoff is planned as if it already had the full 6-by-6 interval matrix required by the Taylor theorem.",
+      "root_cause": "Symmetric storage and the analytic matrix contract were not separated. Before any integration build, a focused proof must fix the exact 21-entry index order, expand it symmetrically to all 36 positions, preserve interval containment, and account for doubled off-diagonal quadratic contributions. Numerical acceptance alone cannot discharge this bridge.",
+      "check_id": "fast_nl_packed_semantic_contract",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-153",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.272-nl-exact-rational-taylor-handoff.md",
+      "failure_mode": "A restored checkpoint contains a theorem source injected as a fragment but has no authenticated source-identity entry for its later standalone needs directive; attempts to replay the dependency fail before the proof body runs.",
+      "root_cause": "Resident logical content was mistaken for authenticated source-loader provenance. A disposable proof-body probe may omit exactly the already-resident dependency and must say so, but it may not manufacture a cache identity or claim standalone-load evidence. Production source retains needs, and standalone loading is deferred to a coherent integration state whose source manifest actually contains that path.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-154",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.272-nl-exact-rational-taylor-handoff.md",
+      "failure_mode": "MATCH_MP_TAC is applied to a theorem whose lower, upper, and center variables occur only in its premise, so it existentializes them and a following conjunction proof fails or proves the wrong shape.",
+      "root_cause": "Premise-only binders were left for tactic inference. Focused proofs must instantiate every semantic domain and center argument explicitly before MATCH_MP_TAC, then inspect the resulting premise shape before splitting it. A CONJ_TAC failure at this boundary is a binder-instantiation defect, not grounds for broader proof search or a longer build.",
+      "check_id": "proof_theorem_binder_class",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
