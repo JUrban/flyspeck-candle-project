@@ -382,6 +382,15 @@ the two complete delta Taylor states, analytic-program induction, packed
 acceptance, multi-family gate, and first original theorem remain open.  No
 runtime or compiler build is admitted.
 
+CakeML commits `3db000f70` and `d333a5f41` close pairwise and three-factor
+products, the fixed 21 delta products, and the complete compact delta-value
+calculation.  The final isolated builds took 31.56 and 35.69 seconds, with
+less than 0.9 GiB peak RSS.  The remaining specialized slice is now the signed
+gradient, fixed Hessian, product Hessian, and the two complete Taylor-state
+compositions for the six authenticated instructions.  Program induction,
+packed acceptance, the multi-family gate, and the first original theorem
+remain open; no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

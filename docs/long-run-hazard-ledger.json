@@ -1420,6 +1420,28 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-127",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.265-nl-delta-products-and-value.md",
+      "failure_mode": "The delta-value proof repeats the LR-117 quantifier-class mistake in the opposite direction, applying Q.SPECL to an implicitly generalized sum theorem and failing after a short child build.",
+      "root_cause": "The LR-117 distinction must be checked at every theorem-application site: use Q.SPECL only when the printed theorem conclusion begins with an explicit universal quantifier, and Q.INST for free theorem variables. Before launching even a short child, inspect the dependency theorem statement and classify its binders; do not infer binder kind from the source declaration's visual parameter list.",
+      "check_id": "proof_theorem_binder_class",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-128",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.265-nl-delta-products-and-value.md",
+      "failure_mode": "Unrestricted metis_tac over six interval relations, a fixed-list sum theorem, and the full delta execution trace begins unbounded clause growth instead of selecting the obvious list instance.",
+      "root_cause": "Fixed arithmetic wiring is not a search problem. Instantiate the exact word list, object list, intermediate result, and helper theorem with Q.INST, then close LIST_REL premises by simplification. Interrupt any metis search that expands beyond the local cap; never respond by increasing the timeout or widening the imported theorem set.",
+      "check_id": "proof_search_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
