@@ -1101,6 +1101,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-098",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.247-nl-atan-real-polynomial-bounds.md",
+      "failure_mode": "Broad simplification over a differentiated arctangent polynomial or positivity goal runs silently past the focused-proof budget; after decomposition, a proof script assigns the derivative theorem to the positivity conjunct because the printed top-goal order is mistaken for the proof-manager goal-list order, and later leaves trivial beta or atn-zero residue.",
+      "root_cause": "Large real expressions make unrestricted simplification and normalization unpredictable, while visual goal-stack order is not a safe guide to tactic-combinator branch order. Analytic range proofs must be decomposed into named derivative, algebraic-identity, positivity, continuity, and monotonicity lemmas; a silent focused tactic is stopped at 60 seconds; branch order is confirmed with top_goals() or explicit separate branches; and residual beta/zero facts are proved narrowly. These failures are never grounds for increasing a compiler/runtime timeout.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
