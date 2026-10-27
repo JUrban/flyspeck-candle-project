@@ -1200,6 +1200,28 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-107",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.256-nl-arithmetic-program-operation-refinement.md",
+      "failure_mode": "A new focused child theory references definitions from a cached parent theory that was previously only a transitive build dependency; the source compiles far enough to report that the parent ML theory structure is undeclared, and trying to rebuild a newly linked local copy exposes the same issue one level lower.",
+      "root_cause": "The disposable child harness contained the required parent object in the cache-owning directory but did not include that directory as an explicit load path for a newly declared direct ancestor. Before building a new child, enumerate every direct theory import, confirm its .ui/.uo location, and run the no-action plan with the same-worktree parent cache explicitly included. Do not recursively link and rebuild stable parents, and never mix project identities or another worktree's cache to satisfy a missing import.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-108",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.256-nl-arithmetic-program-operation-refinement.md",
+      "failure_mode": "An operation proof destructures a six-field Taylor state and later instantiates the completion theorem using parser-generated names such as b and a superscripted list name; one field is mistaken for the domain and another generated name is not stable in source text.",
+      "root_cause": "Generated names are diagnostic display artifacts, not a proof interface. Immediately after every record case split, rename the constructor fields to semantic names with rename1; likewise name intermediate completion results from their defining assumption before Q.INST. Validate a failed local theorem in its dumped heap, then replay the exact named proof under the original short cap. Never compensate for field-name ambiguity with positional search or a longer build.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

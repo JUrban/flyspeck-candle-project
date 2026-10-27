@@ -279,9 +279,11 @@ contains mathematical `atn` whenever the input center contains its source
 value.
 
 This closes the nonlinear-operation slice of item 3; it does not close R3.
-The remaining bounded proof work is to package the already-proved base,
-linear, product, square, and nonlinear operation theorems into one stack
-invariant, discharge the recognized delta instructions, lift that invariant
+CakeML commit `2a8ca0b40f` also packages the completed negation, addition,
+multiplication, and square paths behind the same full-state interface.  The
+remaining bounded proof work is therefore to assemble those operation
+theorems and the already-proved constant/variable cases into one stack
+invariant, discharge the recognized delta instructions, lift the invariant
 through generic program evaluation and packed acceptance, and compose the
 accepted result with the existing analytic/Taylor theorem.  No runtime or
 compiler build is admitted at this point.
