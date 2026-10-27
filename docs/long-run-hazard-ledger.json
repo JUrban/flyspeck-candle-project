@@ -1156,6 +1156,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-103",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.253-nl-signed-atan-unit-range.md",
+      "failure_mode": "Unfolding the signed arctangent unit wrapper before simplifying interval projections and normalization retains impossible sign branches; a branch-specific tactic combinator can then apply the positive proof to the pending negative goal.",
+      "root_cause": "The wrapper's option result, sign test, and endpoint normalization determine which mathematical range theorem applies, but broad early unfolding obscured those facts and the proof depended on an assumed proof-manager branch order. Wrapper proofs must first derive input validity from the successful result, normalize projections and signed endpoints, split the sign explicitly, and discharge each branch with a named sign-specific theorem or a uniform metis step. A trivial sign contradiction in the wrong branch is a proof-state sequencing error, not grounds for broader automation or a longer build.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
