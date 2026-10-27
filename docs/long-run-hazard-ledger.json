@@ -1563,6 +1563,28 @@
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-140",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.269-nl-complete-program-refinement.md",
+      "failure_mode": "A recursive Boolean relation is declared as several chained `<=>` clauses, and TotalDefn rejects the second equivalence before any proof starts.",
+      "root_cause": "Use `=` for pattern-complete recursive Boolean equations, matching existing option-valued run definitions; reserve `<=>` for a single nonrecursive relational definition. Check multi-clause definition syntax before launching the focused child.",
+      "check_id": "proof_definition_clause_form",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-141",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.269-nl-complete-program-refinement.md",
+      "failure_mode": "After one-step and recursive program refinements are proved, unfolding the relational run leaves an existential successor; generic rewriting and repeated list case splits do not choose the already named witness.",
+      "root_cause": "At the run-induction boundary, explicitly choose the one-step object successor before rewriting the recursive relation. At singleton evaluation, destructure the returned pair once and normalize the state relation; it already forces the singleton object stack and empty certificate suffix. Do not rediscover these shapes by additional list cases.",
+      "check_id": "proof_shape_cartesian_case_split",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

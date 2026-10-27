@@ -411,6 +411,15 @@ then analytic-program induction and packed-acceptance composition.  The
 two-family semantic gate, reusable runtime build, and first original theorem
 remain open; the first theorem is still **0/1**.
 
+CakeML commits `c4e41c3f3` and `d45b757e0` then compose the ordinary and
+authenticated-delta cases into one exact object-step relation and lift it
+through arbitrary complete analytic programs.  Successful evaluation now
+produces a related singleton exact object-rational Taylor result while
+preserving the certificate suffix.  The remaining R3 proof boundary starts
+at packed-cell input validity and acceptance, followed by the universal
+analytic/Taylor handoff and the genuine two-family semantic test.  This does
+not admit R4, and the first original theorem remains **0/1**.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
