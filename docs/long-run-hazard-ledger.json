@@ -1123,6 +1123,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-100",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.250-nl-object-rational-real-semantics.md",
+      "failure_mode": "A completed focused proof build appears to have produced no artifact when only the integration source worktree is inspected; subsequent small proof-script corrections each risk paying the full HOL startup cost again instead of using the saved failed proof heap.",
+      "root_cause": "The focused proof workflow intentionally reads the candidate through a symlink in the cache-owning disposable harness, so its log and .hol artifacts live there rather than beside the source. In addition, imported HOL constants, ML theorem values, and definition unfolding have different namespace and matching behavior. Every focused invocation must record its working directory, source target, log, and artifact directory; inspect that exact cache before rerunning; and resume the saved failed heap to validate the exact tactic whenever the theory has already reached the failing theorem. A missing artifact in another worktree or a local term/ML namespace error is never grounds for a broader or longer build.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
