@@ -1145,6 +1145,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-102",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.252-nl-positive-atan-kernel-range.md",
+      "failure_mode": "A conditional predecessor-stage theorem supplied to asm_rewrite_tac remains as a nested implication instead of becoming a usable fact; a final semantic theorem whose witness occurs only in its antecedent leaves an unresolved existential even when the desired conclusion is fully fixed.",
+      "root_cause": "Simplification does not invent proofs of stage preconditions or infer witnesses absent from a theorem conclusion. A sequential numerical proof must first instantiate and derive each predecessor fact from the current authenticated input, then apply the next operation theorem with every object operand and semantic value fixed. For a final relation-to-value bridge, use irule only when conclusion variables are anchored and immediately supply any antecedent-only witness with qexists_tac. Nested implications or an existential encoded witness are proof-wiring failures, not reasons for broader automation or longer builds.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
