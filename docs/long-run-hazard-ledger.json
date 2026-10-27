@@ -1112,6 +1112,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-099",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.248-nl-atan-lower-word-refinement.md",
+      "failure_mode": "Broad implication or first-order search over a repeated Horner chain generates thousands of irrelevant operand permutations; replacing it with Q.INST under irule still re-generalizes runtime operands absent from the relation theorem's conclusion as existential witnesses.",
+      "root_cause": "The same generic add/product relation occurs at many structurally similar stages, while its output relation does not uniquely determine the runtime operands. Repeated numerical pipelines must name their semantic stages and apply each operation theorem sequentially. Instantiate every runtime operand, object witness, and result with Q.INST, then use mp_tac on that exact closed implication; do not use broad imp_res_tac/metis_tac or assume Q.INST beneath irule anchors variables absent from the conclusion. Interrupt combinatorial proof search under the focused-proof cap rather than extending any build timeout.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
