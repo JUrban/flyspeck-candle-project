@@ -1255,6 +1255,50 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-112",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.258-nl-prepared-polynomial-step-refinement.md",
+      "failure_mode": "A new child theory's no-action plan proposes rebuilding two semantically unchanged prepared-plan parents because a transitive soundness artifact was refreshed after their output mtimes; direct cachekey checking confirms both stored parent keys still equal their current keys.",
+      "root_cause": "Mtime scheduling can conservatively invalidate an exact cached parent even when its content-addressed theory key is unchanged. A focused child must not silently consume that wider rebuild. Confirm the current parent cache keys, then expose the authenticated cached objects through a source-free same-worktree proxy so the no-action plan contains exactly the child. Never repair this by mixing worktrees, copying unauthenticated objects, or accepting a larger target set.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-113",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.258-nl-prepared-polynomial-step-refinement.md",
+      "failure_mode": "A child statement can parse constants from transitive theory data while its SML proof cannot resolve the corresponding unqualified definition theorem, producing several declaration failures before the proof begins.",
+      "root_cause": "HOL parser visibility and generated SML structure visibility are distinct. Definitions and theorems from indirect ancestors must be referenced through their exact Theory structure unless the child explicitly opens or directly imports that theory. Treat an undeclared proof binding after a successful statement parse as qualification debt, not as a missing mathematical dependency or reason to rebuild ancestors.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-114",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.258-nl-prepared-polynomial-step-refinement.md",
+      "failure_mode": "A single every_case_tac/gvs/metis dispatcher proof over all six source/prepared instruction alternatives becomes silent for about a minute despite each constructor having a small deterministic proof.",
+      "root_cause": "The combined goal multiplies instruction disjunctions, stack shapes, option results, and repeated relation premises before first-order search. Prove one named step lemma for each exact constructor, normalize only that constructor's stack and option cases, and make the final dispatcher a shallow use of those lemmas. Interrupt an opaque dispatcher near 60 seconds; never raise its timeout or infer progress from CPU activity.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-115",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.258-nl-prepared-polynomial-step-refinement.md",
+      "failure_mode": "Simplifying a cons-stack relation in the conclusion leaves the existing wrapped tail-stack relation untouched in the assumptions, so an otherwise complete constant or variable step stops on the unchanged LIST_REL tail.",
+      "root_cause": "simp normalizes the selected goal but does not necessarily expose a matching relation hidden behind a definition in the assumptions. After selecting the exact object successor, normalize both sides of the stack invariant with gvs on the wrapper definition and LIST_REL, then apply the already-proved head relation. A leftover tail relation is proof-state normalization debt, not a semantic failure.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

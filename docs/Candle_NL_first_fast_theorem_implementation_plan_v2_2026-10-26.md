@@ -307,6 +307,17 @@ program-list induction.  This is measurable semantic-bridge progress, not the
 program theorem, packed acceptance, multi-family gate, or first original
 theorem; those remain open and no long build is admitted.
 
+CakeML commit `29b46c86e` closes the one-step half of the source/prepared
+polynomial gate.  For every related constant, variable, negation, addition,
+multiplication, or square instruction, successful execution of the real word
+step now yields an object step and a related successor stack.  The proof uses
+the general rational-enclosure contract and preserves exact postfix operand
+order and failure behavior.  The final one-child build took 30.14 seconds and
+782,864 KiB peak RSS.  The remaining polynomial slice is list induction over
+complete program execution and extraction of its singleton result; nonlinear
+instructions, recognized delta instructions, packed acceptance, and the
+multi-family gate remain open.  No runtime build is admitted by this result.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
