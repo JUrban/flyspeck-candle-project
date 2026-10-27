@@ -360,6 +360,18 @@ exact recognized-delta refinements, followed by analytic-program induction.
 Packed acceptance, the genuine multi-family gate, and the original theorem
 remain open; no runtime build is admitted.
 
+The subsequent recognized-delta audit found that the optimized executors have
+exact source identities and successful-result well-formedness, but not the
+general object-rational semantic refinements assumed by the earlier estimate.
+Only six instructions in the current 167-instruction family use these
+optimizations, so an ordinary-polynomial fallback remains a legitimate option.
+The first no-op-source discriminator rejected but changed interval completion;
+the proper unchanged-source experiment stopped on missing translation-parent
+artifacts before execution.  Neither result decides the architecture.  The
+next bounded gate is now to state the smallest honest specialized helper
+contract and compare its proof scope against a correctly preflighted ordinary
+fallback benchmark.  No hour-scale build is admitted by this finding.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

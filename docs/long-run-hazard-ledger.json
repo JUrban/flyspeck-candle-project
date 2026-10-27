@@ -1398,6 +1398,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-125",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.263-nl-delta-gate-audit.md",
+      "failure_mode": "A translation experiment treats parent cachekey and lock files as if they implied loadable Theory.ui/Theory.uo artifacts; the child links for about a minute and then fails because the ancestor structures are absent.",
+      "root_cause": "A translation proxy is valid only when every required ancestor has concrete loadable theory artifacts, not merely cache metadata. Before linking a child, enumerate and stat each required Theory.ui and Theory.uo at the exact include path. If any are absent, the no-action target ledger must include their bounded rebuilds explicitly or the experiment must stop. Repeating the child with another source include while keeping --no_prereqs is not a repair and is forbidden.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
