@@ -1486,6 +1486,39 @@
       "check_id": "proof_numeric_literal_type",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-133",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.267-nl-delta-state-packaging.md",
+      "failure_mode": "A general six-coordinate state-wrapper proof unfolds the successful executor into a large fixed calculation before applying the existing fixed-list refinement theorem, leaving automation to reconstruct an exact wrapper identity that it no longer sees.",
+      "root_cause": "Derive the successful executor's exact six-element input shape first, preserve its original equation while substituting that shape, expose the corresponding six object values from LIST_REL, and only then instantiate the fixed-list refinement theorem. General-to-fixed packaging is a shape-elimination step, not a first-order search problem.",
+      "check_id": "proof_shape_cartesian_case_split",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-134",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.267-nl-delta-state-packaging.md",
+      "failure_mode": "A generic list-refinement theorem leaves its predicate identifier unquantified, so HOL resolves the name to an existing order-relation constant and reports a misleading LIST_REL type conflict late in the short build.",
+      "root_cause": "Explicitly quantify every generic relation/function parameter at the theorem boundary, especially identifiers that may already exist in the loaded namespace. A constant-versus-predicate type error is a binder audit failure; inspect the parsed theorem before any broader build.",
+      "check_id": "proof_theorem_binder_class",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-135",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.267-nl-delta-state-packaging.md",
+      "failure_mode": "A focused child command is reconstructed from memory with a nonexistent option and then without its authenticated include list, causing one immediate command rejection and one 21-second missing-preamble failure.",
+      "root_cause": "Reuse the canonical focused-child invocation: explicit HOL Holmake path, --no-project, --no_preexecs, the full parent-cache and misc include list, and --qof. Before execution, compare the command with the most recent green child receipt or progress record; do not improvise harness flags even for a short rebuild.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
