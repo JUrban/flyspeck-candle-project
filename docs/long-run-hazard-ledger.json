@@ -1024,6 +1024,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-091",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.236-nl-generic-taylor-error-bridge.md",
+      "failure_mode": "A focused child theory sees the current wide-arithmetic source but typechecks against an older transitive theory image, so a newly proved scale theorem is absent from the static structure; refreshing one source then exposes incompatible parent-theory identities and expands the proposed build set.",
+      "root_cause": "The disposable harness combined current linked sources with a cache whose Taylor-operation chain was built against an older compute_boundedWideSigned theory identity. Source presence is not proof that the loaded theory structure has the same theorem set or parent digest. Before depending on a newly added prerequisite theorem, inspect the loaded theorem identity and proposed target set; either refresh the complete bounded dependency slice once under a declared cap or prove the small unchanged-definition arithmetic fact locally. Do not repeatedly mix current and stale theory images, add path-order exceptions, or turn the focused check into an unbounded ancestor rebuild.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
