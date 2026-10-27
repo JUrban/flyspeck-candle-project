@@ -1134,6 +1134,17 @@
       "check_id": "proof_harness_source_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-101",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.251-nl-word-real-enclosure.md",
+      "failure_mode": "Ordinary rewriting of a real-fraction order goal expands divisions into internal inverse terms, a reversed positivity simplifier can run silently, and broad application of left/right division equivalences rewrites more occurrences than intended.",
+      "root_cause": "The ambient real simplifier is stronger than the representation-only rewrite required at the word/rational boundary. Fraction-order proofs must use PURE_REWRITE_TAC for the fraction representation, derive denominator positivity through explicit instantiated integer-to-real theorems, and apply REAL_LE_LDIV_EQ and REAL_LE_RDIV_EQ in a single chosen direction to the exact goal. A small named field equality may reassociate the remaining quotient. Resume the failed heap and inspect the resulting goal before any rebuild; do not widen simplification or extend the build timeout.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
