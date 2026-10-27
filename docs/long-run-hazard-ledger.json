@@ -1090,6 +1090,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-097",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.246-nl-atan-unary-input-contract.md",
+      "failure_mode": "A focused arctangent operation proof chooses its existential trace witnesses after fs has simplified the goal; one functional witness is eliminated, so the remaining positional qexists_tac sequence silently assigns later values to the wrong fields and leaves nonsensical equalities such as SOME box_twice = SOME box_derivative_square.",
+      "root_cause": "The proof relied on the original existential order surviving destructive goal simplification. Trace witnesses must be fixed explicitly before fs, gvs, rewriting, or existential simplification; overloaded theorem applications must use explicit Q.INST; and temporary progress instrumentation must use a known general tactic rather than assuming a project-specific print_tac is generic. The exact one-theory source proof must pass under a short cap before any dependent build is admitted.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
