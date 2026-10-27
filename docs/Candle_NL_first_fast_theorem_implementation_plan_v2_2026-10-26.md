@@ -295,6 +295,18 @@ iteration remains capped at ten minutes.  There is no responsible calendar
 estimate for the first fast theorem until that first semantic slice and one
 nonlinear operation pass.
 
+CakeML commit `c913c9e59` closes the first half of that bounded stack slice.
+It defines the exact object-rational Taylor state, lifts the word/object
+relation pointwise to evaluator stacks, gives object semantics for constants,
+variables, negation, addition, multiplication, and square, and proves each
+primitive wrapper from the existing full operation refinements.  Its final
+one-theory build took 36.87 seconds and 819,248 KiB peak RSS.  The next child
+must combine this stack relation with the source-to-prepared instruction
+relation and prove one executable polynomial step preserves it, followed by
+program-list induction.  This is measurable semantic-bridge progress, not the
+program theorem, packed acceptance, multi-family gate, or first original
+theorem; those remain open and no long build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

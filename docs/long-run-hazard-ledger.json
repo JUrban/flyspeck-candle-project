@@ -1222,6 +1222,39 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-109",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.257-nl-object-polynomial-stack-semantics.md",
+      "failure_mode": "A theorem binder named interval is parsed as the imported real-analysis interval constant after the analytic ancestors are added, so an otherwise ordinary result variable fails at statement parsing before any proof starts.",
+      "root_cause": "Common mathematical words can become established constants when a focused child imports a richer analytic ancestry. Use semantic representation-qualified binders such as word_interval, object_interval, or result_interval in new statement boundaries, and treat an early parse/type mismatch after an ancestor change as a name-resolution check before changing a definition or widening the build.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-110",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.257-nl-object-polynomial-stack-semantics.md",
+      "failure_mode": "A bare drule chooses the wrong one of two LIST_REL environment assumptions, or leaves a completion theorem partly universally quantified when several premises have the same relation shape.",
+      "root_cause": "The operation wrappers contain repeated premise forms for center and box environments, left and right operands, and word and object states. Apply the reusable theorem only after Q.INST fixes every environment, operand, result, and representation field from the semantic goal. A wrong repeated-premise match is a local theorem-application ambiguity and must be diagnosed in the dumped heap, not addressed with broader search or a longer build.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-111",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.257-nl-object-polynomial-stack-semantics.md",
+      "failure_mode": "A second broad rename1 over a six-field Taylor constructor matches and renames the already-named left operand instead of the newly destructured right operand, silently wiring the addition theorem to generated fields.",
+      "root_cause": "rename1 patterns are unification patterns and do not mean newest case split. When multiple values have the same constructor shape, anchor each rename to the surrounding semantic relation and the corresponding executable operand, for example the left or right covers relation. Inspect the normalized goal before theorem instantiation; do not rely on constructor position or generated field names.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
