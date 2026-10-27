@@ -1728,6 +1728,28 @@
       "check_id": "proof_theorem_binder_class",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-155",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "CakeML commit c6dfafb8c focused validation",
+      "failure_mode": "A focused one-theory proof is launched from the clean source worktree rather than the prepared proof cache, so Holmake schedules roughly 90 ancestors and then fails on a missing parent theory object before reaching the edited theorem.",
+      "root_cause": "Source identity and proof-cache identity were treated as interchangeable. Before a proof build, enumerate the scheduled target set and require every imported parent-theory interface from the selected cache; a focused edit must use the authenticated prepared cache or stop before compilation. A clean source tree is not evidence that its generated-theory cache is complete.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-156",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "CakeML commit c6dfafb8c focused validation",
+      "failure_mode": "A disposable focused proof below the CakeML project root is launched with project discovery enabled, so Holmake sees both the production source and the same-named scratch source and rejects the ambiguous target before running the proof.",
+      "root_cause": "The scratch harness reused a production theory name inside an ancestor holproject without making the project-discovery mode explicit. Same-named disposable probes must run with --no-project from their prepared cache and pass the existing source-collision audit; otherwise they must use a unique theory name. Ambiguous project discovery is a launcher failure, not evidence about the theorem.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

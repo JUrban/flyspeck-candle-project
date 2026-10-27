@@ -450,6 +450,61 @@ accepted cells and a matching count do not alone prove root-domain coverage.
 Both are proof-only short-loop gates before the genuine second-family gate or
 R4. The first original theorem remains **0/1**.
 
+#### R3 trust-boundary correction — 2026-10-27
+
+The scale-independent Taylor work closes more of the mathematics but also
+exposes a boundary that the preceding paragraph described too loosely.  The
+generic checker's theorem is presently a HOL4 theorem about an exact
+object-rational execution.  The analytic and original-statement theorems are
+HOL Light theorems.  A theorem in one logic is not an assumption-free premise
+in the other merely because their rational encodings agree.  Therefore
+“universal analytic/Taylor handoff” is not complete until a registered Candle
+computation connects the two sides.
+
+The established pieces are:
+
+- Candle commits `4a511339`, `dde18e16`, `5f5b7426`, `c5c6bc72`, and
+  `5eda2024` prove the scale-independent exact Taylor bound, expand the packed
+  21-entry Hessian, connect it to analytic second partials, and derive
+  pointwise negativity conditionally from the exact result fields;
+- CakeML commits `230004466` and `c6dfafb8c` prove that an accepted packed
+  cell has a complete exact object-rational result, a true domain flag, and a
+  strictly negative exact upper endpoint; and
+- the final `c6dfafb8c` theory reproduced from the prepared parent cache in
+  39.30 seconds with 1,164,408 KiB peak RSS.  No runtime/compiler build was
+  used.
+
+The missing trusted composition is now its own R3 gate:
+
+1. Fix one ordinary HOL/Candle entry point whose equation set represents the
+   exact object-rational cell computation.  The preferred discriminator is a
+   generic refinement to the existing exact-rational Taylor program and
+   `candle_cv_q_dim_taylor_model_certified_finish`; the old decimal
+   case-10173 checker is not the target, and a new packed ordinary checker is
+   the fallback only if that refinement cannot express the optimized source
+   instructions.
+2. Prove in HOL4 that generic packed acceptance refines default-clock
+   `compute_eval` of that exact entry point for literal input payloads.  This
+   theorem must be source- and cell-parametric; a case-16594 identity theorem
+   is only a test instance.
+3. Consume the resulting ordinary HOL equality in HOL Light and discharge the
+   premises of `candle_q_packed_hessian6_exact_cell_negative` for one genuine
+   case-16594 cell, with no assumptions or new axioms.
+4. Repeat the same route for all 875 cells and then consume the existing
+   authenticated topology.  Cell count is not topology evidence.
+5. Repeat the semantic route on a structurally different genuine family
+   without changing the entry point or registered evaluator source.
+
+The first discriminator is capped at 4 focused hours, with each build capped
+at 10 minutes.  Its output must be the exact entry-point signature, equation
+set, result representation, and residual proof obligations.  If the existing
+exact evaluator cannot represent a recognized optimized instruction, stop
+and compare a proved expansion against a small new ordinary wrapper; do not
+fall back to another family-specific `compute_eval` chain.  R4 remains
+forbidden until this gate is green.  In particular, the present evidence
+justifies continued short proof work but does not yet justify the 20–36-hour
+runtime investment.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

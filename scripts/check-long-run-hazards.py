@@ -374,6 +374,22 @@ def check_proof_harness_source_identity(
     return run_checked([str(PROOF_HARNESS_SOURCE_IDENTITY)], timeout=30)
 
 
+def check_unresolved_versioned_discriminator(
+    _: dict, __: pathlib.Path
+) -> CheckResult:
+    """Fail closed until a development-scope hazard has a frozen audit.
+
+    Some proof-loop and generic-checker hazards are recorded before their
+    eventual integration controller and source manifest exist.  Registering
+    them against this explicit blocker keeps the ledger schema executable
+    without pretending that a nearby audit checks a different contract.  A
+    scope using one of these check IDs cannot receive a green long-run receipt
+    until the ID is replaced with its versioned discriminator.
+    """
+
+    return CheckResult(False, "versioned_discriminator=not_frozen")
+
+
 def check_registered_input_loader_contract(_: dict, __: pathlib.Path) -> CheckResult:
     return run_checked([str(REGISTERED_INPUT_LOADER_CONTRACT)], timeout=30)
 
@@ -969,6 +985,15 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "kernel_rebuild_scope": check_kernel_rebuild_scope,
     "authenticated_program_cache": check_authenticated_program_cache,
     "proof_harness_source_identity": check_proof_harness_source_identity,
+    "fast_nl_fixture_identity": check_unresolved_versioned_discriminator,
+    "fast_nl_packed_semantic_contract": check_unresolved_versioned_discriminator,
+    "proof_definition_clause_form": check_unresolved_versioned_discriminator,
+    "proof_harness_no_live_session": check_unresolved_versioned_discriminator,
+    "proof_numeric_literal_type": check_unresolved_versioned_discriminator,
+    "proof_search_scope": check_unresolved_versioned_discriminator,
+    "proof_shape_cartesian_case_split": check_unresolved_versioned_discriminator,
+    "proof_tactic_branch_scope": check_unresolved_versioned_discriminator,
+    "proof_theorem_binder_class": check_unresolved_versioned_discriminator,
     "registered_input_loader_contract": check_registered_input_loader_contract,
     "registered_input_preparation_contract": check_registered_input_preparation_contract,
     "long_run_admission_guard": check_long_run_admission_guard,
