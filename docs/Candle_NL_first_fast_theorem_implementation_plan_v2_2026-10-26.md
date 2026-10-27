@@ -267,6 +267,25 @@ The next bounded proof gate is therefore explicit:
 5. compose it with the universal Taylor/checker theorem before any runtime
    rebuild is admitted.
 
+#### R3 semantic-proof update — 2026-10-27
+
+The reusable operation layer now includes complete object-rational Taylor
+state refinements for square root, inverse, and arctangent.  In particular,
+CakeML commit `fc7c944721` composes the general signed arctangent range theorem
+with the generic unary Taylor constructor and preserves domain, center value
+and gradient, whole-box value and gradient bounds, and the complete symmetric
+Hessian.  The same theory separately proves that the returned center interval
+contains mathematical `atn` whenever the input center contains its source
+value.
+
+This closes the nonlinear-operation slice of item 3; it does not close R3.
+The remaining bounded proof work is to package the already-proved base,
+linear, product, square, and nonlinear operation theorems into one stack
+invariant, discharge the recognized delta instructions, lift that invariant
+through generic program evaluation and packed acceptance, and compose the
+accepted result with the existing analytic/Taylor theorem.  No runtime or
+compiler build is admitted at this point.
+
 Within the first eight focused hours, the target invariant and at least the
 ordinary polynomial/arithmetic slice must build, or the exact representation
 or theorem mismatch must be reported and this estimate revised.  Every proof

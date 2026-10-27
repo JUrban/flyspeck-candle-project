@@ -1189,6 +1189,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-106",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.255-nl-complete-atan-operation-refinement.md",
+      "failure_mode": "A complete operation-refinement theorem restates auxiliary trace certificates through a case projection from the original Taylor state; after the source state has been destructured, simplification renames the projected field and leaves an otherwise already-proved certificate goal disconnected from its witness.",
+      "root_cause": "The theorem mixed two stable interfaces: the detailed executable trace/certificate theorem and the operation-level state invariant. Keep authentication details in the trace theorem and make the downstream invariant theorem state only the fields consumed by program induction. If an auxiliary certificate must be exported again, expose the source-state decomposition explicitly instead of reconstructing it through a case expression. A short theorem-shape failure is corrected at the statement boundary and never used to justify a broader proof search or longer build.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
