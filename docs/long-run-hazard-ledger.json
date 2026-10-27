@@ -1057,6 +1057,28 @@
       "check_id": "proof_harness_source_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-094",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.241-nl-source-rational-sqrt-certificate.md",
+      "failure_mode": "A standalone arithmetic transfer theorem silently infers its scale and endpoints as reals, so integer lemmas fail later even though every intended application supplies integer certificate data.",
+      "root_cause": "The generic theorem statement contained only overloaded order and arithmetic operators and no fixed-width decoder or other term forcing the intended integer type. Every proof-only arithmetic bridge must annotate its semantic domain in the theorem statement, and focused preflight must inspect the parsed goal type before beginning tactic search. A type mismatch at the first integer lemma is a statement-contract failure, not grounds for broader automation or a longer build.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-095",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.241-nl-source-rational-sqrt-certificate.md",
+      "failure_mode": "A proof closes when entered as separate interactive commands but the compact source tactic chain loses the high-level coverage premise and cannot instantiate the same component theorem.",
+      "root_cause": "An earlier gvs in the single source chain unfolded the coverage relation before a later imp_res_tac tried to use a theorem whose antecedent was the now-absent high-level relation. Before rebuilding, replay the exact combined tactic chain or inspect its post-rewrite assumptions; derive components before destructive simplification, or unfold the residual relation directly. Success of sequential interactive commands is evidence about the lemmas, not proof that a differently grouped source tactic script preserves the same state.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
