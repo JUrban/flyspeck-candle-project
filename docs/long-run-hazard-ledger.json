@@ -1354,6 +1354,28 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-121",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.261-nl-ordinary-outer-step-refinement.md",
+      "failure_mode": "Unannotated object-step binders named state and domain resolve to existing HOL constants, so type inference reports unrelated eval_state/function types inside a case expression.",
+      "root_cause": "Common semantic names can already denote imported HOL constants and therefore fail to become fresh definition binders. Use role-qualified binders such as object_state, object_next, and object_domain and annotate the state-pair types at the definition boundary. An imported-constant type in a new relation is a binder-collision discriminator, not evidence of a malformed evaluator datatype.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-122",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.261-nl-ordinary-outer-step-refinement.md",
+      "failure_mode": "A final unrestricted metis_tac over the expanded square-root state and all five certificate facts remains silent beyond one minute even though the exact operation theorem is already available.",
+      "root_cause": "Do not ask first-order search to rediscover a large conjunction after expanding the outer-step relation. Instantiate the exact operation wrapper before constructing the successor, split its certificate and state conclusions into assumptions, and close the final constructor goal with local simplification. Interrupt the unrestricted search around 60 seconds rather than raising its timeout.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

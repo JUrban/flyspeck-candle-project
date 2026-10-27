@@ -341,6 +341,16 @@ delta instructions, full program induction, packed acceptance, multi-family
 evidence, and the original theorem remain separate open gates.  No runtime
 build is admitted.
 
+CakeML commit `57f689f93` closes the per-constructor ordinary outer-step
+slice.  A successful actual step for any related polynomial, arithmetic,
+square-root, inverse, arctangent, or pi/2 instruction now constructs an exact
+object-rational successor stack and preserves the unconsumed certificate
+suffix.  The final one-child build took 32.81 seconds and 896,832 KiB peak
+RSS.  The next proof is a shallow source/prepared dispatcher over these nine
+named theorems.  The two recognized delta instructions remain the explicit
+separate gate before program induction; packed acceptance, multi-family
+evidence, and the original theorem remain open.  No runtime build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
