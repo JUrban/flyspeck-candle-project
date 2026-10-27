@@ -318,6 +318,18 @@ complete program execution and extraction of its singleton result; nonlinear
 instructions, recognized delta instructions, packed acceptance, and the
 multi-family gate remain open.  No runtime build is admitted by this result.
 
+CakeML commit `3baad580b` completes the ordinary polynomial slice.  A list
+induction now lifts the step theorem through arbitrary related postfix
+programs, and an evaluator corollary proves that a successful singleton word
+result has an exact singleton object-rational counterpart.  The final
+one-child build took 31.44 seconds and 968,516 KiB peak RSS.  The enclosing
+analytic instruction proof can therefore treat each polynomial block as one
+semantic unit.  Its ordinary nonlinear constructors and pi/2 remain to be
+assembled from the existing operation refinements, while recognized delta
+instructions remain a separate explicit gate.  Packed acceptance,
+multi-family evidence, and the original theorem are still open; no long build
+is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

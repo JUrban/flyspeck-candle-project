@@ -1299,6 +1299,39 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-116",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.259-nl-complete-polynomial-run-refinement.md",
+      "failure_mode": "rename1 is applied to a relation still inside universally quantified goal antecedents and fails through FIRST_ASSUM because no local assumption exists yet.",
+      "root_cause": "Semantic renaming of an inductive cons case must happen after the remaining variables are generalized and the implication is stripped into local assumptions. Use rpt gen_tac, strip_tac, then anchor rename1 to the complete source/prepared LIST_REL assumption. A rename failure before stripping is proof-state staging, not evidence that induction chose the wrong variables.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-117",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.259-nl-complete-polynomial-run-refinement.md",
+      "failure_mode": "Q.INST is used to supply the explicitly quantified source program, prepared program, stacks, and result of the run theorem, leaving the whole universal theorem as an implication premise instead of producing the intended instance.",
+      "root_cause": "Q.INST substitutes free theorem variables; it does not instantiate variables bound by an explicit leading universal quantifier. Apply Q.INST only to the free environment and radius parameters, then Q.SPECL the explicitly quantified program, stack, and result arguments in declaration order. A residual universal premise is an instantiation-kind mismatch and must be corrected locally.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-118",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.259-nl-complete-polynomial-run-refinement.md",
+      "failure_mode": "asm_rewrite_tac uses the proved object-step and recursive-run equations but leaves a case expression whose scrutinee is syntactically SOME object_next, rather than reducing the option case automatically.",
+      "root_cause": "Assumption rewriting and datatype case reduction are separate normalization steps in this proof state. After rewriting the recursive runner with the exact step and induction equations, use a final small simp to reduce the known SOME case. Do not add broad automation or reopen the induction for a residual constructor reduction.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
