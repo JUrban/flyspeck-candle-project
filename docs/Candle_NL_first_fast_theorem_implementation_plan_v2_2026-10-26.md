@@ -420,6 +420,18 @@ at packed-cell input validity and acceptance, followed by the universal
 analytic/Taylor handoff and the genuine two-family semantic test.  This does
 not admit R4, and the first original theorem remains **0/1**.
 
+CakeML commit `3434d4b749` closes the packed-input refinement boundary. The
+plan-driven production wrapper now fails closed unless box, center, and radius
+vectors are exactly six-dimensional and every decoded box/center interval has
+ordered endpoints. Accepted cells refine to complete exact object-rational
+source runs, and an induction lifts that result through every cell in an
+accepted packed stream. The source decoder and checked compiler compose with
+that all-cell theorem. The current genuine 875-cell fixture passes the
+freshly compiled validated checker in 9.05 seconds; a reversed first box
+interval rejects in 0.08 seconds. The remaining R3 proof is the universal
+analytic/Taylor and original-statement handoff plus the genuine second-family
+semantic gate. R4 remains forbidden and the first theorem remains **0/1**.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

@@ -1585,6 +1585,50 @@
       "check_id": "proof_shape_cartesian_case_split",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-142",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.270-nl-validated-packed-semantic-boundary.md",
+      "failure_mode": "The generic packed parser decodes positive box and center endpoints but does not check their order, while the exact object-rational refinement requires every decoded interval to be valid.",
+      "root_cause": "Parsing shape and semantic validity were conflated. The production plan now uses a separate validated wrapper requiring six box intervals, six center intervals, six radii, and EVERY bounded_interval64_valid before numerical evaluation. The legacy case-specific checker remains a regression oracle; no packed acceptance may enter the analytic handoff through the unvalidated wrapper.",
+      "check_id": "fast_nl_packed_semantic_contract",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-143",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.270-nl-validated-packed-semantic-boundary.md",
+      "failure_mode": "Version-1 metadata advertises arbitrary positive dimensions although the prepared Taylor evaluator, radius-pair calculation, and current semantic theorem are six-dimensional.",
+      "root_cause": "The wire schema was generalized ahead of the proved numerical semantics. Version 1 is now explicitly restricted to dimension 6 and rejects every other dimension before compilation or cell evaluation. A future dimension-general implementation requires a new proved evaluator contract and versioned schema rather than silently widening version 1.",
+      "check_id": "fast_nl_packed_semantic_contract",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-144",
+      "scope": "fast-nl-fixture-identity",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.270-nl-validated-packed-semantic-boundary.md",
+      "failure_mode": "A positive generic-plan probe selects an older case-16594 certificate because it has the expected 2,705,516-byte size and a plausible name; it rejects immediately even though the current genuine fixture passes.",
+      "root_cause": "Several case-16594 certificate generations have identical sizes but different instruction/certificate semantics. Every executable probe must pin the logical fixture role, full path, SHA-256, source-program hash, and metadata hash before launch. Size and a broad filename are never artifact identity; an unexpected fast rejection triggers identity comparison before code changes.",
+      "check_id": "fast_nl_fixture_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-145",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.270-nl-validated-packed-semantic-boundary.md",
+      "failure_mode": "A proof that six radii produce Taylor radius pairs rewrites LENGTH with LENGTH_EQ_NUM_compute but leaves nested existential list-shape witnesses and fails to reduce the six-element case.",
+      "root_cause": "The length rewrite exposes, rather than eliminates, the concrete list witnesses. First consume the length premise with fs [LENGTH_EQ_NUM_compute], then simplify bounded_taylor_radius_pairs on the resulting literal six-element list. Do not add list case trees or increase the focused proof cap for this shape obligation.",
+      "check_id": "proof_shape_cartesian_case_split",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
