@@ -1013,6 +1013,17 @@
       "check_id": "resource_headroom",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-090",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.235-nl-generic-dot-completion.md",
+      "failure_mode": "A radius-to-rational witness that is intended for word64 silently generalizes to an arbitrary HOL word width; later induction-hypothesis specialization then contains same-named terms with distinct hidden word types and cannot discharge an apparently identical premise.",
+      "root_cause": "The constructor definition used w2n without an explicit word64 parameter annotation, so HOL inferred a polymorphic word dimension. Fixed-width executable bridge definitions must annotate every boundary word type explicitly, and focused preflight must inspect the saved definition/theorem type before starting a larger induction or translation. A warning about same-named variables of different types is a source-contract failure, not a reason to broaden proof search.",
+      "check_id": "resource_headroom",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
