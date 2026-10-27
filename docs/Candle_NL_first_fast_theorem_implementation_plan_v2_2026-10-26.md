@@ -401,6 +401,16 @@ six authenticated instructions.  Program induction, packed acceptance, the
 multi-family gate, and the first original theorem remain open; no
 runtime/compiler build is admitted.
 
+CakeML commits `fc3f6db6d` and `d5a7dc5ac` close that specialized numerical
+slice.  All three negative-derivative and all three four-coordinate delta
+instructions now refine successful word execution to complete exact
+object-rational Taylor states.  The decisive four-coordinate proof reproduced
+from source in a focused child of about 31 seconds; no long build was used.
+The next bounded target is one combined source/prepared instruction theorem,
+then analytic-program induction and packed-acceptance composition.  The
+two-family semantic gate, reusable runtime build, and first original theorem
+remain open; the first theorem is still **0/1**.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

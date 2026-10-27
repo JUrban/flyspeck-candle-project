@@ -1519,6 +1519,50 @@
       "check_id": "proof_harness_source_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-136",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.268-nl-complete-delta-state-refinement.md",
+      "failure_mode": "A general delta-value wrapper is handed to broad first-order search over the full six-coordinate calculation and remains silent beyond the focused proof cap.",
+      "root_cause": "The wrapper proof is exact wiring, not proof search. Derive the six-element executor shape, expose the six LIST_REL components, and instantiate the existing fixed theorem with Q.INST. Interrupt broad metis at the local cap; never use a longer build to compensate for missing explicit instantiation.",
+      "check_id": "proof_search_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-137",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.268-nl-complete-delta-state-refinement.md",
+      "failure_mode": "A short proof script refers to an ML theorem name from a non-direct ancestor without its theory structure and fails name resolution even though the HOL theorem is present in the loaded ancestry.",
+      "root_cause": "HOL ancestry and Standard ML name opening are distinct. Before a child build, qualify every theorem imported through a non-direct ancestor with its Theory structure unless the defining theory is an explicit ancestor. Treat an unbound ML name as a source qualification defect, not a missing proof dependency.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-138",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.268-nl-complete-delta-state-refinement.md",
+      "failure_mode": "Stopping an enclosing Holmake or timeout leaves its spawned HOL process alive, so a later focused build can overlap an obsolete child and produce misleading silence or resource use.",
+      "root_cause": "After every interrupted build, enumerate the exact child process tree and terminate or wait for any surviving HOL process before editing or rebuilding. A stopped wrapper is not proof that its child exited. The no-live-session preflight applies to orphaned build children as well as deliberate interactive sessions.",
+      "check_id": "proof_harness_no_live_session",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-139",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.268-nl-complete-delta-state-refinement.md",
+      "failure_mode": "A HOL `goal by proof` step for an existential conjunction already introduces its witness and conjuncts, but the script follows it with strip_tac; STRIP_TAC then attacks the unchanged final existential conclusion and the saved source fails although the component theorem is proved.",
+      "root_cause": "Inspect the proof state immediately after every local `by` block that introduces existential evidence. Do not copy the drule-plus-strip pattern onto local subgoal syntax: if the witness and conjuncts are already assumptions, continue directly. Reproduce the complete saved source in a fresh focused child before committing an interactive proof.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
