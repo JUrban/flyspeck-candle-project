@@ -1442,6 +1442,50 @@
       "check_id": "proof_search_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-129",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.266-nl-delta-hessian-and-gradient.md",
+      "failure_mode": "A gradient correspondence proof case-splits both independent 21-element word and object product lists and becomes silent as the malformed-shape branches multiply.",
+      "root_cause": "Do not prove fixed-layout correspondence by destructing both representations. Define one authenticated coordinate-to-index table, select through the existing word/object nth operations, prove the selector relation once, and lift the signed transformation with LIST_REL_MAP and LIST_REL_mono. Interrupt a dual large-list every_case_tac at the local silence cap; never admit it to a longer build.",
+      "check_id": "proof_shape_cartesian_case_split",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-130",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.266-nl-delta-hessian-and-gradient.md",
+      "failure_mode": "A resumed dumped-heap HOL session remains live in the focused child while the next Holmake invocation is launched, making the child appear silent and leaving the parent with negligible CPU usage.",
+      "root_cause": "Interactive heap inspection is exclusive diagnostic state, not a reusable build server. Before every child Holmake invocation, verify that no resumed bin/hol or Holmake process for that child is live and close the interactive session explicitly. Near-zero CPU plus a live diagnostic session is a harness-lock discriminator and must be resolved before inspecting proof performance.",
+      "check_id": "proof_harness_no_live_session",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-131",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.266-nl-delta-hessian-and-gradient.md",
+      "failure_mode": "A chained >> sends PairCases_on or CONJ_TAC into every induction/case branch, including a base branch where the pair binder is still quantified or the goal is not a conjunction.",
+      "root_cause": "Close base and impossible branches inside an explicit focused branch before applying constructor-specific tactics. Introduce quantified binders before PairCases_on, and use a named pointwise theorem plus LIST_REL lifting when branch choreography begins to dominate the proof. A missing pair binder or CONJ_TAC exception is tactic fan-out, not a semantic failure.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-132",
+      "scope": "fast-nl-generic-checker",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-27-v4.266-nl-delta-hessian-and-gradient.md",
+      "failure_mode": "An unconstrained list of signed numeric indices is inferred as (bool # real) list and only conflicts when passed to a selector requiring num indices.",
+      "root_cause": "Annotate the first literal index list as (bool # num) list at its definition boundary. Do not rely on later selector use to resolve overloaded numerals across a separately stored HOL definition; a real-versus-num type error at the first consumer is missing boundary annotation.",
+      "check_id": "proof_numeric_literal_type",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

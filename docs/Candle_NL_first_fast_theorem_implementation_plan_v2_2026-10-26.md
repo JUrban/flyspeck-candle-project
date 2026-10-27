@@ -391,6 +391,16 @@ compositions for the six authenticated instructions.  Program induction,
 packed acceptance, the multi-family gate, and the first original theorem
 remain open; no runtime/compiler build is admitted.
 
+CakeML commits `72ac9892d` and `2d70505fb` close the compact delta Hessian and
+all six gradient components.  The final proofs use one coordinate-index table
+and generic list-relation lifting rather than duplicated 21-element case
+trees.  Their final isolated builds took 28.59 and 36.15 seconds, with less
+than 1 GiB peak RSS.  The remaining specialized work is the coordinate-product
+Hessian and composition through the two complete Taylor constructors for the
+six authenticated instructions.  Program induction, packed acceptance, the
+multi-family gate, and the first original theorem remain open; no
+runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
