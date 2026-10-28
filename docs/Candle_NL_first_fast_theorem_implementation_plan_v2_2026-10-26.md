@@ -639,6 +639,17 @@ families. The combined instruction theorem, source-program induction, first
 genuine cell, and original theorem remain open; no runtime/compiler build is
 admitted.
 
+Candle commit `7be9c09d` closes the corresponding compact six-component
+delta gradient. Its exact signed pair-product table and executable encoding
+passed assumption-free from the same reusable checkpoint in 110 seconds on
+the first focused run. A separate symbolic transcription diagnostic matched
+all six gradient and 21 Hessian expressions to formal differentiation of the
+seven-term delta polynomial, but that untrusted diagnostic does not replace
+the remaining HOL Light analytic identities. Those identities, the
+coordinate-product Hessian, and the two complete Taylor-state families are
+the next bounded delta gate before instruction dispatch and source-program
+induction.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
