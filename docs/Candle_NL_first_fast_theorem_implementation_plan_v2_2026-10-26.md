@@ -694,6 +694,17 @@ the exact-rational complete Taylor-state containment for both families.  The
 first genuine cell and original theorem remain **0/1**, and no runtime/compiler
 build is admitted.
 
+Candle commit `421c75e5` closes the center half of the first specialized
+Taylor-state family.  For each authenticated coordinate 3--5, assumption-free
+theorems now prove that the optimized negative-derivative center value and all
+six center-gradient intervals contain the corresponding analytic value and
+derivatives.  A new checkpoint immediately after the stable delta/product
+analytic libraries reduces the focused state-proof loop to 96 seconds.  The
+remaining specialized joins are the negative-derivative whole-box Hessian and
+the complete three `4*x_i*delta` states, followed by instruction dispatch and
+source-program induction.  The first genuine cell and original theorem remain
+**0/1**; no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
