@@ -672,6 +672,16 @@ complete specialized Taylor-state families. Source-program induction, packed
 full-source acceptance, the first genuine cell, and the original theorem
 remain open; no runtime/compiler build is admitted.
 
+Candle commit `9a92aa96` closes the analytic product-rule join.  One
+coordinate-parametric source expression is proved equal to the optimized
+`4*x_i*delta` value, every gradient component, and every upper-triangular
+Hessian component, including all coordinate-equality cases.  The focused
+proof passed in 126 seconds including checkpoint restore and exports no
+assumptions.  The next bounded gate is now the two complete specialized
+Taylor-state families, followed by ordinary instruction dispatch and source-
+program induction.  The first genuine cell and original theorem remain
+**0/1**; no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
