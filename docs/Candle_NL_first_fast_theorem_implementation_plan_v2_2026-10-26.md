@@ -591,6 +591,17 @@ arctangent and authenticated delta instructions follow.  This remains
 operation-level progress: the complete source-program induction, full entry,
 first genuine cell, and first original theorem are still open.
 
+That square-root join is complete at Candle commit `e3e7c35a`.  One generic
+certified-unary constructor now propagates supplied value, first-derivative,
+and second-derivative intervals through every gradient and Hessian component.
+Its square-root instance checks the root certificate and the same three
+reciprocal facts used by the packed checker, then proves the exact square-root
+chain rule for every source jet.  The final proof passed in 100 seconds from
+the new reusable post-reciprocal checkpoint.  The next operation-level target
+is arctangent; after it, the plan must connect authenticated delta operations
+and perform the complete source-program induction.  The first genuine fast
+cell and original theorem remain **0/1**.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

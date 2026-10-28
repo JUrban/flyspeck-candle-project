@@ -1827,6 +1827,28 @@
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-164",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.277-nl-certified-square-root-jet.md",
+      "failure_mode": "An implicit argument name in new_definition, such as root or derivative, is already a HOL constant; the parser resolves the constant instead of introducing the intended interval variable and reports an unrelated-looking type assignment error.",
+      "root_cause": "Definition binders were chosen without checking the active constant namespace. New executable definitions must use fresh role-specific names such as root_interval and d_interval, and every implicit definition argument must be typechecked in the smallest direct probe before any integration build. A global-constant collision is a definition-front-end failure, not evidence about the semantic theorem.",
+      "check_id": "proof_theorem_binder_class",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-165",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.277-nl-certified-square-root-jet.md",
+      "failure_mode": "The final square-root handoff rewrites a wrapper definition in the supporting theorem even though that wrapper occurs only in the goal, leaving visibly equivalent semantic payloads with different outer constructors and causing ACCEPT_TAC to fail.",
+      "root_cause": "Rewrite-side identity was not inspected before applying the theorem. At final handoffs, print or compare the exact goal and theorem conclusions once, unfold wrappers on the side where they occur, normalize only the required arithmetic association, and then use exact acceptance. Do not respond to an outer-constructor mismatch with broader proof search or a longer run.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
