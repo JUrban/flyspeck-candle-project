@@ -602,6 +602,20 @@ is arctangent; after it, the plan must connect authenticated delta operations
 and perform the complete source-program induction.  The first genuine fast
 cell and original theorem remain **0/1**.
 
+The ordinary arctangent join is complete at Candle commit `993751f0`.  Its
+executable certificate requires the supplied fixed-scale value interval to
+enclose the existing exact rational arctangent range and requires the supplied
+derivative interval to enclose `1 / (1 + x^2)`.  A general theorem constructs
+`-2*x/(1+x^2)^2` and proves the arctangent value, every gradient component,
+and the complete Hessian through the same certified-unary constructor.  The
+final focused proof passed in 98 seconds from the reusable post-analytic-atan
+checkpoint.  This closes the ordinary HOL Light nonlinear-operation list; it
+does not yet prove that the fixed-word arctangent result satisfies the exact
+certificate.  That fact remains part of the fast-to-full-entry refinement.
+The next bounded target is the six authenticated delta operations, followed
+by complete source-program induction.  The first genuine fast cell and
+original theorem remain **0/1**, and no long runtime build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

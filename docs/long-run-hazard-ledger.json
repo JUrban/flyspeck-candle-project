@@ -1849,6 +1849,28 @@
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-166",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.278-nl-certified-arctangent-jet.md",
+      "failure_mode": "A direct proof fragment opens a module inferred from a dependency filename even though that source exports global bindings and declares no such module, so the focused run reaches the new file and fails before its first theorem.",
+      "root_cause": "Filename and module identity were treated as interchangeable. Before composing direct fragments, inspect each dependency for an explicit module declaration and inventory the actual exported namespace; do not invent an open directive from the path. Preserve the loader-authenticated production needs declarations while omitting only those declarations in the direct disposable driver.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-167",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.278-nl-certified-arctangent-jet.md",
+      "failure_mode": "A final generic unary theorem application is delegated to broad MESON after all scalar premises are available, or is instantiated with an untyped nested jet variable; MESON reaches its depth bound and the incomplete ISPECL fails without testing the intended exact composition.",
+      "root_cause": "A higher-order structured theorem was treated as ordinary first-order search. At final jet handoffs, establish the value, derivative, and second-derivative containment facts separately, instantiate the theorem with the complete explicit jet type, conjoin its premises directly, and normalize only the required real-multiplication association. Do not increase proof-search depth or a run cap for this syntactic handoff.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
