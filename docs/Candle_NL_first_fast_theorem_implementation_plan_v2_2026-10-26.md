@@ -580,6 +580,17 @@ through source-program evaluation, and finally prove packed acceptance
 refines this full ordinary entry.  The first fast HOL Light cell and first
 original theorem remain **0/1**; no long runtime build is admitted.
 
+Candle commit `06e42c5b` now closes the reciprocal propagation join named in
+that list.  Under the executable reciprocal certificate, one general theorem
+proves that the supplied interval propagates soundly through the value, every
+gradient component, and the complete Hessian of the reciprocal chain rule.
+The final focused proof passed in 102 seconds including checkpoint restore.
+The next nonlinear join is the corresponding square-root certificate route,
+reusing its existing value theorem and the same generic unary structure;
+arctangent and authenticated delta instructions follow.  This remains
+operation-level progress: the complete source-program induction, full entry,
+first genuine cell, and first original theorem are still open.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

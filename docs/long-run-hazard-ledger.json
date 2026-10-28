@@ -1816,6 +1816,17 @@
       "check_id": "proof_search_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-163",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.276-nl-certified-reciprocal-jet.md",
+      "failure_mode": "A focused scalar-containment proof chains SUBGOAL_THEN and THENL around simplification, but simplification changes the number of residual goals and the tactic aborts with seqapply: Length mismatch before the semantic composition is tested.",
+      "root_cause": "A fixed tactic-branch count was used for a theorem composition whose premises were already available as named facts. At certificate boundaries, instantiate the exact soundness theorems and compose their conclusions explicitly with MATCH_MP and CONJ; do not make proof success depend on the residual subgoal count produced by simplification. Preserve stage markers in disposable probes so this remains a short-loop diagnosis.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
