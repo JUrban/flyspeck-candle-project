@@ -726,6 +726,18 @@ Hessian; instruction dispatch and source-program induction follow it.  The
 first genuine cell and original theorem remain **0/1**, and no runtime/compiler
 build is admitted.
 
+Candle commit `d6f2d22a` completes that final family-local theorem.  A
+structural length/reconstruction lemma joins the fixed 21-entry delta Hessian
+to the analytic product-rule table without expanding its rational formulas,
+and the generic product-Hessian containment theorem lifts the result to the
+executable whole-box state.  The exact final theorem bytes passed from the
+clean checkpoint in 99 seconds and export no assumptions.  Both specialized
+delta families are therefore complete at value, gradient, and Hessian level.
+The next bounded gate is the six-case ordinary instruction dispatcher and
+source-program induction, followed by packed full-source refinement and one
+genuine cell.  The first genuine cell and original theorem remain **0/1**;
+no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
