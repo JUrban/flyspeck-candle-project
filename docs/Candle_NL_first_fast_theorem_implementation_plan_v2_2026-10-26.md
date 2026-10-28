@@ -616,6 +616,17 @@ The next bounded target is the six authenticated delta operations, followed
 by complete source-program induction.  The first genuine fast cell and
 original theorem remain **0/1**, and no long runtime build is admitted.
 
+Candle commit `bb735c94` closes the common delta-value subproblem. The
+ordinary HOL Light operation now uses exactly the same unnormalised rational
+sum/product association as the established HOL4 object witness, has an
+executable Candle encoding, and proves that its result encloses the exact
+Flyspeck delta polynomial for arbitrary contained inputs. The focused proof
+passed in about 100 seconds including checkpoint restore. The remaining delta
+work is the compact gradient, fixed 21-entry Hessian, product Hessian, and the
+two complete Taylor-state families. Only then can the combined instruction
+theorem and source-program induction begin. The first genuine fast cell and
+original theorem remain **0/1**; no long runtime build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

@@ -1871,6 +1871,28 @@
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-168",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.279-nl-packed-delta-value.md",
+      "failure_mode": "A theorem is transcribed from the HOL4 delta refinement into the ordinary HOL Light bridge with the HOL4 library name FOLDL, so the focused parser fails before checking the intended interval argument.",
+      "root_cause": "The two provers' list APIs were treated as a shared namespace. Before a focused cross-logic port, inventory every list/fold identifier in the target prover and define the required association order explicitly when no target primitive exists. Preserve the exact fold direction because unnormalised rational representations are association-sensitive.",
+      "check_id": "proof_search_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-169",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.279-nl-packed-delta-value.md",
+      "failure_mode": "MATCH_MP_TAC is asked to infer the real-value list of an abstract fold from a fully expanded polynomial target, so theorem matching fails even though the interval operands and arithmetic identity are correct.",
+      "root_cause": "A semantic fold equality was left implicit at the theorem boundary. Before applying a generic list-containment theorem to an expanded arithmetic goal, state and prove the exact fold equality separately, substitute it, and only then apply the structural theorem. Do not broaden proof search or lengthen the run for a unification-shape mismatch.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
