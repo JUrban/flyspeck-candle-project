@@ -738,6 +738,18 @@ source-program induction, followed by packed full-source refinement and one
 genuine cell.  The first genuine cell and original theorem remain **0/1**;
 no runtime/compiler build is admitted.
 
+Candle commit `39b69239` packages the complete coordinate 3--5 negative-delta
+state as the generic six-dimensional analytic jet required by ordinary
+source-program induction.  The assumption-free theorem combines the proved
+center value, six center-gradient entries, and expanded 21-entry whole-box
+Hessian into `candle_q_dim_analytic_contains`; a reusable nested-matrix
+lookup theorem supplies all 36 Hessian component queries.  The exact theorem
+body passed from the clean checkpoint in approximately 104 seconds.  The
+only remaining family-local join is the analogous coordinate 0--2
+`4*x_i*delta` analytic jet, after which the bounded path is the six-case
+instruction theorem and source-program induction.  The first genuine cell
+and original theorem remain **0/1**; no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

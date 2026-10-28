@@ -1948,6 +1948,28 @@
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-175",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.290-nl-packed-negative-delta-analytic-jet.md",
+      "failure_mode": "An ASSUME or theorem-instantiation quotation reuses the visible names of surrounding numeric or list variables without type annotations; HOL Light creates fresh polymorphic variables, the printed propositions look identical, and MATCH_MP reports No match.",
+      "root_cause": "Quoted free variables were assumed to inherit types from the tactic goal.  At structural lookup boundaries, annotate every free numeric index, interval-list, matrix, and higher-order function in ASSUME, SPECL, and ISPECL terms; if two printed terms appear identical after a match failure, inspect their inferred types before changing the theorem or adding search.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-176",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.290-nl-packed-negative-delta-analytic-jet.md",
+      "failure_mode": "A restored S3 checkpoint resolves a new production needs path through the manifest-rooted load_path but rejects the load as an unauthenticated Candle source action, so a production-form focused replay stops before the theorem body.",
+      "root_cause": "The restored runtime's authenticated source-action allowlist predates the new bridge module.  Preserve production needs declarations, exercise exact theorem bytes in a disposable driver that omits only already-loaded dependency actions, and record the distinction between source-registration failure and proof failure.  Do not use Sys.chdir, widen the source policy, or start a runtime rebuild until the semantic R3 gate admits it.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
