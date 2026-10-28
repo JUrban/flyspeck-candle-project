@@ -750,6 +750,18 @@ only remaining family-local join is the analogous coordinate 0--2
 instruction theorem and source-program induction.  The first genuine cell
 and original theorem remain **0/1**; no runtime/compiler build is admitted.
 
+Candle commit `1ae0d18d` closes the analogous coordinate 0--2
+`4*x_i*delta` analytic jet.  It constructs the exact optimized state from the
+selected coordinate, shared delta value/gradient/Hessian, product center
+fields, and expanded packed product Hessian, then proves all value, gradient,
+and Hessian queries satisfy `candle_q_dim_analytic_contains`.  The final
+focused proof passed assumption-free in approximately 106 seconds including
+checkpoint restore and prerequisite state modules.  Both specialized delta
+families are now ready for the six-case ordinary instruction theorem; the
+remaining R3 path is instruction dispatch, source-program induction,
+full-source acceptance, and one genuine cell.  The first genuine cell and
+original theorem remain **0/1**, and no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

@@ -1970,6 +1970,17 @@
       "check_id": "proof_harness_source_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-177",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.291-nl-packed-delta-product-analytic-jet.md",
+      "failure_mode": "A nested call to prove is used to package facts from the surrounding tactic context; captured theorems retain the outer hypotheses, so prove rejects the result with additional assumptions even though the intended subgoal follows immediately.",
+      "root_cause": "The distinction between a fresh closed prove invocation and the live tactic goal was ignored.  When a helper fact depends on current hypotheses, introduce it with SUBGOAL_THEN in the live proof, or construct and discharge its premises explicitly; reserve nested prove for genuinely closed lemmas.  Do not alter the semantic theorem or lengthen a probe in response to the additional-assumptions diagnostic.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
