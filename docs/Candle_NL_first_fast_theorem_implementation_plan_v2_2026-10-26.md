@@ -662,6 +662,16 @@ Taylor states. Combined instruction dispatch, source-program induction,
 packed full-source acceptance, the first genuine cell, and the original
 theorem remain open; no runtime/compiler build is admitted.
 
+Candle commit `d06399d0` closes that mathematical delta identity gate. One
+source-generic polynomial AST is now proved equal to the exact packed value,
+all six compact first derivatives, and all 21 upper-triangular second
+derivatives. The focused proof passed in 118 seconds including restore,
+with assumption audits on every exported theorem. The next bounded join is
+the analytic product rule for the three `4*x_i*delta` sources and the two
+complete specialized Taylor-state families. Source-program induction, packed
+full-source acceptance, the first genuine cell, and the original theorem
+remain open; no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

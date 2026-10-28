@@ -1926,6 +1926,28 @@
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-173",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.283-nl-packed-delta-analytic-identities.md",
+      "failure_mode": "A recursive real lookup or packed-list EL is reduced before a binary numeral index is normalized to successor form, so the selector remains opaque and REAL_RING reports Failure find on a true polynomial identity.",
+      "root_cause": "Selector normalization was ordered after algebraic closure. For fixed-index analytic tables, normalize every numeral first, then rerun EL and recursive lookup conversion, inspect that no selector remains, and only then invoke REAL_RING. An opaque selector is a proof-normalization defect and must not trigger a longer run or a table change.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-174",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.283-nl-packed-delta-analytic-identities.md",
+      "failure_mode": "A whole-list rewrite simultaneously expands polymorphic list injectivity, analytic derivatives, and compact table definitions, producing a type_match failure before any scalar derivative identity is tested.",
+      "root_cause": "Structural decomposition and analytic normalization were combined in one rewrite boundary. Prove the arbitrary-coordinate or upper-index derivative theorem first, instantiate it only at fixed valid indices, and reconstruct the finite list separately. Do not broaden rewriting or proof search for a list-level type_match failure.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
