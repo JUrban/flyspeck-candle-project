@@ -705,6 +705,17 @@ the complete three `4*x_i*delta` states, followed by instruction dispatch and
 source-program induction.  The first genuine cell and original theorem remain
 **0/1**; no runtime/compiler build is admitted.
 
+Candle commit `a4b15d68` completes that first specialized Taylor-state
+family.  For coordinates 3--5, the optimized exact-rational construction now
+has assumption-free ordinary-HOL soundness for its center value, all six
+center-gradient components, and all 21 whole-box packed-Hessian components of
+`--(partial delta / partial x_i)`.  The clean restored-state proof took 100
+seconds including checkpoint startup.  The sole remaining specialized state
+family is the three `4*x_i*delta` instructions; after it, the bounded path is
+instruction dispatch, source-program induction, full-source refinement, and
+one genuine cell.  The first genuine cell and original theorem remain
+**0/1**; no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
