@@ -1794,6 +1794,28 @@
       "check_id": "full_source_entry_contract",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-161",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.275-nl-packed-source-certificate-core.md",
+      "failure_mode": "An executable Boolean correctness proof rewrites a positive numeral through cexp_if_def without first exposing its successor form, so the rewrite stops at Cexp_num 1 even though the semantic Boolean branch is already known.",
+      "root_cause": "HOL Light numeral normalization and the constructor pattern expected by cexp_if_def were treated as syntactically interchangeable. Before broad tactic search or a longer proof build, inspect the stuck term and normalize the positive numeral explicitly, for example with ARITH_RULE `1 = SUC 0`, then apply the defining equation. This is a local term-shape issue, not evidence against the checker contract.",
+      "check_id": "proof_numeric_literal_type",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-162",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.275-nl-packed-source-certificate-core.md",
+      "failure_mode": "A focused proof script calls a plausible but nonexistent reflexivity theorem name and fails after checkpoint restore before testing the intended certificate argument.",
+      "root_cause": "A remembered helper name was used without a source/API inventory. Before launching a focused proof, resolve every nonlocal theorem identifier against the loaded source closure; when no named reflexivity lemma exists, derive the fact from the actual foundational equivalence instead of starting broader proof search or extending the run cap.",
+      "check_id": "proof_search_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }

@@ -548,6 +548,38 @@ reported as **1/1 conditional source-contract refinement**, while the first
 fast HOL Light cell and first fast original theorem both remain **0/1**.  No
 run over 30 minutes and no R4 runtime build is admitted by the suffix theorem.
 
+#### R3 certificate-driven full-source entry update — 2026-10-28
+
+A static comparison ruled out the superficially cheapest wrapper.  The
+existing `candle_cv_fsn_variable_raw_jobs_check` is a genuine full exact
+source checker, but it recomputes `sqrt`, reciprocal, and `atan` by different
+exact interval algorithms.  The fast packed checker instead consumes
+outward-rounded certificates and specialized delta instructions.  Packed
+acceptance therefore does not generically imply acceptance by that exact
+checker; treating it as a Boolean-equivalent wrapper would merely hide the
+unproved semantic join.
+
+The bounded replacement is an ordinary certificate-driven source entry.  It
+checks each supplied nonlinear result against an exact rational semantic
+predicate, then reuses the existing analytic theorems.  The first production
+slice is committed at Candle `4b47c08d`:
+
+- exact interval-widening and reciprocal-certificate predicates;
+- an executable Candle encoding of both predicates;
+- assumption-free correctness of those encodings; and
+- an assumption-free theorem that an accepted reciprocal certificate
+  encloses the mathematical reciprocal of every input value.
+
+The proof body passed from the prepared analytic checkpoint in 99 seconds,
+including restore.  This is the first reusable component of the corrected
+full-source entry, not a cell theorem.  The remaining joins are: propagate
+the reciprocal certificate through the Taylor object, connect existing
+square-root certificates, add the exact `atan` certificate predicate, prove
+the authenticated delta instructions' ordinary semantics, lift the result
+through source-program evaluation, and finally prove packed acceptance
+refines this full ordinary entry.  The first fast HOL Light cell and first
+original theorem remain **0/1**; no long runtime build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
