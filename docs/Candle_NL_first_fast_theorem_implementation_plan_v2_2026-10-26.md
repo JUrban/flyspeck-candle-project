@@ -716,6 +716,16 @@ instruction dispatch, source-program induction, full-source refinement, and
 one genuine cell.  The first genuine cell and original theorem remain
 **0/1**; no runtime/compiler build is admitted.
 
+Candle commit `25ce877b` closes the center half of the remaining specialized
+family.  A coordinate-parametric exact-rational theorem now covers the scaled
+`4*x_i*delta` center value and all six product-rule gradient entries, with an
+explicit and discharged safe-lookup range contract.  The clean proof took 97
+seconds including checkpoint restore and exports no assumptions.  The sole
+remaining family-local theorem is the fixed 21-entry whole-box product
+Hessian; instruction dispatch and source-program induction follow it.  The
+first genuine cell and original theorem remain **0/1**, and no runtime/compiler
+build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
