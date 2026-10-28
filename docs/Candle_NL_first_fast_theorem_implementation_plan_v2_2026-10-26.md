@@ -627,6 +627,18 @@ two complete Taylor-state families. Only then can the combined instruction
 theorem and source-program induction begin. The first genuine fast cell and
 original theorem remain **0/1**; no long runtime build is admitted.
 
+Candle commit `29a9352e` closes the fixed 21-entry compact delta-Hessian
+operation. Its executable ordinary definition mirrors the proved HOL4 word
+and object-q row order exactly, and one generic theorem proves simultaneous
+real containment of all 21 upper-triangular row sums. The final focused probe
+passed from the reusable checkpoint in 107 seconds, including restore, with
+no assumptions in any exported correctness or soundness theorem. The
+remaining delta work is the compact gradient, the analytic derivative
+identities, the coordinate-product Hessian, and the two complete Taylor-state
+families. The combined instruction theorem, source-program induction, first
+genuine cell, and original theorem remain open; no runtime/compiler build is
+admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

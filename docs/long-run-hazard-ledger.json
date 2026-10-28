@@ -1833,8 +1833,8 @@
       "scope": "fast-nl-proof-harness",
       "classification": "observed",
       "first_evidence": "docs/progress/2026-10-28-v4.277-nl-certified-square-root-jet.md",
-      "failure_mode": "An implicit argument name in new_definition, such as root or derivative, is already a HOL constant; the parser resolves the constant instead of introducing the intended interval variable and reports an unrelated-looking type assignment error.",
-      "root_cause": "Definition binders were chosen without checking the active constant namespace. New executable definitions must use fresh role-specific names such as root_interval and d_interval, and every implicit definition argument must be typechecked in the smallest direct probe before any integration build. A global-constant collision is a definition-front-end failure, not evidence about the semantic theorem.",
+      "failure_mode": "An implicit argument name in new_definition or a recursive pattern, such as root, derivative, rows, or row, is already a HOL constant; the parser resolves the constant instead of introducing the intended interval variable and reports an unrelated-looking type assignment error.",
+      "root_cause": "Definition and pattern binders were chosen without checking the active constant namespace. New executable definitions must use fresh role-specific names such as root_interval, d_interval, interval_rows, and row_value, and every implicit argument must be typechecked in the smallest direct probe before any integration build. A global-constant collision is a definition-front-end failure, not evidence about the semantic theorem.",
       "check_id": "proof_theorem_binder_class",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
@@ -1890,6 +1890,17 @@
       "first_evidence": "docs/progress/2026-10-28-v4.279-nl-packed-delta-value.md",
       "failure_mode": "MATCH_MP_TAC is asked to infer the real-value list of an abstract fold from a fully expanded polynomial target, so theorem matching fails even though the interval operands and arithmetic identity are correct.",
       "root_cause": "A semantic fold equality was left implicit at the theorem boundary. Before applying a generic list-containment theorem to an expanded arithmetic goal, state and prove the exact fold equality separately, substitute it, and only then apply the structural theorem. Do not broaden proof search or lengthen the run for a unification-shape mismatch.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-170",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.280-nl-packed-delta-hessian.md",
+      "failure_mode": "An exact list operation is specified through MAP while its cval implementation and intended proof recurse through explicit cons cells, leaving the induction handoff behind avoidable higher-order rewriting and causing MATCH_MP or exact acceptance to fail before the row theorem is tested.",
+      "root_cause": "The ordinary semantic wrapper did not mirror the structural recursion of the executable representation. For exact cross-logic list ports, define the semantic operation with the same empty/cons recursion as the cval operation when that does not alter association order, then prove head and tail obligations directly. Do not broaden search or lengthen a run for a representation-only MAP/cons mismatch.",
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
