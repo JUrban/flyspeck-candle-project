@@ -650,6 +650,18 @@ coordinate-product Hessian, and the two complete Taylor-state families are
 the next bounded delta gate before instruction dispatch and source-program
 induction.
 
+Candle commit `2c8d78ef` closes the remaining ordinary exact-rational
+coordinate-product Hessian operation. It proves all four product-rule index
+cases and synchronized containment/cval correctness for the fixed 21-entry
+upper triangle, with no assumptions in any exported theorem. The clean
+restored probe took 117 seconds including checkpoint startup. The remaining
+delta gate is now mathematical rather than arithmetic: prove the compact
+gradient and Hessian tables equal the analytic derivatives of the delta
+source, then compose the three negative-derivative and three `4*x_i*delta`
+Taylor states. Combined instruction dispatch, source-program induction,
+packed full-source acceptance, the first genuine cell, and the original
+theorem remain open; no runtime/compiler build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:

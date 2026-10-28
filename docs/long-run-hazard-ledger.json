@@ -1904,6 +1904,28 @@
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-171",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.282-nl-packed-delta-product-hessian.md",
+      "failure_mode": "A quoted equality passed to ASM_CASES_TAC omits the numeric index annotation, so HOL Light creates fresh polymorphic index variables; the visible equality assumptions then fail to simplify the num-typed conditionals and the next exact theorem application reports No match.",
+      "root_cause": "A tactic quotation was treated as if its free-variable types were inherited from the surrounding goal. Type every free index in case-split and theorem-instantiation quotations at the first proof boundary, and inspect one normalized branch before adding search. A same-named equality at an unrelated type is not a semantic case and must not justify a longer probe.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-172",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.282-nl-packed-delta-product-hessian.md",
+      "failure_mode": "A nested LIST_INDUCT_TAC in a theorem with several list-valued arguments selects the first remaining list, the delta gradient, instead of the intended Hessian-entry list, and fails inside the induction tactic before testing the recursive executable equality.",
+      "root_cause": "Implicit induction-variable selection was used in a multi-list context. After introducing quantified arguments, select the intended list explicitly with SPEC_TAC or an explicit list_CASES split, and name the recursive tail. Never infer which list was inducted from a later MATCH_MP failure or respond by widening automation.",
+      "check_id": "proof_tactic_branch_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
