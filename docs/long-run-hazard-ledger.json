@@ -1750,6 +1750,50 @@
       "check_id": "proof_harness_source_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-157",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.274-nl-production-closure-and-full-source-entry-correction.md",
+      "failure_mode": "A focused HOL4 build is moved into an external directory and fails before the theorem because logical paths such as CAKEMLDIR are not recreated; setting a similarly named shell variable does not register the HOL path.",
+      "root_cause": "A shell environment convention was mistaken for HOL's logical path registry. An isolated build must reproduce the logical project/path configuration and its source identities, or use the real production project. If either is absent, stop before proof execution rather than copying an ad hoc subset of objects.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-158",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.274-nl-production-closure-and-full-source-entry-correction.md",
+      "failure_mode": "A Theory source is staged as a symlink in a disposable build, Holmake omits its Ancestors from the generated dependency closure, and the proof then fails on undeclared ancestor structures.",
+      "root_cause": "The disposable layout changed how the dependency scanner classified the source. Same-name or symlink-staged Theory sources are not an authenticated focused harness. Use ordinary production source or a unique copied probe whose generated dependency file is inspected before proof execution.",
+      "check_id": "proof_harness_source_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-159",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.274-nl-production-closure-and-full-source-entry-correction.md",
+      "failure_mode": "A hand-copied partial misc object closure appears sufficient but omits miscTheory or retains source-path references from preamble.uo, causing Holmake to request unavailable source after the probe starts.",
+      "root_cause": "Object files were treated as relocatable independent units although their authenticated closure includes theory interfaces and recorded source paths. Enumerate the complete dry-run closure before launch and use the prepared cache as a unit; do not assemble a proof cache incrementally after successive missing-parent failures.",
+      "check_id": "authenticated_program_cache",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-160",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-28-v4.274-nl-production-closure-and-full-source-entry-correction.md",
+      "failure_mode": "A proved ordinary entry for the final Taylor arithmetic is treated as the trusted full-source cell handoff and is scheduled for 875-cell topology composition even though its payloads contain no source program, box, or certificates and its HOL Light theorem does not establish analytic containment.",
+      "root_cause": "The final numerical acceptance condition and the source-evaluation soundness contract were collapsed into one milestone. Before any theorem, support-stage, or kernel-build run over 30 minutes, a versioned audit must identify a full ordinary source-evaluation entry, its HOL Light analytic correctness theorem, and the HOL4 default-clock refinement from the same authenticated source/box/certificate inputs. A conditional HOL4 hypothesis or a final-arithmetic Boolean is not a cross-logic source theorem.",
+      "check_id": "full_source_entry_contract",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }

@@ -505,6 +505,49 @@ forbidden until this gate is green.  In particular, the present evidence
 justifies continued short proof work but does not yet justify the 20–36-hour
 runtime investment.
 
+#### R3 full-source-entry correction — 2026-10-28
+
+The first packed-entry discriminator is now cleanly rebuilt but does **not**
+close the gate above.  CakeML commits `14caf5de4`, `470b5156b`, and
+`9869926fb` promote its complete 81-theory closure into production source and
+remove every scratch dependency.  A clean build completed in 34 minutes 42
+seconds across two capped segments and a repeat dry run scheduled zero
+theories.
+
+The proof establishes a valid but narrower result: an authenticated accepted
+packed source cell has exact result payloads for which
+`candle_cv_q_packed_object_accept6` succeeds.  That five-argument ordinary
+entry checks the final Taylor formula only.  Its HOL Light correctness theorem
+does not by itself establish that the supplied center value, gradient, and
+packed Hessian enclose the original analytic expression and derivatives.
+Those facts occur in the HOL4 hypothesis
+`bounded_packed_analytic_object_cell`; they are not transported into HOL Light
+by the final acceptance equality.
+
+Accordingly, the R3 trusted-composition gate is refined as follows:
+
+1. the ordinary entry must represent the **full source evaluation**, or a
+   checked decode into the existing full exact evaluator, rather than only
+   the final Taylor suffix;
+2. its HOL Light correctness theorem must derive the analytic containment
+   premises used by the cell-negativity theorem;
+3. generic packed acceptance must refine default-clock `compute_eval` of that
+   full entry for the same source, box, and certificate identities; and
+4. one genuine closed HOL Light cell must pass before the 875-cell topology is
+   attempted.
+
+The preferred implementation is a Boolean acceptance wrapper around the
+existing fixed nonlinear certified checker.  Returning only the Boolean
+avoids requiring the fast callback to reproduce the exact evaluator's upper
+endpoint.  If the existing call cannot represent the separated packed
+certificate stream, one small ordinary decode-and-check wrapper is allowed;
+a case-specific result table is not.
+
+Until this theorem exists, `bounded_case16594_packed_cell_entry_eval` is
+reported as **1/1 conditional source-contract refinement**, while the first
+fast HOL Light cell and first fast original theorem both remain **0/1**.  No
+run over 30 minutes and no R4 runtime build is admitted by the suffix theorem.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
