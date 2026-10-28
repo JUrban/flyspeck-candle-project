@@ -682,6 +682,18 @@ Taylor-state families, followed by ordinary instruction dispatch and source-
 program induction.  The first genuine cell and original theorem remain
 **0/1**; no runtime/compiler build is admitted.
 
+Candle commit `02b5ea5f` closes the companion negative-derivative analytic
+identity layer.  The established symbolic differentiator constructs one
+coordinate-parametric source expression for `--(partial delta / partial
+x_i)`, and assumption-free theorems identify its value, all first
+derivatives, and all 63 relevant upper-triangular second-derivative cases with
+the optimized packed tables for coordinates 3--5.  The clean focused proof
+passed in 152 seconds including checkpoint restore.  Both specialized delta
+families now have their pure analytic identities; the next bounded gate is
+the exact-rational complete Taylor-state containment for both families.  The
+first genuine cell and original theorem remain **0/1**, and no runtime/compiler
+build is admitted.
+
 ### R4. Freeze once and rebuild the reusable verified runtime
 
 Only after R1–R3 pass:
