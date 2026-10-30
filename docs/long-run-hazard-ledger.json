@@ -1981,6 +1981,17 @@
       "check_id": "proof_tactic_branch_scope",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-178",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-10-30-v4.298-nl-planned-certificate-dispatch.md",
+      "failure_mode": "A manual teardown addresses an old disposable DMTCP session only by the numeric port stored in its stale coord.port file; a newer restore has reused that port, so the teardown interrupts the current validation before it consumes fresh input.",
+      "root_cause": "A run-local observation was treated as a durable process identity.  Never send a teardown command through a stale coordinator port while another restore is live.  End an interactive session through its owning wrapper or input channel, or verify its exact live PID tree and coordinator start identity first; preserve interrupted directories and rerun only after the no-live-session discriminator is green.",
+      "check_id": "proof_harness_no_live_session",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
