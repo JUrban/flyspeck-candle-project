@@ -2091,6 +2091,17 @@
       "check_id": "genuine_inverse_complete_guard",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-188",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.318-nl-corrected-inverse-guard.md",
+      "failure_mode": "A focused evaluator result Pair (Num 1) (Num 0) is read as two independent center/outer success bits even though the frozen expression contains one center success bit paired with a literal diagnostic placeholder; the placeholder is nearly misclassified as a genuine outer reciprocal failure.",
+      "root_cause": "The output contract was inferred from the result shape instead of inspecting the exact frozen expression. Before interpreting any compact diagnostic tuple, audit and record every top-level result field and require a named projection for each claimed status. A literal placeholder, hash, counter, or payload may never be promoted to an execution verdict. The incorrect interpretation must be withdrawn before any checker change or longer run.",
+      "check_id": "genuine_inverse_complete_guard",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
