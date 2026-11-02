@@ -2168,6 +2168,17 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-195",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.324-nl-source-program-identity-and-radius-separation.md",
+      "failure_mode": "The validated fixed word/object checker carries one explicit packed radius vector, while the legacy Candle source entry recomputes distinct rational decimal radius vectors for its center and outer source runs; a 167-step trace against that legacy entry would therefore target a different semantic state even though both routes are mathematically sound.",
+      "root_cause": "Final acceptance and box correspondence were confused with exact evaluator-state identity. Before a source trace or fast callback, prove that its ordinary entry uses the same explicit center boxes, outer boxes, radii, source program, and certificates as the validated word/object contract. Use the exact-object planned entry for the packed route, or prove a complete separate refinement to any legacy two-run entry; never infer intermediate equality from numerical closeness, common source identity, or mutual soundness.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
