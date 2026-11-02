@@ -2124,6 +2124,17 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-191",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.320-nl-whole-checker-handoff-correction.md",
+      "failure_mode": "A single EVAL_TAC topology predicate prepares the authenticated 875-row input and certificate tables and executes an eight-instruction prefix merely to connect one literal inverse fixture to instruction 7; after more than six minutes it has consumed about 12.5 GB without producing a theorem, even though the complete literal inverse step and general program refinement are already proved.",
+      "root_cause": "Whole-table authentication, concrete prefix execution, and fast-callback soundness were collapsed into one evaluator goal, and the internal 167 instructions were mistakenly treated as recursive fast-callback dispatch points. Candle compute_with invokes fast_eval only on the complete starting expression. Prove the production callback against the authenticated whole-checker call and its ordinary final Boolean, reusing the existing plan/source-contract and program-refinement theorems; keep literal per-operation topology as a development diagnostic only unless a later semantic premise genuinely requires it. Never extend the broad topology evaluator timeout or use it as a prerequisite for the whole-checker handoff.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
