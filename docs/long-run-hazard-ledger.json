@@ -2069,6 +2069,28 @@
       "check_id": "genuine_object_operation_vertical_slice",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-186",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.317-nl-genuine-inverse-fast-gate.md",
+      "failure_mode": "A preserved genuine diagnostic theory is loaded after its parent compute theory has been rebuilt under a different identity; HOL correctly rejects the child with a parent-hash mismatch, tempting either a costly recomputation or an unsafe mixture of stale and current objects.",
+      "root_cause": "Cache file location was treated as sufficient theory provenance. Before reusing any cached genuine theorem, compare every recorded parent identity, load it only under its matching preserved graph, and extract small authenticated data fixtures explicitly when current proofs need the values. Never bypass parent linking or infer semantic compatibility from matching theory names.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-187",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.317-nl-genuine-inverse-fast-gate.md",
+      "failure_mode": "A genuine reciprocal interval is used to prove a fast inverse-derivative equality while the frozen source diagnostic reports that the separate reciprocal certificate guard rejects the same extracted input/certificate pair; a derivative-only green gate could therefore be mistaken for a complete inverse-step gate.",
+      "root_cause": "The arithmetic transformation witness and its domain/certificate guard were tested at different boundaries. Before admitting a dispatcher, prefix, cell, or theorem run, identify the current production payload bytes and test the complete operation contract: input identity, reciprocal enclosure, nonzero/domain guard, derivative result, and fail-closed rejection. Classify older diagnostics as stale or current explicitly; never promote a derivative equality to certificate acceptance.",
+      "check_id": "genuine_inverse_complete_guard",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
