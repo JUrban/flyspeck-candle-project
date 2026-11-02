@@ -2036,6 +2036,28 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-183",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.314-nl-object-operation-fast-seam.md",
+      "failure_mode": "A focused Holmake target is started in a worktree whose local object cache is incomplete, so the command silently expands from one new theory to more than one hundred prerequisite theory builds before the new proof is reached.",
+      "root_cause": "The target name was treated as the build scope without inspecting Holmake's resolved dependency plan. Before every bounded proof build, run Holmake -n on the exact target in the intended worktree, record the theory-file count, and use a compatible prepared object cache. Stop immediately if the resolved set exceeds the gate's declared scope; do not reinterpret prerequisite rebuilding as progress on the target theorem.",
+      "check_id": "proof_build_dependency_scope",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-184",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.314-nl-object-operation-fast-seam.md",
+      "failure_mode": "A one-operation correspondence proof expands an entire handwritten rational interval evaluator with a broad symbolic simp and consumes five minutes without producing the first semantic theorem.",
+      "root_cause": "The vertical slice was still too wide and duplicated already-proved primitive semantics. Start with one exact object operation, copy the authenticated exported equation form instead of retyping it, reuse existing primitive evaluator theorems, and inspect saved residual goals after every sub-two-minute failure. Multiplication, inverse composition, genuine-cell dispatch, and original-theorem assembly are distinct gates; a failure in one must not lengthen or broaden another.",
+      "check_id": "genuine_object_operation_vertical_slice",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
