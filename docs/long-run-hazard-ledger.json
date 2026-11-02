@@ -2157,6 +2157,17 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-194",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.323-nl-specialized-step-evaluator-bridge.md",
+      "failure_mode": "A clean source-theory load from a focused checkpoint fails before the first declaration because its newly developed parent theory exists only in the checkpoint's scratch namespace and not as a compiled theory artifact; the failure could trigger another broad dependency rebuild even though the new theorem bodies can be checked directly in the resident state.",
+      "root_cause": "Checkpoint theorem residency was confused with an exported ancestor artifact. Before any source-theory load or coherent closure build, inventory both the required theory identities and their .uo/.ui artifacts. During the edit loop, validate ordered declaration fragments in the matching resident state and record that build integration remains pending. Build the coherent parent/child closure only at a real packet boundary; do not answer a missing development artifact with an unbounded Holmake scan or runtime rebuild.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
