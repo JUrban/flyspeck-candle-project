@@ -2102,6 +2102,17 @@
       "check_id": "genuine_inverse_complete_guard",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-189",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.318-nl-corrected-inverse-guard.md",
+      "failure_mode": "A proposed fast-dispatch gate requires the fixed-word checker's intermediate Taylor state to be byte-identical to the ordinary exact-object evaluator state, even though the proved architecture intentionally relates these distinct representations by enclosure/refinement and requires exact equality only for the final Boolean result.",
+      "root_cause": "Representation equality was substituted for semantic refinement at the production handoff. Require fixed-word-to-object coverage for intermediate states, source/certificate contract preservation, and equality of the callback's final result with ordinary compute_eval. Do not attempt to force binary fixed-scale and exact-rational intermediates into the same encoding or treat their expected byte difference as a checker failure.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
