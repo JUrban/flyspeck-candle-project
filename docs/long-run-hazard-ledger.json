@@ -2135,6 +2135,28 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-192",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.321-nl-validated-whole-contract-preflight.md",
+      "failure_mode": "The compiled case-16594 development checker accepts the streaming sequential numerical predicate, but the proved full-source contract requires the validated checker that also enforces dimension, interval validity, center/radius geometry, record counts, and the authenticated source plan; numerical acceptance alone is nearly promoted to theorem-level source evidence.",
+      "root_cause": "A performance-development predicate and the production theorem predicate were treated as interchangeable because both accept the genuine fixture. Before proving or installing a whole-call fast evaluator, make its checker imply bounded_analytic_source_plan_check for the exact source and versioned metadata, then derive the complete 875-cell source contract. Keep the old sequential predicate only as a performance/regression oracle; no original-theorem or compute_fast_eval_ok claim may depend on it alone.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-193",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.321-nl-validated-whole-contract-preflight.md",
+      "failure_mode": "The case-16594 four-payload development checker requires its jobs and roots roles to be empty, while the existing assumption-free original-theorem handoff consumes 875 encoded numerical jobs and 1,749 authenticated topology tokens; a green numerical batch therefore cannot yet be substituted for the ordinary whole-checker proposition used by that handoff.",
+      "root_cause": "Stable command-line payload arity was mistaken for semantic alignment with the theorem-producing call. Before the first fast theorem, choose and prove one explicit production call shape that authenticates the fixed certificate, exact source, encoded jobs, topology tokens, and their cross-correspondence, and prove its ordinary complete result. Do not hide topology in an unchecked constant, reinterpret empty payload roles, or claim that 875 negative cells alone assemble the original Flyspeck inequality.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
