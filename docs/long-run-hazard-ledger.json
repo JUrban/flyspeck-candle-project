@@ -2058,6 +2058,17 @@
       "check_id": "genuine_object_operation_vertical_slice",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-185",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.316-nl-object-interval-multiplication-fast-seam.md",
+      "failure_mode": "A composite exact-object evaluator proof adds the unrestricted recursive compute_eval definition to a simplifier set, so the simplifier expands every nested application before the proved scalar and extrema correspondence lemmas can match; the resulting residual is a large monadic evaluator term rather than the intended operation boundary.",
+      "root_cause": "Recursive evaluator unfolding was used as normalization instead of exposing one semantic layer at a time. For composite fast-seam proofs, unfold only the literal outer call, normalize substitution separately, and assemble results with explicit application-argument and pair-result lemmas. If a bounded build fails, inspect the saved residual heap before editing or rerunning; never answer a large evaluator residual with broader simp, a longer timeout, or a runtime build.",
+      "check_id": "genuine_object_operation_vertical_slice",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
