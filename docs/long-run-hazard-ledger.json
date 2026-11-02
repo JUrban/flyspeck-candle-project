@@ -2025,6 +2025,17 @@
       "check_id": "genuine_object_compute_capacity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-182",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-02-v4.313-nl-fast-handoff-boundary.md",
+      "failure_mode": "A genuine exported exact-object prefix is sent through the runtime's generic translated compute_pure_fast_eval fallback and is then treated as evidence about the proposed fixed-word production checker; the fallback exhausts a restored 16 GiB CakeML managed heap after about eight minutes even though native HOL evaluates the same compute_eval_pure call in 19.6 seconds and the separate fixed-word checker validates the full 875-cell plan in about nine seconds.",
+      "root_cause": "Three distinct execution mechanisms were conflated: native HOL evaluation, the generic translated CakeML evaluator, and the proved fixed-word checker. Before escalating any genuine computation, statically identify the installed dispatch branch for the exact call and require a bounded hit test proving that it reaches the intended checker. A generic-fallback result cannot admit a runtime rebuild, larger heap, longer prefix, or theorem run. The next gate is a one-operation compute_fast_eval_ok correspondence on the actual fixed-checker/object representation, not another generic object replay.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }

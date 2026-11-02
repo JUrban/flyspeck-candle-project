@@ -880,3 +880,46 @@ work item is a bounded discriminator separating inverse algorithm cost,
 encoded-state growth, and theorem-materialization cost; it is not a larger
 heap build.  The first genuine cell and first fast original theorem remain
 **0/1**.
+
+## R3 execution-mechanism correction — 2026-11-02
+
+The prefix result above was initially classified too broadly as an execution-
+capacity failure.  Subsequent dispatch and native-evaluation probes separate
+three mechanisms that must not be conflated:
+
+1. native HOL `compute_eval_pure` evaluates the exact 133-equation prefix-8
+   call in **19.6 seconds**, with about **3.77 GB** peak RSS and the expected
+   result shape;
+2. the installed Candle runtime misses its case-specific fast branches and
+   sends that call through the generic translated `compute_pure_fast_eval`
+   fallback, which exhausts the restored **16 GiB** managed heap after about
+   eight minutes; and
+3. the separate proved fixed-word plan checker validates the complete
+   **875-cell** case-16594 numerical plan in about **9.18 seconds**.
+
+The failed prefix therefore does not measure the intended production checker,
+and increasing its heap would optimize the wrong route.  Nor is the main cost
+the compact theorem returned by `compute_with`: after a successful fast
+callback, that boundary constructs only the result equality.  The expensive
+work observed here is the generic CakeML evaluator.
+
+There is also older positive but non-scalable evidence.  The genuine
+case-16594 cell-0 closed entry was evaluated in about ten minutes and then
+registered case-specifically, after which a compact `m_cell_pass` theorem was
+replayed immediately.  This proves that one genuine analytic handoff can
+close, but registering a closed result per cell is not the production design.
+The first literal original Flyspeck theorem remains **0/1**.
+
+The corrected next gate is narrower than another prefix:
+
+1. identify the exact fixed-checker result/object-state representation;
+2. prove `compute_fast_eval_ok` correspondence for one genuine representative
+   operation and its actual exported entry call;
+3. run that operation through the installed branch with a **10-minute** cap;
+4. only then induct the same correspondence over a program and try one genuine
+   cell.
+
+Every proposed run must record its expected dispatch branch before execution
+and confirm the branch hit in its result.  A fallback hit is a failed gate even
+if it eventually returns.  No longer prefix, larger-heap runtime, or complete
+theorem run is admitted while the one-operation fixed-handoff gate is open.
