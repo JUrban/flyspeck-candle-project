@@ -823,3 +823,60 @@ the build cost.
 It does **not** yet justify an all-NL runtime estimate.  That estimate requires
 R3, the first repeated fast theorem, and a representative batch with shared
 preparation charged once.
+
+## R3 vertical-slice execution correction — 2026-11-02
+
+The proof development from 2026-10-27 through 2026-11-02 produced and tested
+substantial reusable semantic machinery, but executable risk was tested too
+late.  Focused theorem builds established source/object soundness constructor
+by constructor; they did not establish that the registered HOL Light
+equations represented the genuine call correctly or that the genuine object
+computation fit the restored CakeML managed heap.  Describing the first fast
+theorem as close on proof progress alone was therefore unjustified.
+
+The first genuine case-16594 ordinary-prefix probe now provides the missing
+vertical evidence:
+
+- a complete representation/equation preflight passes in about 135 seconds;
+- genuine instructions 0--6 pass in bounded segments, including polynomial,
+  ordinary arithmetic, and square-root execution;
+- the genuine inverse at instruction 7 exits with CakeML status 1 after about
+  eight minutes from a restored 16 GiB managed heap;
+- retaining only the current state rather than all intermediate theorems does
+  not change that failure; and
+- host RSS remains approximately 18 GiB, so additional free host RAM does not
+  enlarge the managed heap preserved by the DMTCP checkpoint.
+
+This is an execution-capacity failure, not a semantic theorem failure.  It
+blocks a longer prefix, cell, theorem, runtime rebuild, or timeout increase.
+The preserved negative evidence is in runs `v3438`, `v3439`, and `v3440`.
+
+The following vertical gates are now mandatory and are completed in order:
+
+1. **Static representation gate (maximum 5 minutes).**  Parse the exact
+   genuine call and every registered equation, reject malformed encoded
+   numerals, and reject constructor-pattern equation left-hand sides.
+2. **Representative-operation gate (maximum 10 minutes per operation).**  On
+   genuine data, run at least one polynomial, linear, multiplication,
+   square-root, inverse, arctangent, and specialized-delta operation from a
+   fresh valid predecessor state.  Record result shape, certificate
+   consumption, elapsed time, and peak/managed memory.
+3. **Progressive-prefix gate.**  Grow only through measured fresh prefixes
+   (or exact checkpointed predecessor states), normally doubling work.  A
+   stage advances only when the prior stage has a clean marker and a scaling
+   estimate.  Silence, a nonzero exit, or unexplained superlinear growth
+   returns to a smaller discriminator.
+4. **One-cell gate.**  Run one complete genuine cell through the same
+   production computation and obtain its compact accepted result.  Report
+   preparation, computation, theorem materialization/handoff, and memory
+   separately.
+5. **Original-theorem gate.**  Only after the one-cell gate is green may the
+   existing analytic/topology bridge be exercised as a long theorem run.
+
+No run with a declared maximum over 30 minutes is admitted until all earlier
+applicable gates are green on the exact source bytes.  No runtime/compiler
+rebuild is admitted while the representative inverse gate is red.  The next
+work item is a bounded discriminator separating inverse algorithm cost,
+encoded-state growth, and theorem-materialization cost; it is not a larger
+heap build.  The first genuine cell and first fast original theorem remain
+**0/1**.

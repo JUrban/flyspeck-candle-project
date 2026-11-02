@@ -1992,6 +1992,39 @@
       "check_id": "proof_harness_no_live_session",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-179",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "/project/flyspeck-candle-runs/v2172-nl-case16594-cell0-entry-closed-dev-001/holmake.log",
+      "failure_mode": "A kernel-computed exact Hessian is decoded to mathematical fractions and regenerated in normalized form before the complete entry is replayed; all 21 rational intervals are mathematically equal, but the full-source guard compares their cval encodings structurally and correctly returns Num 0 after an eight-minute evaluator run.",
+      "root_cause": "Mathematical rational equality was substituted for the entry contract's exact encoded-artifact identity. Preserve the positive/negative numerator and denominator triples returned by the trusted computation without fraction reduction, and run scripts/check-nl-case16594-cell0-exact-hessian-fixture.py against the theorem log, generator, and generated fixture before another complete entry replay. A rational-value comparison is insufficient for this guard.",
+      "check_id": "full_source_entry_contract",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-180",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "/project/flyspeck-candle-runs/v3437-nl-object-case16594-prefix34-preflight-dev-001/runtime.log",
+      "failure_mode": "The first genuine registered object-executor call initially contained a symbolic successor numeral and eight constructor-pattern equation heads that Kernel.compute could parse only after expensive genuine setup or could not safely use as total registered equations.",
+      "root_cause": "Semantic source theorems were promoted into a registered computation set before the exact encoded call and every equation boundary had a static representation audit. Require the complete call/leaf/equation preflight, literal numeral normalization, and zero constructor-pattern left-hand sides on the exact genuine bytes before any arithmetic or long run. The corrected preflight is green, but this hazard remains fail-closed until that audit is frozen as an executable discriminator.",
+      "check_id": "genuine_object_compute_representation",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-181",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "/project/flyspeck-candle-runs/v3440-nl-object-case16594-tail-segmented-prefix34-gate-dev-001/runtime.log",
+      "failure_mode": "The genuine case-16594 object executor passes polynomial, ordinary, and square-root instructions but exits with CakeML status 1 during the first inverse instruction from the restored 16 GiB managed heap; tail-chaining away prior theorem states does not change the failure and host RSS remains fixed near 18 GiB.",
+      "root_cause": "The proof-unit loop did not include an early genuine representative-operation capacity gate, and free host RAM was incorrectly treated as evidence that a restored DMTCP process could grow its fixed CakeML managed heap. Before any longer prefix, cell, theorem, or runtime build, isolate inverse algorithm cost, encoded-state growth, and theorem materialization with sub-ten-minute probes and freeze a green genuine capacity discriminator. Do not increase the timeout or start a larger-heap rebuild merely in response to this exit.",
+      "check_id": "genuine_object_compute_capacity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }

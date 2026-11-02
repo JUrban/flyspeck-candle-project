@@ -995,6 +995,8 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "proof_tactic_branch_scope": check_unresolved_versioned_discriminator,
     "proof_theorem_binder_class": check_unresolved_versioned_discriminator,
     "full_source_entry_contract": check_unresolved_versioned_discriminator,
+    "genuine_object_compute_representation": check_unresolved_versioned_discriminator,
+    "genuine_object_compute_capacity": check_unresolved_versioned_discriminator,
     "registered_input_loader_contract": check_registered_input_loader_contract,
     "registered_input_preparation_contract": check_registered_input_preparation_contract,
     "long_run_admission_guard": check_long_run_admission_guard,
