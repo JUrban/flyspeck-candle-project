@@ -2113,6 +2113,17 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-190",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "anticipated",
+      "first_evidence": "docs/progress/2026-11-02-v4.319-nl-genuine-inverse-step-refinement.md",
+      "failure_mode": "A complete operation theorem over literal state and certificate values is promoted to evidence about instruction 7 of the authenticated case-16594 payload even though the theorem has not connected those literals to the full program position, certificate cursor, and predecessor state.",
+      "root_cause": "Semantic validity of a fixture was confused with authenticated topology. Before a prefix, dispatcher, cell, or original-theorem claim, prove inside HOL that the operation, predecessor state, radii, and consumed certificate arise at the declared node of the authenticated program and payload. Record external hashes as observations only; never let matching literal values substitute for the topology theorem or callback identity.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
