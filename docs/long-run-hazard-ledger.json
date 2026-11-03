@@ -2223,6 +2223,17 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-200",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-03-v4.328-nl-authenticated-prefix-and-poly-trace.md",
+      "failure_mode": "The authenticated prefix-8 call, the complete first dispatch step with its unchanged large certificate stream, and the isolated four-operation polynomial runner are each submitted to one native proof-producing evaluator reduction; all remain CPU-bound without a theorem through their short two-to-five-minute caps, inviting a larger clock, heap, or timeout retry.",
+      "root_cause": "Exact numerical work, recursive runner control, dispatch wrappers, and inert certificate payload threading were collapsed into one theorem-producing reduction. Authenticate the production split, prove the polynomial recursion and dispatch traversal structurally once, instantiate operation-family step contracts, and keep certificates opaque where the operation does not consume them. Do not raise a monolithic prefix or polynomial-run timeout; retry only the smallest newly isolated family boundary.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
