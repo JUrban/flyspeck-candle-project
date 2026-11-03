@@ -2190,6 +2190,17 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-197",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-03-v4.326-nl-first-inverse-evaluator-seam.md",
+      "failure_mode": "A complete genuine inverse-state operation with zero source gradient and Hessian is submitted to one monolithic EVAL_TAC after its exact derivative boundary has passed; the worker remains CPU-bound and memory-stable but produces no theorem in 325.74 seconds, inviting a longer raw-evaluation retry.",
+      "root_cause": "Exact component arithmetic, recursive list propagation, state recompletion, and wrapper control were collapsed back into one evaluator reduction despite existing compositional control theorems. Preserve the green production derivative theorem, prove second derivative and zero-list/recompletion components separately, and assemble them through the unary and inverse evaluator theorems. Do not raise the monolithic inverse-state timeout or treat stable memory as evidence that raw reduction is the appropriate proof granularity.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
