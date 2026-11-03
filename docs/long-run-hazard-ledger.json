@@ -2179,6 +2179,17 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-196",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-03-v4.325-nl-object-dispatch-traversal.md",
+      "failure_mode": "Native HOL compute_eval_pure evaluates the exact prefix-8 object call quickly and remains memory-stable on the complete 167-entry cell call, but two bounded complete-call attempts produce no theorem within ten minutes; the healthy native evaluator could therefore be mistaken for a sufficiently cheap whole-call production bridge and retried with a longer cap.",
+      "root_cause": "Prefix capacity and complete-call production cost were conflated. The exact full call is a long arbitrary-rational replay even though its prefix and memory behavior are healthy. Preserve the authenticated data and generic structural traversal theorem, discharge the uniform ordinary and specialized step relations, and use the fixed checker for recurring execution. Do not raise the native whole-call timeout or heap, repeat the capacity probe, or treat memory stability as evidence that direct exact evaluation is the production route.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
