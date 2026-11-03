@@ -2201,6 +2201,28 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-198",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-03-v4.327-nl-first-genuine-inverse-state.md",
+      "failure_mode": "The first genuine inverse value-bound call, and then its isolated 21-term quadratic fold, are each submitted to ordinary EVAL_TAC; both remain CPU-bound and memory-stable but produce no theorem within a five-minute cap, tempting either a longer reduction or 21 handwritten arithmetic proofs.",
+      "root_cause": "Ordinary normalization is being used for a large closed first-order numerical fold even though compute_eval_pure already has a verified CV translation. Translate the authenticated equation constant and closed expression once, use cv_eval to produce the kernel theorem, and retain structural component theorems for control and diagnostics. Do not extend the ordinary reduction cap or manually duplicate the numerical algorithm unless verified CV evaluation itself fails.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-199",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-03-v4.327-nl-first-genuine-inverse-state.md",
+      "failure_mode": "A proof-producing cv_eval result is packaged with HOL's cv$cv constructors and then passed to Candle's from_cv, whose domain is the distinct compute_exec$cv datatype; identical printed Num/Pair shapes obscure the namespace mismatch until theorem construction fails.",
+      "root_cause": "Constructor spelling was treated as datatype identity. At the evaluator handoff, convert the explicit compute_exp result recursively to compute_exec$cv constructors, assert the exact result type before defining it, and prove that from_cv of the converted value is the evaluator result. Never use cvSyntax.cv as the object payload type merely because both datatypes print with Num and Pair.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }
