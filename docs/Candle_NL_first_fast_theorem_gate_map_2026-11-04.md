@@ -27,10 +27,10 @@ original statement.
 |---|---|---|
 | G0. Genuine data and numerical execution | **DONE** | The authenticated case-16594 source, certificate plan, 167-position program, and all 875 cells execute and accept through the fixed fast checker. |
 | G1. Ordinary instruction-family bridge | **DONE** | Every ordinary family has a generic evaluator-to-exact-object stack theorem, including certificate-cursor preservation for inverse, square root, and arctangent.  These theorems cover the 161 ordinary positions without position-specific proofs. |
-| G2. Six specialized delta instructions | **IN PROGRESS** | All six authenticated delta positions have evaluator results connected to complete exact analytic jets.  The three negative-derivative cases are covered.  For the three `4*x_i*delta` cases, center value and the full six-component gradient are covered; the product Hessian is the current subgate. |
+| G2. Six specialized delta instructions | **IN PROGRESS** | All six authenticated delta positions have evaluator results connected to complete exact analytic jets.  The three negative-derivative cases are covered.  For the three `4*x_i*delta` cases, center value, the full six-component gradient, and the production 21-entry Hessian are covered; packaging the three complete jets is the current subgate. |
 | G2a. Generic product-Hessian entry | **DONE** | One theorem evaluates the production entry constructor and identifies its exact product-rule interval for arbitrary valid row, column, and product coordinate.  Candle commit `800fe4cba`; clean build 1m07.5s wall and 1,999,216 KiB peak RSS. |
-| G2b. Complete 21-entry product Hessian | **IN PROGRESS** | The entry theorem is composed through the production upper-triangular Hessian constructor, with its row/order contract proved. |
-| G2c. Three complete product-delta jets | **PENDING** | Center value, six gradient entries, and 21 Hessian entries are packaged as the exact analytic result for each of the three authenticated product specializations. |
+| G2b. Complete 21-entry product Hessian | **DONE** | The entry theorem is composed through the production upper-triangular Hessian constructor and its exact canonical order.  Candle commit `82b14934d`; exact clean source build 1m08.3s wall and 1,948,144 KiB peak RSS. |
+| G2c. Three complete product-delta jets | **IN PROGRESS** | Center value, six gradient entries, and 21 Hessian entries are packaged as the exact analytic result for each of the three authenticated product specializations. |
 | G3. Whole 167-position semantic trace | **PENDING** | The existing generic recursive traversal is instantiated with the ordinary and specialized step theorems; it proves exact stack/certificate-cursor preservation and the final ordinary Boolean for the authenticated complete program. |
 | G4. Fast one-call correspondence | **PENDING** | The compact fixed-checker verdict is proved equal to the ordinary complete-call result and supplies `compute_fast_eval_ok` for the authenticated call.  Mutated source, certificate, plan, and equation-set inputs reject. |
 | G5. Analytic acceptance and original theorem | **PENDING** | The complete accepted result is fed through the existing universal analytic/Taylor soundness and original-statement adapter, yielding the literal original case-16594 Flyspeck theorem with audited assumptions and axioms. |
@@ -38,15 +38,16 @@ original statement.
 
 ## Current exact blocker
 
-G2a is complete.  The production evaluator proof covers the base product,
-both conditional product-rule additions, all four row/column equality cases,
-and the final scale-by-four operation.  The exact authoritative source built
-cleanly in 1m07.5s wall with 1,999,216 KiB peak RSS.
+G2b is complete.  One structural theorem now composes the generic production
+entry theorem through the actual two-list recursion and the canonical 21
+upper-triangular index pairs.  It does not replay 21 captured numerical
+results.  The exact clean source built in 1m08.3s wall with 1,948,144 KiB peak
+RSS.
 
-The current gate is G2b: identify the actual recursive row/upper-triangular
-constructor and compose the generic entry theorem through its exact 21-entry
-order.  This must be one structural theorem, not 21 position-specific
-numerical proofs.  G2c through G6 remain after it.
+The current gate is G2c: use the already proved center-value, six-gradient,
+and complete-Hessian evaluator theorems to package each of the three
+authenticated `4*x_i*delta` instructions as a complete exact analytic jet.
+G3 through G6 remain after it.
 
 ## Planning estimate and uncertainty
 
@@ -55,7 +56,7 @@ This is an engineering estimate, not a guarantee:
 - optimistic, if the remaining joins reuse the existing theorem shapes
   directly: **2--4 focused development days**;
 - planning range allowing for local representation or theorem-shape repairs:
-  **4--8 focused development days**.
+  **3--7 focused development days**.
 
 The estimate excludes an all-NL production deployment and any later one-time
 verified runtime/compiler rebuild.  It is only for the first original theorem
@@ -63,11 +64,10 @@ and its fresh fast-path confirmation.
 
 The estimate must be revised immediately if any of these assumptions fails:
 
-1. the 21-entry constructor cannot be composed from the generic entry theorem;
-2. the six delta step results do not fit the existing recursive state relation;
-3. the fixed verdict differs from the ordinary final Boolean on the exact
+1. the six delta step results do not fit the existing recursive state relation;
+2. the fixed verdict differs from the ordinary final Boolean on the exact
    authenticated representation; or
-4. the existing analytic/original-statement adapter needs a new mathematical
+3. the existing analytic/original-statement adapter needs a new mathematical
    theorem rather than an instantiation or representation bridge.
 
 No such failure is currently known, but none of G3--G5 is counted as complete
