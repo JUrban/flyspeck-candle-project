@@ -51,6 +51,20 @@ is to compose the production jet, outer-Hessian, and recompletion wrappers and
 instantiate that generic result for authenticated coordinates 0, 1, and 2.
 G3 through G6 remain after it.
 
+### G2c finite checklist
+
+| Subgate | Status | Exit criterion |
+|---|---|---|
+| G2c-1. Product formula layer | **DONE** | Production center value, six-gradient, and canonical 21-entry Hessian have exact evaluator theorems and object-semantic identities. |
+| G2c-2. Delta intermediates | **PENDING** | The production delta value, gradient, and Hessian calls needed by the center and outer calculations are tied to the corresponding object-semantic intermediate values on the authenticated inputs.  Existing closed component evaluations may be reused, but must not stand in for this identity. |
+| G2c-3. Center jet and outer Hessian | **PENDING** | The production `delta_product_jet_environment` and `object_delta_product_hessian` wrappers return the exact center jet and packed outer Hessian expected by the semantic construction. |
+| G2c-4. Recompletion and three instances | **PENDING** | State recompletion yields a runtime state related to `bounded_object_q_delta_four_coordinate_cv`, instantiated for authenticated coordinates 0, 1, and 2. |
+
+These are subgates of G2c, not additional top-level gates.  If any of them
+requires a new mathematical result rather than evaluator composition or an
+existing semantic identity, the planning estimate must be revised before a
+long build or full replay.
+
 ## Planning estimate and uncertainty
 
 This is an engineering estimate, not a guarantee:
