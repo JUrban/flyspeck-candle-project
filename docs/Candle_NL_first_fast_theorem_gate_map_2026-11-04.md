@@ -30,7 +30,7 @@ original statement.
 | G2. Six specialized delta instructions | **IN PROGRESS** | All six authenticated delta positions have evaluator results connected to complete exact analytic jets.  The three negative-derivative cases are covered.  For the three `4*x_i*delta` cases, center value, the full six-component gradient, and the production 21-entry Hessian are covered; packaging the three complete jets is the current subgate. |
 | G2a. Generic product-Hessian entry | **DONE** | One theorem evaluates the production entry constructor and identifies its exact product-rule interval for arbitrary valid row, column, and product coordinate.  Candle commit `800fe4cba`; clean build 1m07.5s wall and 1,999,216 KiB peak RSS. |
 | G2b. Complete 21-entry product Hessian | **DONE** | The entry theorem is composed through the production upper-triangular Hessian constructor and its exact canonical order.  Candle commit `82b14934d`; exact clean source build 1m08.3s wall and 1,948,144 KiB peak RSS. |
-| G2c. Three complete product-delta jets | **IN PROGRESS** | Center value, six gradient entries, and 21 Hessian entries are packaged as the exact analytic result for each of the three authenticated product specializations. |
+| G2c. Three complete product-delta jets | **IN PROGRESS** | Center value, six gradient entries, and 21 Hessian entries are packaged as the exact analytic result for each of the three authenticated product specializations.  The production six-gradient and recursive Hessian results are now identified with the object-level semantic constructors (`c52ac2276`); the jet/state wrapper composition remains. |
 | G3. Whole 167-position semantic trace | **PENDING** | The existing generic recursive traversal is instantiated with the ordinary and specialized step theorems; it proves exact stack/certificate-cursor preservation and the final ordinary Boolean for the authenticated complete program. |
 | G4. Fast one-call correspondence | **PENDING** | The compact fixed-checker verdict is proved equal to the ordinary complete-call result and supplies `compute_fast_eval_ok` for the authenticated call.  Mutated source, certificate, plan, and equation-set inputs reject. |
 | G5. Analytic acceptance and original theorem | **PENDING** | The complete accepted result is fed through the existing universal analytic/Taylor soundness and original-statement adapter, yielding the literal original case-16594 Flyspeck theorem with audited assumptions and axioms. |
@@ -44,9 +44,11 @@ upper-triangular index pairs.  It does not replay 21 captured numerical
 results.  The exact clean source built in 1m08.3s wall with 1,948,144 KiB peak
 RSS.
 
-The current gate is G2c: use the already proved center-value, six-gradient,
-and complete-Hessian evaluator theorems to package each of the three
-authenticated `4*x_i*delta` instructions as a complete exact analytic jet.
+The current gate is G2c.  The production six-gradient and complete-Hessian
+results are now proved equal to the corresponding object-level constructors
+used by `bounded_object_q_delta_four_coordinate_cv`.  The remaining G2c work
+is to compose the production jet, outer-Hessian, and recompletion wrappers and
+instantiate that generic result for authenticated coordinates 0, 1, and 2.
 G3 through G6 remain after it.
 
 ## Planning estimate and uncertainty
