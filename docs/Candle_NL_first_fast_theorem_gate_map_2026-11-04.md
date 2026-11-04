@@ -91,7 +91,9 @@ theorems now cover the signed-term selection and all-six gradient
 construction.  A production source-item theorem also proves that, given the
 center-jet and outer-Hessian evaluator results, recompletion returns the exact
 six-field runtime state; its companion theorem connects that state to the
-analytic `BoundedObjectQTaylor` value.
+analytic `BoundedObjectQTaylor` value.  The production delta interval-sum
+left fold, shared by the center and Hessian calculations, now has a generic
+exact evaluator theorem for arbitrary encoded interval lists as well.
 
 The remaining G2c work is therefore the two component evaluator relations:
 connect the production center jet and packed outer Hessian to the already
@@ -105,7 +107,7 @@ described above, but not its discharged leaf/topology premises.
 | Subgate | Status | Exit criterion |
 |---|---|---|
 | G2c-1. Product formula layer | **DONE** | Production center value, six-gradient, and canonical 21-entry Hessian have exact evaluator theorems and object-semantic identities. |
-| G2c-2. Delta intermediates | **IN PROGRESS** | The generic signed-term and six-gradient construction succeeds with the required length.  The production delta value, gradient, and Hessian evaluator calls still need their arbitrary-input object-semantic relations.  Existing closed component evaluations may be reused, but must not stand in for this identity. |
+| G2c-2. Delta intermediates | **IN PROGRESS** | The generic signed-term and six-gradient construction succeeds with the required length, and the production interval-sum helper now evaluates exactly for arbitrary encoded lists.  The production delta value, gradient, and Hessian evaluator calls still need their arbitrary-input object-semantic relations.  Existing closed component evaluations may be reused, but must not stand in for this identity. |
 | G2c-3. Center jet and outer Hessian | **IN PROGRESS** | The production source-item wrapper now exposes these as exactly two evaluator premises.  Those two calls must be proved to return the exact center jet and packed outer Hessian expected by the semantic construction. |
 | G2c-4. Recompletion and three instances | **IN PROGRESS** | Recompletion is proved both executable and semantically related once the two component results hold.  Instantiation for authenticated coordinates 0, 1, and 2 remains. |
 
