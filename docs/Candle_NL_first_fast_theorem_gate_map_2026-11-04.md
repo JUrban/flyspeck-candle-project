@@ -28,8 +28,8 @@ original statement.
 | G0. Genuine data and numerical execution | **DONE** | The authenticated case-16594 source, certificate plan, 167-position program, and all 875 cells execute and accept through the fixed fast checker. |
 | G1. Ordinary instruction-family bridge | **DONE** | Every ordinary family has a generic evaluator-to-exact-object stack theorem, including certificate-cursor preservation for inverse, square root, and arctangent.  These theorems cover the 161 ordinary positions without position-specific proofs. |
 | G2. Six specialized delta instructions | **IN PROGRESS** | All six authenticated delta positions have evaluator results connected to complete exact analytic jets.  The three negative-derivative cases are covered.  For the three `4*x_i*delta` cases, center value and the full six-component gradient are covered; the product Hessian is the current subgate. |
-| G2a. Generic product-Hessian entry | **IN PROGRESS** | One theorem evaluates the production entry constructor and identifies its exact product-rule interval for arbitrary valid row, column, and product coordinate. |
-| G2b. Complete 21-entry product Hessian | **PENDING** | The entry theorem is composed through the production upper-triangular Hessian constructor, with its row/order contract proved. |
+| G2a. Generic product-Hessian entry | **DONE** | One theorem evaluates the production entry constructor and identifies its exact product-rule interval for arbitrary valid row, column, and product coordinate.  Candle commit `800fe4cba`; clean build 1m07.5s wall and 1,999,216 KiB peak RSS. |
+| G2b. Complete 21-entry product Hessian | **IN PROGRESS** | The entry theorem is composed through the production upper-triangular Hessian constructor, with its row/order contract proved. |
 | G2c. Three complete product-delta jets | **PENDING** | Center value, six gradient entries, and 21 Hessian entries are packaged as the exact analytic result for each of the three authenticated product specializations. |
 | G3. Whole 167-position semantic trace | **PENDING** | The existing generic recursive traversal is instantiated with the ordinary and specialized step theorems; it proves exact stack/certificate-cursor preservation and the final ordinary Boolean for the authenticated complete program. |
 | G4. Fast one-call correspondence | **PENDING** | The compact fixed-checker verdict is proved equal to the ordinary complete-call result and supplies `compute_fast_eval_ok` for the authenticated call.  Mutated source, certificate, plan, and equation-set inputs reject. |
@@ -38,17 +38,15 @@ original statement.
 
 ## Current exact blocker
 
-The G2a proof already unfolds and proves the real production evaluator's base
-product and both conditional product-rule additions.  The remaining local
-obligation is to reuse the already-proved generic scale-by-four evaluator for
-the four row/column equality cases.  A new focused build on 2026-11-04 did not
-reach its diagnostic marker inside the three-minute cap, so it did **not**
-pass.  The cap was not raised.  Before another proof attempt, the focused
-harness must expose whether time is being spent restoring/scanning or in the
-final tactic itself.
+G2a is complete.  The production evaluator proof covers the base product,
+both conditional product-rule additions, all four row/column equality cases,
+and the final scale-by-four operation.  The exact authoritative source built
+cleanly in 1m07.5s wall with 1,999,216 KiB peak RSS.
 
-This is a narrow immediate proof obligation.  Passing it will not by itself
-make the first theorem complete: G2b through G6 will still remain.
+The current gate is G2b: identify the actual recursive row/upper-triangular
+constructor and compose the generic entry theorem through its exact 21-entry
+order.  This must be one structural theorem, not 21 position-specific
+numerical proofs.  G2c through G6 remain after it.
 
 ## Planning estimate and uncertainty
 
