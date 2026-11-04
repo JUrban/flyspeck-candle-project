@@ -15,6 +15,9 @@ uses of "close" but does not replace the detailed implementation ledger in
 - LP: **complete**, green and checkpointed.
 - Genuine case-16594 numerical checker: **167/167 instruction positions** and
   **875/875 cells** accepted.
+- Explicit-radius whole-call executable: **defined and typechecked** against
+  the prepared Candle state; its numerical and 1,749-token topology parts
+  consume the same canonical job stream.
 - First original Flyspeck NL theorem through the fast route: **0/1**.
 
 The numerical result is not yet the original HOL theorem.  The missing work
@@ -23,18 +26,55 @@ original statement.
 
 ## Gates
 
-| Gate | Status | Exit criterion |
-|---|---|---|
-| G0. Genuine data and numerical execution | **DONE** | The authenticated case-16594 source, certificate plan, 167-position program, and all 875 cells execute and accept through the fixed fast checker. |
-| G1. Ordinary instruction-family bridge | **DONE** | Every ordinary family has a generic evaluator-to-exact-object stack theorem, including certificate-cursor preservation for inverse, square root, and arctangent.  These theorems cover the 161 ordinary positions without position-specific proofs. |
-| G2. Six specialized delta instructions | **IN PROGRESS** | All six authenticated delta positions have evaluator results connected to complete exact analytic jets.  The three negative-derivative cases are covered.  For the three `4*x_i*delta` cases, center value, the full six-component gradient, and the production 21-entry Hessian are covered; packaging the three complete jets is the current subgate. |
-| G2a. Generic product-Hessian entry | **DONE** | One theorem evaluates the production entry constructor and identifies its exact product-rule interval for arbitrary valid row, column, and product coordinate.  Candle commit `800fe4cba`; clean build 1m07.5s wall and 1,999,216 KiB peak RSS. |
-| G2b. Complete 21-entry product Hessian | **DONE** | The entry theorem is composed through the production upper-triangular Hessian constructor and its exact canonical order.  Candle commit `82b14934d`; exact clean source build 1m08.3s wall and 1,948,144 KiB peak RSS. |
-| G2c. Three complete product-delta jets | **IN PROGRESS** | Center value, six gradient entries, and 21 Hessian entries are packaged as the exact analytic result for each of the three authenticated product specializations.  The production six-gradient and recursive Hessian results are now identified with the object-level semantic constructors (`c52ac2276`); the jet/state wrapper composition remains. |
-| G3. Whole 167-position semantic trace | **PENDING** | The existing generic recursive traversal is instantiated with the ordinary and specialized step theorems; it proves exact stack/certificate-cursor preservation and the final ordinary Boolean for the authenticated complete program. |
-| G4. Fast one-call correspondence | **PENDING** | The compact fixed-checker verdict is proved equal to the ordinary complete-call result and supplies `compute_fast_eval_ok` for the authenticated call.  Mutated source, certificate, plan, and equation-set inputs reject. |
-| G5. Analytic acceptance and original theorem | **PENDING** | The complete accepted result is fed through the existing universal analytic/Taylor soundness and original-statement adapter, yielding the literal original case-16594 Flyspeck theorem with audited assumptions and axioms. |
-| G6. Fresh end-to-end confirmation | **PENDING** | A fresh run takes the fast branch, produces the same original theorem, and records preparation, checker execution, decoding, theorem handoff, total elapsed time, and peak RSS. |
+| Gate | Layer | Status | Exit criterion |
+|---|---|---|---|
+| G0. Genuine data and numerical execution | computation | **DONE** | The authenticated source, certificate plan, 167-position program, and all 875 cells accept through the fixed fast checker. |
+| G1. Ordinary instruction-family bridge | logic | **DONE** | Every ordinary family has a generic evaluator-to-exact-object theorem, including certificate-cursor preservation for inverse, square root, and arctangent. |
+| S0. End-to-end contract skeleton | representation/control | **IN PROGRESS** | The Candle whole-call target and HOL4 `compute_fast_eval_ok` target typecheck against the real equation set, with every remaining premise assigned below. The Candle half now typechecks; the HOL4 callback/clock half is pending. |
+| G2. Six specialized delta instructions | logic | **IN PROGRESS** | All six specialized evaluator results are connected to exact object states for arbitrary valid inputs. The product-delta wrapper is current; the three negative cases still need the generic evaluator join despite their existing mathematical refinement and genuine closed probes. |
+| G3. Complete ordinary trace and leaf semantics | logic/clock | **PENDING** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
+| G4. Whole jobs and topology | representation/logic | **IN PROGRESS** | The 875 canonical variable jobs and packed-cell stream are consumed in lockstep, malformed or unequal streams reject, every accepted entry supplies the matching source-box leaf theorem, and the 1,749-token run combines those exact leaves to the authenticated singleton root. |
+| G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven witnessed callback refines the exact four-argument whole call under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
+| G6. Development runtime integration | runtime/representation | **PENDING** | The exact frozen callback is installed in a development runtime, the genuine call records a fast-branch hit, and lightweight compiled tests cover all payload roles and mutations. |
+| G7. Analytic and original-statement adapter | logic | **PENDING** | The authenticated root `m_cell_pass` is converted by the existing case-16594 reconstruction to a typechecked conditional theorem with the literal original conclusion and audited assumptions. |
+| G8. Verified runtime and prepared state | build/runtime | **PENDING** | The exact callback bytes pass the verified rebuild preflight and build; the minimum compatible Flyspeck/NL predecessor state is reconstructed and its cold elapsed time and peak RSS are measured. |
+| G9. First fast original theorem | integration | **PENDING** | A fresh compatible run takes the fast branch and produces the literal original theorem, recording preparation, checking, decoding/handoff, total elapsed time, peak RSS, and theorem assumptions. |
+
+### Audit-driven S0/G4 probe
+
+The audit review exposed that the earlier map did not represent the whole
+runtime and reconstruction path.  A bounded implementation packet therefore
+defined an explicit-radius whole-call executable and a conditional soundness
+skeleton before authorizing any long build.
+
+The representation deliberately keeps the legacy topology job shape
+unchanged:
+
+```text
+job = (outer_boxes,(center_boxes,source_boxes))
+source descriptor = (plan_codes,(source_instructions,packed_cells))
+packed cell = (radii,certificates)
+```
+
+The numerical checker consumes `packed_cells` and `jobs` in lockstep.  It
+rejects nonzero terminators, stream-length mismatches, and any failed entry.
+The same `jobs` value is then supplied to the compact topology runner, so the
+two halves cannot silently use different job lists.
+
+The executable and its conditional contract skeleton typechecked together in
+109 seconds against the real prepared Candle state.  The skeleton proves the
+whole-call component decomposition, conversion of the encoded topology run to
+the logical topology runner, and a root `m_cell_pass` conclusion conditional
+on three explicit obligations: canonical job representation, the per-job
+leaf theorems, and the generalized topology contract.  This closes the Candle
+half of the S0 syntax/type probe; it does **not** close G4.
+
+A bounded attempt at the generalized topology proof found useful type/layout
+hazards, including an initial packed representation that would have broken
+the existing logical job decoder.  That layout was corrected.  The remaining
+topology theorem was left explicit rather than entering a tactic-fragile or
+hour-scale proof loop.  The HOL4 callback/clock skeleton remains the other S0
+half.
 
 ## Current exact blocker
 
@@ -45,27 +85,36 @@ results.  The exact clean source built in 1m08.3s wall with 1,948,144 KiB peak
 RSS.
 
 The current gate is G2c.  The production six-gradient and complete-Hessian
-results are now proved equal to the corresponding object-level constructors
-used by `bounded_object_q_delta_four_coordinate_cv`.  The remaining G2c work
-is to compose the production jet, outer-Hessian, and recompletion wrappers and
-instantiate that generic result for authenticated coordinates 0, 1, and 2.
-G3 through G6 remain after it.
+results are proved equal to the corresponding object-level constructors used
+by `bounded_object_q_delta_four_coordinate_cv`.  Generic success/length
+theorems now cover the signed-term selection and all-six gradient
+construction.  A production source-item theorem also proves that, given the
+center-jet and outer-Hessian evaluator results, recompletion returns the exact
+six-field runtime state; its companion theorem connects that state to the
+analytic `BoundedObjectQTaylor` value.
+
+The remaining G2c work is therefore the two component evaluator relations:
+connect the production center jet and packed outer Hessian to the already
+proved semantic values on arbitrary valid inputs.  Then instantiate the
+source-item wrapper for authenticated coordinates 0, 1, and 2.  G3 through G9
+remain after it; G4 has the executable and conditional contract skeleton
+described above, but not its discharged leaf/topology premises.
 
 ### G2c finite checklist
 
 | Subgate | Status | Exit criterion |
 |---|---|---|
 | G2c-1. Product formula layer | **DONE** | Production center value, six-gradient, and canonical 21-entry Hessian have exact evaluator theorems and object-semantic identities. |
-| G2c-2. Delta intermediates | **PENDING** | The production delta value, gradient, and Hessian calls needed by the center and outer calculations are tied to the corresponding object-semantic intermediate values on the authenticated inputs.  Existing closed component evaluations may be reused, but must not stand in for this identity. |
-| G2c-3. Center jet and outer Hessian | **PENDING** | The production `delta_product_jet_environment` and `object_delta_product_hessian` wrappers return the exact center jet and packed outer Hessian expected by the semantic construction. |
-| G2c-4. Recompletion and three instances | **PENDING** | State recompletion yields a runtime state related to `bounded_object_q_delta_four_coordinate_cv`, instantiated for authenticated coordinates 0, 1, and 2. |
+| G2c-2. Delta intermediates | **IN PROGRESS** | The generic signed-term and six-gradient construction succeeds with the required length.  The production delta value, gradient, and Hessian evaluator calls still need their arbitrary-input object-semantic relations.  Existing closed component evaluations may be reused, but must not stand in for this identity. |
+| G2c-3. Center jet and outer Hessian | **IN PROGRESS** | The production source-item wrapper now exposes these as exactly two evaluator premises.  Those two calls must be proved to return the exact center jet and packed outer Hessian expected by the semantic construction. |
+| G2c-4. Recompletion and three instances | **IN PROGRESS** | Recompletion is proved both executable and semantically related once the two component results hold.  Instantiation for authenticated coordinates 0, 1, and 2 remains. |
 
 These are subgates of G2c, not additional top-level gates.  If any of them
 requires a new mathematical result rather than evaluator composition or an
 existing semantic identity, the planning estimate must be revised before a
 long build or full replay.
 
-## Planning estimate and uncertainty
+## Local proof-stack estimate and uncertainty
 
 This is an engineering estimate, not a guarantee:
 
@@ -74,30 +123,38 @@ This is an engineering estimate, not a guarantee:
 - planning range allowing for local representation or theorem-shape repairs:
   **3--7 focused development days**.
 
-The estimate excludes an all-NL production deployment and any later one-time
-verified runtime/compiler rebuild.  It is only for the first original theorem
-and its fresh fast-path confirmation.
+This range applies only to the local semantic proof stack through G7, assuming
+the existing theorem shapes compose as expected.  It is **not** an end-to-end
+delivery estimate.  It excludes the HOL4 callback implementation, development
+runtime integration, the verified runtime/compiler rebuild, reconstruction of
+a compatible Flyspeck/NL prepared state, and the fresh confirmation run.  Those
+runtime and reconstruction costs must be measured by S0/G6/G8 preflights before
+an end-to-end calendar estimate is stated.
 
 The estimate must be revised immediately if any of these assumptions fails:
 
 1. the six delta step results do not fit the existing recursive state relation;
 2. the fixed verdict differs from the ordinary final Boolean on the exact
    authenticated representation; or
-3. the existing analytic/original-statement adapter needs a new mathematical
+3. the generalized topology contract does not follow from the existing replay
+   invariants without new mathematics; or
+4. the existing analytic/original-statement adapter needs a new mathematical
    theorem rather than an instantiation or representation bridge.
 
-No such failure is currently known, but none of G3--G5 is counted as complete
-until its exact theorem exports.
+No such failure is currently known, but none of G3--G9 is counted as complete
+until its exact exit criterion is met.
 
 ## Working rules
 
-1. The public metric remains **first original theorem 0/1** until G5 passes.
+1. The public metric remains **first original theorem 0/1** until G9 passes.
 2. Do not call the result "close" as a calendar claim.  Report the highest
    completed gate and the current subgate instead.
 3. Keep proof edit loops below three minutes.  Silence at the cap is a harness
    failure to diagnose, not grounds for a longer timeout.
-4. Do not start a whole-case replay, runtime rebuild, or hour-scale run before
-   G3 and G4 are green on exact source bytes.
+4. Do not start a runtime rebuild or hour-scale run before G3--G6 are green on
+   exact source bytes and G8 has a measured minimum-state reconstruction
+   preflight.  Continue to use bounded whole-call development probes when they
+   answer a specific representation or proof question.
 5. Any newly discovered obligation must be attached to one of these gates,
    given an exit criterion, and reflected in the estimate.  It must not appear
    as untracked "one more thing".
@@ -108,7 +165,10 @@ until its exact theorem exports.
 
 The project is technically well-supported and the route is finite, but it is
 not yet fair to use “close” as a delivery estimate.  A defensible threshold is
-after G3 and G4: at that point the exact 167-position computation has a proved
-ordinary meaning and the fast one-call verdict is connected to it, leaving the
-known analytic/original-statement handoff and confirmation run.  Until then,
-report **G2 in progress; first theorem 0/1**.
+after G7: at that point the complete call has a proved ordinary meaning, the
+fast callback is connected to it, and the original-statement adapter has
+typechecked, leaving the verified runtime/state construction and the fresh
+confirmation run.  Even then, G8 may still expose a material build or
+state-reconstruction cost.  Until G7, report the highest completed gate and
+**first theorem 0/1**; currently that is **G2 in progress, S0 and G4 partially
+exercised**.
