@@ -164,10 +164,21 @@ that theorem; no captured cell values are used.
 The current G3 blocker is no longer the first ordinary evaluator/semantic
 handoff.  The unified step and its general-prefix induction now compose that
 handoff, the fixed-word trace, and the flat certificate cursor.  A genuine
-authenticated trace through instructions 0--9 is green.  The next exact task
-is to extend the same construction through the first complete ordinary stretch
-(0--33), splice in the already-proved specialized positions 34 and 35, and
-then repeat that bounded pattern through all 167 positions.  The resulting
+authenticated trace through the first complete ordinary stretch, instructions
+0--33, is green (`d7c8f5c3f`), and the semantic trace has a proved append rule
+(`68776e5be`).  The early splice probe at the first specialized positions 34
+and 35 then found a narrower representation obligation: production runtime
+radii are exact-rational CVs, while the fixed-word semantic run uses their
+word-derived CV representations.  They are related by the existing authenticated
+`LIST_REL` relation but are not required to be byte-identical.
+
+Commit `45af1b789` closes that transport obligation generically.  The positive
+product-delta and negative-delta evaluator/refinement theorems now accept any
+encoded runtime radii related to the semantic radii and return a runtime state
+refining the same exact object-q result.  The exact theory build took 65.17
+seconds with 2,022,136 KiB peak RSS.  The next exact task is the concrete joint
+splice through positions 34 and 35, followed by repetition of that bounded
+pattern through all 167 positions.  The resulting
 entry result must still be connected to the existing Candle theorem
 `candle_cv_q_packed_object_dispatch_entry_accept_cell_pass` (or its smaller
 source-certificate contract) and a genuine cell-0 `m_cell_pass`
@@ -201,7 +212,7 @@ composition test; it does not close the full trace or a leaf theorem.
 |---|---|---|
 | G3a. Cell-0 semantic source result | **DONE** | Exact 167-step fixed-word result, exact-object analytic meaning, and source acceptance. |
 | G3b. Unified general-code joint step | **DONE** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
-| G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative. |
+| G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative, including transport from authenticated exact-rational runtime radii to the related fixed-word semantic radii. |
 | G3d. Authenticated 0--9 prefix | **DONE** | The genuine prefix crosses the first certificate-free and certificate-consuming families and leaves the exact word/object/runtime states and packet suffix. |
 | G3e. Full 167-step trace | **IN PROGRESS** | General induction plus the six specialized positions yields the ordinary evaluator result under a structural clock bound. |
 | G3f. Arbitrary-cell leaf theorem | **PENDING** | Successful accepted-cell inputs yield the matching `m_cell_pass`; cell 0 is a concrete instantiation, not the theorem's scope. |
