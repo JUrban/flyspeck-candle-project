@@ -84,10 +84,10 @@ upper-triangular index pairs.  It does not replay 21 captured numerical
 results.  The exact clean source built in 1m08.3s wall with 1,948,144 KiB peak
 RSS.
 
-The current gate is G2c.  The production six-gradient and complete-Hessian
-results are proved equal to the corresponding object-level constructors used
-by `bounded_object_q_delta_four_coordinate_cv`.  Generic success/length
-theorems now cover the signed-term selection and all-six gradient
+The positive product-delta track G2c is complete.  The production six-gradient
+and complete-Hessian results are proved equal to the corresponding object-level
+constructors used by `bounded_object_q_delta_four_coordinate_cv`.  Generic
+success/length theorems now cover the signed-term selection and all-six gradient
 construction.  A production source-item theorem also proves that, given the
 center-jet and outer-Hessian evaluator results, recompletion returns the exact
 six-field runtime state; its companion theorem connects that state to the
@@ -115,9 +115,19 @@ constructor, the selected coordinate interval, and the final product-Hessian
 call.  The result is exactly the object-level outer Hessian already used by
 the semantic source-item relation; it is not a captured cell-0 value.
 
-G2c-3 is therefore complete.  The current G2c work is G2c-4: instantiate the
-already-proved source-item/recompletion wrapper for authenticated coordinates
-0, 1, and 2.  G3 through G9 remain after it; G4 has the executable and
+G2c is now complete.  One generic theorem composes the exact center jet and
+outer Hessian through the production source-item/recompletion wrapper for any
+coordinate below six and arbitrary valid six-element radius, center-box, and
+outer-box inputs.  Explicit corollaries instantiate that theorem at the three
+authenticated positive coordinates 0, 1, and 2.  The result is the complete
+six-field runtime state used by the existing analytic source-item relation;
+it is not a closed computation over captured cell-0 values.
+
+The current G2 work is the corresponding generic exported-evaluator join for
+the three negative-delta source items at coordinates 3, 4, and 5.  Their
+mathematical fixed-word-to-object refinement and genuine closed probes already
+exist, but they are not counted complete until their arbitrary-input runtime
+states are exported.  G3 through G9 remain after G2; G4 has the executable and
 conditional contract skeleton described above, but not its discharged
 leaf/topology premises.
 
@@ -128,7 +138,7 @@ leaf/topology premises.
 | G2c-1. Product formula layer | **DONE** | Production center value, six-gradient, and canonical 21-entry Hessian have exact evaluator theorems and object-semantic identities. |
 | G2c-2. Delta intermediates | **DONE** | The interval-sum, production delta value, complete six-component gradient, exact 21-row Hessian constructor, generic row sums, and final packed delta Hessian all evaluate exactly for arbitrary encoded inputs. |
 | G2c-3. Center jet and outer Hessian | **DONE** | The exact production center jet and packed outer Hessian evaluate for arbitrary valid six-element environments and coordinates below six, through the authenticated production source bodies. |
-| G2c-4. Recompletion and three instances | **IN PROGRESS** | Recompletion is proved both executable and semantically related once the two component results hold.  Instantiation for authenticated coordinates 0, 1, and 2 remains. |
+| G2c-4. Recompletion and three instances | **DONE** | The production source-item call evaluates to its complete exact runtime state for arbitrary valid inputs and coordinates below six; explicit coordinate 0, 1, and 2 corollaries are exported. |
 
 These are subgates of G2c, not additional top-level gates.  If any of them
 requires a new mathematical result rather than evaluator composition or an
@@ -191,5 +201,5 @@ fast callback is connected to it, and the original-statement adapter has
 typechecked, leaving the verified runtime/state construction and the fresh
 confirmation run.  Even then, G8 may still expose a material build or
 state-reconstruction cost.  Until G7, report the highest completed gate and
-**first theorem 0/1**; currently that is **G2 in progress, S0 and G4 partially
-exercised**.
+**first theorem 0/1**; currently that is **G2c complete, G2 negative-delta
+joins in progress, and S0/G4 partially exercised**.
