@@ -1,6 +1,6 @@
 # Candle NL first fast theorem: live gate map
 
-Date: 2026-11-04 UTC
+Date: 2026-11-04 UTC; updated 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
@@ -31,7 +31,7 @@ original statement.
 | G0. Genuine data and numerical execution | computation | **DONE** | The authenticated source, certificate plan, 167-position program, and all 875 cells accept through the fixed fast checker. |
 | G1. Ordinary instruction-family bridge | logic | **DONE** | Every ordinary family has a generic evaluator-to-exact-object theorem, including certificate-cursor preservation for inverse, square root, and arctangent. |
 | S0. End-to-end contract skeleton | representation/control | **IN PROGRESS** | The Candle whole-call target and HOL4 `compute_fast_eval_ok` target typecheck against the real equation set, with every remaining premise assigned below. The Candle half now typechecks; the HOL4 callback/clock half is pending. |
-| G2. Six specialized delta instructions | logic | **IN PROGRESS** | All six specialized evaluator results are connected to exact object states for arbitrary valid inputs. The product-delta wrapper is current; the three negative cases still need the generic evaluator join despite their existing mathematical refinement and genuine closed probes. |
+| G2. Six specialized delta instructions | logic | **DONE** | All six specialized evaluator results are connected to exact object states for arbitrary valid inputs. The three product-delta coordinates and the three negative-delta coordinates each use one generic production evaluator/refinement theorem rather than captured cell computations. |
 | G3. Complete ordinary trace and leaf semantics | logic/clock | **PENDING** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
 | G4. Whole jobs and topology | representation/logic | **IN PROGRESS** | The 875 canonical variable jobs and packed-cell stream are consumed in lockstep, malformed or unequal streams reject, every accepted entry supplies the matching source-box leaf theorem, and the 1,749-token run combines those exact leaves to the authenticated singleton root. |
 | G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven witnessed callback refines the exact four-argument whole call under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
@@ -123,13 +123,20 @@ authenticated positive coordinates 0, 1, and 2.  The result is the complete
 six-field runtime state used by the existing analytic source-item relation;
 it is not a closed computation over captured cell-0 values.
 
-The current G2 work is the corresponding generic exported-evaluator join for
-the three negative-delta source items at coordinates 3, 4, and 5.  Their
-mathematical fixed-word-to-object refinement and genuine closed probes already
-exist, but they are not counted complete until their arbitrary-input runtime
-states are exported.  G3 through G9 remain after G2; G4 has the executable and
-conditional contract skeleton described above, but not its discharged
-leaf/topology premises.
+G2 is now complete.  The corresponding negative-delta production source-item
+family has one arbitrary-coordinate exact evaluator/refinement theorem.  From
+the ordinary fixed-word success and coverage evidence it derives the exact
+object-q Taylor value, coverage of that value by the word result, the exact
+production `compute_eval` result, and runtime equivalence of the returned
+six-field source state.  The genuine coordinates 3, 4, and 5 are instances of
+that theorem; no captured cell values are used.
+
+The current logic gate is G3: instantiate both generic specialized families
+inside the actual dispatcher, compose them with the ordinary instruction
+invariant through all 167 authenticated positions, derive the per-cell
+`m_cell_pass`, and export the structural clock bound.  G4 has the executable
+and conditional contract skeleton described above, but not its discharged
+leaf/topology premises.  G3 through G9 remain after the completed G2 gate.
 
 ### G2c finite checklist
 
@@ -154,7 +161,8 @@ This is an engineering estimate, not a guarantee:
 - planning range allowing for local representation or theorem-shape repairs:
   **3--7 focused development days**.
 
-This range applies only to the local semantic proof stack through G7, assuming
+This range now applies only to the remaining local semantic proof stack G3
+through G7, assuming
 the existing theorem shapes compose as expected.  It is **not** an end-to-end
 delivery estimate.  It excludes the HOL4 callback implementation, development
 runtime integration, the verified runtime/compiler rebuild, reconstruction of
@@ -164,7 +172,8 @@ an end-to-end calendar estimate is stated.
 
 The estimate must be revised immediately if any of these assumptions fails:
 
-1. the six delta step results do not fit the existing recursive state relation;
+1. the six now-proved delta step results do not fit the existing recursive
+   state relation;
 2. the fixed verdict differs from the ordinary final Boolean on the exact
    authenticated representation; or
 3. the generalized topology contract does not follow from the existing replay
@@ -201,5 +210,5 @@ fast callback is connected to it, and the original-statement adapter has
 typechecked, leaving the verified runtime/state construction and the fresh
 confirmation run.  Even then, G8 may still expose a material build or
 state-reconstruction cost.  Until G7, report the highest completed gate and
-**first theorem 0/1**; currently that is **G2c complete, G2 negative-delta
-joins in progress, and S0/G4 partially exercised**.
+**first theorem 0/1**; currently that is **G2 complete, G3 pending, and S0/G4
+partially exercised**.
