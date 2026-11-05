@@ -101,9 +101,16 @@ The compact production delta Hessian is now covered too: its actual 21-row
 source constructor, generic row summation, and final packed 21-entry result
 all have exact evaluator theorems for arbitrary six-element encoded inputs.
 
+The production center-jet half of G2c-3 is now complete as well.  The proof
+uses the authenticated source bodies for the delta-product jet, its six-value
+environment wrapper, and `candle_cv_q_dim_jet_make`; it sequences the generic
+delta value, gradient, and Hessian theorems and returns the exact object-level
+jet for arbitrary encoded six-element environments and any coordinate below
+six.  It is not a captured coordinate-0 computation.
+
 G2c-2 is therefore complete.  The remaining G2c component work is composition
-of the production center jet and packed outer Hessian with the already-proved
-semantic values on arbitrary valid inputs.  Then instantiate the source-item
+of the production packed outer Hessian with its already-proved semantic value
+on arbitrary valid inputs.  Then instantiate the source-item
 wrapper for authenticated coordinates 0, 1, and 2.  G3 through G9 remain
 after it; G4 has the executable and conditional contract skeleton described
 above, but not its discharged leaf/topology premises.
@@ -114,7 +121,7 @@ above, but not its discharged leaf/topology premises.
 |---|---|---|
 | G2c-1. Product formula layer | **DONE** | Production center value, six-gradient, and canonical 21-entry Hessian have exact evaluator theorems and object-semantic identities. |
 | G2c-2. Delta intermediates | **DONE** | The interval-sum, production delta value, complete six-component gradient, exact 21-row Hessian constructor, generic row sums, and final packed delta Hessian all evaluate exactly for arbitrary encoded inputs. |
-| G2c-3. Center jet and outer Hessian | **IN PROGRESS** | The production source-item wrapper now exposes these as exactly two evaluator premises.  Those two calls must be proved to return the exact center jet and packed outer Hessian expected by the semantic construction. |
+| G2c-3. Center jet and outer Hessian | **HALF DONE** | The exact production center jet now evaluates for arbitrary valid six-element environments and coordinates below six.  The remaining half is the production packed outer-Hessian evaluator. |
 | G2c-4. Recompletion and three instances | **IN PROGRESS** | Recompletion is proved both executable and semantically related once the two component results hold.  Instantiation for authenticated coordinates 0, 1, and 2 remains. |
 
 These are subgates of G2c, not additional top-level gates.  If any of them
