@@ -4,6 +4,35 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit entry/callback update (23:53 UTC)
+
+The complete cell-0 trace has now crossed two more bounded integration
+boundaries on the isolated HOL4/CakeML branch:
+
+- `77773c9c7` proves the structural dispatcher-entry control semantics and
+  instantiates them for a **new exact entry expression containing the checked
+  fast certificate stream**; and
+- `b0467f294` registers a fail-closed fast evaluator for exactly that equation
+  environment and entry expression, with `compute_fast_eval_ok` proved from
+  the complete evaluator result.
+
+The entry proof cleanly rebuilt in 1m45s with 2,974,800 KiB peak RSS.  The
+registration proof rebuilt in 1m47s with 2,872,396 KiB peak RSS.  Neither
+build replayed the numerical checker, rebuilt Candle, or ran a verifier
+prefix.
+
+This boundary caught and resolved an important representation issue before a
+runtime investment: the older exported entry embeds the legacy 134-item
+certificate field, while the successful trace consumes the distinct checked
+fast certificate stream.  The proof therefore does not attach the fast result
+to the old entry by aliasing the two lists.  It defines and authenticates a
+fresh entry whose exact bytes match the proved result.
+
+This is still a **cell-0 vertical-slice callback**, not the arbitrary-cell G3
+exit criterion, the generic whole-call G5 callback, or a callback installed in
+a rebuilt Candle runtime.  It also does not close G4 topology.  The public
+metric remains first original theorem **0/1**.
+
 ## Post-audit progress update (22:17 UTC)
 
 The audit and the initial response were written while the authenticated
