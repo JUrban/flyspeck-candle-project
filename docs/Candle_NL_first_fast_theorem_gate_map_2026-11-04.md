@@ -161,16 +161,19 @@ production `compute_eval` result, and runtime equivalence of the returned
 six-field source state.  The genuine coordinates 3, 4, and 5 are instances of
 that theorem; no captured cell values are used.
 
-The current G3 blocker is the evaluator/representation handoff from this
-accepted HOL4 source result to the existing Candle theorem
+The current G3 blocker is no longer the first ordinary evaluator/semantic
+handoff.  The unified step and its general-prefix induction now compose that
+handoff, the fixed-word trace, and the flat certificate cursor.  A genuine
+authenticated trace through instructions 0--9 is green.  The next exact task
+is to extend the same construction through the first complete ordinary stretch
+(0--33), splice in the already-proved specialized positions 34 and 35, and
+then repeat that bounded pattern through all 167 positions.  The resulting
+entry result must still be connected to the existing Candle theorem
 `candle_cv_q_packed_object_dispatch_entry_accept_cell_pass` (or its smaller
-source-certificate contract), followed by a genuine cell-0 `m_cell_pass`
-instantiation.  The analytic and source-acceptance theorems already exist; the
-open work is to prove the corresponding exact dispatcher-entry result without
-rerunning the slow generic rational evaluator, then discharge the existing
-Candle adapter.  G4
-still has the executable and conditional contract skeleton described above,
-but not its discharged 875-leaf/topology premises.  G3 through G9 remain open.
+source-certificate contract) and a genuine cell-0 `m_cell_pass`
+instantiation.  G4 still has the executable and conditional contract skeleton
+described above, but not its discharged 875-leaf/topology premises.  G3
+through G9 remain open.
 
 Further focused G3 work has now made the remaining trace structure explicit.
 The six certificate-free instruction families share one joint
@@ -181,6 +184,17 @@ combines all nine general-code families under one packet-suffix invariant.
 The fast 134-field payload is also proved distinct from the legacy payload
 (`5b4117f84`), so no legacy-payload identity remains in the plan.
 
+Commit `b17dee352` adds the general all-ordinary-prefix induction and its first
+genuine authenticated instantiation.  The concrete theorem consumes source
+and prepared instructions 0--9 from the canonical 167-position program,
+threads the exact word trace and packet ledger, and records the matching
+object-q semantic and production-evaluator trace while retaining the exact
+suffix for instruction 10.  This prefix includes the first polynomial,
+pi-half, square-root, inverse, multiplication, and arctangent steps, including
+the first certificate-consuming operations.  Its fresh exact build took
+1m49.28s and 4,249,736 KiB peak RSS.  This closes G3d as a representation and
+composition test; it does not close the full trace or a leaf theorem.
+
 ### G3 finite checklist
 
 | Subgate | Status | Exit criterion |
@@ -188,8 +202,8 @@ The fast 134-field payload is also proved distinct from the legacy payload
 | G3a. Cell-0 semantic source result | **DONE** | Exact 167-step fixed-word result, exact-object analytic meaning, and source acceptance. |
 | G3b. Unified general-code joint step | **DONE** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
 | G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative. |
-| G3d. Authenticated 0--9 prefix | **IN PROGRESS** | The genuine prefix crosses every general family and leaves the exact expected states and packet suffix. |
-| G3e. Full 167-step trace | **PENDING** | General induction plus the six specialized positions yields the ordinary evaluator result under a structural clock bound. |
+| G3d. Authenticated 0--9 prefix | **DONE** | The genuine prefix crosses the first certificate-free and certificate-consuming families and leaves the exact word/object/runtime states and packet suffix. |
+| G3e. Full 167-step trace | **IN PROGRESS** | General induction plus the six specialized positions yields the ordinary evaluator result under a structural clock bound. |
 | G3f. Arbitrary-cell leaf theorem | **PENDING** | Successful accepted-cell inputs yield the matching `m_cell_pass`; cell 0 is a concrete instantiation, not the theorem's scope. |
 
 The cell-0 vertical slice is a representation test and must not be reported as
