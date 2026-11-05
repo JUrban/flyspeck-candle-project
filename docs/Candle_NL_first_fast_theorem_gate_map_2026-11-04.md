@@ -32,7 +32,7 @@ original statement.
 | G1. Ordinary instruction-family bridge | logic | **DONE** | Every ordinary family has a generic evaluator-to-exact-object theorem, including certificate-cursor preservation for inverse, square root, and arctangent. |
 | S0. End-to-end contract skeleton | representation/control | **IN PROGRESS** | The Candle whole-call target and HOL4 `compute_fast_eval_ok` target typecheck against the real equation set, with every remaining premise assigned below. The Candle half now typechecks; the HOL4 callback/clock half is pending. |
 | G2. Six specialized delta instructions | logic | **DONE** | All six specialized evaluator results are connected to exact object states for arbitrary valid inputs. The three product-delta coordinates and the three negative-delta coordinates each use one generic production evaluator/refinement theorem rather than captured cell computations. |
-| G3. Complete ordinary trace and leaf semantics | logic/clock | **PENDING** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
+| G3. Complete ordinary trace and leaf semantics | logic/clock | **IN PROGRESS** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
 | G4. Whole jobs and topology | representation/logic | **IN PROGRESS** | The 875 canonical variable jobs and packed-cell stream are consumed in lockstep, malformed or unequal streams reject, every accepted entry supplies the matching source-box leaf theorem, and the 1,749-token run combines those exact leaves to the authenticated singleton root. |
 | G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven witnessed callback refines the exact four-argument whole call under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
 | G6. Development runtime integration | runtime/representation | **PENDING** | The exact frozen callback is installed in a development runtime, the genuine call records a fast-branch hit, and lightweight compiled tests cover all payload roles and mutations. |
@@ -77,6 +77,29 @@ hour-scale proof loop.  The HOL4 callback/clock skeleton remains the other S0
 half.
 
 ## Current exact blocker
+
+The genuine cell-0 fixed-word trace and its exact analytic meaning now close
+on commit `abb3694f67`.  The checker executes all **167** authenticated
+instructions, consumes all 31 typed certificates, emits the 134 diagnostic
+intervals, and leaves exactly one Taylor result.  Its measured `cv_eval`
+execution is **1.8 seconds** on a fixed-word box proved to enclose the
+authenticated production box.
+
+The resulting theorem is no longer tied to the legacy exact-rational
+certificate stream.  A bounded comparison showed that **122 of 134** emitted
+word intervals do not enclose the corresponding legacy payload intervals;
+the two streams are different witnesses with different guard margins.  The
+v4.355 proposal to prove one 134-item payload identity is therefore retracted.
+The corrected proof treats the 31 fixed-word certificates as untrusted
+witnesses checked independently by the successful evaluator.
+
+The generic refinement theorem now turns that checked execution into an exact
+object-q analytic run for the authenticated source program, using the proved
+source/prepared-plan relation and proved enclosure of the authenticated center
+and outer boxes.  The final object result has a valid domain, a strictly
+negative completed upper bound, and satisfies the six-dimensional ordinary
+acceptance contract.  This completes the HOL4 numerical-to-exact-analytic
+semantic core for the first genuine leaf.
 
 G2b is complete.  One structural theorem now composes the generic production
 entry theorem through the actual two-list recursion and the canonical 21
@@ -131,12 +154,15 @@ production `compute_eval` result, and runtime equivalence of the returned
 six-field source state.  The genuine coordinates 3, 4, and 5 are instances of
 that theorem; no captured cell values are used.
 
-The current logic gate is G3: instantiate both generic specialized families
-inside the actual dispatcher, compose them with the ordinary instruction
-invariant through all 167 authenticated positions, derive the per-cell
-`m_cell_pass`, and export the structural clock bound.  G4 has the executable
-and conditional contract skeleton described above, but not its discharged
-leaf/topology premises.  G3 through G9 remain after the completed G2 gate.
+The current G3 blocker is the representation handoff from this accepted HOL4
+object result to the existing Candle theorem
+`candle_cv_q_packed_object_dispatch_entry_accept_cell_pass` (or its smaller
+source-certificate contract), followed by a genuine cell-0 `m_cell_pass`
+instantiation.  The analytic theorem itself already exists; the open work is
+to align the authenticated source boxes, expression, planned source, and
+accepted result without rerunning the slow generic rational evaluator.  G4
+still has the executable and conditional contract skeleton described above,
+but not its discharged 875-leaf/topology premises.  G3 through G9 remain open.
 
 ### G2c finite checklist
 
