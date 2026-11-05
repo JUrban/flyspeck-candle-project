@@ -176,20 +176,19 @@ Further focused G3 work has now made the remaining trace structure explicit.
 The six certificate-free instruction families share one joint
 word/object/evaluator theorem (`fd56a5670`).  Square root, inverse, and
 arctangent have corresponding certified joins, and the authenticated cell-0
-packet ledger supplies their 5/2/8-field guards.  The next source theorem
-combines those nine general-code families under one packet-suffix invariant;
-it is not yet committed or counted green.  The fast 134-field payload is also
-proved distinct from the legacy payload (`5b4117f84`), so no legacy-payload
-identity remains in the plan.
+packet ledger supplies their 5/2/8-field guards.  Commit `47118a893` now
+combines all nine general-code families under one packet-suffix invariant.
+The fast 134-field payload is also proved distinct from the legacy payload
+(`5b4117f84`), so no legacy-payload identity remains in the plan.
 
 ### G3 finite checklist
 
 | Subgate | Status | Exit criterion |
 |---|---|---|
 | G3a. Cell-0 semantic source result | **DONE** | Exact 167-step fixed-word result, exact-object analytic meaning, and source acceptance. |
-| G3b. Unified general-code joint step | **IN PROGRESS** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
+| G3b. Unified general-code joint step | **DONE** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
 | G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative. |
-| G3d. Authenticated 0--9 prefix | **PENDING** | The genuine prefix crosses every general family and leaves the exact expected states and packet suffix. |
+| G3d. Authenticated 0--9 prefix | **IN PROGRESS** | The genuine prefix crosses every general family and leaves the exact expected states and packet suffix. |
 | G3e. Full 167-step trace | **PENDING** | General induction plus the six specialized positions yields the ordinary evaluator result under a structural clock bound. |
 | G3f. Arbitrary-cell leaf theorem | **PENDING** | Successful accepted-cell inputs yield the matching `m_cell_pass`; cell 0 is a concrete instantiation, not the theorem's scope. |
 
