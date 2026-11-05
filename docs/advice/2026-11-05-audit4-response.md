@@ -4,6 +4,33 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit progress update (22:17 UTC)
+
+The audit and the initial response were written while the authenticated
+cell-0 trace was still being assembled.  Since then, the isolated HOL4/CakeML
+proof branch has completed and cleanly rebuilt the entire **167/167-action
+joint trace for genuine cell 0**.  The five new source commits are:
+
+- `96d5735da`: ordinary actions through 76;
+- `0621c40eb`: the second specialized pair, actions 77--78;
+- `4bb05651b`: ordinary actions through 119;
+- `a4c34d164`: the final specialized pair, actions 120--121; and
+- `9cff95635`: the ordinary tail through action 166.
+
+The final theorem,
+`bounded_case16594_cell0_authenticated_object_prefix0_through166_trace`,
+jointly carries the authenticated fixed-word certificate state, exact-object
+semantics, production evaluator state, and all six specialized delta actions.
+The five clean focused builds took 1:46--1:57 each and peaked between 2.88 and
+4.15 GiB RSS.  No long runtime build or cumulative replay was used.
+
+This materially advances G3d/G3e for the concrete vertical slice, but it does
+**not** close G3.  The theorem is still specialized to cell 0.  The next proof
+boundary is the exact dispatcher-entry/result handoff for that trace, followed
+by the reusable arbitrary-accepted-cell leaf theorem (G3f).  The 875-job,
+1,749-token topology composition remains G4, and the first fast original
+Flyspeck NL theorem remains **0/1**.
+
 ## Executive assessment
 
 Audit 4 is useful and mostly directionally correct.  Its most important
@@ -130,15 +157,15 @@ ten operations exercise polynomial, pi-half, square root, inverse,
 multiplication, and arctangent before the first specialized delta.  It catches
 representation and certificate-cursor errors cheaply.  It does not close G3.
 
-The current finite G3 checklist is:
+The current finite G3 checklist, updated after the audit snapshot, is:
 
 | Subgate | Status on this response | Exit criterion |
 |---|---|---|
 | G3a. Cell-0 semantic source result | **DONE** | Exact 167-step fixed-word result, exact-object analytic meaning, and source acceptance. |
-| G3b. Unified general-code joint step | **IN PROGRESS** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
+| G3b. Unified general-code joint step | **DONE** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
 | G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative. |
-| G3d. Authenticated 0--9 prefix | **PENDING** | The genuine prefix crosses every general family and leaves the exact expected states and packet suffix. |
-| G3e. Full 167-step trace | **PENDING** | General induction plus the six specialized positions yields the ordinary evaluator result under a structural clock bound. |
+| G3d. Authenticated concrete prefix | **DONE FOR CELL 0** | The genuine trace crosses every general family and leaves the exact expected states and packet suffix. |
+| G3e. Full 167-step joint trace | **DONE FOR CELL 0** | The complete genuine-cell trace includes all six specialized positions and the production evaluator state. |
 | G3f. Arbitrary-cell leaf theorem | **PENDING** | Successful accepted-cell inputs yield the matching `m_cell_pass`; cell 0 is then a concrete instantiation, not the theorem's scope. |
 
 No G3 completion claim is permitted at G3a or G3d.
@@ -200,7 +227,9 @@ proof that the case-specific route scales.
 
 ## What the audit changes in the plan
 
-The immediate sequence is now explicit:
+The immediate sequence is now explicit.  Steps 1--3 below are complete for the
+concrete cell-0 vertical slice; their reusable arbitrary-cell generalization is
+part of step 4:
 
 1. finish and commit the unified general-code step theorem;
 2. prove the genuine 0--9 prefix;
