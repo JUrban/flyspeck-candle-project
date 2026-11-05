@@ -98,8 +98,9 @@ object-q analytic run for the authenticated source program, using the proved
 source/prepared-plan relation and proved enclosure of the authenticated center
 and outer boxes.  The final object result has a valid domain, a strictly
 negative completed upper bound, and satisfies the six-dimensional ordinary
-acceptance contract.  This completes the HOL4 numerical-to-exact-analytic
-semantic core for the first genuine leaf.
+acceptance contract.  Follow-up commit `31f6a133b` transfers that contract to
+the authenticated source expression and production boxes.  This completes the
+HOL4 numerical-to-exact-analytic semantic core for the first genuine leaf.
 
 G2b is complete.  One structural theorem now composes the generic production
 entry theorem through the actual two-list recursion and the canonical 21
@@ -154,13 +155,14 @@ production `compute_eval` result, and runtime equivalence of the returned
 six-field source state.  The genuine coordinates 3, 4, and 5 are instances of
 that theorem; no captured cell values are used.
 
-The current G3 blocker is the representation handoff from this accepted HOL4
-object result to the existing Candle theorem
+The current G3 blocker is the evaluator/representation handoff from this
+accepted HOL4 source result to the existing Candle theorem
 `candle_cv_q_packed_object_dispatch_entry_accept_cell_pass` (or its smaller
 source-certificate contract), followed by a genuine cell-0 `m_cell_pass`
-instantiation.  The analytic theorem itself already exists; the open work is
-to align the authenticated source boxes, expression, planned source, and
-accepted result without rerunning the slow generic rational evaluator.  G4
+instantiation.  The analytic and source-acceptance theorems already exist; the
+open work is to prove the corresponding exact dispatcher-entry result without
+rerunning the slow generic rational evaluator, then discharge the existing
+Candle adapter.  G4
 still has the executable and conditional contract skeleton described above,
 but not its discharged 875-leaf/topology premises.  G3 through G9 remain open.
 
