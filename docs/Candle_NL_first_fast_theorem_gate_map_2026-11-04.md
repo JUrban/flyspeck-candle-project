@@ -18,6 +18,9 @@ uses of "close" but does not replace the detailed implementation ledger in
 - Explicit-radius whole-call executable: **defined and typechecked** against
   the prepared Candle state; its numerical and 1,749-token topology parts
   consume the same canonical job stream.
+- Existing case-10173 fixed-route reference: the complete 4,173-cell
+  certificate took **401.740 seconds** and produced its original theorem.  It
+  is a case-specific baseline, not a generic all-NL projection.
 - First original Flyspeck NL theorem through the fast route: **0/1**.
 
 The numerical result is not yet the original HOL theorem.  The missing work
@@ -35,7 +38,7 @@ original statement.
 | G3. Complete ordinary trace and leaf semantics | logic/clock | **IN PROGRESS** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
 | G4. Whole jobs and topology | representation/logic | **IN PROGRESS** | The 875 canonical variable jobs and packed-cell stream are consumed in lockstep, malformed or unequal streams reject, every accepted entry supplies the matching source-box leaf theorem, and the 1,749-token run combines those exact leaves to the authenticated singleton root. |
 | G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven witnessed callback refines the exact four-argument whole call under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
-| G6. Development runtime integration | runtime/representation | **PENDING** | The exact frozen callback is installed in a development runtime, the genuine call records a fast-branch hit, and lightweight compiled tests cover all payload roles and mutations. |
+| G6. Pre-bootstrap callback/dispatcher probe | executable representation | **PENDING** | The exact frozen callback is exercised through the lightest faithful compiled representation; all four payload roles, the intended branch hit, and mutations are covered. This is a bounded bug-finding gate, not a changed-kernel Candle runtime. |
 | G7. Analytic and original-statement adapter | logic | **PENDING** | The authenticated root `m_cell_pass` is converted by the existing case-16594 reconstruction to a typechecked conditional theorem with the literal original conclusion and audited assumptions. |
 | G8. Verified runtime and prepared state | build/runtime | **PENDING** | The exact callback bytes pass the verified rebuild preflight and build; the minimum compatible Flyspeck/NL predecessor state is reconstructed and its cold elapsed time and peak RSS are measured. |
 | G9. First fast original theorem | integration | **PENDING** | A fresh compatible run takes the fast branch and produces the literal original theorem, recording preparation, checking, decoding/handoff, total elapsed time, peak RSS, and theorem assumptions. |
@@ -68,6 +71,9 @@ the logical topology runner, and a root `m_cell_pass` conclusion conditional
 on three explicit obligations: canonical job representation, the per-job
 leaf theorems, and the generalized topology contract.  This closes the Candle
 half of the S0 syntax/type probe; it does **not** close G4.
+
+The two exact sources are now preserved on the isolated Candle branch in
+commit `0ad3bf38`; they are no longer dependent on an untracked worktree.
 
 A bounded attempt at the generalized topology proof found useful type/layout
 hazards, including an initial packed representation that would have broken
@@ -166,6 +172,30 @@ Candle adapter.  G4
 still has the executable and conditional contract skeleton described above,
 but not its discharged 875-leaf/topology premises.  G3 through G9 remain open.
 
+Further focused G3 work has now made the remaining trace structure explicit.
+The six certificate-free instruction families share one joint
+word/object/evaluator theorem (`fd56a5670`).  Square root, inverse, and
+arctangent have corresponding certified joins, and the authenticated cell-0
+packet ledger supplies their 5/2/8-field guards.  The next source theorem
+combines those nine general-code families under one packet-suffix invariant;
+it is not yet committed or counted green.  The fast 134-field payload is also
+proved distinct from the legacy payload (`5b4117f84`), so no legacy-payload
+identity remains in the plan.
+
+### G3 finite checklist
+
+| Subgate | Status | Exit criterion |
+|---|---|---|
+| G3a. Cell-0 semantic source result | **DONE** | Exact 167-step fixed-word result, exact-object analytic meaning, and source acceptance. |
+| G3b. Unified general-code joint step | **IN PROGRESS** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
+| G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative. |
+| G3d. Authenticated 0--9 prefix | **PENDING** | The genuine prefix crosses every general family and leaves the exact expected states and packet suffix. |
+| G3e. Full 167-step trace | **PENDING** | General induction plus the six specialized positions yields the ordinary evaluator result under a structural clock bound. |
+| G3f. Arbitrary-cell leaf theorem | **PENDING** | Successful accepted-cell inputs yield the matching `m_cell_pass`; cell 0 is a concrete instantiation, not the theorem's scope. |
+
+The cell-0 vertical slice is a representation test and must not be reported as
+G3 completion.
+
 ### G2c finite checklist
 
 | Subgate | Status | Exit criterion |
@@ -182,21 +212,12 @@ long build or full replay.
 
 ## Local proof-stack estimate and uncertainty
 
-This is an engineering estimate, not a guarantee:
-
-- optimistic, if the remaining joins reuse the existing theorem shapes
-  directly: **2--4 focused development days**;
-- planning range allowing for local representation or theorem-shape repairs:
-  **3--7 focused development days**.
-
-This range now applies only to the remaining local semantic proof stack G3
-through G7, assuming
-the existing theorem shapes compose as expected.  It is **not** an end-to-end
-delivery estimate.  It excludes the HOL4 callback implementation, development
-runtime integration, the verified runtime/compiler rebuild, reconstruction of
-a compatible Flyspeck/NL prepared state, and the fresh confirmation run.  Those
-runtime and reconstruction costs must be measured by S0/G6/G8 preflights before
-an end-to-end calendar estimate is stated.
+The earlier **2--4 optimistic / 3--7 planning-day** range compressed several
+different risks and is retired as a work-control estimate.  It may be retained
+only as historical context for the local proof stack; it is not an end-to-end
+delivery estimate.  The per-packet table below now controls G3--G8 separately.
+It still cannot responsibly estimate compatible-state reconstruction or the
+fresh confirmation run until the S0/G6/G8 preflights measure them.
 
 The estimate must be revised immediately if any of these assumptions fails:
 
@@ -211,6 +232,22 @@ The estimate must be revised immediately if any of these assumptions fails:
 
 No such failure is currently known, but none of G3--G9 is counted as complete
 until its exact exit criterion is met.
+
+### Per-packet controls
+
+| Work packet | Planning effort | Feedback cap |
+|---|---:|---:|
+| G3b--G3d joint step and prefix | 0.5--1.5 focused days | 3 minutes per exact theory build; reduce any failure before a longer run. |
+| G3e--G3f trace and leaf | 1--3 focused days | 10 minutes for a bounded concrete trace, 3 minutes for local theorem edits. |
+| G4 topology adapter | 1--3 focused days, high uncertainty | 10 minutes per focused probe; after one focused day without a stable invariant, publish the exact goal and re-estimate. |
+| S0 HOL4 half and G5 callback | 1--3 focused days after G3/G4 stabilize | 10 minutes per callback/clock probe; no bootstrap. |
+| G6 compiled probe | 0.5--1 focused day | 30 minutes per exact integration probe; a fallback branch blocks G8. |
+| G7 original handoff | 0.5--2 focused days | 10 minutes per focused proof probe. |
+| G8 verified build/runtime | old 20--36 elapsed-hour range, to be re-preflighted | One frozen attempt only after G3--G7 and source closure are green. |
+| G8 state reconstruction and G9 | not yet responsibly estimated | Require a measured minimum-state preflight before launch. |
+
+Completion reports must record actual elapsed time and peak RSS.  These are
+planning controls, not guarantees or an end-to-end delivery estimate.
 
 ## Working rules
 
