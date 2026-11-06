@@ -7,23 +7,20 @@ Status: **DEVELOPMENT / NON-RELEASE**
 ## Post-audit genuine singleton seam (2026-11-06 UTC)
 
 The audit's request for a real vertical slice has now advanced one boundary
-beyond generic composition.  HOL Light commit `d8e1c20c` instantiates the
-whole-call path on genuine case-16594 cell 0 with one packed cell, one topology
-job, and one leaf token.  Conditional only on the exact entry verdict, the
-kernel proves the executable result shape, both geometry contracts, the
-authenticated reference run, and the final root `m_cell_pass`.  The clean
-source-only repeat took 125 seconds from the authenticated checkpoint and had
-source-set SHA-256
-`f1e034b19f14bfbf319f0e054efadb5201f2099851ad40ee42739b6ea59ffd09`.
+beyond generic composition.  HOL Light commits `d8e1c20c` and `f8c73ea6`
+instantiate the whole-call path on genuine current case-16594 cell 0 with one
+packed cell, one topology job, and one leaf token.  Conditional only on the
+exact entry verdict, the kernel proves the executable result shape, both
+geometry contracts, the authenticated reference run, and the final root
+`m_cell_pass`.
 
-The slice also found a concrete fixture defect: each captured radius was one
-`2^-40` unit too small for the represented outward-rounded outer interval.
-Increasing each cell-0 radius by exactly one fixed-scale unit makes both
-correspondence predicates kernel-provable.  The earlier numerical verdict used
-the uncorrected radii, so it is not being reused silently.  The next bounded
-gate is the exact corrected cell-0 entry verdict; only after that passes should
-the corrected radius construction be generated and checked across all 875
-cells.
+The first probe reused pre-tight fixture bindings already present in the
+v3612 checkpoint and briefly suggested a one-unit radius defect.  That result
+is rejected.  The accepted repeat freshly streamed the current tight fixture,
+packet data, plan, exact call, generic proofs, and singleton theorem; it passed
+with the original frozen radii in 127 seconds.  Its source-set SHA-256 was
+`d220908e10e90afd6672fcef41f8c10ab103a8b9c8918899b99acb8c07b2d955`.
+This confirms, rather than revises, the v4.365 tight-box repair.
 
 This is meaningful evidence that the generic G4 theorem connects to genuine
 data, but it does **not** close G4 or produce the original theorem.  The metric

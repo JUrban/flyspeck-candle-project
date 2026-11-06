@@ -26,8 +26,8 @@ uses of "close" but does not replace the detailed implementation ledger in
 The highest closed logic gate is now **G3**.  G4 has a proved generic
 whole-call composition theorem and a kernel-checked genuine cell-0 singleton
 instantiation conditional only on its exact entry verdict.  G4 remains open
-until the corrected entry verdict and the authenticated
-875-job/1,749-token case-16594 instantiation are discharged.
+until the authenticated 875-job/1,749-token case-16594 instantiation is
+discharged.
 
 The numerical result is not yet the original HOL theorem.  The missing work
 is the proved semantic composition from the accepted fast computation to the
@@ -42,7 +42,7 @@ original statement.
 | S0. End-to-end contract skeleton | representation/control | **IN PROGRESS** | The Candle whole-call target and HOL4 `compute_fast_eval_ok` target typecheck against the real equation set, with every remaining premise assigned below. The Candle half now typechecks; the HOL4 callback/clock half is pending. |
 | G2. Six specialized delta instructions | logic | **DONE** | All six specialized evaluator results are connected to exact object states for arbitrary valid inputs. The three product-delta coordinates and the three negative-delta coordinates each use one generic production evaluator/refinement theorem rather than captured cell computations. |
 | G3. Complete ordinary trace and leaf semantics | logic/clock | **DONE** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
-| G4. Whole jobs and topology | representation/logic | **IN PROGRESS — generic composition and genuine singleton seam proved** | The generic checker consumes packed cells and jobs in lockstep, rejects failed entries and length mismatches, derives every matching leaf from one authenticated source program, and combines those leaves through the proved topology invariant. A genuine cell-0 one-job/one-leaf instance now closes conditional only on its exact corrected entry verdict. The remaining exit items are that verdict and the exact authenticated 875-job/1,749-token instantiation and root equality. |
+| G4. Whole jobs and topology | representation/logic | **IN PROGRESS — generic composition and genuine singleton seam proved** | The generic checker consumes packed cells and jobs in lockstep, rejects failed entries and length mismatches, derives every matching leaf from one authenticated source program, and combines those leaves through the proved topology invariant. A genuine current tight-box cell-0 one-job/one-leaf instance now closes conditional only on its exact entry verdict. The remaining exit item is the exact authenticated 875-job/1,749-token instantiation and root equality; the executable verdict bridge is tracked under G5. |
 | G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven witnessed callback refines the exact four-argument whole call under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
 | G6. Pre-bootstrap callback/dispatcher probe | executable representation | **PENDING** | The exact frozen callback is exercised through the lightest faithful compiled representation; all four payload roles, the intended branch hit, and mutations are covered. This is a bounded bug-finding gate, not a changed-kernel Candle runtime. |
 | G7. Analytic and original-statement adapter | logic | **PENDING** | The authenticated root `m_cell_pass` is converted by the existing case-16594 reconstruction to a typechecked conditional theorem with the literal original conclusion and audited assumptions. |
@@ -111,23 +111,23 @@ and source-set SHA-256
 `a5e0c2e2c3ab116cef00994e5fc5707b4d715c1f1dc183e7931c51074a2c2f27`.
 
 This is a generic conditional theorem, not the first original theorem.  The
-first real-data seam is now also proved on genuine cell 0.  Commit `d8e1c20c`
-constructs its one-job/one-leaf whole call, proves both geometry contracts,
-proves the exact singleton executable equation from the per-entry verdict,
-and applies the generic theorem to the root.  Its diagnostics-free clean probe
-took **125 seconds** from the same checkpoint, with source-set SHA-256
-`f1e034b19f14bfbf319f0e054efadb5201f2099851ad40ee42739b6ea59ffd09`.
+first real-data seam is now also proved on genuine cell 0.  Commits `d8e1c20c`
+and `f8c73ea6` construct its one-job/one-leaf whole call, prove both geometry
+contracts, prove the exact singleton executable equation from the per-entry
+verdict, and apply the generic theorem to the root.
 
-That probe exposed a concrete data-contract issue: the captured fixed-scale
-radii covered the packer's precursor endpoints but were one `2^-40` unit too
-small for the outward-rounded outer intervals represented in the HOL fixture.
-Adding exactly one fixed-scale unit to each of the six cell-0 radii makes both
-the source-box and outer-box correspondence predicates kernel-provable.  The
-conditional seam is green with those corrected radii, but the exact corrected
-entry verdict has not yet been evaluated.  The next bounded blocker is that
-single entry verdict, followed by mechanical correction/generation and the
-875-record/1,749-token instantiation.  Only then does G4 close.  No runtime
-rebuild or hour-scale replay is justified for this step.
+The first probe accidentally reused pre-tight fixture bindings from the v3612
+checkpoint and is not counted.  The accepted repeat freshly streamed the
+current tight correspondence, 134-packet fixture, 167-action plan, exact call,
+generic G4 modules, and singleton theorem.  It closed with the original frozen
+radii in **127 seconds**, with source-set SHA-256
+`d220908e10e90afd6672fcef41f8c10ab103a8b9c8918899b99acb8c07b2d955`.
+This confirms the v4.365 tight-box repair; no radius change is required.
+
+The next bounded blocker is the full authenticated
+875-record/1,749-token instantiation.  The explicit evaluator-verdict bridge
+remains the separate G5 obligation.  No runtime rebuild or hour-scale replay
+is justified for this step.
 
 ### Historical path to the current boundary
 
