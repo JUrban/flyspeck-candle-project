@@ -4,19 +4,21 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
-## Follow-up status (2026-11-06 UTC): 189/875 exact entries
+## Follow-up status (2026-11-06 UTC): 253/875 exact entries
 
-CakeML/HOL4 commit `48cdf1bf9` extends the restartable exact
-production-entry authentication through genuine cell 188: **189/875 cells**.
-The two independent 16-cell chunks each passed a one-cell integrated preflight
-before their full builds.  That preflight caught and corrected a missing use of
-the clock-aware authentication helper before the expensive phase began.
+CakeML/HOL4 commits `48cdf1bf9`, `ac4ac8f6e`, and `0403819f3` extend the
+restartable exact production-entry authentication through genuine cell 252:
+**253/875 cells**.  The first two independent 16-cell chunks each passed a
+one-cell integrated preflight before their full builds.  That preflight caught
+and corrected a missing use of the clock-aware authentication helper before
+the expensive phase began.  The frozen helper/template then passed four more
+independent 16-cell chunks.
 
-The complete builds then passed every 167-step trace, all 42 specialized guard
-evaluations per cell, the packet contracts, ordinary production-entry
-evaluation, and clock-parametric production-entry evaluation.  Cells 157--172
-took **9m04.59s** and peaked at **4,240,532 KiB** RSS; cells 173--188 took
-**9m00.25s** and peaked at **4,605,824 KiB** RSS.  Both were single-threaded.
+All 96 new entries passed their 167-step traces, all 42 specialized guard
+evaluations per cell, packet contracts, ordinary production-entry evaluation,
+and clock-parametric production-entry evaluation.  The six authentication
+builds took between **9m00.25s** and **9m53.49s**, with peak RSS between
+**4,240,532 KiB** and **5,387,704 KiB**; all were single-threaded.
 
 This is a monotonic G4 input-evidence lift, not G4 or G5 closure.  The exact
 875-job/1,749-token composition, scalable plan-driven callback correspondence,
