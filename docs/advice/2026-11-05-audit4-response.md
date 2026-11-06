@@ -4,6 +4,29 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit arbitrary-cell leaf closure (2026-11-06 UTC)
+
+The audit's cell-0-versus-arbitrary-cell warning has now been discharged at
+the logical G3 boundary.  HOL4/CakeML commit `63ee21818` proves, for arbitrary
+valid runtime and semantic radii, center and outer boxes, packet contracts,
+and accepted packed result, that the actual object-dispatch entry evaluates to
+`M_success (Num 1)` under its structural clock bound.  Its clean focused build
+took 1m47.71s and peaked at 2,636,380 KiB RSS.
+
+Commit `ddeb76b1e` then proves by exact evaluation that the generic complete
+167-action code and source payloads are the canonical case-16594 dispatcher
+payloads.  That clean build took 1m48.99s and peaked at 4,108,892 KiB RSS.
+Together with the existing generic HOL Light entry-success theorem, these
+results turn every accepted entry satisfying the correspondence and plan
+premises into the required `m_cell_pass` leaf theorem.  The proof is no longer
+specialized to the genuine cell-0 constants.
+
+This closes **G3**.  It does not prove the 875-leaf/1,749-token topology
+composition, install the callback in a rebuilt Candle runtime, or produce the
+original Flyspeck theorem.  **G4 topology is now the active gate**, and the
+public first-fast-original-theorem metric remains **0/1**.  No runtime rebuild,
+verifier prefix, or hour-scale run was used for this closure.
+
 ## Post-audit arbitrary 167-step trace closure (2026-11-06 04:20 UTC)
 
 The most important cell-0 qualification in the audit is now resolved at the
@@ -189,7 +212,7 @@ that the Audit 3 response was absent and that no relevant source commits had
 landed since November 3 therefore describes the audit's snapshot, not the
 current repositories.
 
-The public result is unchanged:
+At the time of the initial response, the public result was:
 
 - direct Flyspeck: **297/297**, green and checkpointed;
 - LP: complete and checkpointed;
@@ -197,6 +220,9 @@ The public result is unchanged:
 - first original Flyspeck NL theorem through the fast route: **0/1**;
 - highest closed logic gate: **G2**;
 - active gate: **G3**.
+
+The post-audit updates above supersede only those last two gate labels: G3 is
+now closed and G4 is active.  The result metric remains **0/1**.
 
 No runtime rebuild or hour-scale run is justified yet.
 
@@ -356,9 +382,9 @@ proof that the case-specific route scales.
 
 ## What the audit changes in the plan
 
-The immediate sequence is now explicit.  Steps 1--3 below are complete both
+The immediate sequence is now explicit.  Steps 1--4 below are complete both
 for the concrete cell-0 vertical slice and for the reusable quantified
-167-action trace.  Step 4 remains the current boundary:
+167-action/accepted-entry path.  Step 5 is the current boundary:
 
 1. finish and commit the unified general-code step theorem;
 2. prove the genuine 0--9 prefix;
