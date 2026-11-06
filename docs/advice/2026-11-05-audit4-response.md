@@ -21,13 +21,18 @@ clean final theory build took 1m47.62s and peaked at 2,800,704 KiB RSS.  No
 runtime rebuild, verifier prefix, or hour-scale run was used.
 
 This closes the arbitrary-input **G3e trace**, but not the whole G3 exit
-criterion.  The current focused proof is the accepted-result endpoint: turn
-the quantified accepted fixed-word result into the six-field packed runtime
-object and its semantic source-accept contract.  The generic HOL Light theorem
-that turns such a successful entry into `m_cell_pass` already exists, but the
-exact HOL4-to-entry handoff and final composition are not yet committed.
-Topology G4, whole-call callback/clock composition, the verified runtime, and
-the original theorem remain open.  The public metric is still **0/1**.
+criterion.  Follow-up commit `cc4444c85` now also proves the accepted-result
+endpoint: an accepted fixed-word singleton yields the six-field packed runtime
+object and its semantic source-accept contract.  Its clean focused build took
+1m50.85s and peaked at 3,508,292 KiB RSS.  The failure found before that build
+was only a missing unfold of the singleton list encoding; it was isolated and
+repaired in the restored HOL proof session, without extending a timeout.
+
+The generic HOL Light theorem that turns such a successful entry into
+`m_cell_pass` already exists, but the exact HOL4-to-entry handoff and final
+composition are not yet committed.  Topology G4, whole-call callback/clock
+composition, the verified runtime, and the original theorem remain open.  The
+public metric is still **0/1**.
 
 ## Post-audit tight-box closure (2026-11-06 UTC)
 
@@ -290,7 +295,7 @@ The current finite G3 checklist, updated after the audit snapshot, is:
 | G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative. |
 | G3d. Authenticated concrete prefix | **DONE FOR CELL 0** | The genuine trace crosses every general family and leaves the exact expected states and packet suffix. |
 | G3e. Full 167-step joint trace | **DONE GENERICALLY** | The quantified complete trace covers all 167 canonical actions, all six specialized positions, runtime refinement, semantic evaluation, and packet contracts. |
-| G3f. Arbitrary-cell leaf theorem | **IN PROGRESS** | Successful accepted-cell inputs yield the matching `m_cell_pass`; the accepted-result runtime/source endpoint is the current focused proof. |
+| G3f. Arbitrary-cell leaf theorem | **IN PROGRESS** | The accepted-result runtime/source endpoint is done; the exact HOL4-to-entry handoff and composition to `m_cell_pass` remain. |
 
 No G3 completion claim is permitted at G3a or G3d.
 
