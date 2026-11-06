@@ -4,6 +4,36 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit generic whole-call closure (2026-11-06 UTC)
+
+The audit's warning about the 875-leaf/topology lift has now been reduced to a
+bounded real-data instantiation, but it is not yet closed.  Candle/HOL Light
+commits `abd5726e` through `5bcce532` prove the following reusable chain:
+
+- the generalized topology contract from the replay invariants;
+- certificate-erased source identity for any two successful executions of the
+  same planned 167-action program, including all ordinary, polynomial, and six
+  specialized instruction families;
+- one `m_cell_pass` theorem for every exact accepted packed job;
+- lockstep recursion over packed cells and topology jobs, with length mismatch
+  and any per-job result other than exactly `Cexp_num 1` rejected; and
+- root `m_cell_pass` from a successful complete numerical/topology call.
+
+The diagnostics-free proof probe took 113 seconds from the authenticated
+prepared checkpoint and introduced no runtime rebuild or cumulative Flyspeck
+replay.  Its checkpoint SHA-256 was
+`5d69e6e41e3603e72b1a74d65d72a83be88e5e912f42849a42f16e204e9003db`;
+the exact four-source set SHA-256 was
+`a5e0c2e2c3ab116cef00994e5fc5707b4d715c1f1dc183e7931c51074a2c2f27`.
+
+This materially answers the audit's concern that topology might conceal an
+unbounded new mathematical proof.  It does **not** yet close G4 or produce the
+original theorem.  The remaining G4 obligation is to instantiate the generic
+theorem on the authenticated 875 packed cells, 875 jobs, and 1,749 topology
+tokens, prove their lockstep input contract, and establish the exact singleton
+root returned by that genuine whole call.  The public metric remains first
+fast original theorem **0/1**.
+
 ## Post-audit arbitrary-cell leaf closure (2026-11-06 UTC)
 
 The audit's cell-0-versus-arbitrary-cell warning has now been discharged at

@@ -1,6 +1,6 @@
 # Candle NL first fast theorem: live gate map
 
-Date: 2026-11-04 UTC; updated 2026-11-05 UTC
+Date: 2026-11-04 UTC; updated 2026-11-06 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
@@ -23,6 +23,10 @@ uses of "close" but does not replace the detailed implementation ledger in
   is a case-specific baseline, not a generic all-NL projection.
 - First original Flyspeck NL theorem through the fast route: **0/1**.
 
+The highest closed logic gate is now **G3**.  G4 has a proved generic
+whole-call composition theorem, but remains open until that theorem is
+instantiated on the authenticated 875-job/1,749-token case-16594 data.
+
 The numerical result is not yet the original HOL theorem.  The missing work
 is the proved semantic composition from the accepted fast computation to the
 original statement.
@@ -35,8 +39,8 @@ original statement.
 | G1. Ordinary instruction-family bridge | logic | **DONE** | Every ordinary family has a generic evaluator-to-exact-object theorem, including certificate-cursor preservation for inverse, square root, and arctangent. |
 | S0. End-to-end contract skeleton | representation/control | **IN PROGRESS** | The Candle whole-call target and HOL4 `compute_fast_eval_ok` target typecheck against the real equation set, with every remaining premise assigned below. The Candle half now typechecks; the HOL4 callback/clock half is pending. |
 | G2. Six specialized delta instructions | logic | **DONE** | All six specialized evaluator results are connected to exact object states for arbitrary valid inputs. The three product-delta coordinates and the three negative-delta coordinates each use one generic production evaluator/refinement theorem rather than captured cell computations. |
-| G3. Complete ordinary trace and leaf semantics | logic/clock | **IN PROGRESS** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
-| G4. Whole jobs and topology | representation/logic | **IN PROGRESS** | The 875 canonical variable jobs and packed-cell stream are consumed in lockstep, malformed or unequal streams reject, every accepted entry supplies the matching source-box leaf theorem, and the 1,749-token run combines those exact leaves to the authenticated singleton root. |
+| G3. Complete ordinary trace and leaf semantics | logic/clock | **DONE** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
+| G4. Whole jobs and topology | representation/logic | **IN PROGRESS — generic composition proved** | The generic checker consumes packed cells and jobs in lockstep, rejects failed entries and length mismatches, derives every matching leaf from one authenticated source program, and combines those leaves through the proved topology invariant. The remaining exit item is the exact authenticated 875-job/1,749-token instantiation and root equality. |
 | G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven witnessed callback refines the exact four-argument whole call under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
 | G6. Pre-bootstrap callback/dispatcher probe | executable representation | **PENDING** | The exact frozen callback is exercised through the lightest faithful compiled representation; all four payload roles, the intended branch hit, and mutations are covered. This is a bounded bug-finding gate, not a changed-kernel Candle runtime. |
 | G7. Analytic and original-statement adapter | logic | **PENDING** | The authenticated root `m_cell_pass` is converted by the existing case-16594 reconstruction to a typechecked conditional theorem with the literal original conclusion and audited assumptions. |
@@ -83,6 +87,35 @@ hour-scale proof loop.  The HOL4 callback/clock skeleton remains the other S0
 half.
 
 ## Current exact blocker
+
+### Current boundary (2026-11-06)
+
+G3 is closed.  On the isolated Candle branch, commits `abd5726e` through
+`5bcce532` now prove the reusable G4 path:
+
+1. the generalized topology contract follows from the replay invariants;
+2. all successful executions of the same planned 167-action source program
+   have the same certificate-erased source expression, even when their boxes,
+   radii, certificates, and runtime states differ;
+3. each accepted reflected job yields the matching `m_cell_pass` leaf;
+4. packed cells and jobs are traversed in exact lockstep, and a per-job result
+   is accepted only when it is exactly `Cexp_num 1`; and
+5. a successful whole reflected call yields the root `m_cell_pass` theorem.
+
+The final clean source-only probe took **113 seconds** from the authenticated
+prepared checkpoint.  It used checkpoint SHA-256
+`5d69e6e41e3603e72b1a74d65d72a83be88e5e912f42849a42f16e204e9003db`
+and source-set SHA-256
+`a5e0c2e2c3ab116cef00994e5fc5707b4d715c1f1dc183e7931c51074a2c2f27`.
+
+This is a generic conditional theorem, not the first original theorem.  The
+current blocker is the bounded real-data instantiation: prove the lockstep
+input contract for the authenticated 875 records and establish the exact
+whole-call result for those records and the 1,749 topology tokens.  Only then
+does G4 close.  No runtime rebuild or hour-scale replay is justified for this
+step.
+
+### Historical path to the current boundary
 
 The genuine cell-0 fixed-word trace and its exact analytic meaning now close
 on commit `abb3694f67`.  The checker executes all **167** authenticated
@@ -214,11 +247,11 @@ composition test; it does not close the full trace or a leaf theorem.
 | G3b. Unified general-code joint step | **DONE** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
 | G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative, including transport from authenticated exact-rational runtime radii to the related fixed-word semantic radii. |
 | G3d. Authenticated 0--9 prefix | **DONE** | The genuine prefix crosses the first certificate-free and certificate-consuming families and leaves the exact word/object/runtime states and packet suffix. |
-| G3e. Full 167-step trace | **IN PROGRESS** | General induction plus the six specialized positions yields the ordinary evaluator result under a structural clock bound. |
-| G3f. Arbitrary-cell leaf theorem | **PENDING** | Successful accepted-cell inputs yield the matching `m_cell_pass`; cell 0 is a concrete instantiation, not the theorem's scope. |
+| G3e. Full 167-step trace | **DONE** | General induction plus the six specialized positions yields the ordinary evaluator result under a structural clock bound. |
+| G3f. Arbitrary-cell leaf theorem | **DONE** | Successful accepted-cell inputs yield the matching `m_cell_pass`; cell 0 is a concrete instantiation, not the theorem's scope. |
 
-The cell-0 vertical slice is a representation test and must not be reported as
-G3 completion.
+The earlier cell-0 vertical slice was only a representation test.  The later
+quantified trace and leaf theorems, rather than that slice, close G3.
 
 ### G2c finite checklist
 
@@ -299,5 +332,5 @@ fast callback is connected to it, and the original-statement adapter has
 typechecked, leaving the verified runtime/state construction and the fresh
 confirmation run.  Even then, G8 may still expose a material build or
 state-reconstruction cost.  Until G7, report the highest completed gate and
-**first theorem 0/1**; currently that is **G2 complete, G3 pending, and S0/G4
-partially exercised**.
+**first theorem 0/1**; currently that is **G3 complete, with generic G4
+composition proved and its authenticated real-data instantiation pending**.
