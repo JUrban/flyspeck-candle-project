@@ -18,16 +18,24 @@ uses of "close" but does not replace the detailed implementation ledger in
 - Explicit-radius whole-call executable: **defined and typechecked** against
   the prepared Candle state; its numerical and 1,749-token topology parts
   consume the same canonical job stream.
-- Existing case-10173 fixed-route reference: the complete 4,173-cell
-  certificate took **401.740 seconds** and produced its original theorem.  It
-  is a case-specific baseline, not a generic all-NL projection.
+- Existing case-10173 stock-route reference: the general fixed-nonlinear
+  checker took **434.364 seconds** for the complete 4,173-cell numerical and
+  topology verdict, **46.468 seconds** for theorem handoff, and **480.933
+  seconds** through the exact source theorem, at about **17.15 GiB** peak RSS.
+  The earlier **401.740-second** result was an unproved raw-only run.  This is
+  one genuine data point for a general checker, not an all-NL projection.
+- The closed per-cell HOL4 regression prefix is **349/875** cells (0--348).
+  It is now parked: G3 already supplies the arbitrary-valid-cell theorem, so
+  extending this closed prefix is not a production G4/G5 gate.
 - First original Flyspeck NL theorem through the fast route: **0/1**.
 
 The highest closed logic gate is now **G3**.  G4 has a proved generic
 whole-call composition theorem and a kernel-checked genuine cell-0 singleton
 instantiation conditional only on its exact entry verdict.  G4 remains open
-until the authenticated 875-job/1,749-token case-16594 instantiation is
-discharged.
+until the genuine 875-job/1,749-token representation, lockstep contracts, and
+root identity are instantiated in HOL Light.  The complete executable verdict
+is then discharged by `Kernel.compute` through the generic G5 callback; it
+does not require a closed HOL4 theorem for every cell.
 
 The numerical result is not yet the original HOL theorem.  The missing work
 is the proved semantic composition from the accepted fast computation to the
@@ -42,8 +50,8 @@ original statement.
 | S0. End-to-end contract skeleton | representation/control | **IN PROGRESS** | The Candle whole-call target and HOL4 `compute_fast_eval_ok` target typecheck against the real equation set, with every remaining premise assigned below. The Candle half now typechecks; the HOL4 callback/clock half is pending. |
 | G2. Six specialized delta instructions | logic | **DONE** | All six specialized evaluator results are connected to exact object states for arbitrary valid inputs. The three product-delta coordinates and the three negative-delta coordinates each use one generic production evaluator/refinement theorem rather than captured cell computations. |
 | G3. Complete ordinary trace and leaf semantics | logic/clock | **DONE** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
-| G4. Whole jobs and topology | representation/logic | **IN PROGRESS — generic composition and genuine singleton seam proved** | The generic checker consumes packed cells and jobs in lockstep, rejects failed entries and length mismatches, derives every matching leaf from one authenticated source program, and combines those leaves through the proved topology invariant. A genuine current tight-box cell-0 one-job/one-leaf instance now closes conditional only on its exact entry verdict. The remaining exit item is the exact authenticated 875-job/1,749-token instantiation and root equality; the executable verdict bridge is tracked under G5. |
-| G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven witnessed callback refines the exact four-argument whole call under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
+| G4. Whole jobs and topology | representation/logic | **IN PROGRESS — generic composition and genuine singleton seam proved** | The generic checker consumes packed cells and jobs in lockstep, rejects failed entries and length mismatches, derives every matching leaf from one authenticated source program, and combines those leaves through the proved topology invariant. A genuine current tight-box cell-0 one-job/one-leaf instance now closes conditional only on its exact entry verdict. The remaining exit item is the genuine 875-job/1,749-token HOL Light representation/contract/root instantiation. Its executable verdict is supplied by `Kernel.compute` through G5, not by 875 closed HOL4 entry theorems. |
+| G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven callback runs the fixed checker on the four-argument call's own authenticated payload, and the arbitrary-valid-cell G3 theorem plus generic topology composition proves `compute_fast_eval_ok` under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
 | G6. Pre-bootstrap callback/dispatcher probe | executable representation | **PENDING** | The exact frozen callback is exercised through the lightest faithful compiled representation; all four payload roles, the intended branch hit, and mutations are covered. This is a bounded bug-finding gate, not a changed-kernel Candle runtime. |
 | G7. Analytic and original-statement adapter | logic | **PENDING** | The authenticated root `m_cell_pass` is converted by the existing case-16594 reconstruction to a typechecked conditional theorem with the literal original conclusion and audited assumptions. |
 | G8. Verified runtime and prepared state | build/runtime | **PENDING** | The exact callback bytes pass the verified rebuild preflight and build; the minimum compatible Flyspeck/NL predecessor state is reconstructed and its cold elapsed time and peak RSS are measured. |
@@ -124,10 +132,30 @@ radii in **127 seconds**, with source-set SHA-256
 `d220908e10e90afd6672fcef41f8c10ab103a8b9c8918899b99acb8c07b2d955`.
 This confirms the v4.365 tight-box repair; no radius change is required.
 
-The next bounded blocker is the full authenticated
-875-record/1,749-token instantiation.  The explicit evaluator-verdict bridge
-remains the separate G5 obligation.  No runtime rebuild or hour-scale replay
-is justified for this step.
+Audit 5 exposed that the subsequent closed per-cell HOL4 lift was no longer on
+this production path once G3 had closed generically.  That lift is therefore
+parked at committed cells 0--348.  It remains useful as a regression oracle:
+it exercised distinct genuine packets, found a converter-identity hazard and
+a stale non-clock-aware helper, and validates the generic theorem on many
+inputs.  It does **not** gate G4 or G5 and no decision currently requires its
+completion.
+
+The next bounded production blockers are now separated correctly:
+
+1. instantiate the generic HOL Light jobs/topology theorem on the genuine 875
+   packed cells, 875 jobs, and 1,749 tokens, proving the lockstep geometry
+   contracts and singleton root identity without 875 closed HOL4 entry facts;
+2. implement the G5 callback that executes the fixed checker on the call's
+   runtime payload and derive its generic `compute_fast_eval_ok` theorem from
+   G3 plus the whole-list/topology result; and
+3. exercise that exact callback through G6 before any runtime rebuild.
+
+In parallel, the freed build slots are assigned to the capped stock-route
+projection: join the existing 812-source/7,814-selected-leaf inventory with
+certificate cell/topology sizes, measure a stratified 20--30-inequality batch,
+and report compute, handoff, RSS, and error-bounded total CPU-hour estimates.
+No runtime rebuild or hour-scale replay is justified for the first-theorem
+path at this step.
 
 ### Historical path to the current boundary
 
@@ -314,7 +342,7 @@ until its exact exit criterion is met.
 | S0 HOL4 half and G5 callback | 1--3 focused days after G3/G4 stabilize | 10 minutes per callback/clock probe; no bootstrap. |
 | G6 compiled probe | 0.5--1 focused day | 30 minutes per exact integration probe; a fallback branch blocks G8. |
 | G7 original handoff | 0.5--2 focused days | 10 minutes per focused proof probe. |
-| G8 verified build/runtime | old 20--36 elapsed-hour range, to be re-preflighted | One frozen attempt only after G3--G7 and source closure are green. |
+| G8 verified build/runtime | external fresh-checkout reference is 8--10 elapsed hours; exact local callback closure still requires a measured preflight | One frozen attempt only after G3--G7 and source closure are green; explain any material difference from the 8--10-hour reference before launch. |
 | G8 state reconstruction and G9 | not yet responsibly estimated | Require a measured minimum-state preflight before launch. |
 
 Completion reports must record actual elapsed time and peak RSS.  These are

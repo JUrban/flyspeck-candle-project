@@ -4,6 +4,48 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Audit 5 correction (2026-11-06 UTC)
+
+Two claims below are superseded.
+
+First, the closed per-cell HOL4 authentication lift is **not** a production G4
+or G5 prerequisite after the arbitrary-valid-cell G3 theorem.  The committed
+prefix now covers cells 0--348 (**349/875**) and is parked as regression and
+fault-discovery evidence.  It found real converter-identity and clock-helper
+defects, but completing another 526 closed entry theorems would not advance
+the intended plan-driven callback.  Production G4 instead needs the genuine
+HOL Light 875-job/1,749-token representation, lockstep contracts, and root
+identity.  Production G5 must run the fixed checker on the call's own payload
+and prove the callback generically from G3 and the whole-list/topology
+composition.  `Kernel.compute` then supplies the complete call verdict.  The
+per-cell prefix no longer gates either step.
+
+Second, section 6 misclassified and mismeasured the v3.15 baseline.  The
+proved run used a **general fixed-nonlinear checker** on case 10173; it was not
+a one-branch-per-inequality callback.  Its complete 4,173-cell numerical and
+topology verdict took **434.364 seconds**, theorem handoff took **46.468
+seconds**, and the exact source theorem was reached in **480.933 seconds**, at
+about **17.15 GiB** peak RSS.  The **401.740-second** figure was the preceding
+unproved raw-only run.  The baseline remains only one corpus point and is not
+an all-NL forecast.
+
+The requested projection is promoted from a later suggestion to an immediate,
+capped parallel lane.  Existing sealed inventories already establish 812
+source IDs, 23,242 parameter records, and 7,814 selected production leaves;
+expanded source preparation covers 7,517 leaves, with the 297 structural
+residuals concentrated in `hminus` (250), `matan` (42), and five `asn`/`acs`
+or `arc_hhn` leaves.  The missing inventory fields are per-selected-inequality
+certificate cell and topology sizes and stock-checker operation coverage.
+They will be joined first, then a stratified 20--30-inequality stock-route
+batch will measure compute, handoff, and RSS.  The lane is capped at 1--2
+focused days and must publish uncertainty/error bars rather than extrapolate
+from case 10173 alone.
+
+Finally, the old 20--36-hour G8 planning figure is withdrawn.  Re-preflight
+starts from the externally reported 8--10-hour fresh-checkout CakeML build and
+must explain any material local difference before authorizing the one frozen
+production build.
+
 ## Follow-up status (2026-11-06 UTC): 317/875 exact entries
 
 CakeML/HOL4 commits `48cdf1bf9`, `ac4ac8f6e`, `0403819f3`, `4b979a87f`, and
@@ -515,17 +557,14 @@ These figures are engineering estimates, not guarantees.
 
 ### 6. The existing case-10173 result should be an explicit baseline
 
-Useful correction, with an important terminology distinction.  The project
-does already have an original case-10173 theorem through a fixed nonlinear
-route.  The complete 4,173-cell numerical certificate was measured at
-**401.740 seconds** in v3.10, and the later handoff produced the original
-theorem without hypotheses or axiom growth.  That deserves an explicit place
-in the gate map as a fallback/reference baseline.
-
-It is not the generic stock rational evaluator that failed on the case-16594
-prefix after about eight minutes and 16 GiB.  The installed runtime contains a
-case-10173-specific fast branch.  Extending that architecture with one branch
-per inequality is precisely the non-scalable route rejected by plan v2.
+Correction: v3.15 ran the general fixed-nonlinear checker on the genuine
+case-10173 certificate.  Its proved complete numerical/topology verdict took
+**434.364 seconds**, theorem handoff took **46.468 seconds**, and the exact
+source theorem took **480.933 seconds** in total, at about **17.15 GiB** peak
+RSS.  The earlier **401.740-second** result was the unproved raw-only run.
+This general checker is distinct both from the generic evaluator fallback that
+failed on the case-16594 prefix and from the non-scalable exact-identity
+callback used only as a vertical-slice probe.
 
 An all-NL CPU-hour estimate cannot honestly be obtained by multiplying one
 case-10173 wall time by the paper's roughly 23,000 inequalities.  The units do
@@ -533,18 +572,19 @@ not match: case-10173 itself contains 4,173 subdivided cells, while the 23,000
 figure counts formal inequality tasks whose certificate sizes and expression
 families vary.  Two deliberately naive normalizations illustrate the problem:
 
-- 23,000 copies of the complete 401.740-second certificate would be about
-  **2,567 CPU-hours**; but this assumes every inequality is a case-10173-sized
+- 23,000 copies of the complete 480.933-second source-theorem run would be
+  about **3,073 CPU-hours**; but this assumes every inequality is a
+  case-10173-sized
   certificate.
-- 23,000 cells at case-10173's mean numerical rate would be under one CPU-hour;
+- 23,000 cells at case-10173's mean numerical rate would still be under one CPU-hour;
   but this incorrectly treats every paper-level inequality as one comparable
   cell and excludes preparation/handoff.
 
 Neither is a forecast.  A defensible projection needs an inventory grouped by
 source program/family, cell count, and topology size, followed by a small
-representative batch on the same runtime.  That projection is useful before
-G8, but it must not interrupt the current G3/G4 theorem path or be presented as
-proof that the case-specific route scales.
+representative batch on the same runtime.  Audit 5 correctly moves that work
+to the freed build slots now; it remains parallel to, rather than a blocker of,
+the bounded G4/G5 first-theorem proof work.
 
 ## What the audit changes in the plan
 
