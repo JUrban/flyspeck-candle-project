@@ -4,6 +4,31 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit arbitrary 167-step trace closure (2026-11-06 04:20 UTC)
+
+The most important cell-0 qualification in the audit is now resolved at the
+trace level.  HOL4/CakeML commit `3454acc3f` proves
+`bounded_case16594_object_joint_complete_trace` for quantified runtime radii,
+semantic radii, center and outer boxes, word state, semantic state, runtime
+stack, certificate trace, and packet contracts.  It is not a replay theorem
+specialized to the genuine cell-0 constants.  Its companion identity theorem
+proves that the assembled 167 source and prepared instructions are exactly the
+canonical case-16594 programs and that the remaining suffix is empty.
+
+This closure was reached in seven small commits: the three generic specialized
+pairs, then cumulative boundaries through actions 35, 78, 121, and 166.  The
+clean final theory build took 1m47.62s and peaked at 2,800,704 KiB RSS.  No
+runtime rebuild, verifier prefix, or hour-scale run was used.
+
+This closes the arbitrary-input **G3e trace**, but not the whole G3 exit
+criterion.  The current focused proof is the accepted-result endpoint: turn
+the quantified accepted fixed-word result into the six-field packed runtime
+object and its semantic source-accept contract.  The generic HOL Light theorem
+that turns such a successful entry into `m_cell_pass` already exists, but the
+exact HOL4-to-entry handoff and final composition are not yet committed.
+Topology G4, whole-call callback/clock composition, the verified runtime, and
+the original theorem remain open.  The public metric is still **0/1**.
+
 ## Post-audit tight-box closure (2026-11-06 UTC)
 
 The concrete cell-0 callback chain has now been regenerated around the one
@@ -264,8 +289,8 @@ The current finite G3 checklist, updated after the audit snapshot, is:
 | G3b. Unified general-code joint step | **DONE** | One theorem joins all nine ordinary/certificate-consuming families while preserving the packet suffix. |
 | G3c. Specialized delta joins | **DONE** | Six generic delta adapters, three positive and three negative. |
 | G3d. Authenticated concrete prefix | **DONE FOR CELL 0** | The genuine trace crosses every general family and leaves the exact expected states and packet suffix. |
-| G3e. Full 167-step joint trace | **DONE FOR CELL 0** | The complete genuine-cell trace includes all six specialized positions and the production evaluator state. |
-| G3f. Arbitrary-cell leaf theorem | **PENDING** | Successful accepted-cell inputs yield the matching `m_cell_pass`; cell 0 is then a concrete instantiation, not the theorem's scope. |
+| G3e. Full 167-step joint trace | **DONE GENERICALLY** | The quantified complete trace covers all 167 canonical actions, all six specialized positions, runtime refinement, semantic evaluation, and packet contracts. |
+| G3f. Arbitrary-cell leaf theorem | **IN PROGRESS** | Successful accepted-cell inputs yield the matching `m_cell_pass`; the accepted-result runtime/source endpoint is the current focused proof. |
 
 No G3 completion claim is permitted at G3a or G3d.
 
@@ -326,9 +351,9 @@ proof that the case-specific route scales.
 
 ## What the audit changes in the plan
 
-The immediate sequence is now explicit.  Steps 1--3 below are complete for the
-concrete cell-0 vertical slice; their reusable arbitrary-cell generalization is
-part of step 4:
+The immediate sequence is now explicit.  Steps 1--3 below are complete both
+for the concrete cell-0 vertical slice and for the reusable quantified
+167-action trace.  Step 4 remains the current boundary:
 
 1. finish and commit the unified general-code step theorem;
 2. prove the genuine 0--9 prefix;
