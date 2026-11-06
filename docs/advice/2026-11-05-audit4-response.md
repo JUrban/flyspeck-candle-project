@@ -4,6 +4,27 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit executable-probe result (2026-11-06 01:28 UTC)
+
+The exact cell-0 callback has now passed its standalone pre-bootstrap
+executable probe.  CakeML/HOL4 commit `be56fc840` repairs the supposedly
+literal entry so its executable definition contains constructor data rather
+than latent payload assemblers, translates the exact callback over the small
+`mlbasicsProg` state, and exports a closed program.
+
+The linked program exited zero after checking the exact hit, an altered
+equation-environment miss, six independent entry-argument mutations, a wrong
+entry root, and unchanged fallback behavior.  Direct `cake` compilation took
+2.20s, linking 0.26s, and execution less than 0.01s.  The source, measurements,
+artifact identities, and bounded failures are recorded in
+`docs/progress/2026-11-06-v4.364-nl-authenticated-fast-callback-executable-probe.md`.
+
+This result closes the audit's bounded pre-bootstrap representation question.
+It still does **not** install a changed Candle runtime, establish an
+arbitrary-cell callback, close 875-cell topology, or produce the original
+Flyspeck theorem.  The public metric therefore remains first fast original NL
+theorem **0/1**.
+
 ## Post-audit frozen-chain update (2026-11-06 00:53 UTC)
 
 Two further bounded source commits address the audit's concern that a cheap
