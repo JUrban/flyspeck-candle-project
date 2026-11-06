@@ -4,6 +4,35 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Follow-up status (2026-11-06 UTC): 125/875 exact entries, theorem still 0/1
+
+The restartable all-cell lift has continued beyond the evidence available to
+the auditor.  HOL4/CakeML commit `c836cceed` brings the committed exact
+production-entry authentication through genuine cell 124: **125/875 cells**.
+Each cell carries its literal certificate data, complete 167-instruction
+trace, all specialized guard evaluations, packet contract, input facts, and
+actual `compute_eval` theorem for the production dispatcher entry.  This is
+measured progress on distinct real inputs; it is not an inference from cell 0.
+
+The two newest 16-cell authentication builds remained small in memory
+(approximately 5 GiB peak RSS each), but competing proof/data work stretched
+their wall times to 20m30s and 22m01s.  That is a workflow result, not a proof
+failure: subsequent authentication pairs are being run without extra HOL
+builds to avoid unnecessary contention.
+
+A bounded export probe also exposed a real remaining G5 representation defect:
+although the cell-0 four-argument whole call and its structured result were
+closed HOL terms, the first exported entry still contained applications of
+HOL constructors and source encoders not present in the registered equation
+environment.  It is therefore rejected as evidence.  The exporter is being
+changed to normalize all four payloads to literal `Cexp` data, followed by an
+explicit application-name audit and a focused HOL4 build before it can count.
+
+None of this changes the decision metric.  The exact 875-cell/1,749-token
+whole call, source/callback correspondence, and final original-theorem handoff
+remain open.  First fast original Flyspeck NL theorem remains **0/1**, and no
+runtime rebuild or hour-scale replay is authorized by these results.
+
 ## Post-audit restartable all-cell lift (2026-11-06 UTC)
 
 The audit's warning not to infer arbitrary-cell or batch closure from cell 0
