@@ -2234,6 +2234,17 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-201",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-06-v4.365-nl-tight-outer-box-bridge.md",
+      "failure_mode": "The authenticated object entry widens every outer-box endpoint by one scale-2^40 unit for numerical guarding, while the generic analytic handoff requires that same outer box to be covered by the frozen Taylor radii; the fixed checker accepts, but the exact source-correspondence premise is false and a numerically green callback cannot yield cell_pass.",
+      "root_cause": "A numerical guard box and the analytic Taylor-domain box were treated as the same payload without checking both directions of the contract. Before a callback or original-theorem build, prove exact source coverage and radius coverage for the frozen entry, then run the complete fixed checker on that exact box and compare its result and certificate packets with the authenticated trace. Permit only the minimal endpoint expansion required by exact source coverage; never answer a false correspondence premise with a theorem exception, a wider radius, or a longer evaluator run.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }

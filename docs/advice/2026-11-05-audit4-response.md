@@ -4,6 +4,29 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit tight-box closure (2026-11-06 UTC)
+
+The concrete cell-0 callback chain has now been regenerated around the one
+outer box that satisfies both sides of the contract.  The previously guarded
+box passed the numerical checker but exceeded the analytic Taylor radii; the
+unguarded box missed one exact source endpoint.  The repaired box changes only
+the required coordinate-5 upper endpoint.
+
+The tight fixture now has all of the following green on the frozen source
+branches: exact source and radius correspondence in HOL Light, the complete
+167-step fixed checker and 134-packet ledger, the full HOL4 semantic/callback
+closure, independent equality to the regenerated HOL Light constructor term,
+translation, and a directly compiled standalone callback executable.  The
+executable compiled in 2.56 seconds, linked in 0.32 seconds, and exited zero
+immediately with empty output.  Details and artifact hashes are in
+`docs/progress/2026-11-06-v4.365-nl-tight-outer-box-bridge.md`.
+
+This materially reduces the concrete vertical-slice integration risk, but it
+does not change the public first-theorem metric: **0/1**.  The callback is not
+yet installed in a Candle runtime, and arbitrary-cell generalization,
+875-cell topology, and the original theorem remain open.  No runtime rebuild
+or hour-scale run was started.
+
 ## Post-audit executable-probe result (2026-11-06 01:28 UTC)
 
 The exact cell-0 callback has now passed its standalone pre-bootstrap
