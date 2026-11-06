@@ -4,6 +4,49 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit restartable all-cell lift (2026-11-06 UTC)
+
+The audit's warning not to infer arbitrary-cell or batch closure from cell 0
+has now been tested first on three additional genuine cells and then on a
+restartable 25-cell chunk.  HOL4/CakeML commit `2a1585143` authenticates cells
+0--3 at the fixed-word packet layer.  For each of cells 1--3 it proves the
+exact complete 167-instruction trace, checks all 42 arctangent packet guards,
+and proves the recursive packet contract.  The three new traces took
+approximately 1.8--2.0 seconds each.  All 126 new closed guard evaluations
+returned exactly `SOME (Num 1)`.
+
+Commit `8fa923708` adds the reusable word-converted production-entry theorem
+and instantiates it on cells 1--3.  These are actual `compute_eval` theorems
+for the production dispatcher entry under `compute_default_clock`, not only
+packet or certificate facts.  Its clean focused build took **1m54.51s** and
+peaked at **2,806,104 KiB** RSS.
+
+Commit `314381612` then authenticates cells 4--28.  Each cell has its literal
+31-certificate data, exact 167-step trace, all 42 guard evaluations, packet
+contract, elementary input and acceptance facts, and actual production-entry
+evaluation theorem.  The data build took **2m00.33s** with **4,344,220 KiB**
+peak RSS; the authentication build took **13m09.92s** with **5,930,356 KiB**
+peak RSS.  Commit `0890b0787` independently rebuilds the cleaned helpers on
+cells 29--44 with the same obligations.  Its authentication build took
+**9m23.20s** with **4,029,924 KiB** peak RSS.  The committed
+production-entry authentication count is therefore **45/875 cells**.
+
+This lift found a real scaling hazard before an 875-cell monolith:
+independently generated certificate and runtime CV converters had identical
+printed names but distinct theory identities.  The repair keeps certificate
+materialization in a certificate-only helper and consumes its proved literal
+from a separate runtime-authentication helper.  It does not equate or bypass
+the conflicting converters.  Because the first 25-cell authentication chunk
+exceeded the intended ten-minute feedback cap, subsequent chunks are limited
+to 16 cells and remain independently rebuildable and committable.
+
+This is evidence that the all-cell lift is being executed on distinct real
+data rather than inferred from cell 0.  It does **not** yet prove the exact
+875-record whole call or the HOL4/HOL Light source/callback correspondence;
+those are the remaining all-cell and G5 boundaries.  The original Flyspeck
+theorem therefore remains **0/1**.  No runtime rebuild or hour-scale replay is
+justified yet.
+
 ## Post-audit genuine singleton seam (2026-11-06 UTC)
 
 The audit's request for a real vertical slice has now advanced one boundary
