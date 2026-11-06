@@ -4,11 +4,31 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
-## Follow-up status (2026-11-06 UTC): 125/875 exact entries, theorem still 0/1
+## Post-audit exact whole-evaluator/callback seam (2026-11-06 UTC)
+
+The exact imported genuine cell-0 four-argument whole call now has a complete
+ordinary `compute_eval` theorem at a structural clock requirement of 524,759
+ticks, safely below the default one-billion-tick clock.  CakeML/HOL4 commit
+`213b74e7f` composes the authenticated numerical job and genuine compact
+topology result; its clean build took 1m55.43s and peaked at 4,282,516 KiB.
+
+Commit `0094b91e4` then proves a real-call witnessed callback vertical seam:
+`compute_fast_eval_ok`, the exact structured-result hit, and fail-closed
+rejection of altered equations, result witness, source descriptor, dimension,
+tokens, or jobs.  Its clean build took 1m50.45s and peaked at 3,988,372 KiB.
+
+This closes the exact cell-0 callback-mechanism uncertainty, not production
+G5.  The checker intentionally authenticates one imported call by exact
+identity.  The scalable callback must still connect the plan-driven compact
+witness to all four whole-call payload roles, and G4 still requires the full
+875-job/1,749-token instantiation.  The original theorem remains **0/1** and
+no runtime rebuild is authorized.
+
+## Follow-up status (2026-11-06 UTC): 157/875 exact entries, theorem still 0/1
 
 The restartable all-cell lift has continued beyond the evidence available to
-the auditor.  HOL4/CakeML commit `c836cceed` brings the committed exact
-production-entry authentication through genuine cell 124: **125/875 cells**.
+the auditor.  HOL4/CakeML commits through `e75632bc1` bring the committed exact
+production-entry authentication through genuine cell 156: **157/875 cells**.
 Each cell carries its literal certificate data, complete 167-instruction
 trace, all specialized guard evaluations, packet contract, input facts, and
 actual `compute_eval` theorem for the production dispatcher entry.  This is
