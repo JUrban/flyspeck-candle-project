@@ -4,6 +4,32 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Post-audit frozen-chain update (2026-11-06 00:53 UTC)
+
+Two further bounded source commits address the audit's concern that a cheap
+compiled probe could be confused with an installed Candle runtime:
+
+- `9f5c3cebe` proves a small generic callback-prepend theorem, including exact
+  hit, miss/fallback, and conditional `compute_fast_eval_ok` preservation; and
+- `86e27ade9` evaluates the authenticated semantic entry once to a literal
+  `compute_exp`, proves the literal identical to that entry, and defines the
+  exact literal callback that the pre-bootstrap probe will compile.
+
+Both theories cleanly rebuilt in under two minutes (1m50.44s and 1m51.69s),
+with peak RSS 3,615,584 KiB and 3,614,424 KiB.  They do not install a changed
+runtime and do not close arbitrary-cell G3 or topology G4.
+
+The first attempt to prepare the standalone `basisProg` executable probe
+exposed abandoned HOL build locks and was stopped rather than allowed to wait
+silently.  After removing only locks owned by the verified-dead process, a
+bounded resume completed 23 of 44 missing generic CakeML translator/basis
+theories before the remaining 18-minute cap fired.  It peaked at 2,230,692
+KiB RSS.  The reusable prerequisites remain built, but the project-specific
+probe itself has **not** yet been compiled or run.  This is therefore recorded
+as incomplete one-time preparation under cap, not as callback evidence and not
+as a checker failure.  No timeout extension, Candle rebuild, or Flyspeck replay
+was started.
+
 ## Post-audit entry/callback update (23:53 UTC)
 
 The complete cell-0 trace has now crossed two more bounded integration
