@@ -4,6 +4,26 @@ Date: 2026-11-05 UTC
 
 Status: **DEVELOPMENT / NON-RELEASE**
 
+## Follow-up status (2026-11-06 UTC): 189/875 exact entries
+
+CakeML/HOL4 commit `48cdf1bf9` extends the restartable exact
+production-entry authentication through genuine cell 188: **189/875 cells**.
+The two independent 16-cell chunks each passed a one-cell integrated preflight
+before their full builds.  That preflight caught and corrected a missing use of
+the clock-aware authentication helper before the expensive phase began.
+
+The complete builds then passed every 167-step trace, all 42 specialized guard
+evaluations per cell, the packet contracts, ordinary production-entry
+evaluation, and clock-parametric production-entry evaluation.  Cells 157--172
+took **9m04.59s** and peaked at **4,240,532 KiB** RSS; cells 173--188 took
+**9m00.25s** and peaked at **4,605,824 KiB** RSS.  Both were single-threaded.
+
+This is a monotonic G4 input-evidence lift, not G4 or G5 closure.  The exact
+875-job/1,749-token composition, scalable plan-driven callback correspondence,
+original-statement adapter, and verified-runtime handoff remain open.  The
+first fast original Flyspeck NL theorem therefore remains **0/1**, and no
+runtime rebuild or hour-scale replay is authorized yet.
+
 ## Post-audit exact whole-evaluator/callback seam (2026-11-06 UTC)
 
 The exact imported genuine cell-0 four-argument whole call now has a complete
