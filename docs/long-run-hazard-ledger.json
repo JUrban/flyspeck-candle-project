@@ -2295,8 +2295,8 @@
       "scope": "fast-nl-executable-probe",
       "classification": "observed",
       "first_evidence": "docs/progress/2026-11-07-v4.376-nl-g6-topology-isolation.md",
-      "failure_mode": "A direct topology probe is translated into the large whole-checker program environment and compiled only with --skip_type_inference=true; it returns NONE even on a one-leaf input that the HOL definition proves successful, while enabling CakeML type inference reports a monomorphic cv-versus-compute_exp binding collision in the inherited environment.",
-      "root_cause": "A generated program was treated as executable evidence without requiring its complete source program to pass type inference. New G6 executables must either extend a type-clean minimal basis state or repair the inherited name collision, and must compile with type inference enabled before their verdict is trusted. A skip-only compiled verdict is a representation/tooling failure, not evidence about the proved checker function.",
+      "failure_mode": "A direct topology probe was compiled only with --skip_type_inference=true and returned NONE even on a one-leaf input that the HOL definition proves successful. A declaration-prefix discriminator later showed that the complete verified whole-checker program is type-clean; the cv-versus-compute_exp mismatch first appears when the ad-hoc quoted wrapper supplies values built with ambiguous unqualified Num and Pair constructors to the cv checker.",
+      "root_cause": "Both compute_syntax$compute_exp and compute_exec$cv use the HOL constructor names Num and Pair. After both types are registered, an unannotated CakeML quotation can select the compute_exp constructors even when the wrapper author intends cv. Keep probe-side cv construction and pattern matching behind explicitly typed translated HOL definitions, and require the complete generated program to pass type inference before trusting any verdict. The exact 1.2 MB program passed type inference in 7.03 seconds after changing only those wrapper constructors to their generated cv identities; a skip-only verdict remains a representation/tooling failure, not checker evidence.",
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
@@ -2308,6 +2308,17 @@
       "first_evidence": "docs/progress/2026-11-07-v4.376-nl-g6-topology-isolation.md",
       "failure_mode": "A follow-up quoted CakeML main calls a helper that appeared in an earlier quoted main but was never added to the translated program environment; compiling with type inference skipped emits an executable that segfaults before either main prints output.",
       "root_cause": "Quoted AST fragments were mistaken for exported translation-state bindings. Every diagnostic main must be self-contained or call a helper explicitly translated into its parent state, and the complete generated program must pass type inference. Preserve startup crashes as tooling failures and do not infer anything about checker semantics from them.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-208",
+      "scope": "fast-nl-executable-probe",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-07-v4.379-nl-integrated-direct-checker-type-closure.md",
+      "failure_mode": "The first type-clean integrated 875-cell probe still compares its complete result with the historical cell-0 expected value. Its negative modes merely require a result different from that stale value, so they could label an unexpected successful Some result as a rejection.",
+      "root_cause": "A captured result from an earlier one-cell executable was reused as the oracle after the topology scope changed to the complete 875-leaf tree. Before any genuine run, derive the wrapper verdict directly from the proved checker contract: the positive case requires Some _, and every fail-closed mutation requires exactly None. Do not carry a captured expected value across a cell/topology scope change, and inspect the final wrapper oracle before paying extraction or execution cost.",
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
