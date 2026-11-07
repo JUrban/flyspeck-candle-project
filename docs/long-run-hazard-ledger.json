@@ -2278,6 +2278,17 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-205",
+      "scope": "fast-nl-executable-probe",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-07-v4.375-nl-g6-translation-and-heap-boundary.md",
+      "failure_mode": "The exact translated case-16594 whole checker closes through CakeML source translation and direct compilation, but its genuine positive 875-cell execution touches and exhausts 1, 8, 32, and 80 GiB CakeML heaps before producing a verdict; the same external payload parsing plus an immediate wrong-source rejection succeeds in 4.76 seconds with 2,031,232 KiB peak RSS.",
+      "root_cause": "The memory blow-up lies in the complete numerical matcher/execution path rather than external file parsing, but its precise allocation/retention boundary is not yet measured. Preserve the failed heap runs and stop heap escalation. Before another complete positive run, add a development-only prefix/phase discriminator over the already translated matcher, measure live/allocation behavior at representative cell counts, and inspect whether per-cell runtime-packet construction/equality or recursive matcher state prevents reclamation. Require a bounded-memory complete executable result before G8; never treat a larger heap, translation success, or the native 875-cell timing as a substitute.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
