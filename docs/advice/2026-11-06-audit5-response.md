@@ -60,6 +60,21 @@ The corrected first-theorem sequence is:
 The exact-identity cell-0 witnessed callback remains useful vertical-slice
 evidence.  It is explicitly not the production design.
 
+### Follow-up, 2026-11-07
+
+The corrected production sequence has now closed its generic G5 logic gate.
+CakeML/HOL4 commits `05f7bd2be`, `018caa4f2`, `be242c42a`, and `5b009642d`
+prove a complete runtime-payload checker and the final
+`compute_fast_eval_ok` theorem.  It authenticates the external certificate,
+canonical source identity, all 875 packed cells, and all 875 jobs; recomputes
+the numerical packets through the generic G3 theorem; and evaluates only the
+compact topology through the proved pure evaluator.
+
+This is not yet the first original theorem.  The exact real call still needs
+the bounded G6 executable hit/mutation probe and the G7 original-statement
+adapter remains to be typechecked.  The first original fast NL theorem is
+therefore still **0/1**, and no verified runtime build has started.
+
 ## 2. The v3.15 baseline was misclassified and mismeasured
 
 Audit 5 is correct here as well.  The proved v3.15 run used a general

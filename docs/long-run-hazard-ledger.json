@@ -2267,6 +2267,17 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-204",
+      "scope": "fast-nl-executable-probe",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-07-v4.374-nl-g5-fast-callback-sound.md",
+      "failure_mode": "The first standalone whole-checker translation target recursively schedules hundreds of unrelated program theories because the local CakeML basis cache contains a stale CharProg/RatProg parent identity; allowing the target to continue would turn a bounded G6 probe into a broad basis rebuild before any real payload is exercised.",
+      "root_cause": "Generated translation-cache coherence was assumed from file presence rather than checked from parent theory identities. Before another compiled G6 probe, preflight the exact basis/translator ancestor closure in an isolated cache, extend the smallest direct basis state rather than the old Great100 executable stack, and predict the rebuild set before execution. Stop if the plan includes unrelated basis or legacy checker theories. Never treat cache reconstruction as evidence about the NL checker or authorize a runtime build from it.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
     }
   ]
 }
