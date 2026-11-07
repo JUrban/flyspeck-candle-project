@@ -307,6 +307,12 @@ struct AnalyticCertificateRecord {
   std::array<Interval, 5> values;
 };
 
+struct RuntimePacketRecord {
+  std::size_t job_index;
+  std::size_t ordinal;
+  Interval value;
+};
+
 bool kCaptureReciprocalCertificates = false;
 bool kUseReciprocalCertificates = false;
 bool kReciprocalCertificateEvaluationActive = false;
@@ -317,6 +323,10 @@ std::vector<ReciprocalCertificateRecord> kReciprocalCertificates;
 bool kCaptureAnalyticCertificates = false;
 std::size_t kAnalyticCertificateOrdinal = 0;
 std::vector<AnalyticCertificateRecord> kAnalyticCertificates;
+bool kCaptureRuntimePackets = false;
+std::size_t kRuntimePacketOrdinal = 0;
+std::vector<RuntimePacketRecord> kRuntimePackets;
+int kDenseRadiusPadding = 0;
 
 #if (defined(CANDLE_NL_FIXED_INT128) || \
      defined(CANDLE_NL_CHECKED_INT192) || \
@@ -2129,6 +2139,17 @@ void write_reciprocal_certificates(const std::string& path) {
 
 Interval zero_fixed_interval() { return {0, 0}; }
 
+void capture_runtime_packet(const Interval& value) {
+  if (!kCaptureRuntimePackets) return;
+  kRuntimePackets.push_back(
+      {kReciprocalCertificateJob, kRuntimePacketOrdinal++, value});
+}
+
+template <std::size_t Size>
+void capture_runtime_packet(const std::array<Interval, Size>& values) {
+  for (const Interval& value : values) capture_runtime_packet(value);
+}
+
 void capture_sqrt_analytic_certificate(
     const Interval& center_sqrt, const Interval& box_sqrt,
     const Interval& center_derivative, const Interval& box_derivative,
@@ -2190,6 +2211,18 @@ void write_analytic_certificates(const std::string& path) {
              << '\t' << integer_of_fixed(value.upper).get_str();
     }
     output << '\n';
+  }
+}
+
+void write_runtime_packets(const std::string& path) {
+  std::ofstream output(path);
+  if (!output) {
+    throw std::runtime_error("cannot write runtime packets: " + path);
+  }
+  for (const RuntimePacketRecord& record : kRuntimePackets) {
+    output << record.job_index << '\t' << record.ordinal << '\t'
+           << integer_of_fixed(record.value.lower).get_str() << '\t'
+           << integer_of_fixed(record.value.upper).get_str() << '\n';
   }
 }
 
@@ -2576,6 +2609,7 @@ TaylorResult result_inverse_fixed(const IntegerVector& radii,
 
   const Interval box_r = fixed_interval_inv(value.value_bound);
   capture_inverse_analytic_certificate(r, box_r);
+  capture_runtime_packet(std::array<Interval, 2>{r, box_r});
   const Interval box_r2 = interval_mul(box_r, box_r, counters);
   const Interval box_r3 = interval_mul(box_r2, box_r, counters);
   const IntervalMatrix hessian = matrix_add(
@@ -2625,6 +2659,8 @@ TaylorResult result_sqrt_fixed(
       fixed_interval_inv(dd_denominator);
   capture_sqrt_analytic_certificate(
       center_sqrt, box_sqrt, center_d, box_d, box_second_reciprocal);
+  capture_runtime_packet(std::array<Interval, 5>{
+      center_sqrt, box_sqrt, center_d, box_d, box_second_reciprocal});
   const Interval box_dd = interval_neg(box_second_reciprocal);
   const IntervalMatrix hessian = matrix_add(
       interval_matrix_scale(
@@ -2744,10 +2780,14 @@ TaylorResult result_atan_fixed(const IntegerVector& radii,
                               const TaylorResult& value,
                               Counters& counters) {
   ++counters.atan_steps;
+  const Interval center_square =
+      fixed_interval_square(value.center.value, counters);
+  const Interval box_square =
+      fixed_interval_square(value.value_bound, counters);
   const Interval center_denominator = interval_add(
-      one_interval(), fixed_interval_square(value.center.value, counters));
+      one_interval(), center_square);
   const Interval box_denominator = interval_add(
-      one_interval(), fixed_interval_square(value.value_bound, counters));
+      one_interval(), box_square);
   // fixed_atan_range_interval uses reciprocal range reduction outside
   // (-1,1).  Exact +/-1 endpoints remain fail-closed because the polynomial
   // boundary needs a separately authenticated pi/4 enclosure.
@@ -2766,11 +2806,12 @@ TaylorResult result_atan_fixed(const IntegerVector& radii,
   bool upper_range_present = false;
   Interval lower_range_reciprocal = zero_fixed_interval();
   Interval upper_range_reciprocal = zero_fixed_interval();
+  const Interval center_result = fixed_atan_range_interval(
+      value.center.value, counters,
+      &lower_range_present, &lower_range_reciprocal,
+      &upper_range_present, &upper_range_reciprocal);
   const FirstJet center = {
-      fixed_atan_range_interval(
-          value.center.value, counters,
-          &lower_range_present, &lower_range_reciprocal,
-          &upper_range_present, &upper_range_reciprocal),
+      center_result,
       interval_vector_scale(center_d, value.center.gradient, counters)};
 
   const Interval box_d = fixed_interval_inv(box_denominator);
@@ -2779,6 +2820,9 @@ TaylorResult result_atan_fixed(const IntegerVector& radii,
       upper_range_present, upper_range_reciprocal,
       center_d, box_d);
   const Interval box_d2 = interval_mul(box_d, box_d, counters);
+  capture_runtime_packet(std::array<Interval, 8>{
+      value.center.value, value.value_bound, center_result, center_square,
+      center_d, box_square, box_d, box_d2});
   const Interval box_dd = interval_neg(interval_mul(
       interval_add(value.value_bound, value.value_bound), box_d2, counters));
   const IntervalMatrix hessian = matrix_add(
@@ -6419,7 +6463,8 @@ Evaluation evaluate_job(const Program& program, const Job& job,
     center_environment[coordinate] = interval_constant(midpoint);
     box_environment[coordinate] = interval_of_q(
         {job.lower[coordinate], job.upper[coordinate]});
-    radii[coordinate] = ceil_scaled(radius);
+    radii[coordinate] =
+        ceil_scaled(radius) + static_cast<Fixed>(kDenseRadiusPadding);
     if (kUseTaylorReconstructedBox) {
       box_environment[coordinate] = {
           center_environment[coordinate].lower - radii[coordinate],
@@ -7125,6 +7170,8 @@ int main(int argc, char** argv) {
                 << " [--capture-reciprocal-certificates=PATH]"
                 << " [--use-reciprocal-certificates=PATH]"
                 << " [--capture-analytic-certificates=PATH]"
+                << " [--capture-runtime-packets=PATH]"
+                << " [--dense-radius-padding=N]"
                 << " [--trace-first-state=PATH]"
                 << " [--rounding-profile]"
                 << " [--dihedral-identity-diagnostics]"
@@ -7159,6 +7206,7 @@ int main(int argc, char** argv) {
     std::string capture_reciprocal_certificates_path;
     std::string use_reciprocal_certificates_path;
     std::string capture_analytic_certificates_path;
+    std::string capture_runtime_packets_path;
     std::string trace_first_state_path;
     bool custom_decimal_scale = false;
     bool custom_binary_scale = false;
@@ -7296,6 +7344,19 @@ int main(int argc, char** argv) {
           throw std::runtime_error(
               "empty analytic certificate capture path");
         }
+      } else if (option.rfind(
+                     "--capture-runtime-packets=", 0) == 0) {
+        capture_runtime_packets_path = option.substr(
+            std::string("--capture-runtime-packets=").size());
+        if (capture_runtime_packets_path.empty()) {
+          throw std::runtime_error("empty runtime packet capture path");
+        }
+      } else if (option.rfind("--dense-radius-padding=", 0) == 0) {
+        kDenseRadiusPadding = std::stoi(option.substr(
+            std::string("--dense-radius-padding=").size()));
+        if (kDenseRadiusPadding < 0) {
+          throw std::runtime_error("negative dense radius padding");
+        }
       } else if (option.rfind("--trace-first-state=", 0) == 0) {
         trace_first_state_path = option.substr(
             std::string("--trace-first-state=").size());
@@ -7391,6 +7452,11 @@ int main(int argc, char** argv) {
         (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel)) {
       throw std::runtime_error(
           "analytic certificate capture requires fixed scalar kernels");
+    }
+    if (!capture_runtime_packets_path.empty() &&
+        (!kUseFixedSqrtInverseKernels || !kUseFixedAtanKernel)) {
+      throw std::runtime_error(
+          "runtime packet capture requires fixed scalar kernels");
     }
     if (profile_enabled && rounding_profile_enabled) {
       throw std::runtime_error(
@@ -7702,6 +7768,10 @@ int main(int argc, char** argv) {
       kAnalyticCertificates.clear();
       kCaptureAnalyticCertificates = true;
     }
+    if (!capture_runtime_packets_path.empty()) {
+      kRuntimePackets.clear();
+      kCaptureRuntimePackets = true;
+    }
     Program program = read_program(argv[1]);
     if (prepared_polynomial_pair_index >= 0) {
       prepare_polynomial_pair(
@@ -7846,6 +7916,7 @@ int main(int argc, char** argv) {
       kReciprocalCertificateJob = index;
       kReciprocalCertificateOrdinal = 0;
       kAnalyticCertificateOrdinal = 0;
+      kRuntimePacketOrdinal = 0;
       Evaluation evaluation;
       try {
         evaluation = kUseDirectSpecializedFunction
@@ -7910,6 +7981,14 @@ int main(int argc, char** argv) {
             "analytic certificate record count drift");
       }
       write_analytic_certificates(capture_analytic_certificates_path);
+    }
+    if (kCaptureRuntimePackets) {
+      if (kRuntimePackets.empty() ||
+          (kCaseId == 16594 &&
+           kRuntimePackets.size() != jobs.size() * 134)) {
+        throw std::runtime_error("runtime packet record count drift");
+      }
+      write_runtime_packets(capture_runtime_packets_path);
     }
     const auto evaluation_end = std::chrono::steady_clock::now();
     const std::uint64_t evaluation_floor_calls =
@@ -8122,6 +8201,11 @@ int main(int argc, char** argv) {
               << (kCaptureAnalyticCertificates ? 1 : 0)
               << " analytic_certificate_records="
               << kAnalyticCertificates.size()
+              << " runtime_packet_capture="
+              << (kCaptureRuntimePackets ? 1 : 0)
+              << " runtime_packet_records="
+              << kRuntimePackets.size()
+              << " dense_radius_padding=" << kDenseRadiusPadding
               << " mixed_wide_taylor_completions="
               << kMixedWideTaylorCompletions
               << " mixed_wide_narrowings="
