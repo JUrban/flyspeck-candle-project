@@ -2245,6 +2245,28 @@
       "check_id": "genuine_fast_dispatch_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-202",
+      "scope": "fast-nl-first-original-theorem",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-07-v4.373-nl-complete-g4-data-seam.md",
+      "failure_mode": "The first complete 875-cell source-correspondence proof fails at nine of 5,250 coordinates even though the source boxes, dyadic centers, and packed radii came from the accepted plan; endpoint conversion has rounded those radii inward by exactly one scale-2^40 unit at the affected coordinates.",
+      "root_cause": "A numerically generated dyadic radius was treated as exact source-coverage authority. Before a full geometry or callback run, scan every source/center/radius coordinate in exact arithmetic, report the complete mismatch set, and prove the chosen correction globally. For case 16594, one scale-2^40 radius unit covers all 5,250 coordinates and the complete compiled checker must be recaptured on that exact corrected payload. Never widen source boxes, hide individual exceptions, or increase padding without a new exact scan and complete acceptance test.",
+      "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-203",
+      "scope": "fast-nl-proof-harness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-07-v4.373-nl-complete-g4-data-seam.md",
+      "failure_mode": "A convenience theorem tries to extract the first reference item existentially from a successful nonempty whole call and immediately reapply the generic whole-success theorem; the component facts and root theorem each construct, but tactic-level matching/generalization repeatedly fails with `ABS: variable is free in assumptions`, inviting more wrapper-specific proof code.",
+      "root_cause": "Existential witness selection, labeled assumptions, and theorem instantiation were combined inside one tactic pipeline even though the production boundary already has a generic whole-success theorem and will have the exact runtime payload. Keep the failed wrapper uncommitted. At G5, expose or instantiate the reference source witness at the payload boundary and compose with the existing generic theorem using exact theorem terms; use a tiny isolated logical reproducer before adding any convenience wrapper. Never answer this proof-state failure with a longer evaluator run, broader automation, or another copy of whole-call soundness.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage", "kernel-build"]
     }
   ]
 }

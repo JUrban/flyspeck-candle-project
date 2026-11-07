@@ -30,12 +30,13 @@ uses of "close" but does not replace the detailed implementation ledger in
 - First original Flyspeck NL theorem through the fast route: **0/1**.
 
 The highest closed logic gate is now **G3**.  G4 has a proved generic
-whole-call composition theorem and a kernel-checked genuine cell-0 singleton
-instantiation conditional only on its exact entry verdict.  G4 remains open
-until the genuine 875-job/1,749-token representation, lockstep contracts, and
-root identity are instantiated in HOL Light.  The complete executable verdict
-is then discharged by `Kernel.compute` through the generic G5 callback; it
-does not require a closed HOL4 theorem for every cell.
+whole-call composition theorem, a kernel-checked genuine cell-0 singleton,
+the complete assumption-free 875-job geometry contract, and an exact
+875-job/1,749-token representation seam.  G4 remains open until those terms
+are frozen in the production whole call and the reference source witness plus
+singleton root are instantiated at the G5 payload boundary.  The complete
+executable verdict is then discharged by `Kernel.compute` through the generic
+G5 callback; it does not require a closed HOL4 theorem for every cell.
 
 The numerical result is not yet the original HOL theorem.  The missing work
 is the proved semantic composition from the accepted fast computation to the
@@ -50,7 +51,7 @@ original statement.
 | S0. End-to-end contract skeleton | representation/control | **IN PROGRESS** | The Candle whole-call target and HOL4 `compute_fast_eval_ok` target typecheck against the real equation set, with every remaining premise assigned below. The Candle half now typechecks; the HOL4 callback/clock half is pending. |
 | G2. Six specialized delta instructions | logic | **DONE** | All six specialized evaluator results are connected to exact object states for arbitrary valid inputs. The three product-delta coordinates and the three negative-delta coordinates each use one generic production evaluator/refinement theorem rather than captured cell computations. |
 | G3. Complete ordinary trace and leaf semantics | logic/clock | **DONE** | Generic ordinary and specialized steps compose through all 167 positions for an arbitrary valid explicit-radius cell; the entry result implies that cell's `m_cell_pass`; a structural ordinary-evaluator clock bound is exported. |
-| G4. Whole jobs and topology | representation/logic | **IN PROGRESS — generic composition and genuine singleton seam proved** | The generic checker consumes packed cells and jobs in lockstep, rejects failed entries and length mismatches, derives every matching leaf from one authenticated source program, and combines those leaves through the proved topology invariant. A genuine current tight-box cell-0 one-job/one-leaf instance now closes conditional only on its exact entry verdict. The remaining exit item is the genuine 875-job/1,749-token HOL Light representation/contract/root instantiation. Its executable verdict is supplied by `Kernel.compute` through G5, not by 875 closed HOL4 entry theorems. |
+| G4. Whole jobs and topology | representation/logic | **IN PROGRESS — complete geometry and representation green** | The generic checker consumes packed cells and jobs in lockstep, rejects failed entries and length mismatches, derives every matching leaf from one authenticated source program, and combines those leaves through the proved topology invariant. The complete 875-job geometry contract is assumption-free and certificate-parametric; all 875 source-box identities and all 1,749 token roles match the authenticated plan. The remaining exit item is the exact production-call/reference-source/singleton-root instantiation at G5. Its executable verdict is supplied by `Kernel.compute`, not by 875 closed HOL4 entry theorems. |
 | G5. Generic fast callback | HOL4 logic | **PENDING** | A plan-driven callback runs the fixed checker on the four-argument call's own authenticated payload, and the arbitrary-valid-cell G3 theorem plus generic topology composition proves `compute_fast_eval_ok` under `compute_default_clock = 10^9`; altered equation sets, source/plan, packed cells, jobs, or topology reject. |
 | G6. Pre-bootstrap callback/dispatcher probe | executable representation | **PENDING** | The exact frozen callback is exercised through the lightest faithful compiled representation; all four payload roles, the intended branch hit, and mutations are covered. This is a bounded bug-finding gate, not a changed-kernel Candle runtime. |
 | G7. Analytic and original-statement adapter | logic | **PENDING** | The authenticated root `m_cell_pass` is converted by the existing case-16594 reconstruction to a typechecked conditional theorem with the literal original conclusion and audited assumptions. |
@@ -142,13 +143,24 @@ completion.
 
 The next bounded production blockers are now separated correctly:
 
-1. instantiate the generic HOL Light jobs/topology theorem on the genuine 875
-   packed cells, 875 jobs, and 1,749 tokens, proving the lockstep geometry
-   contracts and singleton root identity without 875 closed HOL4 entry facts;
-2. implement the G5 callback that executes the fixed checker on the call's
-   runtime payload and derive its generic `compute_fast_eval_ok` theorem from
-   G3 plus the whole-list/topology result; and
-3. exercise that exact callback through G6 before any runtime rebuild.
+1. freeze the corrected 875 packed cells, the already matched 875 jobs, all
+   1,749 tokens, and the singleton root in the exact production call;
+2. implement the G5 callback that executes the fixed checker on those runtime
+   payloads and derive its generic `compute_fast_eval_ok` theorem from G3 plus
+   whole-list/topology composition;
+3. instantiate the existing Candle whole-success theorem with the resulting
+   whole equality and reference source witness, then typecheck G7; and
+4. exercise that exact callback through G6 before any runtime rebuild.
+
+The complete geometry proof found nine of 5,250 coordinates whose packed
+radius rounded inward by one scale-2^40 unit.  One uniform unit of radius
+padding proved all coordinates and the recaptured compiled checker accepted
+all 875 cells in 10.82 seconds; LR-202 preserves this discriminator.  The
+kernel proof took 35m53s and is not being replayed during adapter edits.  A
+separate 166-second representation probe matched all 875 source boxes and the
+875/874 token counts.  An optional nonempty-reference convenience wrapper was
+stopped after a tactic-level free-variable/generalization failure and remains
+uncommitted (LR-203); the existing generic theorem remains the authority.
 
 In parallel, the freed build slots are assigned to the capped stock-route
 projection: join the existing 812-source/7,814-selected-leaf inventory with
