@@ -28,17 +28,23 @@ uses of "close" but does not replace the detailed implementation ledger in
   It is now parked: G3 already supplies the arbitrary-valid-cell theorem, so
   extending this closed prefix is not a production G4/G5C gate.
 - First original Flyspeck NL theorem through the fast route: **0/1**.
+- G6 phase isolation: the direct numerical matcher accepts all **875** cells
+  in **145 seconds** within a fixed 4 GiB heap; the clean typed direct
+  topology executable accepts all **1,749** tokens in **0.09 seconds** at
+  **72,576 KiB** RSS.  The previous greater-than-80-GiB failure is isolated
+  to generic topology interpretation, not the numerical matcher.
 
 The highest closed first-case logic gate is now **G5C**.  G4 has a proved generic
 whole-call composition theorem, a kernel-checked genuine cell-0 singleton,
 the complete assumption-free 875-job geometry contract, and an exact
 875-job/1,749-token representation seam.  G5C's witnessed whole-call theorem
-closes the remaining case-16594 production-payload instantiation, including
-the authenticated source and singleton-root boundary.  The
+closes the remaining case-16594 production-payload evaluator refinement.  The
 case-16594, payload-generic/program-fixed G5C callback and its
 `compute_fast_eval_ok` theorem are now closed; the plan-generic G5P callback
 required by the all-NL production design remains pending.  The complete
-genuine executable call and the original-statement adapter remain untested.
+genuine numerical and topology phases now execute separately, but the direct
+topology function still needs its refinement theorem and typed integration
+into one complete callback.  The original-statement adapter remains untested.
 
 The numerical result is not yet the original HOL theorem.  The missing work
 is the proved semantic composition from the accepted fast computation to the
@@ -56,7 +62,7 @@ original statement.
 | G4. Whole jobs and topology | representation/logic | **DONE for case 16594** | The generic checker consumes packed cells and jobs in lockstep, rejects failed entries and length mismatches, derives every matching leaf from one authenticated source program, and combines those leaves through the proved topology invariant. The complete 875-job geometry contract is assumption-free and certificate-parametric; all 875 source-box identities and all 1,749 token roles match the authenticated plan. G5C closes the exact production-call/reference-source/singleton-root instantiation. Its executable verdict is supplied by `Kernel.compute`, not by 875 closed HOL4 entry theorems. |
 | G5C. Case-16594 fast callback | HOL4 logic | **DONE** | Commit `5b009642d` proves `compute_fast_eval_ok` for the witnessed whole-call callback. Runtime certificate bytes, boxes, radii, packed cells and jobs are data, but the checker authenticates the case-16594 875-by-31 header and canonical 167 code/source streams. It recomputes all runtime packets through G3 and evaluates only the compact topology through the proved pure evaluator. Numerical or topology failure and equation-set mismatch fail closed. This is payload-generic and program-fixed, not the all-NL production callback. |
 | G5P. Plan-generic fast callback | HOL4 logic/runtime architecture | **PENDING** | Decode and compile an arbitrary supported versioned source/evidence plan, recognize deltas through the checked compiler, support variable certificate and cell counts, and prove the ordinary-evaluator refinement over the compiled trace. A structurally distinct genuine family must pass unchanged callback source. |
-| G6. Pre-bootstrap callback/dispatcher probe | executable representation | **BLOCKED ON COMPLETE-CHECKER HEAP** | Source commit `ae4b12816` coherently translates and directly compiles the exact checker and four-file input harness. The genuine positive 875-cell run exhausts 8, 32 and 80 GiB CakeML heaps before a verdict; the same parsing plus an immediate wrong-source rejection succeeds in 4.76s at 2,031,232 KiB RSS. Before another complete run, a bounded prefix/phase harness must isolate and repair the matcher allocation/retention boundary. This remains a development probe, not a changed-kernel Candle runtime. |
+| G6. Pre-bootstrap callback/dispatcher probe | executable representation | **IN PROGRESS — DIRECT TOPOLOGY REFINEMENT** | The phase harness proves the direct numerical matcher is bounded: 875/875 cells in 145 seconds under a fixed 4 GiB heap. A clean, type-inferred basis program executes the same 1,749-token compact topology stack machine in 0.09 seconds at 72,576 KiB RSS, matches the authenticated full root, and rejects token, job and truncation mutations. The old greater-than-80-GiB failure is the generic cexp topology interpreter. Before the one complete rerun, prove the direct function refines that unchanged ordinary topology call, integrate it into the checker, require the entire generated program to pass type inference, and retain the mutation matrix. This remains development evidence, not a changed-kernel Candle runtime. |
 | G7. Analytic and original-statement adapter | logic | **PENDING** | The authenticated root `m_cell_pass` is converted by the existing case-16594 reconstruction to a typechecked conditional theorem with the literal original conclusion and audited assumptions. |
 | G8. Verified runtime and prepared state | build/runtime | **PENDING** | The owner has explicitly chosen case-only demonstrator or plan-generic production scope; the exact chosen callback bytes pass the verified rebuild preflight and build; the minimum compatible Flyspeck/NL predecessor state is reconstructed and its cold elapsed time and peak RSS are measured. |
 | G9. First fast original theorem | integration | **PENDING** | A fresh compatible run takes the fast branch and produces the literal original theorem, recording preparation, checking, decoding/handoff, total elapsed time, peak RSS, and theorem assumptions. |
@@ -165,17 +171,21 @@ separate 166-second representation probe matched all 875 source boxes and the
 stopped after a tactic-level free-variable/generalization failure and remains
 uncommitted (LR-203); the existing generic theorem remains the authority.
 
-The case-16594 HOL4 half has since closed.  Commits `05f7bd2be`, `018caa4f2`,
+The original case-16594 HOL4 callback refinement has since closed.  Commits `05f7bd2be`, `018caa4f2`,
 `be242c42a`, and `5b009642d` authenticate the complete runtime payload,
 generalize the evaluator clock, refine the fixed numerical and compact
 topology results to the unchanged ordinary whole call, and prove the final
 witnessed callback sound.  The numerical matcher never reruns the generic
 arbitrary-rational checker: only the compact topology expression crosses the
 generic pure evaluator, and its `compute_exp` result is converted by the
-existing proved `compute_exp_to_cv` handoff.
+existing proved `compute_exp_to_cv` handoff.  The current G6 correction replaces
+only that last topology execution mechanism after proving it equivalent; it
+does not change the ordinary whole-call semantics.
 
-This closes G5C logic, not G5P and not the first theorem.  G6 still has to run the exact
-875-cell call, cover role and topology mutations, and measure execution.  G7
+This closes G5C logic, not G5P and not the first theorem.  G6 has separately
+run the exact 875-cell numerical phase and exact 1,749-token topology phase;
+it still has to compose them through the proved direct-topology refinement,
+run the one exact complete call, and cover the full role mutation matrix. G7
 still has to typecheck the root-to-original-statement adapter.  No verified
 runtime build is authorized by the G5C proof alone.
 

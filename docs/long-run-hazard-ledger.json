@@ -1833,8 +1833,8 @@
       "scope": "fast-nl-proof-harness",
       "classification": "observed",
       "first_evidence": "docs/progress/2026-10-28-v4.277-nl-certified-square-root-jet.md",
-      "failure_mode": "An implicit argument name in new_definition or a recursive pattern, such as root, derivative, rows, or row, is already a HOL constant; the parser resolves the constant instead of introducing the intended interval variable and reports an unrelated-looking type assignment error.",
-      "root_cause": "Definition and pattern binders were chosen without checking the active constant namespace. New executable definitions must use fresh role-specific names such as root_interval, d_interval, interval_rows, and row_value, and every implicit argument must be typechecked in the smallest direct probe before any integration build. A global-constant collision is a definition-front-end failure, not evidence about the semantic theorem.",
+      "failure_mode": "An implicit argument name in new_definition or a recursive pattern, such as root, derivative, rows, row, or cell, is already a HOL constant; the parser resolves the constant instead of introducing the intended interval variable and reports an unrelated-looking type assignment error.",
+      "root_cause": "Definition and pattern binders were chosen without checking the active constant namespace. New executable definitions must use fresh role-specific names such as root_interval, d_interval, interval_rows, row_value, and parsed_cell, and every implicit argument must be typechecked in the smallest direct probe before any integration build. A global-constant collision is a definition-front-end failure, not evidence about the semantic theorem.",
       "check_id": "proof_theorem_binder_class",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
@@ -2284,9 +2284,31 @@
       "scope": "fast-nl-executable-probe",
       "classification": "observed",
       "first_evidence": "docs/progress/2026-11-07-v4.375-nl-g6-translation-and-heap-boundary.md",
-      "failure_mode": "The exact translated case-16594 whole checker closes through CakeML source translation and direct compilation, but its genuine positive 875-cell execution touches and exhausts 1, 8, 32, and 80 GiB CakeML heaps before producing a verdict; the same external payload parsing plus an immediate wrong-source rejection succeeds in 4.76 seconds with 2,031,232 KiB peak RSS.",
-      "root_cause": "The memory blow-up lies in the complete numerical matcher/execution path rather than external file parsing, but its precise allocation/retention boundary is not yet measured. Preserve the failed heap runs and stop heap escalation. Before another complete positive run, add a development-only prefix/phase discriminator over the already translated matcher, measure live/allocation behavior at representative cell counts, and inspect whether per-cell runtime-packet construction/equality or recursive matcher state prevents reclamation. Require a bounded-memory complete executable result before G8; never treat a larger heap, translation success, or the native 875-cell timing as a substitute.",
+      "failure_mode": "The exact translated case-16594 whole checker closes through CakeML source translation and direct compilation, but its genuine positive 875-cell execution touches and exhausts 1, 8, 32, and 80 GiB CakeML heaps before producing a verdict; a phase probe later shows that all 875 numerical cells finish in 145 seconds within a fixed 4 GiB heap, while the following generic compute_eval topology interpretation causes the blow-up.",
+      "root_cause": "The compact 1,749-token topology stack machine was left inside the generic cexp interpreter even though the expensive numerical matcher was already direct. Preserve the failed heap runs and stop heap escalation. Use the proved direct topology implementation only after its refinement to the unchanged ordinary topology call is established; the clean typed executable accepts the genuine topology in 0.09 seconds at 72,576 KiB RSS and rejects token, job, and truncation mutations. Require the integrated complete checker to remain bounded before G8; never treat a larger heap or the isolated direct timing as a substitute for that integration result.",
       "check_id": "genuine_fast_dispatch_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-206",
+      "scope": "fast-nl-executable-probe",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-07-v4.376-nl-g6-topology-isolation.md",
+      "failure_mode": "A direct topology probe is translated into the large whole-checker program environment and compiled only with --skip_type_inference=true; it returns NONE even on a one-leaf input that the HOL definition proves successful, while enabling CakeML type inference reports a monomorphic cv-versus-compute_exp binding collision in the inherited environment.",
+      "root_cause": "A generated program was treated as executable evidence without requiring its complete source program to pass type inference. New G6 executables must either extend a type-clean minimal basis state or repair the inherited name collision, and must compile with type inference enabled before their verdict is trusted. A skip-only compiled verdict is a representation/tooling failure, not evidence about the proved checker function.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-207",
+      "scope": "fast-nl-executable-probe",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-07-v4.376-nl-g6-topology-isolation.md",
+      "failure_mode": "A follow-up quoted CakeML main calls a helper that appeared in an earlier quoted main but was never added to the translated program environment; compiling with type inference skipped emits an executable that segfaults before either main prints output.",
+      "root_cause": "Quoted AST fragments were mistaken for exported translation-state bindings. Every diagnostic main must be self-contained or call a helper explicitly translated into its parent state, and the complete generated program must pass type inference. Preserve startup crashes as tooling failures and do not infer anything about checker semantics from them.",
+      "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
     }
