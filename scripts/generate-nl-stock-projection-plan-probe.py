@@ -11,7 +11,7 @@ import re
 
 PROJECT = pathlib.Path("/project/flyspeck-candle-project")
 CANONICAL = PROJECT / "tools" / "nl_stock_projection_plan_probe.ml"
-CANONICAL_SHA256 = "cf4a29170bbe00af63ff22462c2c2f871ac03dc8b62070f79c538a88554c68c5"
+CANONICAL_SHA256 = "3237d6625b1362eea98df8a1f95be5243740df8dee08b8ef8a6f2d8dfa64dd10"
 
 
 def sha256_bytes(data: bytes) -> str:

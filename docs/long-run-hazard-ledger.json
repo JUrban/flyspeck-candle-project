@@ -2333,6 +2333,17 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-210",
+      "scope": "nl-stock-projection-probe",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.384-nl-second-sample-plan-checkpoint.md",
+      "failure_mode": "The genuine mixed-disjunct plan reports function_counts=4,794 even though an exact forest traversal finds 794 function-0 leaves and four function-1 leaves, leading the first structural assertion to expect the selections in the wrong order.",
+      "root_cause": "The diagnostic join_ints helper seeded an itlist fold with the first item and then prepended the remaining items, reversing every list after its head; the proof data and tree were correct. Preserve source order with an ordinary recursive join, print all structural counts before compound assertions, and treat a disagreement between a pretty-printer and an exact tree traversal as a reporting defect until the underlying terms are compared.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
     }
   ]
 }

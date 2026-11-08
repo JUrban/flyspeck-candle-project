@@ -234,22 +234,19 @@ let prepared_hyp_counts =
       length (hyp prepared.program_representation))
     reflected_prepared;;
 
-let join_hyp_counts values =
-  match values with
+let rec join_hyp_counts = function
   | [] -> ""
-  | (valid,source,compile,representation) :: rest ->
-      itlist
-        (fun (next_valid,next_source,next_compile,next_representation) result ->
-          result ^ "," ^
-          string_of_int next_valid ^ "/" ^
-          string_of_int next_source ^ "/" ^
-          string_of_int next_compile ^ "/" ^
-          string_of_int next_representation)
-        rest
-        (string_of_int valid ^ "/" ^
-         string_of_int source ^ "/" ^
-         string_of_int compile ^ "/" ^
-         string_of_int representation);;
+  | [(valid,source,compile,representation)] ->
+      string_of_int valid ^ "/" ^
+      string_of_int source ^ "/" ^
+      string_of_int compile ^ "/" ^
+      string_of_int representation
+  | (valid,source,compile,representation) :: remaining ->
+      string_of_int valid ^ "/" ^
+      string_of_int source ^ "/" ^
+      string_of_int compile ^ "/" ^
+      string_of_int representation ^ "," ^
+      join_hyp_counts remaining;;
 
 print_endline
   ("CANDLE_NL_STOCK_PROJECTION_PLAN_AUTH_DIAGNOSTIC" ^
@@ -282,12 +279,12 @@ if length axioms_after <> length axioms_before ||
 then failwith "projection plan changed the global axiom set";;
 
 let join_ints values =
-  match values with
+  let rec join = function
   | [] -> ""
-  | first :: rest ->
-      itlist
-        (fun value result -> string_of_int value ^ "," ^ result)
-        rest (string_of_int first);;
+  | [value] -> string_of_int value
+  | value :: remaining ->
+      string_of_int value ^ "," ^ join remaining in
+  join values;;
 
 print_endline
   ("CANDLE_NL_STOCK_PROJECTION_PLAN_RESULT DEVELOPMENT_NON_RELEASE" ^
