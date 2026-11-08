@@ -2399,6 +2399,28 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-216",
+      "scope": "nl-stock-projection-sparse-repair",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.388-nl-tskajxy-sparse-repair.md",
+      "failure_mode": "A complete repaired batch still rejects after every known-bad source leaf is bisected once on the same axis, even though that one-level repair was sufficient for an earlier projection sample.",
+      "root_cause": "A successful subdivision depth and axis pattern from one inequality was treated as a likely complete proposal for another.  Before another complete numerical pass, scan only the new children in authenticated batches, retain the exact left/right rejection set, and refine only those children on the next bounded axis.  Never infer complete acceptance from a previously successful repair shape.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-217",
+      "scope": "restored-checkpoint-readiness",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.388-nl-tskajxy-sparse-repair.md",
+      "failure_mode": "A checkpoint taken as soon as an in-module success marker appears retains a large pending module-signature print; its next restore spends minutes replaying tens of megabytes of stale output before it can acknowledge fresh input.",
+      "root_cause": "The semantic success marker preceded the frontend's completion and prompt boundary.  Any checkpoint intended for iterative reuse must key its readiness marker to a separate top-level phrase after the module closes, then verify a fresh restored-input acknowledgement.  In-module markers may establish proof success but are not sufficient evidence that the captured REPL is idle.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
     }
   ]
 }
