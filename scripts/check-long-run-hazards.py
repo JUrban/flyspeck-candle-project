@@ -958,6 +958,23 @@ def check_fresh_run_target(_: dict, controller: pathlib.Path) -> CheckResult:
     return CheckResult(True, f"fresh_run_target={target}")
 
 
+def check_restored_input_driver_phrase_shape(
+    _: dict, controller: pathlib.Path
+) -> CheckResult:
+    if not controller.is_file():
+        return CheckResult(False, f"missing_controller={controller}")
+    bad: list[str] = []
+    loads_phrase = re.compile(r'^\s*loads\s+"[^"]+";;\s*$')
+    for number, line in enumerate(
+        controller.read_text(encoding="utf-8").splitlines(), start=1
+    ):
+        if re.match(r"^\s*loads(?:\s|$)", line) and not loads_phrase.match(line):
+            bad.append(str(number))
+    if bad:
+        return CheckResult(False, f"invalid_loads_lines={','.join(bad)}")
+    return CheckResult(True, "line_streamed_loads_phrases=valid")
+
+
 CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "runtime_provenance": check_runtime_provenance,
     "source_worktrees_clean": check_source_worktrees_clean,
@@ -1014,6 +1031,7 @@ CHECKS: dict[str, Callable[[dict, pathlib.Path], CheckResult]] = {
     "fast_theorem_controller_contract": check_theorem_controller_contract,
     "resource_headroom": check_resource_headroom,
     "fresh_run_target": check_fresh_run_target,
+    "restored_input_driver_phrase_shape": check_restored_input_driver_phrase_shape,
 }
 
 

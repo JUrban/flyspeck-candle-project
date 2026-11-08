@@ -19,6 +19,19 @@ timeout_seconds=${FAST_NL_INPUT_PROBE_TIMEOUT_SECONDS:-600}
 [[ -f $driver ]]
 [[ -x $runtime/cake ]]
 [[ $timeout_seconds =~ ^[1-9][0-9]*$ ]]
+
+# This runner feeds one physical line at a time to the restored CakeML REPL.
+# Its special `loads` form therefore requires the literal and terminator on
+# that same line, even though a multiline phrase is valid in ordinary HOL.
+bad_load_phrases=$(
+  rg -n '^[[:space:]]*loads([[:space:]]|$)' "$driver" |
+    rg -v '^[0-9]+:[[:space:]]*loads[[:space:]]+"[^"]+";;[[:space:]]*$' || true
+)
+if [[ -n $bad_load_phrases ]]; then
+  printf 'invalid line-streamed loads phrase:\n%s\n' "$bad_load_phrases" >&2
+  exit 2
+fi
+
 sha256sum -c "$base/checkpoint.sha256"
 mapfile -t checkpoints < <(
   find "$base/checkpoint" -maxdepth 1 -type f -name 'ckpt_*.dmtcp' -print

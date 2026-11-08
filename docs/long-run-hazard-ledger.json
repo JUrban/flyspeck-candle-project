@@ -2421,6 +2421,61 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-218",
+      "scope": "nl-stock-projection-source-closure",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.389-nl-tskajxy-original-theorem.md",
+      "failure_mode": "A mixed-theorem source opens the term-order compatibility module used by an earlier successful sample, but its new retained checkpoint does not contain that separately streamed module and fails before topology execution.",
+      "root_cause": "Source closure was inferred from a related checkpoint lineage rather than enumerated from the exact theorem input.  Before theorem execution, hash and stream every non-base compatibility module used by the source, or include it in a green post-module surface checkpoint.  A successful theorem on another retained state does not prove module presence in this one.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-219",
+      "scope": "nl-stock-projection-topology-handoff",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.389-nl-tskajxy-original-theorem.md",
+      "failure_mode": "The split topology verdict, correspondence theorem, and stack soundness all pass, but a new multi-root adapter compares the intermediate logical stack expression directly with concrete expected boxes and reports a false root-box drift.",
+      "root_cause": "The logical stack field is a correspondence result, not the canonical concrete comparison boundary.  Decode the authenticated encoded stack with candle_cv_q_boxes_stack_decode, compare the decoded roots, and rewrite the stack theorem with that decoder equality exactly as the established complete and fixed-nonlinear forest adapters do.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-220",
+      "scope": "restored-repl-line-stream-driver",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.389-nl-tskajxy-original-theorem.md",
+      "failure_mode": "A restored-input driver places loads on one line and its string literal on the next; the line-oriented CakeML REPL rejects both phrases before loading theorem sources.",
+      "root_cause": "A syntactically valid multiline HOL Light source is not necessarily a valid line-streamed restored-REPL driver.  Preflight every driver phrase under the runner's line-oriented contract and keep loads \"path\";; on one physical line.",
+      "check_id": "restored_input_driver_phrase_shape",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-221",
+      "scope": "nl-stock-projection-source-closure",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.389-nl-tskajxy-original-theorem.md",
+      "failure_mode": "A streamed compatibility module is authenticated, but its internal needs request names a dependency absent from the restored loaded-source ledger and fails before the theorem source runs.",
+      "root_cause": "Authenticating the top-level source does not close its transitive restored-state dependencies.  Enumerate each internal needs edge against the checkpoint's loaded-source identity; explicitly load and hash a missing dependency before its consumer rather than assuming the dependency from the consumer's successful parse in another state.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-222",
+      "scope": "nl-stock-projection-topology-handoff",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.389-nl-tskajxy-original-theorem.md",
+      "failure_mode": "All reflected topology verdicts and root identities pass, but no split-forest source theorem matches its live Flyspeck component because the source theorem still names the exact q-interval root representation.",
+      "root_cause": "The split-forest source boundary requires the same exact interval-decoder reduction already used by the established bounded-component handoff before live-domain transport.  Reduce only the q-interval representation, then demand exact function/domain matching and a unique one-time component pairing.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
     }
   ]
 }
