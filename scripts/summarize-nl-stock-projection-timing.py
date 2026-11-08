@@ -142,10 +142,12 @@ def summarize(directory: pathlib.Path) -> dict[str, object]:
 
     compute_begin = exactly_one(events, "phase=variable-complete-compute-begin")
     compute_end = exactly_one(events, "phase=variable-complete-compute-end")
-    validation_begin = exactly_one(
+    validation_begins = select(
         events, "phase=variable-complete-validation-begin"
     )
-    validation_end = exactly_one(events, "phase=variable-complete-validation-end")
+    validation_ends = select(events, "phase=variable-complete-validation-end")
+    if len(validation_begins) != 2 or len(validation_ends) != 2:
+        raise ValueError("expected two complete-validation marker pairs")
     encoding_begin = exactly_one(
         events, "phase=variable-complete-certificate-encoding-begin"
     )
@@ -165,14 +167,16 @@ def summarize(directory: pathlib.Path) -> dict[str, object]:
         complete_begin,
         encoding_begin,
         encoding_end,
-        validation_begin,
-        validation_end,
+        validation_begins[0],
+        validation_ends[0],
         compute_begin,
         compute_end,
         handoff_begins[0],
         handoff_ends[0],
         complete_end,
         root_begin,
+        validation_begins[1],
+        validation_ends[1],
         handoff_begins[1],
         handoff_ends[1],
         root_end,
@@ -191,12 +195,17 @@ def summarize(directory: pathlib.Path) -> dict[str, object]:
         "pre_complete_gap": phase(plan_end, complete_begin, ticks_per_second),
         "complete_check": phase(complete_begin, complete_end, ticks_per_second),
         "certificate_encoding": phase(encoding_begin, encoding_end, ticks_per_second),
-        "validation": phase(validation_begin, validation_end, ticks_per_second),
+        "validation": phase(
+            validation_begins[0], validation_ends[0], ticks_per_second
+        ),
         "kernel_compute": phase(compute_begin, compute_end, ticks_per_second),
         "complete_handoff": phase(
             handoff_begins[0], handoff_ends[0], ticks_per_second
         ),
         "root_handoff": phase(root_begin, root_end, ticks_per_second),
+        "root_validation": phase(
+            validation_begins[1], validation_ends[1], ticks_per_second
+        ),
         "root_internal_handoff": phase(
             handoff_begins[1], handoff_ends[1], ticks_per_second
         ),

@@ -2355,6 +2355,17 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-212",
+      "scope": "nl-stock-projection-timing",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.386-nl-controlled-stock-projection-timing.md",
+      "failure_mode": "The controlled theorem run and phase table are green, but the summarizer rejects them because it assumes exactly one variable-complete validation marker pair while the real route validates once before complete evaluation and again before root handoff.",
+      "root_cause": "A repeated phase name was treated as a globally unique event rather than an ordered event within two parent stages. Require exactly two ordered validation pairs, associate the first with complete-check and the second with root-handoff, and fixture-test the full real marker sequence. Never rerun or alter valid measurement bytes to satisfy a summarizer's narrower handwritten schema.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
     }
   ]
 }

@@ -37,6 +37,8 @@ class TimingSummaryTest(unittest.TestCase):
             "CANDLE_CERT_PROFILE phase=variable-complete-handoff-end",
             "CANDLE_NL_STOCK_PROJECTION_COMPLETE|complete-check|end",
             "CANDLE_NL_STOCK_PROJECTION_COMPLETE|root-handoff|begin",
+            "CANDLE_CERT_PROFILE phase=variable-complete-validation-begin",
+            "CANDLE_CERT_PROFILE phase=variable-complete-validation-end",
             "CANDLE_CERT_PROFILE phase=variable-complete-handoff-begin",
             "CANDLE_CERT_PROFILE phase=variable-complete-handoff-end",
             "CANDLE_NL_STOCK_PROJECTION_COMPLETE|root-handoff|end",
@@ -90,8 +92,9 @@ class TimingSummaryTest(unittest.TestCase):
             self.assertEqual(result["status"], 0)
             self.assertEqual(result["repaired_cells"], 534)
             self.assertEqual(result["gnu_time"]["cpu_seconds"], 22.0)
-            self.assertEqual(result["phases"]["post_restore_total"]["cpu_seconds"], 20.0)
+            self.assertEqual(result["phases"]["post_restore_total"]["cpu_seconds"], 22.0)
             self.assertEqual(result["phases"]["kernel_compute"]["wall_seconds"], 1.0)
+            self.assertEqual(result["phases"]["root_validation"]["cpu_seconds"], 1.0)
             self.assertEqual(result["restore_to_ready_seconds"], 109.5)
 
     def test_elapsed_formats(self) -> None:
