@@ -225,18 +225,56 @@ let instruction_counts =
     (fun prepared -> length (dest_list prepared.program_term))
     reflected_prepared;;
 
-if hyp domain_subset <> [] ||
-   !precision_leaves <> stats.pass + stats.pass_raw + stats.pass_mono ||
-   !precision_glues <> stats.glue + stats.glue_convex ||
-   not
-     (List.for_all
-       (fun prepared ->
-         hyp prepared.valid_theorem = [] &&
-         hyp prepared.source_theorem = [] &&
-         hyp prepared.compile_theorem = [] &&
-         hyp prepared.program_representation = [])
-       reflected_prepared) then
-  failwith "projection plan: authenticated state mismatch";;
+let prepared_hyp_counts =
+  map
+    (fun prepared ->
+      length (hyp prepared.valid_theorem),
+      length (hyp prepared.source_theorem),
+      length (hyp prepared.compile_theorem),
+      length (hyp prepared.program_representation))
+    reflected_prepared;;
+
+let join_hyp_counts values =
+  match values with
+  | [] -> ""
+  | (valid,source,compile,representation) :: rest ->
+      itlist
+        (fun (next_valid,next_source,next_compile,next_representation) result ->
+          result ^ "," ^
+          string_of_int next_valid ^ "/" ^
+          string_of_int next_source ^ "/" ^
+          string_of_int next_compile ^ "/" ^
+          string_of_int next_representation)
+        rest
+        (string_of_int valid ^ "/" ^
+         string_of_int source ^ "/" ^
+         string_of_int compile ^ "/" ^
+         string_of_int representation);;
+
+print_endline
+  ("CANDLE_NL_STOCK_PROJECTION_PLAN_AUTH_DIAGNOSTIC" ^
+   " domain_subset_hyp=" ^ string_of_int (length (hyp domain_subset)) ^
+   " certificate_expected_leaves=" ^
+   string_of_int (stats.pass + stats.pass_mono) ^
+   " certificate_actual_leaves=" ^ string_of_int !precision_leaves ^
+   " certificate_expected_glues=" ^
+   string_of_int stats.glue ^
+   " certificate_actual_glues=" ^ string_of_int !precision_glues ^
+   " prepared_hyp_counts=" ^ join_hyp_counts prepared_hyp_counts);;
+
+if hyp domain_subset <> [] then
+  failwith "projection plan: domain subset assumptions";;
+(* pass_raw and glue_convex are subsets of pass and glue respectively, not  *)
+(* additional nodes.  Only pass_mono is a separate terminal constructor.    *)
+if !precision_leaves <> stats.pass + stats.pass_mono ||
+   !precision_glues <> stats.glue then
+  failwith "projection plan: certificate tree mismatch";;
+if not
+    (List.for_all
+      (fun (valid,source,compile,representation) ->
+        valid = 0 && source = 0 && compile = 0 && representation = 0)
+      prepared_hyp_counts) then
+  failwith "projection plan: prepared proof assumptions";;
 
 let axioms_after = axioms ();;
 if length axioms_after <> length axioms_before ||

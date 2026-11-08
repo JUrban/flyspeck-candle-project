@@ -2322,6 +2322,17 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["support-stage", "kernel-build"]
+    },
+    {
+      "id": "LR-209",
+      "scope": "nl-stock-projection-probe",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.384-nl-second-sample-plan-checkpoint.md",
+      "failure_mode": "A complete genuine projection plan is rejected after certificate search and adaptive verification because the probe expects pass + pass_raw + pass_mono leaves and glue + glue_convex nodes, even though the raw and convex counters are subsets of their corresponding totals.",
+      "root_cause": "Diagnostic subtype counters were treated as additional tree constructors. Derive structural cardinality from the result_tree datatype and Certificate.result_stats implementation: leaves are pass + pass_mono and binary nodes are glue. Print expected and actual counts separately, regression-test that subtype counters are not added, and do not change numerical or proof code when only this accounting assertion fails.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
     }
   ]
 }

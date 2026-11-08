@@ -19,6 +19,20 @@ SPEC.loader.exec_module(MODULE)
 
 
 class ProjectionGeneratorTest(unittest.TestCase):
+    def test_certificate_subclass_counts_are_not_double_counted(self) -> None:
+        canonical = MODULE.CANONICAL.read_text(encoding="utf-8")
+        self.assertIn(
+            "string_of_int (stats.pass + stats.pass_mono)", canonical
+        )
+        self.assertIn(
+            "!precision_leaves <> stats.pass + stats.pass_mono", canonical
+        )
+        self.assertIn(
+            "!precision_glues <> stats.glue", canonical
+        )
+        self.assertNotIn("stats.pass + stats.pass_raw", canonical)
+        self.assertNotIn("stats.glue + stats.glue_convex", canonical)
+
     def test_exact_two_field_instantiation(self) -> None:
         canonical = (
             "module Test = struct\n"
