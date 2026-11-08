@@ -2366,6 +2366,39 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-213",
+      "scope": "nl-stock-projection-domain-setup",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.387-nl-hminus-setup-and-third-sample-plan.md",
+      "failure_mode": "A structurally supported projection reaches mk_float_domain and raises Not_found because an endpoint contains the named constant hminus, whose theorem exists in Flyspeck but whose mutable formal/informal evaluator registration is absent from the sealed support checkpoint.",
+      "root_cause": "Expression-language coverage was mistaken for complete domain-evaluation readiness.  Before certificate search, evaluate every ordered endpoint through the actual interval evaluator, require every named constant to have a zero-assumption registered enclosure, and checkpoint stable registrations once.  For hminus, replay the exact proved Flyspeck enclosure; never substitute a guessed decimal or classify the numerical theorem failure as an unsupported expression.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-214",
+      "scope": "nl-stock-projection-proof-fragment",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.387-nl-hminus-setup-and-third-sample-plan.md",
+      "failure_mode": "Replaying the standalone formal_tests/hminus.hl source in the production checkpoint proves its three numerical exclusions and then fails on an unrelated section_proof helper; the first shortened module copy also assumes top-level theorem visibility and applies SPEC to a theorem whose x is free rather than universally quantified.",
+      "root_cause": "A standalone test file and a module-scoped reusable setup have different environment and binding contracts.  Isolate the minimal mathematical dependency, qualify module-owned definitions, inspect the theorem conclusion before choosing SPEC versus INST, and validate the small setup independently before starting a certificate plan.  The durable setup combines the three proof-producing exclusions with Nonlinear_lemma.hminus_prop and checkpoints only after exact theorem-shape and evaluator-registration checks pass.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-215",
+      "scope": "nl-stock-projection-normalization",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.387-nl-hminus-setup-and-third-sample-plan.md",
+      "failure_mode": "The sample structure scanner declares TSKAJXY supported after applying candle_direct_flyspeck_defs, but the generated plan omits that definition prefix and fails with Not_found while building verifier functions.",
+      "root_cause": "Coverage classification and execution used independently handwritten normalization lists.  The plan now begins with the same canonical candle_direct_flyspeck_defs prefix, and a focused generator regression checks that contract.  Any future coverage claim must compare the exact normalization pipeline used by the executable probe, not merely a stronger scanner pipeline.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
     }
   ]
 }

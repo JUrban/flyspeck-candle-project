@@ -33,6 +33,29 @@ class ProjectionGeneratorTest(unittest.TestCase):
         self.assertNotIn("stats.pass + stats.pass_raw", canonical)
         self.assertNotIn("stats.glue + stats.glue_convex", canonical)
 
+    def test_opaque_domain_endpoints_fail_before_float_conversion(self) -> None:
+        canonical = MODULE.CANONICAL.read_text(encoding="utf-8")
+        preflight = canonical.index("ensure_evaluable_endpoint")
+        conversion = canonical.index("M_verifier_main.mk_float_domain")
+        self.assertLess(preflight, conversion)
+        self.assertIn("opaque \" ^ side ^", canonical)
+        self.assertIn("Eval_interval.eval_interval_fun", canonical)
+
+    def test_proved_hminus_interval_is_registered(self) -> None:
+        canonical = MODULE.CANONICAL.read_text(encoding="utf-8")
+        self.assertIn(
+            "Candle_nl_stock_projection_hminus_setup.hminus_interval", canonical
+        )
+
+    def test_plan_uses_the_structural_scanner_definition_prefix(self) -> None:
+        canonical = MODULE.CANONICAL.read_text(encoding="utf-8")
+        self.assertIn(
+            "let projection_expanded_defs =\n"
+            "  candle_direct_flyspeck_defs @\n"
+            "  Break_case_exec.nonlin_rewrites @",
+            canonical,
+        )
+
     def test_exact_two_field_instantiation(self) -> None:
         canonical = (
             "module Test = struct\n"

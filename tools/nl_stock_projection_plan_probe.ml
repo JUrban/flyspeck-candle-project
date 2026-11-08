@@ -22,6 +22,13 @@ end;;
 let source_id = "prep-1395142356";;
 let parameter_index = 3;;
 
+(* The production Flyspeck hminus setup registers this proved enclosure in
+   both interval evaluators.  The sealed support predecessor retains the
+   theorem but deliberately predates that mutable-table side effect. *)
+let _ =
+  M_verifier_main.add_constant_interval
+    Candle_nl_stock_projection_hminus_setup.hminus_interval;;
+
 let marker phase event =
   print_endline
     ("CANDLE_NL_STOCK_PROJECTION_PLAN|" ^ phase ^ "|" ^ event);;
@@ -67,6 +74,7 @@ let base_expansion =
     case_term;;
 
 let projection_expanded_defs =
+  candle_direct_flyspeck_defs @
   Break_case_exec.nonlin_rewrites @
   map snd Break_case_exec.trig_expansions1 @
   [Sphere.sqrt8;
@@ -131,6 +139,16 @@ let _ =
     ("CANDLE_NL_STOCK_PROJECTION_PLAN_BOUNDS lower=" ^
      string_of_term xx ^ " upper=" ^ string_of_term zz);;
 let _ = marker "domain-order" "end";;
+let ensure_evaluable_endpoint side tm =
+  try
+    let interval_function = Eval_interval.build_interval_fun tm in
+    let _ = Eval_interval.eval_interval_fun 6 interval_function [] [] in ()
+  with Not_found ->
+    failwith
+      ("projection plan: opaque " ^ side ^
+       " domain endpoint before float conversion: " ^ string_of_term tm);;
+let _ = do_list (ensure_evaluable_endpoint "lower") xx0;;
+let _ = do_list (ensure_evaluable_endpoint "upper") zz0;;
 let _ = marker "float-domain" "begin";;
 let domain_subset,(xx1,zz1) = M_verifier_main.mk_float_domain 6 (xx,zz);;
 let xx2 = Informal_taylor.convert_to_float_list 6 true xx
