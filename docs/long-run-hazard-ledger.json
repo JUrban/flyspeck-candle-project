@@ -2344,6 +2344,17 @@
       "check_id": "proof_cache_parent_identity",
       "enforcement": "preflight",
       "profiles": ["theorem", "support-stage"]
+    },
+    {
+      "id": "LR-211",
+      "scope": "nl-stock-projection-handoff",
+      "classification": "observed",
+      "first_evidence": "docs/progress/2026-11-08-v4.385-nl-third-stock-original-theorem.md",
+      "failure_mode": "A closed mixed-disjunct root theorem with the exact domain and exact two source functions is rejected before normalization because the explicit term-order merge returns the functions in canonical order rather than their original source-list order.",
+      "root_cause": "Set membership required by m_cell_list_pass was confused with ordered diagnostic representation. Before rejecting a mixed root, compare its function list with the source list as an alpha-equivalent permutation, verify the exact root domain and zero hypotheses, and then let normalize_disj_result perform the established source normalization. Do not reorder theorem bytes, bypass the explicit term-order compatibility merge, or repeat numerical evaluation for a list-order-only mismatch.",
+      "check_id": "proof_cache_parent_identity",
+      "enforcement": "preflight",
+      "profiles": ["theorem", "support-stage"]
     }
   ]
 }
